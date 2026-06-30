@@ -71,12 +71,62 @@ cb fsop --dir=/data/t --sizes=4KiB,4MiB --threads=1,8 --iters=500
 cb fsop --dir=/data/t --sizes=4KiB --threads=1,8,32 --shared_dir
 ```
 
+## 火焰图（`--flamegraph`）
+
+定位瓶颈时，光看延迟分位数只能「猜」。给任意一次压测加上 `--flamegraph`，
+`cb` 会在**测量窗口**内自动抓火焰图，跑完后渲染成可交互的 SVG、起一个 web 服务并打印链接：
+
+- **on-cpu**（`perf`）：CPU 时间花在哪些函数/哪一层；
+- **off-cpu**（bcc `offcputime`）：线程在哪里**阻塞/等待**（等锁、等 IO），io 配色。
+
+渲染（`perf script` 折叠 + SVG 生成）与 web 服务都**内置在 cb 二进制里**（原生 C++，
+无 perl / python3 / 外部脚本）。支持 `aio` / `fs` / `store` / `client`（`fsop` 是 syscall 矩阵、无稳态窗口，**不支持**）。
+
+```bash
+# 默认 on-cpu + off-cpu；结束后打印 http 链接，浏览器打开即看
+cb aio --dir=/data/t --rw=randread --bs=4KiB --iodepth=128 --runtime=30 --flamegraph
+
+# 只看 on-cpu，采样 199Hz，固定端口
+cb store --layer=blockcache --dir=/data/t --rw=randread --runtime=30 \
+         --flamegraph --profile_mode=on_cpu --profile_freq=199 --profile_port=8088
+```
+
+输出示例：
+
+```
+[flamegraph] on-cpu  : /tmp/cb-flame-12345/on_cpu.svg
+[flamegraph] off-cpu : /tmp/cb-flame-12345/off_cpu.svg
+[flamegraph] serving : http://10.0.0.3:43187/   (Ctrl-C to stop)
+```
+
+| flag | 默认 | 说明 |
+|------|------|------|
+| `--flamegraph` | false | 总开关；`--noflamegraph` 关闭 |
+| `--profile_mode` | `both` | `on_cpu` / `off_cpu` / `both` |
+| `--profile_freq` | 99 | on-cpu 采样频率 (Hz) |
+| `--profile_dir` | 空 | 输出目录；空 = `/tmp/cb-flame-<pid>` |
+| `--profile_port` | 0 | http 端口；0 = 自动选空闲端口 |
+
+**依赖**（压测机，需 root）：只需 **`perf`**（on-cpu，含 `binutils`/`addr2line` 用于 DWARF 符号化，
+`perf` 包通常已带）+ **`bcc-tools`**（提供 `offcputime`，off-cpu）。
+一键安装：`dnf install -y perf binutils bcc-tools`。**渲染与 web 服务已编进 cb，无需 perl / python3 / 任何外部脚本**——
+把 `build/bin/cb` 单文件拷到目标机、装好上面两个工具即可。任一工具缺失只会**跳过对应能力并打印安装提示**，不会让压测失败。
+
+**注意**：
+
+- web 服务绑 `0.0.0.0`，直接打印机器 IP；远程压测机用浏览器即可访问（注意端口暴露在内网）。
+  服务在前台运行，**Ctrl-C 结束**。
+- `--flamegraph` 会**轻微扰动吞吐**（DWARF 栈采样 + eBPF sched 探针），是「找瓶颈模式」，
+  不是「跑漂亮数字模式」；要 headline 数字时别开。
+- 默认输出在 `/tmp`，**不要**把 `--profile_dir` 指到被测的 `--dir` 下（`perf.data` 较大，会污染被测盘 IO）。
+- 容器内即便 root，若缺 `CAP_PERFMON`/`CAP_BPF` 或 BTF，`perf`/`offcputime` 仍可能失败 —— 会自动降级。
+
 ## 代码结构
 
 ```
 bench/
   main.cc            子命令分发器
-  common/            跨子命令共享：flags 解析 / 格式化 / 直方图 / 统计 / 控制台报告
+  common/            跨子命令共享：flags 解析 / 格式化 / 直方图 / 统计 / 控制台报告 / 火焰图采集
   aio/ fs/ store/ client/ fsop/
                      每层独立目录，各含 options / runner / command
 ```

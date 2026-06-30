@@ -37,6 +37,7 @@ void RegisterFlags(FlagSet* fs, Options* o) {
   fs->Switch("prep", &o->prep, "pre-fill files before read tests");
   fs->Switch("keep", &o->keep, "keep test files after the run");
   fs->U32("report_interval", &o->report_interval_s, "progress interval (s)");
+  RegisterProfileFlags(fs, &o->profile);
 }
 
 std::string RwName(Rw rw) {
@@ -78,6 +79,7 @@ std::string Validate(Options* o) {
     return "with --direct, bs and filesize must be 4KiB-aligned";
   }
   if (o->report_interval_s == 0) return "report_interval must be > 0";
+  if (auto e = ValidateProfile(o->profile); !e.empty()) return e;
   return "";
 }
 

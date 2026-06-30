@@ -35,6 +35,7 @@ void RegisterFlags(FlagSet* fs, Options* o) {
   fs->Switch("prep", &o->prep, "pre-write all blocks before read tests");
   fs->Switch("keep", &o->keep, "keep test files after the run");
   fs->U32("report_interval", &o->report_interval_s, "progress interval (s)");
+  RegisterProfileFlags(fs, &o->profile);
 }
 
 std::string RwName(Rw rw) {
@@ -73,6 +74,7 @@ std::string Validate(Options* o) {
   if (o->rwmixread > 100) return "rwmixread must be in [0, 100]";
   if (o->runtime_s == 0 && o->io_size == 0) return "set --runtime or --io_size";
   if (o->report_interval_s == 0) return "report_interval must be > 0";
+  if (auto e = ValidateProfile(o->profile); !e.empty()) return e;
   return "";
 }
 

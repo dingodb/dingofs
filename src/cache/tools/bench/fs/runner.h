@@ -24,6 +24,7 @@
 
 #include "cache/local/disk_cache_layout.h"
 #include "cache/local/local_filesystem.h"
+#include "cache/tools/bench/common/profiler.h"
 #include "cache/tools/bench/common/reporter.h"
 #include "cache/tools/bench/common/stats.h"
 #include "cache/tools/bench/fs/options.h"
@@ -61,6 +62,7 @@ class Runner {
   uint64_t deadline_us_{0};
   std::atomic<bool> stop_{false};
   std::atomic<uint64_t> bytes_issued_{0};
+  Profiler profiler_;
 };
 
 }  // namespace fs

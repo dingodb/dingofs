@@ -21,6 +21,7 @@
 #include <string>
 
 #include "cache/tools/bench/common/flags.h"
+#include "cache/tools/bench/common/profiler.h"
 
 namespace dingofs {
 namespace cache {
@@ -55,6 +56,8 @@ struct Options {
   std::string key_dist_str{"seq"};
   KeyDist key_dist{KeyDist::kSeq};
   double zipf_theta{0.99};
+
+  ProfileOptions profile;
 
   uint64_t BytesPerOp() const {
     return operation == OperationType::kRange ? range_length : block_size;

@@ -41,6 +41,7 @@ void RegisterFlags(FlagSet* fs, Options* o) {
   fs->Str("key_dist", &o->key_dist_str, "key distribution: seq | uniform | zipf");
   fs->Real("zipf_theta", &o->zipf_theta, "zipfian skew in (0, 1)");
   fs->U32("report_interval", &o->report_interval_s, "progress interval (s)");
+  RegisterProfileFlags(fs, &o->profile);
 }
 
 std::string OperationName(OperationType op) {
@@ -97,6 +98,7 @@ std::string Validate(Options* o) {
     return "uniform/zipf need a stop condition: set --duration or --ops";
   }
   if (o->report_interval_s == 0) return "report_interval must be > 0";
+  if (auto e = ValidateProfile(o->profile); !e.empty()) return e;
   return "";
 }
 

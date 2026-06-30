@@ -21,6 +21,7 @@
 #include <string>
 
 #include "cache/tools/bench/common/flags.h"
+#include "cache/tools/bench/common/profiler.h"
 
 namespace dingofs {
 namespace cache {
@@ -46,6 +47,7 @@ struct Options {
   bool prep{true};
   bool keep{false};
   uint32_t report_interval_s{3};
+  ProfileOptions profile;
 
   bool DoesRead() const {
     return rw == Rw::kRead || rw == Rw::kRandRead || rw == Rw::kRandRw;

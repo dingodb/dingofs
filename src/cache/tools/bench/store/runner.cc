@@ -198,7 +198,8 @@ Runner::Runner(Options options)
       stats_(std::make_unique<Stats>(options_.jobs)),
       reporter_(std::make_unique<ConsoleReporter>(
           "DingoFS cb store", BuildHeader(options_), options_.report_interval_s,
-          options_.warmup_s, stats_.get())) {}
+          options_.warmup_s, stats_.get())),
+      profiler_(options_.profile) {}
 
 Runner::~Runner() { Shutdown(); }
 
@@ -331,6 +332,9 @@ Status Runner::Run() {
     workers.emplace_back([this, i]() { RunWorker(i); });
   }
 
+  // Profile the measurement window (covers both runtime and io_size modes).
+  profiler_.Start();
+
   if (options_.runtime_s > 0) {
     if (options_.warmup_s > 0) {
       ::sleep(options_.warmup_s);
@@ -343,8 +347,10 @@ Status Runner::Run() {
 
   for (auto& worker : workers) worker.join();
 
+  profiler_.Stop();
   reporter_->Stop();
   Shutdown();
+  profiler_.RenderAndServe();
   return Status::OK();
 }
 
