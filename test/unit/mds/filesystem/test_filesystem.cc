@@ -1121,6 +1121,50 @@ TEST_F(FileSystemTest, CalcDirStat) {
   EXPECT_EQ(st.length(), 6000);
 }
 
+// A same-directory hardlink (`ln f hl`) puts two dentries on one inode, so the
+// inode number repeats in the dentry scan. CalcDirStat must not hand BatchGet a
+// duplicate inode key (the store txn rejects duplicates) and must still charge
+// the inode's length once per dentry (matching `find`).
+TEST_F(FileSystemTest, CalcDirStatSameDirHardlink) {
+  auto fs = Fs();
+  Context ctx;
+  FileSystem::MkDirParam dp;
+  dp.parent = kRootIno;
+  dp.name = "calc_hl_d";
+  dp.mode = 0777;
+  dp.uid = 1;
+  dp.gid = 1;
+  dp.rdev = 0;
+  EntryOut dout;
+  ASSERT_TRUE(fs->MkDir(ctx, dp, dout).ok());
+  Ino d = dout.attr.ino();
+
+  FileSystem::MkNodParam p;
+  p.parent = d;
+  p.name = "f";
+  p.mode = 0644;
+  p.uid = 1;
+  p.gid = 1;
+  p.rdev = 0;
+  EntryOut o;
+  ASSERT_TRUE(fs->MkNod(ctx, p, o).ok());
+  Ino f = o.attr.ino();
+  FileSystem::FlushFileParam fp;
+  fp.length = 7777;
+  EntryOut fo;
+  ASSERT_TRUE(fs->FlushFile(ctx, f, fp, fo).ok());
+
+  // hardlink the file under a second name in the SAME directory.
+  EntryOut lo;
+  ASSERT_TRUE(fs->Link(ctx, f, d, "f_hl", lo).ok());
+
+  DirStatEntry st;
+  auto status = fs->CalcDirStat(ctx, d, st);
+  ASSERT_TRUE(status.ok()) << "CalcDirStat fail: " << status.error_str();
+  EXPECT_EQ(st.inodes(), 2);         // two dentries (f, f_hl)
+  EXPECT_EQ(st.length(), 7777 * 2);  // length charged once per dentry
+}
+
 TEST_F(FileSystemTest, UpdateDirStatOnWrite) {
   auto fs = Fs();
   ASSERT_TRUE(fs->EnableDirStats());

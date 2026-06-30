@@ -24,6 +24,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <set>
 #include <string>
@@ -3145,23 +3146,31 @@ Status FileSystem::CalcDirStat(Context& ctx, Ino ino, DirStatEntry& out) {
     // (bypassing the inode cache so a full-directory scan does not evict the hot
     // working set) instead of a serial per-child store round-trip. Sub-directory
     // children are counted into `dirs` so non-recursive summaries need no scan.
-    std::vector<uint64_t> file_inos;
-    file_inos.reserve(dentries.size());
+    //
+    // A same-directory hardlink (`ln f hl`) puts two dentries on one inode, so
+    // the inode number repeats within the page. BatchGet rejects duplicate keys,
+    // and length must still be charged once per dentry (matching `find`), so key
+    // the BatchGet by unique inode while remembering each inode's dentry count.
+    std::map<uint64_t, int64_t> file_ino_count;
     for (const auto& dentry : dentries) {
       if (dentry.Type() == pb::mds::FileType::FILE) {
-        file_inos.push_back(dentry.INo());
+        ++file_ino_count[dentry.INo()];
       } else if (dentry.Type() == pb::mds::FileType::DIRECTORY) {
         ++total_dirs;
       }
     }
 
-    if (file_inos.empty()) return Status::OK();
+    if (file_ino_count.empty()) return Status::OK();
+
+    std::vector<uint64_t> file_inos;
+    file_inos.reserve(file_ino_count.size());
+    for (const auto& [file_ino, count] : file_ino_count) file_inos.push_back(file_ino);
 
     std::vector<InodeSPtr> inodes;
     auto st = BatchGetInodeFromStore(ctx, file_inos, "CalcDirStat", /*is_cache=*/false, inodes);
     if (!st.ok()) return st;
     for (const auto& inode : inodes) {
-      total_length += static_cast<int64_t>(inode->Length());
+      total_length += static_cast<int64_t>(inode->Length()) * file_ino_count[inode->Ino()];
     }
     return Status::OK();
   });
