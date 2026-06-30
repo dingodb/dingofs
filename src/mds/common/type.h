@@ -207,6 +207,12 @@ struct AttrOrMutation {
   bool IsMutation() const { return attr.ino() == 0; }
 };
 
+enum class ReqType : uint8_t {
+  kNormal = 0,
+  kRetryToPrimary = 1,
+  kRetryToSecondary = 2,
+};
+
 }  // namespace mds
 }  // namespace dingofs
 

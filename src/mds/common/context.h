@@ -27,10 +27,12 @@ namespace mds {
 class Context {
  public:
   Context() = default;
-  Context(const std::string& request_id, const std::string method_name)
-      : request_id_(request_id), method_name_(method_name) {};
-  Context(const ContextEntry& ctx, const std::string& request_id, const std::string method_name)
-      : is_bypass_cache_(ctx.is_bypass_cache()),
+  Context(const std::string& request_id, const std::string method_name, ReqType req_type = ReqType::kNormal)
+      : req_type_(req_type), request_id_(request_id), method_name_(method_name) {};
+  Context(const ContextEntry& ctx, const std::string& request_id, const std::string method_name,
+          ReqType req_type = ReqType::kNormal)
+      : req_type_(req_type),
+        is_bypass_cache_(ctx.is_bypass_cache()),
         use_base_version_(ctx.use_base_version()),
         inode_version_(ctx.inode_version()),
         client_id_(ctx.client_id()),
@@ -39,6 +41,8 @@ class Context {
         uid_(ctx.uid()) {
     ancestors_ = {ctx.ancestors().begin(), ctx.ancestors().end()};
   };
+
+  ReqType GetReqType() const { return req_type_; }
 
   bool IsBypassCache() const { return is_bypass_cache_; }
   bool UseBaseVersion() const { return use_base_version_; }
@@ -63,6 +67,8 @@ class Context {
   const std::string method_name_;
 
   const uint32_t uid_{0};
+
+  ReqType req_type_{ReqType::kNormal};
 
   std::vector<Ino> ancestors_;
 

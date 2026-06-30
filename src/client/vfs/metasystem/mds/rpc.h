@@ -196,6 +196,9 @@ inline Status TransformError(const pb::error::Error& error) {
     case pb::error::ENOT_EMPTY:
       return Status::NotEmpty(error.errcode(), error.errmsg());
 
+    case pb::error::EEXISTED:
+      return Status::Exist(error.errcode(), error.errmsg());
+
     case pb::error::ENOT_FOUND:
       return Status::NotExist(error.errcode(), error.errmsg());
 

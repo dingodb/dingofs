@@ -1355,7 +1355,10 @@ Status MDSMetaSystem::Unlink(ContextSPtr ctx, Ino parent,
   if (FLAGS_vfs_meta_batch_operation_enable) {
     auto operation = std::make_shared<UnlinkOperation>(ctx, parent, name);
     auto status = RunOperation(operation);
-    if (!status.ok()) return status;
+    if (!status.ok()) {
+      if (status.IsNotExist()) return Status::OK();
+      return status;
+    }
 
     auto& result = operation->GetResult();
     attr_entry = result.attr_entry;
@@ -1368,7 +1371,10 @@ Status MDSMetaSystem::Unlink(ContextSPtr ctx, Ino parent,
   } else {
     auto status =
         mds_client_.UnLink(ctx, parent, name, attr_entry, parent_attr_entry);
-    if (!status.ok()) return status;
+    if (!status.ok()) {
+      if (status.IsNotExist()) return Status::OK();
+      return status;
+    }
   }
 
   PutInodeToCache(attr_entry);

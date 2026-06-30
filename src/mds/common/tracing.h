@@ -20,6 +20,7 @@
 #include <utility>
 #include <vector>
 
+#include "mds/common/type.h"
 #include "utils/time.h"
 
 namespace dingofs {
@@ -52,6 +53,9 @@ class Trace {
     uint64_t write_time_us{0};
   };
 
+  ReqType GetReqType() const { return req_type_; }
+  bool IsNormalReq() const { return req_type_ == ReqType::kNormal; }
+
   Time& GetTime() { return time_; }
   const Time& GetTime() const { return time_; }
   Cache& GetCache() { return cache_; }
@@ -72,6 +76,8 @@ class Trace {
 
  private:
   uint64_t last_time_us_{0};
+
+  ReqType req_type_{ReqType::kNormal};
 
   Time time_;
   Cache cache_;
