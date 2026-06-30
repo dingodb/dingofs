@@ -24,6 +24,8 @@ add_executable(cb
     common/histogram.cc
     common/stats.cc
     common/reporter.cc
+    common/profiler.cc
+    common/file_server.cc
 
     aio/options.cc
     aio/runner.cc
@@ -49,6 +51,8 @@ add_executable(cb
 )
 
 target_link_libraries(cb
+    flamegraph
+
     cache_tier
     cache_local
     cache_common

@@ -21,6 +21,7 @@
 #include <string>
 
 #include "cache/tools/bench/common/flags.h"
+#include "cache/tools/bench/common/profiler.h"
 
 namespace dingofs {
 namespace cache {
@@ -48,6 +49,7 @@ struct Options {
   bool keep{false};
   uint32_t store_size_mb{10240};
   uint32_t report_interval_s{3};
+  ProfileOptions profile;
 
   bool NeedsDisk() const { return layer != Layer::kMem; }
   bool DoesRead() const {

@@ -65,7 +65,8 @@ Runner::Runner(Options options)
       stats_(std::make_unique<Stats>(options_.iodepth)),
       reporter_(std::make_unique<ConsoleReporter>(
           "DingoFS cb aio (io_uring/AioQueue)", BuildHeader(options_),
-          options_.report_interval_s, options_.warmup_s, stats_.get())) {}
+          options_.report_interval_s, options_.warmup_s, stats_.get())),
+      profiler_(options_.profile) {}
 
 Runner::~Runner() { Shutdown(); }
 
@@ -245,6 +246,9 @@ Status Runner::Run() {
     }
   }
 
+  // Profile the measurement window (covers both runtime and io_size modes).
+  profiler_.Start();
+
   if (options_.runtime_s > 0) {
     if (options_.warmup_s > 0) {
       ::sleep(options_.warmup_s);
@@ -259,8 +263,10 @@ Status Runner::Run() {
     if (tids[i] != 0) bthread_join(tids[i], nullptr);
   }
 
+  profiler_.Stop();
   reporter_->Stop();
   Shutdown();
+  profiler_.RenderAndServe();
   return Status::OK();
 }
 

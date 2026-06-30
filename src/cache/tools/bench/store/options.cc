@@ -37,6 +37,7 @@ void RegisterFlags(FlagSet* fs, Options* o) {
   fs->Switch("prep", &o->prep, "pre-fill blocks before read tests");
   fs->Switch("keep", &o->keep, "keep the cache dir after the run");
   fs->U32("report_interval", &o->report_interval_s, "progress interval (s)");
+  RegisterProfileFlags(fs, &o->profile);
 }
 
 std::string LayerName(Layer layer) {
@@ -95,6 +96,7 @@ std::string Validate(Options* o) {
   if (o->store_size_mb == 0) return "store_size_mb must be > 0";
   if (o->runtime_s == 0 && o->io_size == 0) return "set --runtime or --io_size";
   if (o->report_interval_s == 0) return "report_interval must be > 0";
+  if (auto e = ValidateProfile(o->profile); !e.empty()) return e;
   return "";
 }
 

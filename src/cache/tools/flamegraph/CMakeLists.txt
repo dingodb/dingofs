@@ -12,5 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(flamegraph)
-add_subdirectory(bench)
+# Native flame-graph renderer: folds `perf script` output and renders an
+# interactive SVG, so cb needs no perl/flamegraph.pl at runtime. Pure C++ stdlib
+# (flamegraph_assets.cc holds the embedded browser-side script).
+add_library(flamegraph STATIC
+    flamegraph.cc
+    flamegraph_assets.cc
+)

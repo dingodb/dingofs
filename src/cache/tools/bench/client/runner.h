@@ -31,6 +31,7 @@
 #include "cache/tools/bench/client/key_generator.h"
 #include "cache/tools/bench/client/operation.h"
 #include "cache/tools/bench/client/options.h"
+#include "cache/tools/bench/common/profiler.h"
 #include "cache/tools/bench/common/reporter.h"
 #include "cache/tools/bench/common/stats.h"
 #include "common/blockaccess/block_accesser.h"
@@ -92,6 +93,7 @@ class Runner {
   uint32_t inflight_per_worker_{0};
   double schedule_interval_us_{0};
   std::atomic<uint64_t> issued_{0};
+  Profiler profiler_;
 };
 
 }  // namespace client

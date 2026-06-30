@@ -78,7 +78,8 @@ Runner::Runner(Options options)
       mds_client_(std::make_shared<MDSClientImpl>()),
       reporter_(std::make_unique<ConsoleReporter>(
           "DingoFS cb client (TierBlockCache, open-loop)", BuildHeader(options_),
-          options_.report_interval_s, options_.warmup_s, stats_.get())) {
+          options_.report_interval_s, options_.warmup_s, stats_.get())),
+      profiler_(options_.profile) {
   workers_.reserve(options_.threads);
   for (uint32_t i = 0; i < options_.threads; ++i) {
     workers_.push_back(std::make_unique<Worker>());
@@ -133,12 +134,18 @@ Status Runner::Run() {
     reporter_->ResetBaseline();
   }
 
+  // Profile the measurement window (the open-loop workers run until their
+  // deadline / op budget; the join below spans that window).
+  profiler_.Start();
+
   for (uint32_t i = 0; i < options_.threads; ++i) {
     if (tids[i] != 0) bthread_join(tids[i], nullptr);
   }
 
+  profiler_.Stop();
   reporter_->Stop();
   Shutdown();
+  profiler_.RenderAndServe();
   return Status::OK();
 }
 

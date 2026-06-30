@@ -27,6 +27,7 @@
 
 #include "cache/local/aio_queue.h"
 #include "cache/tools/bench/aio/options.h"
+#include "cache/tools/bench/common/profiler.h"
 #include "cache/tools/bench/common/reporter.h"
 #include "cache/tools/bench/common/stats.h"
 #include "common/status.h"
@@ -74,6 +75,7 @@ class Runner {
   uint64_t deadline_us_{0};
   std::atomic<bool> stop_{false};
   std::atomic<uint64_t> bytes_issued_{0};
+  Profiler profiler_;
 };
 
 }  // namespace aio
