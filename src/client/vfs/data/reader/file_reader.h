@@ -84,7 +84,7 @@ class FileReader {
   // pretected by mutex_
   void DeleteReadRequestUnlock(ReadRequestSptr req);
   void DeleteReadRequest(ReadRequestSptr req);
-  void DeleteReadRequestAsync(ReadRequestSptr req);
+  void ScheduleReadRequestCleanup(ReadRequestSptr req);
 
   // pretected by mutex_
   void CheckReadahead(ContextSPtr ctx, const FileRange& frange, int64_t flen);

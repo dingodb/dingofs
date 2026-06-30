@@ -91,11 +91,15 @@ class VFSTestBase : public ::testing::Test {
     // --- 6. Real thread pools (sdk pattern: don't mock executors) ---
     read_executor_ = std::make_unique<ExecutorImpl>("test_read", 2);
     flush_executor_ = std::make_unique<ExecutorImpl>("test_flush", 2);
-    bg_executor_ = std::make_unique<ExecutorImpl>("test_bg", 1);
+    read_cleanup_executor_ =
+        std::make_unique<ExecutorImpl>("test_read_cleanup", 1);
+    write_background_executor_ =
+        std::make_unique<ExecutorImpl>("test_write_bg", 1);
     cb_executor_ = std::make_unique<ExecutorImpl>("test_cb", 1);
     CHECK(read_executor_->Start());
     CHECK(flush_executor_->Start());
-    CHECK(bg_executor_->Start());
+    CHECK(read_cleanup_executor_->Start());
+    CHECK(write_background_executor_->Start());
     CHECK(cb_executor_->Start());
 
     // --- 7. MockVFSHub defaults (ON_CALL + AnyNumber pattern) ---
@@ -116,8 +120,10 @@ class VFSTestBase : public ::testing::Test {
         .WillByDefault(Return(read_executor_.get()));
     ON_CALL(*mock_hub_, GetFlushExecutor())
         .WillByDefault(Return(flush_executor_.get()));
-    ON_CALL(*mock_hub_, GetBGExecutor())
-        .WillByDefault(Return(bg_executor_.get()));
+    ON_CALL(*mock_hub_, GetReadCleanupExecutor())
+        .WillByDefault(Return(read_cleanup_executor_.get()));
+    ON_CALL(*mock_hub_, GetWriteBackgroundExecutor())
+        .WillByDefault(Return(write_background_executor_.get()));
     ON_CALL(*mock_hub_, GetCBExecutor())
         .WillByDefault(Return(cb_executor_.get()));
     ON_CALL(*mock_hub_, GetFsInfo()).WillByDefault(Return(MakeTestFsInfo()));
@@ -134,7 +140,8 @@ class VFSTestBase : public ::testing::Test {
     EXPECT_CALL(*mock_hub_, GetCompactor()).Times(AnyNumber());
     EXPECT_CALL(*mock_hub_, GetReadExecutor()).Times(AnyNumber());
     EXPECT_CALL(*mock_hub_, GetFlushExecutor()).Times(AnyNumber());
-    EXPECT_CALL(*mock_hub_, GetBGExecutor()).Times(AnyNumber());
+    EXPECT_CALL(*mock_hub_, GetReadCleanupExecutor()).Times(AnyNumber());
+    EXPECT_CALL(*mock_hub_, GetWriteBackgroundExecutor()).Times(AnyNumber());
     EXPECT_CALL(*mock_hub_, GetCBExecutor()).Times(AnyNumber());
     EXPECT_CALL(*mock_hub_, GetFsInfo()).Times(AnyNumber());
     EXPECT_CALL(*mock_hub_, GetUidGidMapper()).Times(AnyNumber());
@@ -197,10 +204,11 @@ class VFSTestBase : public ::testing::Test {
 
   ~VFSTestBase() override {
     handle_manager_->Stop();
-    cb_executor_->Stop();
+    write_background_executor_->Stop();
     flush_executor_->Stop();
     read_executor_->Stop();
-    bg_executor_->Stop();
+    read_cleanup_executor_->Stop();
+    cb_executor_->Stop();
   }
 
  protected:
@@ -222,7 +230,8 @@ class VFSTestBase : public ::testing::Test {
   // Real executors
   std::unique_ptr<ExecutorImpl> read_executor_;
   std::unique_ptr<ExecutorImpl> flush_executor_;
-  std::unique_ptr<ExecutorImpl> bg_executor_;
+  std::unique_ptr<ExecutorImpl> read_cleanup_executor_;
+  std::unique_ptr<ExecutorImpl> write_background_executor_;
   std::unique_ptr<ExecutorImpl> cb_executor_;
 
   ContextSPtr ctx_;

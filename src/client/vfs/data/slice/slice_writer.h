@@ -59,7 +59,7 @@ class SliceWriter {
   // Should be called only once (protected by ChunkWriter).
   void FlushAsync(StatusCallback cb);
 
-  // Trigger async slice_id pre-allocation on BGExecutor.
+  // Trigger async slice_id pre-allocation on the write background executor.
   // Called by ChunkWriter after construction.
   void StartPrepareSliceId();
 

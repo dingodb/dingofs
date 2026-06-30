@@ -730,11 +730,11 @@ class SliceWriterStreamingTest : public test::VFSTestBase {
     return sw;
   }
 
-  // Wait for bg_executor_ to drain (PrepareSliceId runs there).
-  void WaitBGExecutorIdle() {
+  // Wait for write_background_executor_ to drain (PrepareSliceId runs there).
+  void WaitWriteBackgroundExecutorIdle() {
     test::AsyncWaiter w;
     w.Expect(1);
-    bg_executor_->Execute([&w]() { w.Done(); });
+    write_background_executor_->Execute([&w]() { w.Done(); });
     w.Wait();
   }
 
@@ -773,7 +773,7 @@ TEST_F(SliceWriterStreamingTest, UT1_FlushUpTo_OnlyFullBlocks) {
 
   auto sw = MakeStreamingWriter(0);
   SliceWriterGuard guard(sw);
-  WaitBGExecutorIdle();  // slice_id_ = 42
+  WaitWriteBackgroundExecutorIdle();  // slice_id_ = 42
 
   // Write 10MB = 2 full blocks (4MB each) + 2MB partial
   auto buf = MakeBuf(10 * 1024 * 1024);
@@ -834,7 +834,7 @@ TEST_F(SliceWriterStreamingTest, UT2_SliceId_DelayedArrival_CatchUp) {
 
   auto sw = MakeStreamingWriter(0);
   SliceWriterGuard guard(sw);
-  // Do NOT WaitBGExecutorIdle — PrepareSliceId is blocked
+  // Do NOT WaitWriteBackgroundExecutorIdle — PrepareSliceId is blocked
 
   // Write 8MB = 2 full blocks. slice_id_==0, FlushUpTo skips.
   auto buf1 = MakeBuf(8 * 1024 * 1024);
@@ -847,7 +847,7 @@ TEST_F(SliceWriterStreamingTest, UT2_SliceId_DelayedArrival_CatchUp) {
 
   // Release PrepareSliceId
   proceed.set_value();
-  WaitBGExecutorIdle();  // slice_id_ = 77
+  WaitWriteBackgroundExecutorIdle();  // slice_id_ = 77
 
   // Write 4MB more. FlushUpTo(12MB) catches up: block[0](end=4<=12),
   // block[1](end=8<=12), block[2](end=12<=12) — all uploaded.
@@ -894,7 +894,7 @@ TEST_F(SliceWriterStreamingTest, UT3_UploadError_Propagation) {
 
   auto sw = MakeStreamingWriter(0);
   SliceWriterGuard guard(sw);
-  WaitBGExecutorIdle();
+  WaitWriteBackgroundExecutorIdle();
 
   // Write 8MB = 2 blocks. block[0] OK, block[1] fails.
   auto buf = MakeBuf(8 * 1024 * 1024);
@@ -927,7 +927,7 @@ TEST_F(SliceWriterStreamingTest, UT4_WaitInflight_Timeout) {
 
   auto sw = MakeStreamingWriter(0);
   SliceWriterGuard guard(sw);
-  WaitBGExecutorIdle();
+  WaitWriteBackgroundExecutorIdle();
 
   // Write 4MB = 1 full block. PutAsync held → inflight_=1
   auto buf = MakeBuf(4 * 1024 * 1024);
@@ -974,7 +974,7 @@ TEST_F(SliceWriterStreamingTest, UT5_SmallFile_NoStreamingUpload) {
 
   auto sw = MakeStreamingWriter(0);
   SliceWriterGuard guard(sw);
-  WaitBGExecutorIdle();
+  WaitWriteBackgroundExecutorIdle();
 
   auto buf = MakeBuf(100 * 1024);  // 100KB
   ASSERT_TRUE(sw->Write(ctx_, buf.data(), 100 * 1024, 0).ok());
@@ -1017,7 +1017,7 @@ TEST_F(SliceWriterStreamingTest, UT6_MultipleWrites_StreamingOneByOne) {
 
   auto sw = MakeStreamingWriter(0);
   SliceWriterGuard guard(sw);
-  WaitBGExecutorIdle();
+  WaitWriteBackgroundExecutorIdle();
 
   const int32_t kBSize = 4 * 1024 * 1024;
   for (int i = 0; i < 4; i++) {
@@ -1068,7 +1068,8 @@ TEST_F(SliceWriterStreamingTest, UT7_SliceId_PreallocFail_SyncFallback) {
 
   auto sw = MakeStreamingWriter(0);
   SliceWriterGuard guard(sw);
-  WaitBGExecutorIdle();  // PrepareSliceId fails, alloc_failed_=true
+  WaitWriteBackgroundExecutorIdle();  // PrepareSliceId fails,
+                                      // alloc_failed_=true
 
   // Write 8MB = 2 blocks. FlushUpTo skips (alloc_failed).
   auto buf = MakeBuf(8 * 1024 * 1024);
@@ -1119,7 +1120,7 @@ TEST_F(SliceWriterStreamingTest, UT8_SingleWrite_MultiBlockFlushUpTo) {
 
   auto sw = MakeStreamingWriter(0);
   SliceWriterGuard guard(sw);
-  WaitBGExecutorIdle();
+  WaitWriteBackgroundExecutorIdle();
 
   // 10MB = 2 full blocks (4MB each) + 2MB partial
   auto buf = MakeBuf(10 * 1024 * 1024);
@@ -1164,7 +1165,7 @@ TEST_F(SliceWriterStreamingTest, UT9_ConcurrentCallbacks_ThreadSafe) {
 
   auto sw = MakeStreamingWriter(0);
   SliceWriterGuard guard(sw);
-  WaitBGExecutorIdle();
+  WaitWriteBackgroundExecutorIdle();
 
   // 20MB = 4 full blocks + 4MB partial. FlushUpTo uploads block[0..3].
   auto buf = MakeBuf(20 * 1024 * 1024);
@@ -1227,7 +1228,7 @@ TEST_F(SliceWriterStreamingTest, UT10_MixedStreamAndFlushResidual) {
 
   auto sw = MakeStreamingWriter(0);
   SliceWriterGuard guard(sw);
-  WaitBGExecutorIdle();
+  WaitWriteBackgroundExecutorIdle();
 
   // 6MB = 1 full block (4MB) + 2MB partial
   auto buf = MakeBuf(6 * 1024 * 1024);
@@ -1277,7 +1278,7 @@ TEST_F(SliceWriterStreamingTest, UT11_TimeoutThenLateCallback_NoUAF) {
 
   auto* sw = MakeStreamingWriter(0);
   // No SliceWriterGuard — manually control DecRef to test exact sequence
-  WaitBGExecutorIdle();
+  WaitWriteBackgroundExecutorIdle();
 
   // Write 4MB = 1 full block → IncRef in UploadBlockAsync → refs=2
   auto buf = MakeBuf(4 * 1024 * 1024);

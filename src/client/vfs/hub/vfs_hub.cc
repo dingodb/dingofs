@@ -54,7 +54,8 @@ namespace vfs {
 
 static const std::string kFlushExecutorName = "vfs_flush";
 static const std::string kReadExecutorName = "vfs_read";
-static const std::string kBgExecutorName = "vfs_bg";
+static const std::string kReadCleanupExecutorName = "vfs_read_cleanup";
+static const std::string kWriteBackgroundExecutorName = "vfs_write_bg";
 static const std::string kCBExecutorName = "vfs_callback";
 
 static MetaSystemUPtr BuildMetaSystem(const VFSConfig& vfs_conf,
@@ -85,6 +86,21 @@ WriterTable* VFSHubImpl::GetWriterTable() {
 }
 
 VFSHubImpl::~VFSHubImpl() {
+  // Quiesce before tearing members down. Stop() is idempotent, so this is a
+  // no-op after a normal shutdown that already stopped the hub; but it is the
+  // only thing that stops live components when Start() failed half-way and the
+  // external Stop() path was skipped -- otherwise e.g. ~BatchProcessor would
+  // pthread_cond_destroy a condition variable its worker is still waiting on
+  // and hang the process forever.
+  //
+  // skip_unmount=false: the only case where this actually runs (rather than
+  // no-op) is a dying process whose external Stop() never ran -- it should
+  // deregister its own client_id from the MDS (UnmountFs is per-client_id, it
+  // never touches a peer's mount). A successful handover already ran an
+  // explicit Stop(/*skip_unmount=*/true), so this is a no-op there and does not
+  // override it.
+  Stop(/*skip_unmount=*/false);
+
   if (handle_manager_ != nullptr) {
     handle_manager_.reset();
   }
@@ -97,12 +113,16 @@ VFSHubImpl::~VFSHubImpl() {
     read_executor_.reset();
   }
 
-  if (flush_executor_ != nullptr) {
-    flush_executor_.reset();
+  if (read_cleanup_executor_ != nullptr) {
+    read_cleanup_executor_.reset();
   }
 
-  if (bg_executor_ != nullptr) {
-    bg_executor_.reset();
+  if (write_background_executor_ != nullptr) {
+    write_background_executor_.reset();
+  }
+
+  if (flush_executor_ != nullptr) {
+    flush_executor_.reset();
   }
 
   if (warmup_manager_ != nullptr) {
@@ -137,6 +157,10 @@ VFSHubImpl::~VFSHubImpl() {
 Status VFSHubImpl::Start(bool skip_mount) {
   CHECK(started_.load(std::memory_order_relaxed) == false)
       << "unexpected start";
+
+  // Arm teardown before creating any component: if Start() fails half-way, the
+  // destructor's Stop() must still quiesce whatever came up.
+  stopped_.store(false, std::memory_order_relaxed);
 
   LOG(INFO) << fmt::format("[vfs.hub] vfs hub starting, skip_mount({}).",
                            skip_mount);
@@ -268,10 +292,19 @@ Status VFSHubImpl::Start(bool skip_mount) {
   }
 
   {
-    bg_executor_ = std::make_unique<ExecutorImpl>(kBgExecutorName,
-                                                  FLAGS_vfs_bg_executor_thread);
-    if (!bg_executor_->Start()) {
-      return Status::Internal("bg executor start fail");
+    read_cleanup_executor_ = std::make_unique<ExecutorImpl>(
+        kReadCleanupExecutorName, FLAGS_vfs_read_cleanup_executor_thread);
+    if (!read_cleanup_executor_->Start()) {
+      return Status::Internal("read cleanup executor start fail");
+    }
+  }
+
+  {
+    write_background_executor_ = std::make_unique<ExecutorImpl>(
+        kWriteBackgroundExecutorName,
+        FLAGS_vfs_write_background_executor_thread);
+    if (!write_background_executor_->Start()) {
+      return Status::Internal("write background executor start fail");
     }
   }
 
@@ -378,7 +411,16 @@ Status VFSHubImpl::Start(bool skip_mount) {
 
 // NOTE: the stop sequence is important, please do not change it lightly.
 Status VFSHubImpl::Stop(bool skip_unmount) {
-  if (!started_.load(std::memory_order_relaxed)) {
+  // Teardown-once gate. The first caller runs the full quiescence; later
+  // callers (the destructor after a normal Stop, or a second handover Stop)
+  // no-op. Gated on stopped_ rather than started_ so a half-started hub (e.g.
+  // Start failed after components came up because the brpc dummy server could
+  // not bind) still tears its live components down instead of leaking them into
+  // a destructor that would hang (~BatchProcessor destroying an in-use
+  // condition variable). NOTE: assumes Stop() calls are sequential (they are on
+  // the teardown path); concurrent Stop() would need a wait-for-completion
+  // guard, not exchange.
+  if (stopped_.exchange(true)) {
     return Status::OK();
   }
 
@@ -409,8 +451,10 @@ Status VFSHubImpl::Stop(bool skip_unmount) {
     read_executor_->Stop();
   }
 
-  if (bg_executor_ != nullptr) {
-    bg_executor_->Stop();
+  // Writer-side background tasks may call meta_system/block_store or enqueue
+  // flush work, so drain them while those dependencies are still alive.
+  if (write_background_executor_ != nullptr) {
+    write_background_executor_->Stop();
   }
 
   if (flush_executor_ != nullptr) {
@@ -430,12 +474,27 @@ Status VFSHubImpl::Stop(bool skip_unmount) {
     prefetch_manager_->Stop();
   }
 
-  if (meta_wrapper_ != nullptr) {
-    meta_wrapper_->Stop(skip_unmount);
-  }
-
+  // Block cache read/prefetch completions run in cache-owned bthreads and may
+  // schedule read cleanup work. Keep read_cleanup_executor_ alive until
+  // block_store_->Shutdown() has joined those bthreads.
   if (block_store_ != nullptr) {
     block_store_->Shutdown();
+  }
+
+  // read_cleanup_executor_ is the consumer of read completions (it erases
+  // finished read requests); stop it only after block_store_ has joined every
+  // read bthread, otherwise a straggler completion submits to a dead executor.
+  if (read_cleanup_executor_ != nullptr) {
+    read_cleanup_executor_->Stop();
+  }
+
+  // meta_wrapper_ can stop after block_store_: the metasystem flushes to MDS
+  // via RPC and never pushes data through block_store_, and its only background
+  // producer (write_background_executor_'s slice_id pre-allocation) was already
+  // drained above. Block-store completions firing during Shutdown() touch only
+  // read_cleanup_executor_ / cb_executor_, never meta.
+  if (meta_wrapper_ != nullptr) {
+    meta_wrapper_->Stop(skip_unmount);
   }
 
   if (trace_manager_ != nullptr) {
@@ -453,6 +512,11 @@ Status VFSHubImpl::Stop(bool skip_unmount) {
   LOG(INFO) << fmt::format("[vfs.hub] stopped vfs hub, skip_unmount({}).",
                            skip_unmount);
 
+  // Mark not-serving only after every component is stopped. GetFsInfo() /
+  // GetBlockAccesserOptions() CHECK(started_), and a draining background task
+  // (e.g. an in-flight compaction the compactor is joining) may still call them
+  // while the components are being torn down. Clearing started_ at the top of
+  // Stop() would CHECK-fail (SIGABRT) such a late caller mid-teardown.
   started_.store(false, std::memory_order_relaxed);
 
   return Status::OK();

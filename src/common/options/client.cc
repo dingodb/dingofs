@@ -141,8 +141,17 @@ DEFINE_uint32(vfs_prefetch_threads, 8, "number of prefetch threads");
 DEFINE_int32(vfs_warmup_threads, 4, "number of warmup threads");
 
 // vfs handle
-DEFINE_int32(vfs_bg_executor_thread, 4, "number of backgroud threads");
-DEFINE_validator(vfs_bg_executor_thread, brpc::PassValidate);
+// read_cleanup runs only low-frequency reader-side housekeeping (async
+// read-request erasure + periodic mem shrink), so a small pool suffices.
+DEFINE_int32(vfs_read_cleanup_executor_thread, 2,
+             "number of read cleanup executor threads");
+DEFINE_validator(vfs_read_cleanup_executor_thread, brpc::PassValidate);
+
+// write_background runs only low-frequency writer-side housekeeping (slice_id
+// pre-allocation + periodic flush trigger), so a small pool suffices.
+DEFINE_int32(vfs_write_background_executor_thread, 2,
+             "number of write background executor threads");
+DEFINE_validator(vfs_write_background_executor_thread, brpc::PassValidate);
 
 DEFINE_int32(vfs_periodic_flush_interval_ms, 5000,
              "periodic flush interval in milliseconds");

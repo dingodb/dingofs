@@ -112,7 +112,8 @@ DECLARE_uint32(vfs_meta_warmup_small_file_batch_size);
 DECLARE_uint32(vfs_meta_warmup_small_file_ttl_s);
 
 // vfs handle
-DECLARE_int32(vfs_bg_executor_thread);
+DECLARE_int32(vfs_read_cleanup_executor_thread);
+DECLARE_int32(vfs_write_background_executor_thread);
 DECLARE_int32(vfs_periodic_flush_interval_ms);
 DECLARE_int32(vfs_periodic_trim_mem_ms);
 

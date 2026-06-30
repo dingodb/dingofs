@@ -384,7 +384,7 @@ void FileWriter::SchedulePeriodicFlush() {
 
   AcquireRef();
 
-  vfs_hub_->GetBGExecutor()->Schedule(
+  vfs_hub_->GetWriteBackgroundExecutor()->Schedule(
       [this] {
         RunPeriodicFlush();
         ReleaseRef();

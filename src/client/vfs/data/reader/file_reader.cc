@@ -221,7 +221,7 @@ void FileReader::SchedulePeriodicShrink() {
   }
 
   AcquireRef();
-  vfs_hub_->GetBGExecutor()->Schedule(
+  vfs_hub_->GetReadCleanupExecutor()->Schedule(
       [this] {
         RunPeriodicShrink();
         ReleaseRef();
@@ -351,10 +351,11 @@ ReadRequestSptr FileReader::NewReadRequest(int64_t s, int64_t e) {
   return new_req;
 }
 
-// NOTD: hold req lock
-void FileReader::DeleteReadRequestAsync(ReadRequestSptr req) {
+// NOTE: caller holds req lock. Schedule cleanup outside the completion callback
+// path so request erasure runs in the reader cleanup lane.
+void FileReader::ScheduleReadRequestCleanup(ReadRequestSptr req) {
   AcquireRef();
-  vfs_hub_->GetBGExecutor()->Execute([&, req]() {
+  vfs_hub_->GetReadCleanupExecutor()->Execute([&, req]() {
     DeleteReadRequest(req);
     ReleaseRef();
   });
@@ -369,7 +370,7 @@ void FileReader::DeleteReadRequest(ReadRequestSptr req) {
 //
 // erase() is intentionally idempotent. A request may be reclaimed by several
 // uncoordinated paths that all delete on the same (kInvalid && readers==0)
-// condition: the async DeleteReadRequestAsync scheduled from
+// condition: the scheduled cleanup from ScheduleReadRequestCleanup,
 // OnReadRequestComplete, the per-read CleanUpRequest, the periodic ShrinkMem,
 // and the foreground Read cleanup. The async path decides to delete while
 // holding only req->mutex and erases later under mutex_, so a synchronous path
@@ -435,7 +436,7 @@ void FileReader::OnReadRequestComplete(ReadRequestSptr req, Status s) {
       break;
     case ReadRequestState::kInvalid:
       if (req->readers == 0) {
-        DeleteReadRequestAsync(req);
+        ScheduleReadRequestCleanup(req);
       } else {
         // it's user's responsibility to clean up
         req->cv.notify_all();
