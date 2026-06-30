@@ -73,7 +73,9 @@ class VFSHub {
 
   virtual Executor* GetReadExecutor() = 0;
 
-  virtual Executor* GetBGExecutor() = 0;
+  virtual Executor* GetReadCleanupExecutor() = 0;
+
+  virtual Executor* GetWriteBackgroundExecutor() = 0;
 
   virtual Executor* GetFlushExecutor() = 0;
 
@@ -139,9 +141,14 @@ class VFSHubImpl : public VFSHub {
     return read_executor_.get();
   }
 
-  Executor* GetBGExecutor() override {
-    CHECK_NOTNULL(bg_executor_);
-    return bg_executor_.get();
+  Executor* GetReadCleanupExecutor() override {
+    CHECK_NOTNULL(read_cleanup_executor_);
+    return read_cleanup_executor_.get();
+  }
+
+  Executor* GetWriteBackgroundExecutor() override {
+    CHECK_NOTNULL(write_background_executor_);
+    return write_background_executor_.get();
   }
 
   Executor* GetFlushExecutor() override {
@@ -205,7 +212,15 @@ class VFSHubImpl : public VFSHub {
   }
 
  private:
+  // started_ means "serviceable to FUSE ops" (set when Start completes, cleared
+  // when Stop begins). stopped_ is the teardown-needed gate: it starts true (a
+  // freshly constructed, never-started hub owns nothing to tear down), Start()
+  // arms it (false) before creating any component, and Stop() disarms it (back
+  // to true) exactly once. So the destructor's Stop() tears down a half-started
+  // hub yet is a clean no-op for a never-started or already-stopped one,
+  // without relying on the "no Start() after Stop()" invariant.
   std::atomic_bool started_{false};
+  std::atomic_bool stopped_{true};
 
   blockaccess::BlockAccessOptions blockaccess_options_;
 
@@ -223,7 +238,19 @@ class VFSHubImpl : public VFSHub {
   std::unique_ptr<blockaccess::BlockAccesser> block_accesser_;
   std::unique_ptr<BlockStore> block_store_;
   std::unique_ptr<Executor> read_executor_;
-  std::unique_ptr<Executor> bg_executor_;
+
+  // Reader-local cleanup only: periodic shrink and read-request cleanup.
+  // It must not issue block_store I/O.  Keep it alive until after
+  // block_store_->Shutdown(), because cache bthread read completions can still
+  // schedule cleanup work while block_store is draining.
+  std::unique_ptr<Executor> read_cleanup_executor_;
+
+  // Writer-side background work: periodic flush scheduling and slice-id
+  // pre-allocation.  These tasks may touch flush_executor, block_store, and
+  // meta_system, so Stop() must drain this executor before those dependencies
+  // are torn down.
+  std::unique_ptr<Executor> write_background_executor_;
+
   std::unique_ptr<Executor> flush_executor_;
   std::unique_ptr<Executor> cb_executor_;
   std::unique_ptr<WriteMemPool> write_buffer_manager_;

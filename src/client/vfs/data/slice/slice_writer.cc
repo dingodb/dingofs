@@ -94,10 +94,11 @@ void SliceWriter::DecRef() {
 
 void SliceWriter::StartPrepareSliceId() {
   // Hold a ref for the async work to prevent use-after-free if SliceWriter
-  // is destroyed before BGExecutor picks up the lambda (high load + short
-  // SliceWriter lifetime). Mirrors the pattern in UploadBlockAsync.
+  // is destroyed before write_background_executor picks up the lambda (high
+  // load + short SliceWriter lifetime). Mirrors the pattern in
+  // UploadBlockAsync.
   IncRef();
-  vfs_hub_->GetBGExecutor()->Execute([this]() {
+  vfs_hub_->GetWriteBackgroundExecutor()->Execute([this]() {
     PrepareSliceId();
     DecRef();
   });

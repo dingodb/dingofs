@@ -19,6 +19,7 @@
 
 #include <glog/logging.h>
 
+#include <atomic>
 #include <cstdint>
 #include <string>
 #include <utility>
@@ -36,14 +37,40 @@ namespace vfs {
 class MetaWrapper {
  public:
   MetaWrapper(MetaSystemUPtr target);
-  ~MetaWrapper() = default;
+
+  // Defense in depth: guarantee the underlying metasystem (and its batch
+  // processor worker) is stopped before destruction, even if VFSHubImpl::Stop
+  // never reached meta_wrapper_->Stop(). Stop() is idempotent. skip_unmount is
+  // false so a dying process that never ran an external Stop() still
+  // deregisters its own client_id; a handover already ran an explicit
+  // Stop(true), making this a no-op there (it never overrides the handover's
+  // skipped unmount).
+  ~MetaWrapper() { Stop(/*skip_unmount=*/false); }
 
   Status Init(bool skip_mount) {
     CHECK(target_ != nullptr) << "meta system is null";
-    return target_->Init(skip_mount);
+    Status s = target_->Init(skip_mount);
+    if (s.ok()) {
+      // Arm teardown only after a FULLY successful Init. If the metasystem's
+      // Init() fails half-way, Stop() must NOT run: MDSMetaSystem::Stop()
+      // unconditionally stops sub-components (executor_, compact_processor_,
+      // ...) that a partial Init left uninitialized, which would crash. Leaving
+      // stopped_=true makes the destructor's Stop() a no-op and cleanup falls
+      // to the (uninitialized-safe) member destructors, matching pre-fix
+      // behavior.
+      stopped_.store(false);
+    }
+    return s;
   }
 
-  void Stop(bool skip_unmount) { target_->Stop(skip_unmount); }
+  // Idempotent: shields the underlying (unbounded) FlushAllFile and the batch
+  // processor join from any repeated Stop().
+  void Stop(bool skip_unmount) {
+    if (stopped_.exchange(true)) {
+      return;
+    }
+    target_->Stop(skip_unmount);
+  }
 
   bool Dump(ContextSPtr ctx, Json::Value& value) {
     return target_->Dump(ctx, value);
@@ -214,6 +241,10 @@ class MetaWrapper {
   }
 
  private:
+  // Starts true (a never-Init'd wrapper owns no live worker); Init() arms it
+  // (false) and Stop() disarms it (true) exactly once.
+  std::atomic<bool> stopped_{true};
+
   MetaSystemUPtr target_;
   std::unique_ptr<metrics::client::SliceMetric> slice_metric_;
 };
