@@ -57,6 +57,8 @@ using OperationProcessorSPtr = std::shared_ptr<OperationProcessor>;
 
 const uint32_t kStoreOperationBatchSize = 64;
 
+DECLARE_bool(mds_check_before_create_enable);
+
 class Operation {
  public:
   Operation(Trace& trace) : trace_(trace) { time_ns_ = utils::TimestampNs(); }
@@ -329,6 +331,12 @@ class Operation {
 
   Trace& GetTrace() { return trace_; }
 
+  bool IsCheckBeforeCreate() {
+    if (!trace_.IsNormalReq()) return true;
+
+    return FLAGS_mds_check_before_create_enable;
+  }
+
  private:
   uint64_t time_ns_{0};
 
@@ -557,6 +565,8 @@ class MkDirOperation : public Operation {
   uint32_t GetFsId() const override { return dentry_.FsId(); }
   Ino GetIno() const override { return dentry_.ParentIno(); }
 
+  void PrefetchKey(std::vector<std::string>& keys) override;
+
   Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
 
   void SetResultAttr(BatchSharedParam& shared_param) override { result_.parent_attr = shared_param.attr; }
@@ -583,6 +593,8 @@ class BatchMkDirOperation : public Operation {
   OpType GetOpType() const override { return OpType::kBatchMkDir; }
   uint32_t GetFsId() const override { return dentries_[0].FsId(); }
   Ino GetIno() const override { return dentries_[0].ParentIno(); }
+
+  void PrefetchKey(std::vector<std::string>& keys) override;
 
   Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
 
@@ -611,6 +623,8 @@ class MkNodOperation : public Operation {
 
   uint32_t GetFsId() const override { return dentry_.FsId(); }
   Ino GetIno() const override { return dentry_.ParentIno(); }
+
+  void PrefetchKey(std::vector<std::string>& keys) override;
 
   Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
 
@@ -643,6 +657,8 @@ class BatchMkNodOperation : public Operation {
   uint32_t GetFsId() const override { return dentries_[0].FsId(); }
   Ino GetIno() const override { return dentries_[0].ParentIno(); }
 
+  void PrefetchKey(std::vector<std::string>& keys) override;
+
   Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
 
   void SetResultAttr(BatchSharedParam& shared_param) override {
@@ -674,6 +690,8 @@ class BatchCreateFileOperation : public Operation {
 
   uint32_t GetFsId() const override { return dentries_.front().FsId(); }
   Ino GetIno() const override { return dentries_.front().ParentIno(); }
+
+  void PrefetchKey(std::vector<std::string>& keys) override;
 
   Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
 
@@ -738,6 +756,8 @@ class SymLinkOperation : public Operation {
 
   uint32_t GetFsId() const override { return dentry_.FsId(); }
   Ino GetIno() const override { return dentry_.ParentIno(); }
+
+  void PrefetchKey(std::vector<std::string>& keys) override;
 
   Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
 

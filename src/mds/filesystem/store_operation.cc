@@ -69,6 +69,9 @@ DEFINE_validator(mds_store_operation_merge_delay_us, brpc::PassValidate);
 DEFINE_bool(mds_tiny_file_data_enable, false, "enable tiny file data feature.");
 DEFINE_validator(mds_tiny_file_data_enable, brpc::PassValidate);
 
+DEFINE_bool(mds_check_before_create_enable, false, "enable check before create file/dir.");
+DEFINE_validator(mds_check_before_create_enable, brpc::PassValidate);
+
 DECLARE_uint32(mds_filesession_live_time_s);
 
 static const uint32_t kOpNameBufInitSize = 128;
@@ -744,15 +747,33 @@ Status CreateRootOperation::Run(TxnUPtr& txn) {
   return Status::OK();
 }
 
+void MkDirOperation::PrefetchKey(std::vector<std::string>& keys) {
+  if (IsCheckBeforeCreate()) {
+    // used by check dentry exist, if exist, return error
+    keys.push_back(MetaCodec::EncodeDentryKey(GetFsId(), GetIno(), dentry_.Name()));
+  }
+}
+
 Status MkDirOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) {
   auto& parent_attr = shared_param.attr;
+  auto& prefetch_index = shared_param.prefetch_index;
   const uint32_t fs_id = GetFsId();
   const Ino parent = GetIno();
+
   CHECK(parent_attr.ino() == parent) << fmt::format("parent not equal in shared param, {} {}", parent_attr.ino(),
                                                     parent);
 
+  // check dentry exist
+  const std::string dentry_key = MetaCodec::EncodeDentryKey(fs_id, parent, dentry_.Name());
+  if (IsCheckBeforeCreate()) {
+    std::string dentry_value = FindValue(prefetch_index, dentry_key);
+    if (!dentry_value.empty()) {
+      return Status(pb::error::EEXISTED, fmt::format("dentry({}) already exist", dentry_key));
+    }
+  }
+
   // create dentry
-  txn->Put(MetaCodec::EncodeDentryKey(fs_id, parent, dentry_.Name()), MetaCodec::EncodeDentryValue(dentry_.Copy()));
+  txn->Put(dentry_key, MetaCodec::EncodeDentryValue(dentry_.Copy()));
 
   // create inode
   txn->Put(MetaCodec::EncodeInodeKey(fs_id, dentry_.INo()), MetaCodec::EncodeInodeValue(attr_));
@@ -770,10 +791,21 @@ Status MkDirOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) 
   return Status::OK();
 }
 
+void BatchMkDirOperation::PrefetchKey(std::vector<std::string>& keys) {
+  if (IsCheckBeforeCreate()) {
+    // used by check dentry exist, if exist, return error
+    for (const auto& dentry : dentries_) {
+      keys.push_back(MetaCodec::EncodeDentryKey(GetFsId(), GetIno(), dentry.Name()));
+    }
+  }
+}
+
 Status BatchMkDirOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) {
   auto& parent_attr = shared_param.attr;
+  auto& prefetch_index = shared_param.prefetch_index;
   const uint32_t fs_id = GetFsId();
   const Ino parent = GetIno();
+
   CHECK(parent_attr.ino() == parent) << fmt::format("parent not equal in shared param, {} {}", parent_attr.ino(),
                                                     parent);
 
@@ -781,9 +813,19 @@ Status BatchMkDirOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_pa
   CHECK(dentries_.size() == attrs_.size())
       << fmt::format("dentry and attr size not equal, {} {}.", dentries_.size(), attrs_.size());
 
-  // create dentry
+  // check and create dentry
   for (const auto& dentry : dentries_) {
-    txn->Put(MetaCodec::EncodeDentryKey(fs_id, parent, dentry.Name()), MetaCodec::EncodeDentryValue(dentry.Copy()));
+    // check dentry exist
+    const std::string dentry_key = MetaCodec::EncodeDentryKey(fs_id, parent, dentry.Name());
+    if (IsCheckBeforeCreate()) {
+      std::string dentry_value = FindValue(prefetch_index, dentry_key);
+      if (!dentry_value.empty()) {
+        return Status(pb::error::EEXISTED, fmt::format("dentry({}) already exist", dentry_key));
+      }
+    }
+
+    // create dentry
+    txn->Put(dentry_key, MetaCodec::EncodeDentryValue(dentry.Copy()));
   }
 
   // create inode + seed empty dir-stat in the same txn so each dir is tracked from birth
@@ -802,13 +844,30 @@ Status BatchMkDirOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_pa
   return Status::OK();
 }
 
+void MkNodOperation::PrefetchKey(std::vector<std::string>& keys) {
+  if (IsCheckBeforeCreate()) {
+    // used by check dentry exist, if exist, return error
+    keys.push_back(MetaCodec::EncodeDentryKey(GetFsId(), GetIno(), dentry_.Name()));
+  }
+}
+
 Status MkNodOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) {
   auto& parent_attr = shared_param.attr;
+  auto& prefetch_index = shared_param.prefetch_index;
   const uint32_t fs_id = GetFsId();
   const Ino parent = GetIno();
 
+  // check dentry exist
+  const std::string dentry_key = MetaCodec::EncodeDentryKey(fs_id, parent, dentry_.Name());
+  if (IsCheckBeforeCreate()) {
+    std::string dentry_value = FindValue(prefetch_index, dentry_key);
+    if (!dentry_value.empty()) {
+      return Status(pb::error::EEXISTED, fmt::format("dentry({}) already exist", dentry_key));
+    }
+  }
+
   // create dentry
-  txn->Put(MetaCodec::EncodeDentryKey(fs_id, parent, dentry_.Name()), MetaCodec::EncodeDentryValue(dentry_.Copy()));
+  txn->Put(dentry_key, MetaCodec::EncodeDentryValue(dentry_.Copy()));
 
   // create inode
   txn->Put(MetaCodec::EncodeInodeKey(fs_id, dentry_.INo()), MetaCodec::EncodeInodeValue(attr_));
@@ -833,8 +892,18 @@ Status MkNodOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) 
   return Status::OK();
 }
 
+void BatchMkNodOperation::PrefetchKey(std::vector<std::string>& keys) {
+  if (IsCheckBeforeCreate()) {
+    // used by check dentry exist, if exist, return error
+    for (const auto& dentry : dentries_) {
+      keys.push_back(MetaCodec::EncodeDentryKey(GetFsId(), GetIno(), dentry.Name()));
+    }
+  }
+}
+
 Status BatchMkNodOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) {
   auto& parent_attr = shared_param.attr;
+  auto& prefetch_index = shared_param.prefetch_index;
   const uint32_t fs_id = GetFsId();
   const Ino parent = GetIno();
 
@@ -842,9 +911,19 @@ Status BatchMkNodOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_pa
   CHECK(dentries_.size() == attrs_.size())
       << fmt::format("dentry and attr size not equal, {} {}.", dentries_.size(), attrs_.size());
 
-  // create dentry
+  // check and create dentry
   for (const auto& dentry : dentries_) {
-    txn->Put(MetaCodec::EncodeDentryKey(fs_id, parent, dentry.Name()), MetaCodec::EncodeDentryValue(dentry.Copy()));
+    // check dentry exist
+    const std::string dentry_key = MetaCodec::EncodeDentryKey(fs_id, parent, dentry.Name());
+    if (IsCheckBeforeCreate()) {
+      std::string dentry_value = FindValue(prefetch_index, dentry_key);
+      if (!dentry_value.empty()) {
+        return Status(pb::error::EEXISTED, fmt::format("dentry({}) already exist", dentry_key));
+      }
+    }
+
+    // create dentry
+    txn->Put(dentry_key, MetaCodec::EncodeDentryValue(dentry.Copy()));
   }
 
   // create inode
@@ -873,8 +952,18 @@ Status BatchMkNodOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_pa
   return Status::OK();
 }
 
+void BatchCreateFileOperation::PrefetchKey(std::vector<std::string>& keys) {
+  if (IsCheckBeforeCreate()) {
+    // used by check dentry exist, if exist, return error
+    for (const auto& dentry : dentries_) {
+      keys.push_back(MetaCodec::EncodeDentryKey(GetFsId(), GetIno(), dentry.Name()));
+    }
+  }
+}
+
 Status BatchCreateFileOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) {
   auto& parent_attr = shared_param.attr;
+  auto& prefetch_index = shared_param.prefetch_index;
   const uint32_t fs_id = GetFsId();
   const Ino parent = GetIno();
 
@@ -888,8 +977,17 @@ Status BatchCreateFileOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shar
     const auto& attr = attrs_[i];
     const auto& file_session = file_sessions_[i];
 
+    // check dentry exist
+    const std::string dentry_key = MetaCodec::EncodeDentryKey(fs_id, parent, dentry.Name());
+    if (IsCheckBeforeCreate()) {
+      std::string dentry_value = FindValue(prefetch_index, dentry_key);
+      if (!dentry_value.empty()) {
+        return Status(pb::error::EEXISTED, fmt::format("dentry({}) already exist", dentry_key));
+      }
+    }
+
     // create dentry
-    txn->Put(MetaCodec::EncodeDentryKey(fs_id, parent, dentry.Name()), MetaCodec::EncodeDentryValue(dentry.Copy()));
+    txn->Put(dentry_key, MetaCodec::EncodeDentryValue(dentry.Copy()));
 
     // create inode
     txn->Put(MetaCodec::EncodeInodeKey(fs_id, dentry.INo()), MetaCodec::EncodeInodeValue(attr));
@@ -921,6 +1019,10 @@ Status BatchCreateFileOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shar
 
 void HardLinkOperation::PrefetchKey(std::vector<std::string>& keys) {
   keys.push_back(MetaCodec::EncodeInodeKey(GetFsId(), dentry_.INo()));
+  if (IsCheckBeforeCreate()) {
+    // used by check dentry exist, if exist, return error
+    keys.push_back(MetaCodec::EncodeDentryKey(GetFsId(), GetIno(), dentry_.Name()));
+  }
 }
 
 Status HardLinkOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) {
@@ -928,6 +1030,15 @@ Status HardLinkOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_para
   auto& prefetch_index = shared_param.prefetch_index;
   const uint32_t fs_id = GetFsId();
   const Ino parent = GetIno();
+
+  // check dentry exist
+  const std::string dentry_key = MetaCodec::EncodeDentryKey(fs_id, parent, dentry_.Name());
+  if (IsCheckBeforeCreate()) {
+    std::string dentry_value = FindValue(prefetch_index, dentry_key);
+    if (!dentry_value.empty()) {
+      return Status(pb::error::EEXISTED, fmt::format("dentry({}) already exist", dentry_key));
+    }
+  }
 
   // get child attr
   std::string child_key = MetaCodec::EncodeInodeKey(fs_id, dentry_.INo());
@@ -945,7 +1056,7 @@ Status HardLinkOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_para
   txn->Put(child_key, MetaCodec::EncodeInodeValue(attr));
 
   // create dentry
-  txn->Put(MetaCodec::EncodeDentryKey(fs_id, parent, dentry_.Name()), MetaCodec::EncodeDentryValue(dentry_.Copy()));
+  txn->Put(dentry_key, MetaCodec::EncodeDentryValue(dentry_.Copy()));
 
   // update parent attr
   if (shared_param.UseMutation()) {
@@ -969,13 +1080,30 @@ Status HardLinkOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_para
   return Status::OK();
 }
 
+void SymLinkOperation::PrefetchKey(std::vector<std::string>& keys) {
+  if (IsCheckBeforeCreate()) {
+    // used by check dentry exist, if exist, return error
+    keys.push_back(MetaCodec::EncodeDentryKey(GetFsId(), GetIno(), dentry_.Name()));
+  }
+}
+
 Status SymLinkOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) {
   auto& parent_attr = shared_param.attr;
+  auto& prefetch_index = shared_param.prefetch_index;
   const uint32_t fs_id = GetFsId();
   const Ino parent = GetIno();
 
+  // check dentry exist
+  const std::string dentry_key = MetaCodec::EncodeDentryKey(fs_id, parent, dentry_.Name());
+  if (IsCheckBeforeCreate()) {
+    std::string dentry_value = FindValue(prefetch_index, dentry_key);
+    if (!dentry_value.empty()) {
+      return Status(pb::error::EEXISTED, fmt::format("dentry({}) already exist", dentry_key));
+    }
+  }
+
   // create dentry
-  txn->Put(MetaCodec::EncodeDentryKey(fs_id, parent, dentry_.Name()), MetaCodec::EncodeDentryValue(dentry_.Copy()));
+  txn->Put(dentry_key, MetaCodec::EncodeDentryValue(dentry_.Copy()));
 
   // create inode
   txn->Put(MetaCodec::EncodeInodeKey(fs_id, dentry_.INo()), MetaCodec::EncodeInodeValue(attr_));

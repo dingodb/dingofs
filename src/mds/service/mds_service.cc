@@ -120,6 +120,18 @@ static Status ValidateRequest(FileSystemSPtr& file_system, T* request, uint64_t 
   return Status::OK();
 }
 
+template <typename Request>
+static ReqType CalReqType(const Request* request) {
+  bool is_bypass_cache = request->context().is_bypass_cache();
+  uint32_t retry_times = request->info().retry_times();
+
+  if (retry_times == 0) {
+    return ReqType::kNormal;
+  } else {
+    return is_bypass_cache ? ReqType::kRetryToSecondary : ReqType::kRetryToPrimary;
+  }
+}
+
 MDSServiceImpl::MDSServiceImpl(FileSystemSetSPtr file_system_set, GcProcessorSPtr gc_processor, FsStatsUPtr fs_stat,
                                CacheGroupMemberManagerSPtr cache_group_manager)
     : file_system_set_(file_system_set),
