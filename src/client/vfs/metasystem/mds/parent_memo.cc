@@ -16,12 +16,15 @@
 
 #include "common/const.h"
 #include "fmt/core.h"
+#include "fmt/ranges.h"
 #include "json/value.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
 namespace meta {
+
+const uint32_t kMaxDepth = 1000;
 
 ParentMemo::ParentMemo() {
   // root ino is its own parent
@@ -58,21 +61,28 @@ bool ParentMemo::GetVersion(Ino ino, uint64_t& version) {
   return found;
 }
 
-std::vector<uint64_t> ParentMemo::GetAncestors(uint64_t ino) {
-  std::vector<uint64_t> ancestors;
+std::vector<Ino> ParentMemo::GetAncestors(Ino ino) {
+  std::vector<Ino> ancestors;
   ancestors.reserve(32);
   ancestors.push_back(ino);
 
+  uint32_t depth = 0;
   Ino parent;
   do {
     if (!GetParent(ino, parent)) break;
     ancestors.push_back(parent);
 
-    if (parent == 1) break;
+    if (parent == kRootIno) break;
 
     ino = parent;
 
-  } while (true);
+  } while (++depth <= kMaxDepth);
+
+  if (depth > kMaxDepth) {
+    LOG(ERROR) << fmt::format(
+        "[meta.parent_memo] get ancestors fail, depth({}/{}) ancestors({}).",
+        depth, kMaxDepth, ancestors);
+  }
 
   return ancestors;
 }
