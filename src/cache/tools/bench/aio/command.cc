@@ -47,6 +47,7 @@ int Run(const std::string& program, int argc, char** argv) {
   if (fs.HelpRequested()) {
     fs.PrintHelp(program, program + " --dir=DIR [OPTIONS]",
                  "  $ cb aio --dir=/data/t --rw=randread --bs=4KiB --iodepth=128 --runtime=30\n"
+                 "  $ cb aio --dir=/data/t --rw=randread --bs=4KiB --iodepth=128 --threads=4 --runtime=30\n"
                  "  $ cb aio --dir=/data/t --rw=write --bs=4MiB --nrfiles=4 --filesize=4GiB --iodepth=16\n");
     return 0;
   }

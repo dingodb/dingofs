@@ -39,8 +39,12 @@ cb help <cmd>      # 等价写法
 ## 常用命令
 
 ```bash
-# 1) 裸盘极限：4K 随机读，128 队列深度，跑 30s
+# 1) 裸盘极限：4K 随机读，128 个并发 worker（= 128 个在飞 I/O），跑 30s
 cb aio --dir=/data/t --rw=randread --bs=4KiB --iodepth=128 --runtime=30
+# 1b) 并发(在飞 I/O 数)由 --threads 决定，每个 worker 闭环压 1 个 I/O 等完再发下一个；
+#     --iodepth 只设 io_uring ring 深度（= 现在 cache 里 FLAGS_iodepth 的用法）。
+#     下面 = 32 并发、ring 深 128。想量单次延迟就 --threads=1。
+cb aio --dir=/data/t --rw=randread --bs=4KiB --iodepth=128 --threads=32 --runtime=30
 
 # 2) 文件系统层：1M 整块随机读，4096 个块文件，64 并发
 cb fs --dir=/data/t --rw=randread --bs=1MiB --nrfiles=4096 --iodepth=64
@@ -77,43 +81,62 @@ cb fsop --dir=/data/t --sizes=4KiB --threads=1,8,32 --shared_dir
 `cb` 会在**测量窗口**内自动抓火焰图，跑完后渲染成可交互的 SVG、起一个 web 服务并打印链接：
 
 - **on-cpu**（`perf`）：CPU 时间花在哪些函数/哪一层；
-- **off-cpu**（bcc `offcputime`）：线程在哪里**阻塞/等待**（等锁、等 IO），io 配色。
+- **off-cpu**（bcc `offcputime`）：线程在哪里**阻塞/等待**（等锁、等 IO、被抢占），计数=**绝对微秒**，io 配色；
+- **lock**（brpc 进程内 contention profiler）：每条调用链**在 mutex 上阻塞的绝对时间**（us），定位锁瓶颈最直接；**进程内采集，不需要 root/perf/bcc**。
 
-渲染（`perf script` 折叠 + SVG 生成）与 web 服务都**内置在 cb 二进制里**（原生 C++，
+> off-cpu 与 lock 火焰图的**计数就是绝对时间(us)**，宽度=占比；**鼠标悬停**任一帧即看该调用链消耗的绝对微秒，输出行也会打印总时长。off-cpu 覆盖一切阻塞（锁+IO+上下文切换），lock 只看 mutex 但更精准、零依赖。
+
+渲染（`perf script` 折叠 + 符号化 + SVG 生成）与 web 服务都**内置在 cb 二进制里**（原生 C++，
 无 perl / python3 / 外部脚本）。支持 `aio` / `fs` / `store` / `client`（`fsop` 是 syscall 矩阵、无稳态窗口，**不支持**）。
 
 ```bash
-# 默认 on-cpu + off-cpu；结束后打印 http 链接，浏览器打开即看
+# 默认只抓 on-cpu（依赖最少：perf+addr2line）；结束后打印 http 链接，浏览器打开即看
 cb aio --dir=/data/t --rw=randread --bs=4KiB --iodepth=128 --runtime=30 --flamegraph
 
 # 只看 on-cpu，采样 199Hz，固定端口
 cb store --layer=blockcache --dir=/data/t --rw=randread --runtime=30 \
          --flamegraph --profile_mode=on_cpu --profile_freq=199 --profile_port=8088
+
+# 锁竞争火焰图（进程内、无需 root/perf/bcc，只需 addr2line 符号化）
+cb store --layer=mem --rw=randread --nrfiles=8192 --jobs=32 --runtime=20 \
+         --flamegraph --profile_mode=lock
+
+# 三张一起：on-cpu + off-cpu + lock
+cb store --layer=blockcache --dir=/data/t --rw=randread --runtime=30 --flamegraph --profile_mode=all
 ```
 
 输出示例：
 
 ```
 [flamegraph] on-cpu  : /tmp/cb-flame-12345/on_cpu.svg
-[flamegraph] off-cpu : /tmp/cb-flame-12345/off_cpu.svg
+[flamegraph] off-cpu : /tmp/cb-flame-12345/off_cpu.svg  (total blocked ≈ 820 ms across threads; hover a frame for its us)
+[flamegraph] lock    : /tmp/cb-flame-12345/lock.svg  (total on locks ≈ 11498 ms; hover a frame for its us)
 [flamegraph] serving : http://10.0.0.3:43187/   (Ctrl-C to stop)
 ```
 
 | flag | 默认 | 说明 |
 |------|------|------|
 | `--flamegraph` | false | 总开关；`--noflamegraph` 关闭 |
-| `--profile_mode` | `both` | `on_cpu` / `off_cpu` / `both` |
+| `--profile_mode` | `on_cpu` | `on_cpu` / `off_cpu` / `lock` / `both`(=on+off) / `all`；可逗号组合，如 `on_cpu,lock` |
 | `--profile_freq` | 99 | on-cpu 采样频率 (Hz) |
 | `--profile_dir` | 空 | 输出目录；空 = `/tmp/cb-flame-<pid>` |
 | `--profile_port` | 0 | http 端口；0 = 自动选空闲端口 |
 
-**依赖**（压测机，需 root）：只需 **`perf`**（on-cpu，含 `binutils`/`addr2line` 用于 DWARF 符号化，
-`perf` 包通常已带）+ **`bcc-tools`**（提供 `offcputime`，off-cpu）。
-一键安装：`dnf install -y perf binutils bcc-tools`。**渲染与 web 服务已编进 cb，无需 perl / python3 / 任何外部脚本**——
-把 `build/bin/cb` 单文件拷到目标机、装好上面两个工具即可。任一工具缺失只会**跳过对应能力并打印安装提示**，不会让压测失败。
+**依赖**（压测机）：
+- **on-cpu**：`perf`（+ `binutils`/`addr2line` 做 DWARF 符号化，`perf` 包通常已带）；
+- **off-cpu**：`bcc-tools`（`offcputime`，需 **root** + BTF）；
+- **lock**：仅需 `addr2line`（binutils）符号化，**进程内采集、不需要 root/perf/bcc**——容器里也能跑。
+
+一键装齐：`dnf install -y perf binutils bcc-tools`。**渲染与 web 服务已编进 cb，无需 perl / python3 / 任何外部脚本**——
+把 `build/bin/cb` 单文件拷到目标机、装好需要的工具即可。
+
+**你显式请求某个模式（`--profile_mode`）但它依赖的工具没装时，cb 会在启动时直接报错退出并提示 `dnf install xxx`**（不再静默跳过），例如：
+`profile_mode=off_cpu needs bcc offcputime -- install it: dnf install bcc-tools`。
 
 **注意**：
 
+- **lock 火焰图只覆盖 mutex**（bthread/pthread），不含条件变量/信号量/自旋；采样上限 ~1000/s，绝对值为**估计**；
+  最适合 `store`/`client`（真有缓存锁，如 `MemCache::Load`）。`aio` 的 `Aio::Wait` 用条件变量、**不**计入。
 - web 服务绑 `0.0.0.0`，直接打印机器 IP；远程压测机用浏览器即可访问（注意端口暴露在内网）。
   服务在前台运行，**Ctrl-C 结束**。
 - `--flamegraph` 会**轻微扰动吞吐**（DWARF 栈采样 + eBPF sched 探针），是「找瓶颈模式」，
