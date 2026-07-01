@@ -38,7 +38,7 @@ class ParentMemo {
 
   bool GetParent(Ino ino, Ino& parent);
   bool GetVersion(Ino ino, uint64_t& version);
-  std::vector<uint64_t> GetAncestors(uint64_t ino);
+  std::vector<Ino> GetAncestors(Ino ino);
   bool GetRenameRefCount(Ino ino, int32_t& rename_ref_count);
 
   void Upsert(Ino ino, Ino parent, uint64_t version = 0,
