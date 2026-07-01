@@ -110,8 +110,13 @@ void PutBlockTask::OnRetry(const blockaccess::PutObjectAsyncContextSPtr& ctx) {
                << (butil::gettimeofday_us() - ctx->start_time) / 1e6 << "s)"
                << ",  status = " << ctx->status.ToString();
 
-  retry_queue_->Submit(
-      [this, ctx]() { block_accesser_->AsyncPut(ctx->origin_key, ctx); });
+  if (!retry_queue_->Submit(
+          [this, ctx]() { block_accesser_->AsyncPut(ctx->origin_key, ctx); })) {
+    LOG(ERROR) << "Give up retrying upload block, storage client is shutting "
+                  "down: key = "
+               << ctx->origin_key << ", status = " << ctx->status.ToString();
+    OnComplete(ctx->status);
+  }
 }
 
 void PutBlockTask::OnComplete(Status s) {
@@ -182,8 +187,13 @@ void RangeBlockTask::OnRetry(
                << (butil::gettimeofday_us() - ctx->start_time) / 1e6 << "s)"
                << ",  status = " << ctx->status.ToString();
 
-  retry_queue_->Submit(
-      [this, ctx]() { block_accesser_->AsyncGet(ctx->origin_key, ctx); });
+  if (!retry_queue_->Submit(
+          [this, ctx]() { block_accesser_->AsyncGet(ctx->origin_key, ctx); })) {
+    LOG(ERROR) << "Give up retrying download block, storage client is shutting "
+                  "down: key = "
+               << ctx->origin_key << ", status = " << ctx->status.ToString();
+    OnComplete(ctx->status);
+  }
 }
 
 void RangeBlockTask::OnComplete(Status s) {

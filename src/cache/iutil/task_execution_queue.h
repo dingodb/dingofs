@@ -52,9 +52,12 @@ class TaskExecutionQueue {
     CHECK_EQ(0, bthread::execution_queue_join(queue_id_));
   }
 
-  void Submit(Task task) {
-    CHECK_EQ(0, bthread::execution_queue_execute(queue_id_, task));
+  bool Submit(Task task) {
+    if (bthread::execution_queue_execute(queue_id_, task) != 0) {
+      return false;
+    }
     size_.fetch_add(1, std::memory_order_relaxed);
+    return true;
   }
 
   int64_t Size() { return size_.load(std::memory_order_relaxed); }

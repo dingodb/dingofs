@@ -23,8 +23,11 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include <condition_variable>
 #include <memory>
+#include <mutex>
 #include <string>
+#include <thread>
 
 #include "cache/common/storage_client.h"
 #include "common/block/block_handle.h"
@@ -120,6 +123,43 @@ TEST_F(StorageClientTest, PutFailsWhenRetryWindowElapsed) {
   FLAGS_storage_upload_retry_timeout_s = saved;
 }
 
+TEST_F(StorageClientTest, PutRetryAfterShutdownReturnsIoError) {
+  StorageClient client(&accesser_);
+  ASSERT_TRUE(client.Start().ok());
+
+  // Capture the in-flight async context and defer its callback, so the failure
+  // fires after Shutdown has stopped the retry queue. This reproduces the race
+  // where a late S3 callback resubmits to a dead queue, which used to abort the
+  // process; it must now converge to an IO error instead.
+  std::mutex mu;
+  std::condition_variable cv;
+  std::shared_ptr<PutObjectAsyncContext> inflight;
+  EXPECT_CALL(accesser_, AsyncPut(_, _))
+      .WillOnce(Invoke([&](const std::string&,
+                           std::shared_ptr<PutObjectAsyncContext> ctx) {
+        std::lock_guard<std::mutex> lk(mu);
+        inflight = ctx;
+        cv.notify_one();
+      }));
+
+  // Put blocks until the task completes, so drive it from a separate thread.
+  Status put_status;
+  std::thread putter([&] { put_status = client.Put(Handle(300), Buf("x")); });
+
+  {
+    std::unique_lock<std::mutex> lk(mu);
+    cv.wait(lk, [&] { return inflight != nullptr; });
+  }
+
+  ASSERT_TRUE(client.Shutdown().ok());
+
+  inflight->status = Status::IoError("late failure after shutdown");
+  inflight->cb(inflight);
+
+  putter.join();
+  EXPECT_TRUE(put_status.IsIoError());
+}
+
 TEST_F(StorageClientTest, RangeSuccess) {
   StorageClient client(&accesser_);
   ASSERT_TRUE(client.Start().ok());
@@ -182,6 +222,45 @@ TEST_F(StorageClientTest, RangeNotFoundIsNotRetried) {
   IOBuffer buffer(storage.data(), storage.size());
   EXPECT_TRUE(client.Range(Handle(201), 0, 4096, &buffer).IsNotFound());
   ASSERT_TRUE(client.Shutdown().ok());
+}
+
+TEST_F(StorageClientTest, RangeRetryAfterShutdownReturnsIoError) {
+  StorageClient client(&accesser_);
+  ASSERT_TRUE(client.Start().ok());
+
+  // Same late-callback race as the Put case, exercised on the download retry
+  // queue: submitting a retry to the stopped queue must return an IO error
+  // rather than crashing.
+  std::mutex mu;
+  std::condition_variable cv;
+  std::shared_ptr<GetObjectAsyncContext> inflight;
+  EXPECT_CALL(accesser_, AsyncGet(_, _))
+      .WillOnce(Invoke([&](const std::string&,
+                           std::shared_ptr<GetObjectAsyncContext> ctx) {
+        std::lock_guard<std::mutex> lk(mu);
+        inflight = ctx;
+        cv.notify_one();
+      }));
+
+  const size_t length = 5;
+  std::string storage(length, '\0');
+  IOBuffer buffer(storage.data(), storage.size());
+  Status range_status;
+  std::thread ranger(
+      [&] { range_status = client.Range(Handle(301), 0, length, &buffer); });
+
+  {
+    std::unique_lock<std::mutex> lk(mu);
+    cv.wait(lk, [&] { return inflight != nullptr; });
+  }
+
+  ASSERT_TRUE(client.Shutdown().ok());
+
+  inflight->status = Status::IoError("late failure after shutdown");
+  inflight->cb(inflight);
+
+  ranger.join();
+  EXPECT_TRUE(range_status.IsIoError());
 }
 
 }  // namespace cache
