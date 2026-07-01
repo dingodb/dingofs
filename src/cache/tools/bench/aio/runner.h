@@ -37,8 +37,10 @@ namespace cache {
 namespace bench {
 namespace aio {
 
-// Closed-loop at --iodepth (fio-style): iodepth slot bthreads each Submit+Wait
-// an Aio against AioQueue, so the outstanding i/o count is ~iodepth.
+// --threads closed-loop worker bthreads, each keeping exactly one i/o in flight
+// (Submit + Wait), so the offered concurrency (in-flight i/o count) is
+// --threads. --iodepth only sizes the AioQueue/io_uring ring (FLAGS_iodepth),
+// like the production cache uses it.
 class Runner {
  public:
   explicit Runner(Options options);
@@ -57,7 +59,7 @@ class Runner {
   Status OpenFiles();
   Status PrepFiles();
 
-  void RunSlot(uint32_t id);
+  void RunWorker(uint32_t worker);
   static void* GenEntry(void* arg);
 
   std::string FilePath(uint32_t index) const;

@@ -94,6 +94,10 @@ Status Runner::Run() {
     Shutdown();
     return status;
   }
+  // Start capturing before the reporter prints its table, so the [flamegraph]
+  // lines don't split the metrics output (perf -p follows the worker bthreads
+  // spawned below).
+  profiler_.Start();
   status = reporter_->Start();
   if (!status.ok()) {
     Shutdown();
@@ -133,10 +137,6 @@ Status Runner::Run() {
     stats_->Reset();
     reporter_->ResetBaseline();
   }
-
-  // Profile the measurement window (the open-loop workers run until their
-  // deadline / op budget; the join below spans that window).
-  profiler_.Start();
 
   for (uint32_t i = 0; i < options_.threads; ++i) {
     if (tids[i] != 0) bthread_join(tids[i], nullptr);

@@ -39,6 +39,7 @@ struct Options {
   Rw rw{Rw::kRandRead};
   uint32_t rwmixread{70};
   uint32_t iodepth{128};
+  uint32_t threads{0};  // worker bthreads; 0 => iodepth (1 in-flight each)
   uint32_t runtime_s{10};
   uint64_t io_size{0};
   uint32_t warmup_s{0};

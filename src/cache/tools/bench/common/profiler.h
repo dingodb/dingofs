@@ -34,7 +34,7 @@ namespace bench {
 // subcommands expose the same flags through their own FlagSet (no global gflags).
 struct ProfileOptions {
   bool flamegraph{false};      // master switch
-  std::string mode{"both"};    // on_cpu | off_cpu | both
+  std::string mode{"on_cpu"};  // on_cpu | off_cpu | lock | both | all (comma-ok)
   uint32_t freq{99};           // on-cpu perf sampling frequency (Hz)
   std::string dir;             // output dir; empty => /tmp/cb-flame-<pid>
   uint32_t port{0};            // http port; 0 => auto-pick a free port
@@ -74,6 +74,7 @@ class Profiler {
 
   bool want_on_cpu_{false};
   bool want_off_cpu_{false};
+  bool want_lock_{false};
   std::string out_dir_;
 
   std::string perf_bin_;        // resolved perf, or "" if absent
@@ -81,6 +82,7 @@ class Profiler {
 
   pid_t on_cpu_pid_{-1};
   pid_t off_cpu_pid_{-1};
+  bool lock_active_{false};  // brpc contention profiler running (in-process)
   bool started_{false};
 };
 

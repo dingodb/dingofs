@@ -313,6 +313,10 @@ Status Runner::Run() {
     Shutdown();
     return status;
   }
+  // Start capturing before the reporter prints its table, so the [flamegraph]
+  // lines don't split the metrics output (perf -p follows the worker threads
+  // spawned below). Covers both runtime and io_size modes.
+  profiler_.Start();
   status = reporter_->Start();
   if (!status.ok()) {
     Shutdown();
@@ -331,9 +335,6 @@ Status Runner::Run() {
   for (uint32_t i = 0; i < options_.jobs; ++i) {
     workers.emplace_back([this, i]() { RunWorker(i); });
   }
-
-  // Profile the measurement window (covers both runtime and io_size modes).
-  profiler_.Start();
 
   if (options_.runtime_s > 0) {
     if (options_.warmup_s > 0) {

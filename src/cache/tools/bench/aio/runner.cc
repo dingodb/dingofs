@@ -49,6 +49,7 @@ ConsoleReporter::HeaderRows BuildHeader(const Options& o) {
   }
   h.emplace_back("block size", FormatBytes(o.bs));
   h.emplace_back("iodepth", std::to_string(o.iodepth));
+  h.emplace_back("threads", std::to_string(o.threads));
   h.emplace_back("files",
                  std::to_string(o.nrfiles) + " x " + FormatBytes(o.filesize));
   h.emplace_back("O_DIRECT", o.direct ? "yes" : "no");
@@ -62,7 +63,7 @@ ConsoleReporter::HeaderRows BuildHeader(const Options& o) {
 
 Runner::Runner(Options options)
     : options_(options),
-      stats_(std::make_unique<Stats>(options_.iodepth)),
+      stats_(std::make_unique<Stats>(options_.threads)),
       reporter_(std::make_unique<ConsoleReporter>(
           "DingoFS cb aio (io_uring/AioQueue)", BuildHeader(options_),
           options_.report_interval_s, options_.warmup_s, stats_.get())),
@@ -75,8 +76,11 @@ std::string Runner::FilePath(uint32_t index) const {
 }
 
 Status Runner::AllocBuffers() {
-  buffers_.assign(options_.iodepth, nullptr);
-  for (uint32_t i = 0; i < options_.iodepth; ++i) {
+  // One buffer (and one registered fixed-buffer slot) per worker: each worker
+  // has a single i/o in flight, so the concurrency -- and the buffer count --
+  // is --threads, independent of the AioQueue ring depth (--iodepth).
+  buffers_.assign(options_.threads, nullptr);
+  for (uint32_t i = 0; i < options_.threads; ++i) {
     void* p = nullptr;
     if (posix_memalign(&p, kBufAlign, options_.bs) != 0 || p == nullptr) {
       return Status::Internal("posix_memalign failed");
@@ -85,8 +89,8 @@ Status Runner::AllocBuffers() {
     buffers_[i] = static_cast<char*>(p);
   }
   if (options_.fixed) {
-    fixed_iovecs_.resize(options_.iodepth);
-    for (uint32_t i = 0; i < options_.iodepth; ++i) {
+    fixed_iovecs_.resize(options_.threads);
+    for (uint32_t i = 0; i < options_.threads; ++i) {
       fixed_iovecs_[i] = iovec{buffers_[i], options_.bs};
     }
   }
@@ -155,27 +159,31 @@ Status Runner::Init() {
 
 void* Runner::GenEntry(void* arg) {
   auto* gen_arg = static_cast<GenArg*>(arg);
-  gen_arg->self->RunSlot(gen_arg->id);
+  gen_arg->self->RunWorker(gen_arg->id);
   return nullptr;
 }
 
-void Runner::RunSlot(uint32_t id) {
+void Runner::RunWorker(uint32_t worker) {
   const uint32_t nrfiles = options_.nrfiles;
   const uint64_t bs = options_.bs;
   const uint64_t nblocks = options_.filesize / bs;
+  const uint32_t threads = options_.threads;
 
-  int fd = fds_[id % nrfiles];
-  char* buffer = buffers_[id];
-  const int buf_index = options_.fixed ? static_cast<int>(id) : -1;
+  // Each worker is one closed-loop submitter: it keeps exactly ONE i/o in
+  // flight (Submit + Wait), so the offered concurrency is --threads. --iodepth
+  // only sizes the AioQueue/io_uring ring (FLAGS_iodepth), exactly like the
+  // production cache uses it.
+  int fd = fds_[worker % nrfiles];
+  char* buffer = buffers_[worker];
+  const int buf_index = options_.fixed ? static_cast<int>(worker) : -1;
 
-  const uint64_t rank = id / nrfiles;
-  uint64_t stride = (options_.iodepth / nrfiles) +
-                    ((options_.iodepth % nrfiles) > (id % nrfiles) ? 1 : 0);
+  uint64_t stride = (threads / nrfiles) +
+                    ((threads % nrfiles) > (worker % nrfiles) ? 1 : 0);
   if (stride == 0) stride = 1;
-  uint64_t seq_block = rank;
+  uint64_t seq_block = worker / nrfiles;
 
   std::mt19937_64 rng(0x9E3779B97F4A7C15ULL ^
-                      (static_cast<uint64_t>(id + 1) * 0x100000001B3ULL));
+                      (static_cast<uint64_t>(worker + 1) * 0x100000001B3ULL));
   const bool random = options_.IsRandom();
   const bool always_read =
       options_.rw == Rw::kRead || options_.rw == Rw::kRandRead;
@@ -212,7 +220,7 @@ void Runner::RunSlot(uint32_t id) {
     queue_->Submit(&aio);
     aio.Wait();
     const uint64_t latency_us = butil::gettimeofday_us() - start_us;
-    stats_->Record(id, bs, latency_us, aio.Result().status.ok());
+    stats_->Record(worker, bs, latency_us, aio.Result().status.ok());
   }
 }
 
@@ -222,6 +230,10 @@ Status Runner::Run() {
     Shutdown();
     return status;
   }
+  // Start capturing before the reporter prints its table, so the [flamegraph]
+  // lines don't split the metrics output (perf -p follows the worker threads
+  // spawned below). Covers both runtime and io_size modes.
+  profiler_.Start();
   status = reporter_->Start();
   if (!status.ok()) {
     Shutdown();
@@ -235,19 +247,16 @@ Status Runner::Run() {
                               1000000ULL);
   }
 
-  std::vector<bthread_t> tids(options_.iodepth, 0);
-  std::vector<GenArg> args(options_.iodepth);
-  for (uint32_t i = 0; i < options_.iodepth; ++i) {
+  std::vector<bthread_t> tids(options_.threads, 0);
+  std::vector<GenArg> args(options_.threads);
+  for (uint32_t i = 0; i < options_.threads; ++i) {
     args[i] = GenArg{this, i};
     if (bthread_start_background(&tids[i], nullptr, &Runner::GenEntry,
                                  &args[i]) != 0) {
       tids[i] = 0;
-      RunSlot(i);
+      RunWorker(i);
     }
   }
-
-  // Profile the measurement window (covers both runtime and io_size modes).
-  profiler_.Start();
 
   if (options_.runtime_s > 0) {
     if (options_.warmup_s > 0) {
@@ -259,7 +268,7 @@ Status Runner::Run() {
     stop_.store(true, std::memory_order_relaxed);
   }
 
-  for (uint32_t i = 0; i < options_.iodepth; ++i) {
+  for (uint32_t i = 0; i < options_.threads; ++i) {
     if (tids[i] != 0) bthread_join(tids[i], nullptr);
   }
 

@@ -27,7 +27,11 @@ void RegisterFlags(FlagSet* fs, Options* o) {
   fs->Size("bs", &o->bs, "i/o block size");
   fs->Size("filesize", &o->filesize, "size of each test file");
   fs->U32("nrfiles", &o->nrfiles, "number of test files");
-  fs->U32("iodepth", &o->iodepth, "outstanding i/o (concurrency), <= 4096");
+  fs->U32("iodepth", &o->iodepth,
+          "AioQueue/io_uring ring depth (FLAGS_iodepth), <= 4096");
+  fs->U32("threads", &o->threads,
+          "worker bthreads = offered concurrency (each keeps 1 i/o in flight); "
+          "0 = iodepth");
   fs->U32("rwmixread", &o->rwmixread, "read percent for randrw");
   fs->U32("runtime", &o->runtime_s, "run seconds; 0 = use io_size");
   fs->Size("io_size", &o->io_size, "total bytes; 0 = use runtime");
@@ -71,6 +75,8 @@ std::string Validate(Options* o) {
   if (o->filesize < o->bs) return "filesize must be >= bs";
   if (o->nrfiles == 0) return "nrfiles must be > 0";
   if (o->iodepth == 0 || o->iodepth > 4096) return "iodepth must be in [1, 4096]";
+  if (o->threads == 0) o->threads = o->iodepth;  // default: one worker per ring slot
+  if (o->threads > 4096) return "threads must be in [1, 4096]";
   if (o->rwmixread > 100) return "rwmixread must be in [0, 100]";
   if (o->runtime_s == 0 && o->io_size == 0) {
     return "set --runtime or --io_size";
