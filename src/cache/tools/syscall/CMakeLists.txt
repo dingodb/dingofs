@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(flamegraph)
-add_subdirectory(bench)
-add_subdirectory(syscall)
+# Syscall microbenchmarks. Self-contained (libc + pthread only); each also
+# builds standalone, e.g.  g++ -O2 -pthread futex_wake_bench.cc -o futex_wake_bench
+add_executable(futex_wake_bench futex_wake_bench.cc)
+target_link_libraries(futex_wake_bench pthread)
