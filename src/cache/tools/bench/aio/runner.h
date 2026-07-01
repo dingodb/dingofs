@@ -77,6 +77,10 @@ class Runner {
   uint64_t deadline_us_{0};
   std::atomic<bool> stop_{false};
   std::atomic<uint64_t> bytes_issued_{0};
+  // Breakdown of one closed-loop op: Submit() call vs blocking in Wait().
+  std::atomic<uint64_t> submit_sum_us_{0};
+  std::atomic<uint64_t> wait_sum_us_{0};
+  std::atomic<uint64_t> op_count_{0};
   Profiler profiler_;
 };
 

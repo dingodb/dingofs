@@ -25,6 +25,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
+#include <iomanip>
 #include <iostream>
 #include <random>
 
@@ -190,6 +191,7 @@ void Runner::RunWorker(uint32_t worker) {
   const bool always_write =
       options_.rw == Rw::kWrite || options_.rw == Rw::kRandWrite;
 
+  uint64_t l_submit = 0, l_wait = 0, l_ops = 0;  // per-worker, merged at exit
   for (;;) {
     if (stop_.load(std::memory_order_relaxed)) break;
     if (deadline_us_ != 0 && butil::gettimeofday_us() >= deadline_us_) break;
@@ -218,10 +220,17 @@ void Runner::RunWorker(uint32_t worker) {
     Aio aio(fd, offset, bs, buffer, buf_index, for_read);
     const uint64_t start_us = butil::gettimeofday_us();
     queue_->Submit(&aio);
+    const uint64_t submitted_us = butil::gettimeofday_us();
     aio.Wait();
-    const uint64_t latency_us = butil::gettimeofday_us() - start_us;
-    stats_->Record(worker, bs, latency_us, aio.Result().status.ok());
+    const uint64_t done_us = butil::gettimeofday_us();
+    stats_->Record(worker, bs, done_us - start_us, aio.Result().status.ok());
+    l_submit += submitted_us - start_us;  // time in Submit()
+    l_wait += done_us - submitted_us;     // time blocked in Wait()
+    ++l_ops;
   }
+  submit_sum_us_.fetch_add(l_submit, std::memory_order_relaxed);
+  wait_sum_us_.fetch_add(l_wait, std::memory_order_relaxed);
+  op_count_.fetch_add(l_ops, std::memory_order_relaxed);
 }
 
 Status Runner::Run() {
@@ -274,6 +283,16 @@ Status Runner::Run() {
 
   profiler_.Stop();
   reporter_->Stop();
+
+  const uint64_t ops = op_count_.load(std::memory_order_relaxed);
+  if (ops > 0) {
+    std::cout << "\nPer-op breakdown (closed loop)\n------------------------------\n";
+    std::cout << "  " << std::left << std::setw(16) << "AioQueue.Submit()"
+              << FormatLatencyUs(submit_sum_us_.load() / ops) << " avg\n";
+    std::cout << "  " << std::left << std::setw(16) << "Aio.Wait()"
+              << FormatLatencyUs(wait_sum_us_.load() / ops) << " avg\n";
+  }
+
   Shutdown();
   profiler_.RenderAndServe();
   return Status::OK();
