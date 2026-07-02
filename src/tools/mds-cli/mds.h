@@ -253,7 +253,10 @@ class MDSClient {
   // Render-silent, paged variant for the client-side tree walk: returns one page
   // (entries after `last`, up to `limit`) without printing.
   ListDentryResponse ListDentryPaged(Ino parent, const std::string& last, uint32_t limit, bool is_only_dir);
-  GetInodeResponse GetInode(Ino ino);
+  // bypass_cache reads the inode from the store instead of the serving MDS's
+  // local cache, which goes stale on non-owner MDSes (no cross-MDS
+  // invalidation).
+  GetInodeResponse GetInode(Ino ino, bool bypass_cache = false);
   BatchGetInodeResponse BatchGetInode(const std::vector<int64_t>& inos);
   BatchGetXAttrResponse BatchGetXattr(const std::vector<int64_t>& inos);
 
