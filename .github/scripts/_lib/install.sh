@@ -1,12 +1,15 @@
 #!/bin/bash
-# apt fuse3 + dingocli (latest) + uv install.
+# apt fuse3 + libibverbs1 + dingocli (latest) + uv install.
 # Sourced by .github/workflows/pr-check.yml (e2e job) AND
 # .github/scripts/simulate-locally.sh — single source of truth.
 set -euo pipefail
 
-echo "[install] apt fuse3 (+ ccache for future build-from-source)..."
+echo "[install] apt fuse3 + libibverbs1 (+ ccache for future build-from-source)..."
 sudo apt-get update -qq
-sudo apt-get install -y -qq fuse3 ccache
+# libibverbs1 provides libibverbs.so.1: dingo-client/dingo-cache link it
+# dynamically (RDMA cache feature). e2e runs TCP-only, but the binaries still
+# need the .so present just to load, or they die at startup.
+sudo apt-get install -y -qq fuse3 ccache libibverbs1
 
 if ! command -v dingo >/dev/null 2>&1; then
   echo "[install] dingocli (latest)..."
