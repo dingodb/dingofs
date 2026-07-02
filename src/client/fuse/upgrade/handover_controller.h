@@ -33,9 +33,13 @@ namespace client {
 namespace fuse {
 
 struct HandoverOptions {
+  using StatfsWakeupFn =
+      std::function<void(const std::string&, const std::atomic<bool>&)>;
+
   std::string mountpoint;
   uint32_t drain_timeout_ms{0};
   uint32_t statfs_interval_ms{0};
+  StatfsWakeupFn statfs_wakeup_fn;
 };
 
 class HandoverController {

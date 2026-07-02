@@ -60,26 +60,30 @@ namespace {
 
 class StatfsWakeupLoop {
  public:
-  void Start(const std::string& mountpoint, uint32_t interval_ms) {
+  void Start(const std::string& mountpoint, uint32_t interval_ms,
+             HandoverOptions::StatfsWakeupFn wakeup_fn) {
+    if (!wakeup_fn) {
+      wakeup_fn = [](const std::string& mountpoint,
+                     const std::atomic<bool>&) {
+        struct statfs buf;
+        (void)statfs(mountpoint.c_str(), &buf);
+      };
+    }
+
     stop_ = std::make_shared<std::atomic<bool>>(false);
     auto stop = stop_;
-    thread_ = std::thread([stop, mountpoint, interval_ms]() {
-      struct statfs buf;
+    thread_ = std::thread([stop, mountpoint, interval_ms,
+                           wakeup_fn = std::move(wakeup_fn)]() {
       while (!stop->load()) {
         // Drive a FUSE round-trip to pop a worker blocked in read() back to the
         // recv_paused check. pause_receive() does not wake a blocked reader.
-        (void)statfs(mountpoint.c_str(), &buf);
+        wakeup_fn(mountpoint, *stop);
         std::this_thread::sleep_for(std::chrono::milliseconds(interval_ms));
       }
     });
   }
 
-  void StopAndJoinIfPossible() {
-    Stop();
-    if (thread_.joinable()) thread_.join();
-  }
-
-  void DetachOnCommit() {
+  void StopAndDetach() {
     Stop();
     if (thread_.joinable()) thread_.detach();
   }
@@ -211,23 +215,27 @@ Status HandoverController::DrainSessionForHandover() {
   session_->PauseReceive();
 
   StatfsWakeupLoop wakeup;
-  wakeup.Start(options_.mountpoint, options_.statfs_interval_ms);
+  wakeup.Start(options_.mountpoint, options_.statfs_interval_ms,
+               options_.statfs_wakeup_fn);
   int rc = session_->WaitDrained(options_.drain_timeout_ms);
 
   if (rc != 0) {
     // Leave the session paused; the caller's AbortHandover() does the single
-    // ResumeReceive() (and state rollback). Only the wakeup thread is ours to
-    // clean up here.
-    wakeup.StopAndJoinIfPossible();
+    // ResumeReceive() (and state rollback). The statfs wakeup thread may itself
+    // be blocked in a FUSE statfs request queued behind the paused session. Never
+    // join it here: on timeout that can deadlock the controller before it sends
+    // kNack/resumes receive. Stop it and detach; after ResumeReceive() serves the
+    // pending statfs, the thread observes stop_ and exits.
+    wakeup.StopAndDetach();
     return Status::Internal(
         fmt::format("wait_drained failed rc={} (0=ok, -1=timeout)", rc));
   }
 
   // Drained: the wakeup thread may be blocked in a statfs the paused session
-  // will no longer serve. Detach it; it holds no FuseServer references and
-  // exits once the new process serves the pending statfs, or with this process
-  // on commit.
-  wakeup.DetachOnCommit();
+  // will no longer serve. Detach it; it holds no FuseServer references and exits
+  // once the new process serves the pending statfs, or with this process on
+  // commit.
+  wakeup.StopAndDetach();
   return Status::OK();
 }
 
