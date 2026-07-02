@@ -64,6 +64,9 @@ class Latch {
   bool Wait() {
     return future_.wait_for(kWaitTimeout) == std::future_status::ready;
   }
+  bool WaitFor(std::chrono::milliseconds timeout) {
+    return future_.wait_for(timeout) == std::future_status::ready;
+  }
 
  private:
   std::promise<void> promise_;
@@ -95,8 +98,8 @@ class HandoverControllerTest : public ::testing::Test {
   MockHandoverSession session_;
 };
 
-// Full success: drain -> checkpoint -> ready/ACK -> exit. No resume/abort, and
-// the state stays kFuseUpgradeOld (the new takes over).
+// Full success: drain -> checkpoint -> ready notification -> exit. No
+// resume/abort, and the state stays kFuseUpgradeOld (the new takes over).
 TEST_F(HandoverControllerTest, HappyPath_DrainCheckpointCommitExits) {
   Latch done;
   std::atomic<bool> checkpoint_ran{false};
@@ -163,6 +166,61 @@ TEST_F(HandoverControllerTest, DrainTimeout_AbortsAndResumes) {
   EXPECT_EQ(State(), FuseUpgradeState::kFuseNormal);
 }
 
+TEST_F(HandoverControllerTest, DrainTimeout_DoesNotJoinBlockedStatfsWakeup) {
+  Latch resumed;
+  std::promise<void> wakeup_entered;
+  auto wakeup_entered_future = wakeup_entered.get_future();
+  std::promise<void> release_wakeup;
+  auto release_wakeup_future = release_wakeup.get_future();
+  std::promise<void> wakeup_returned;
+  auto wakeup_returned_future = wakeup_returned.get_future();
+  std::atomic<bool> wakeup_entered_once{false};
+
+  HandoverOptions options = Options();
+  options.statfs_wakeup_fn =
+      [&](const std::string&, const std::atomic<bool>&) {
+        if (!wakeup_entered_once.exchange(true)) {
+          wakeup_entered.set_value();
+        }
+        release_wakeup_future.wait();
+        wakeup_returned.set_value();
+      };
+
+  {
+    InSequence seq;
+    EXPECT_CALL(peer_, WaitHandoverPrepare()).WillOnce(Return(true));
+    EXPECT_CALL(session_, PauseReceive());
+    EXPECT_CALL(session_, WaitDrained(_)).WillOnce(InvokeWithoutArgs([&] {
+      EXPECT_EQ(wakeup_entered_future.wait_for(kWaitTimeout),
+                std::future_status::ready);
+      return -1;
+    }));
+    EXPECT_CALL(peer_, NotifyHandoverAbort());
+    EXPECT_CALL(session_, ResumeReceive()).WillOnce(InvokeWithoutArgs([&] {
+      resumed.Signal();
+    }));
+  }
+  EXPECT_CALL(session_, Exit()).Times(0);
+  EXPECT_CALL(peer_, NotifyReadyToExit()).Times(0);
+
+  HandoverController controller(options, &peer_, &session_);
+  controller.SetCheckpoint([]() -> Status { return Status::OK(); });
+  controller.Start();
+  controller.RequestHandover();
+
+  const bool resumed_before_wakeup_returns =
+      resumed.WaitFor(std::chrono::milliseconds(500));
+  release_wakeup.set_value();
+  ASSERT_EQ(wakeup_returned_future.wait_for(kWaitTimeout),
+            std::future_status::ready);
+  controller.Stop();
+
+  EXPECT_TRUE(resumed_before_wakeup_returns)
+      << "drain timeout must not join a statfs wakeup blocked behind the "
+         "paused session";
+  EXPECT_EQ(State(), FuseUpgradeState::kFuseNormal);
+}
+
 // M1: a SIGHUP before the checkpoint is registered must NOT pause IO (no drain).
 // It aborts immediately (telling the new to back off) and keeps serving.
 TEST_F(HandoverControllerTest, NoCheckpoint_AbortsWithoutDraining) {
@@ -210,7 +268,7 @@ TEST_F(HandoverControllerTest, InvalidPrepare_KeepsServing) {
 }
 
 // Past the checkpoint the VFS is torn down and cannot be resumed: the session
-// must exit even when the READY notification cannot reach the new process.
+// must exit even when notifying the new fails.
 TEST_F(HandoverControllerTest, CommitExitsEvenIfReadyNotifyFails) {
   Latch done;
   {
