@@ -13,6 +13,7 @@
 # limitations under the License.
 
 add_subdirectory(vfs)
+add_subdirectory(fuse)
 
 add_executable(test_client
   main.cc

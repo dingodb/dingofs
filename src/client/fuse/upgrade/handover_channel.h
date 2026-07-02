@@ -14,12 +14,16 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_SRC_CLIENT_FUSE_PASSFD_H
-#define DINGOFS_SRC_CLIENT_FUSE_PASSFD_H
+#ifndef DINGOFS_SRC_CLIENT_FUSE_UPGRADE_HANDOVER_CHANNEL_H_
+#define DINGOFS_SRC_CLIENT_FUSE_UPGRADE_HANDOVER_CHANNEL_H_
 
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
+
+#include <cerrno>
+#include <cstdint>
+#include <cstring>
 
 #include "glog/logging.h"
 #include "utils/scoped_cleanup.h"
@@ -27,6 +31,74 @@
 namespace dingofs {
 namespace client {
 namespace fuse {
+
+// Build a 4-byte ASCII magic, e.g. MakeMagic('D','R','D','Y') == 'DRDY'.
+constexpr uint32_t MakeMagic(char a, char b, char c, char d) {
+  return (static_cast<uint32_t>(static_cast<unsigned char>(a)) << 24) |
+         (static_cast<uint32_t>(static_cast<unsigned char>(b)) << 16) |
+         (static_cast<uint32_t>(static_cast<unsigned char>(c)) << 8) |
+         static_cast<uint32_t>(static_cast<unsigned char>(d));
+}
+
+// Handover handshake messages exchanged over the UDS after the /dev/fuse fd is
+// passed. ASCII magic (not 1/2/3) so a version-mismatched or stray peer is
+// rejected as "unexpected" instead of silently matching a small integer.
+// Cross-version wire contract: never renumber existing values.
+enum class HandoverMessage : uint32_t {
+  kPrepare = MakeMagic('D', 'P', 'R', 'P'),  // new -> old: start the handover
+  kReadyToExit = MakeMagic('D', 'R', 'D', 'Y'),
+  kAck = MakeMagic('D', 'A', 'C', 'K'),
+  kNack = MakeMagic('D', 'N', 'A', 'K'),
+};
+
+inline bool SendAll(int fd, const void* data, size_t size) {
+  const char* p = static_cast<const char*>(data);
+  while (size > 0) {
+    ssize_t n = send(fd, p, size, MSG_NOSIGNAL);
+    if (n < 0) {
+      if (errno == EINTR) continue;
+      return false;
+    }
+    if (n == 0) {
+      errno = EPIPE;
+      return false;
+    }
+    p += n;
+    size -= n;
+  }
+  return true;
+}
+
+inline bool RecvAll(int fd, void* data, size_t size) {
+  char* p = static_cast<char*>(data);
+  while (size > 0) {
+    ssize_t n = recv(fd, p, size, 0);
+    if (n < 0) {
+      if (errno == EINTR) continue;
+      return false;
+    }
+    if (n == 0) {
+      errno = ECONNRESET;
+      return false;
+    }
+    p += n;
+    size -= n;
+  }
+  return true;
+}
+
+inline bool SendHandoverMessage(int fd, HandoverMessage msg) {
+  uint32_t raw = static_cast<uint32_t>(msg);
+  return SendAll(fd, &raw, sizeof(raw));
+}
+
+inline bool RecvHandoverMessage(int fd, HandoverMessage* msg) {
+  uint32_t raw = 0;
+  if (!RecvAll(fd, &raw, sizeof(raw))) return false;
+  *msg = static_cast<HandoverMessage>(raw);
+  return true;
+}
+
 /**
  * Send a file descriptor over a Unix domain socket.
  * Returns 0 on success, -1 on error.
@@ -59,7 +131,7 @@ inline int SendFd(int socket, int fd, void* data, size_t data_size) {
   msg.msg_iov = &iov;
   msg.msg_iovlen = 1;
 
-  return sendmsg(socket, &msg, 0);
+  return sendmsg(socket, &msg, MSG_NOSIGNAL);
 }
 
 /**
@@ -114,7 +186,8 @@ inline int GetFd(int socket, void* data_buf, size_t data_bufsize,
  * @param real_size real size of receive data
  */
 inline int GetFuseFd(const char* fd_comm_path, void* data_buf,
-                     size_t data_bufsize, size_t* real_size) {
+                     size_t data_bufsize, size_t* real_size,
+                     int* comm_fd = nullptr) {
   int client_fd = socket(AF_UNIX, SOCK_STREAM, 0);
   if (client_fd == -1) {
     LOG(ERROR) << "create socket failed, path: " << fd_comm_path
@@ -139,6 +212,11 @@ inline int GetFuseFd(const char* fd_comm_path, void* data_buf,
     return -1;
   }
 
+  if (comm_fd != nullptr) {
+    *comm_fd = client_fd;
+    defer_close.cancel();
+  }
+
   return fuse_fd;
 }
 
@@ -146,4 +224,4 @@ inline int GetFuseFd(const char* fd_comm_path, void* data_buf,
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CLIENT_FUSE_PASSFD_H
+#endif  // DINGOFS_SRC_CLIENT_FUSE_UPGRADE_HANDOVER_CHANNEL_H_

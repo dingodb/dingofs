@@ -28,7 +28,7 @@
 #include "absl/strings/str_format.h"
 #include "client/common/const.h"
 #include "client/fuse/fs_context.h"
-#include "client/fuse/fuse_upgrade_manager.h"
+#include "client/fuse/upgrade/state_store.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/data_buffer.h"
 #include "client/vfs/vfs_meta.h"
@@ -49,8 +49,8 @@ USING_FLAG(fuse_enable_parallel_dirops)
 USING_FLAG(fuse_dryrun_bench_mode)
 
 using dingofs::Status;
-using dingofs::client::fuse::FuseUpgradeManager;
 using dingofs::client::fuse::FuseUpgradeState;
+using dingofs::client::fuse::UpgradeStateStore;
 using dingofs::client::vfs::Attr;
 using dingofs::client::vfs::Attr2Str;
 using dingofs::client::vfs::FsStat;
@@ -393,9 +393,9 @@ void FuseOpInit(void* userdata, struct fuse_conn_info* conn) {
 
   g_vfs = new dingofs::client::VFSWrapper();
   int upgrade_from_pid = 0;
-  if (FuseUpgradeManager::GetInstance().GetFuseState() ==
+  if (UpgradeStateStore::GetInstance().GetFuseState() ==
       FuseUpgradeState::kFuseUpgradeNew) {
-    upgrade_from_pid = FuseUpgradeManager::GetInstance().GetOldFusePid();
+    upgrade_from_pid = UpgradeStateStore::GetInstance().GetOldFusePid();
   }
   Status s = g_vfs->Start(config, upgrade_from_pid);
   if (!s.ok()) {
@@ -403,6 +403,25 @@ void FuseOpInit(void* userdata, struct fuse_conn_info* conn) {
     fs_context->fuse_server->Shutdown();
     return;
   }
+
+  // Handover checkpoint: stop the VFS (which flushes dirty data + metadata
+  // internally) and dump state for the new process. We are past the drain here
+  // and tearing down, so there is no rollback: a stop/dump failure cores.
+  //
+  // CONSTRAINT: the metadata flush inside vfs Stop
+  // (MDSMetaSystem::FlushAllFile) is currently UNBOUNDED -- it hangs forever if
+  // the MDS is unreachable. So a bounded, fail-closed flush gate that could
+  // abort-and-resume is NOT possible yet; that needs the metasystem to make the
+  // flush bounded (decision A). Until then: only upgrade while the MDS is
+  // healthy. See handover-ack-handshake-design.md /
+  // dingofs-hotupgrade-constraints.md.
+  fs_context->fuse_server->SetHandoverCheckpoint([]() -> Status {
+    Status s = g_vfs->Stop(/*handover=*/true);
+    if (!s.ok()) {
+      LOG(FATAL) << "hot-upgrade: stop/dump failed";
+    }
+    return Status::OK();
+  });
 
   InitFuseConnInfo(conn);
 
@@ -414,7 +433,7 @@ void FuseOpInit(void* userdata, struct fuse_conn_info* conn) {
 void FuseOpDestroy(void* userdata) {
   VLOG(1) << "FuseOpDestroy userdata: " << userdata;
   if (g_vfs) {
-    const bool handover = (FuseUpgradeManager::GetInstance().GetFuseState() ==
+    const bool handover = (UpgradeStateStore::GetInstance().GetFuseState() ==
                            FuseUpgradeState::kFuseUpgradeOld);
     g_vfs->Stop(handover);
     delete g_vfs;

@@ -175,8 +175,8 @@ class VFSImpl : public VFS {
   uint32_t LocalGidToHashed(uint32_t gid) const;
 
   // Translate a (uid, gid) outbound pair under a single read lock.
-  void LocalPairToHashed(uint32_t uid, uint32_t gid,
-                         uint32_t& out_uid, uint32_t& out_gid) const;
+  void LocalPairToHashed(uint32_t uid, uint32_t gid, uint32_t& out_uid,
+                         uint32_t& out_gid) const;
 
   // Rewrite an Attr's uid/gid from MDS hashed ids back to host-local, using
   // this mount's UidGidMapper. No-op when uid/gid mapping is disabled.

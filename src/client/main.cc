@@ -15,16 +15,17 @@
  */
 
 #include <glog/logging.h>
+#include <unistd.h>
 
+#include <atomic>
 #include <csignal>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
+#include <thread>
 
 #include "client/fuse/fs_context.h"
 #include "client/fuse/fuse_server.h"
-#include "client/vfs/access_log.h"
-#include "client/vfs/metasystem/meta_log.h"
 #include "common/flag.h"
 #include "common/helper.h"
 #include "common/logging.h"
@@ -44,27 +45,47 @@ using FsContext = dingofs::client::fuse::FsContext;
 
 static FuseServer* fuse_server = nullptr;
 
-// signal handler
-static void HandleSignal(int sig) {
-  printf("received signal %s, exit...\n", strsignal(sig));
-  CHECK(signal(sig, SIG_DFL) != nullptr);
+// SIGSEGV/SIGABRT = fatal synchronous signals (the process is crashing).
+//
+// Do the async-signal-safe minimum: write a short note via write(2), restore
+// the default disposition, and re-raise so the process cores normally. Do NOT
+// unmount, flush logs, or take any lock here -- umount may fork/exec fusermount
+// and grab locks, which can deadlock/hang a crashed process and block the core
+// dump. Mount cleanup is left to an external watchdog / the kernel FUSE abort.
+static void HandleCrashSignal(int sig) {
+  static const char msg[] = "dingo-client: fatal signal, re-raising for core\n";
+  ssize_t n = write(STDERR_FILENO, msg, sizeof(msg) - 1);
+  (void)n;
+  signal(sig, SIG_DFL);
+  raise(sig);
+}
 
-  if (fuse_server == nullptr) {
-    return;
-  }
+static void BlockGracefulSignals(sigset_t* set) {
+  sigemptyset(set);
+  sigaddset(set, SIGHUP);
 
-  if (sig == SIGHUP) {
-    fuse_server->MarkThenShutdown();
-  }
-  if (sig == SIGSEGV || sig == SIGABRT) {
-    fuse_server->SessionUnmount();
-    CHECK(raise(sig) == 0);
-  }
+  // Block SIGHUP in the process before worker threads are created. The signal
+  // thread below consumes it synchronously with sigwait(), so the handover path
+  // runs in a normal thread context instead of an async signal handler.
+  CHECK_EQ(pthread_sigmask(SIG_BLOCK, set, nullptr), 0);
+}
 
-  // flush log
-  dingofs::Logger::FlushLogs();
-  dingofs::client::FlushAccessLog();
-  dingofs::client::vfs::FlushMetaLog();
+static std::thread StartGracefulSignalThread(const sigset_t& set,
+                                             std::atomic<bool>* stopped) {
+  return std::thread([set, stopped]() {
+    while (!stopped->load()) {
+      int sig = 0;
+      // sigwait only fails with EINVAL (an invalid signal in the set), a
+      // programming error here; fail loudly rather than spinning on a tight
+      // retry loop that would peg a CPU and flood the log.
+      CHECK_EQ(sigwait(&set, &sig), 0) << "sigwait failed";
+      if (stopped->load()) break;
+
+      if (sig == SIGHUP && fuse_server != nullptr) {
+        fuse_server->TriggerHandover();
+      }
+    }
+  });
 }
 
 static int InstallSignal(int sig, void (*handler)(int)) {
@@ -102,10 +123,12 @@ int main(int argc, char* argv[]) {
     orig_args.emplace_back(argv[i]);
   }
 
-  // install singal handler
-  InstallSignal(SIGHUP, HandleSignal);
-  InstallSignal(SIGSEGV, HandleSignal);
-  InstallSignal(SIGABRT, HandleSignal);
+  sigset_t graceful_signal_set;
+  BlockGracefulSignals(&graceful_signal_set);
+
+  // install crash signal handlers
+  InstallSignal(SIGSEGV, HandleCrashSignal);
+  InstallSignal(SIGABRT, HandleCrashSignal);
 
   //  parse gflags
   int rc = dingofs::ParseFlags(&argc, &argv, extras);
@@ -188,19 +211,21 @@ int main(int argc, char* argv[]) {
     return EXIT_FAILURE;
   }
 
-  struct MountOption mount_option{
-      .mount_point = mountpoint,
-      .fs_name = fs_name,
-      .metasystem_type = metasystem_type,
-      .mds_addrs = mds_addrs,
-      .storage_info = storage_info,
-      .meta_url = argv[1],
-      .subdir = dingofs::client::FLAGS_fuse_subdir,
+  struct MountOption mount_option {
+    .mount_point = mountpoint, .fs_name = fs_name,
+    .metasystem_type = metasystem_type, .mds_addrs = mds_addrs,
+    .storage_info = storage_info, .meta_url = argv[1],
+    .subdir = dingofs::client::FLAGS_fuse_subdir,
   };
 
   fuse_server = new FuseServer();
   if (fuse_server == nullptr) return EXIT_FAILURE;
-  auto defer_free = dingofs::MakeScopedCleanup([&]() { delete fuse_server; });
+  // Null the global after delete; the graceful signal thread is joined before
+  // this cleanup runs.
+  auto defer_free = dingofs::MakeScopedCleanup([&]() {
+    delete fuse_server;
+    fuse_server = nullptr;
+  });
 
   // init fuse
   if (fuse_server->Init(argv[0], &mount_option) == 1) return EXIT_FAILURE;
@@ -220,12 +245,25 @@ int main(int argc, char* argv[]) {
   // create fuse session
   if (fuse_server->CreateSession(&fs_context) == 1) return EXIT_FAILURE;
   auto defer_destory =
-      dingofs::MakeScopedCleanup([&]() { fuse_server->DestroySsesion(); });
+      dingofs::MakeScopedCleanup([&]() { fuse_server->DestroySession(); });
 
   // mount filesystem
   if (fuse_server->SessionMount() == 1) return EXIT_FAILURE;
   auto defer_unmount =
       dingofs::MakeScopedCleanup([&]() { fuse_server->SessionUnmount(); });
+
+  fuse_server->ArmHandoverController();
+
+  std::atomic<bool> graceful_signal_thread_stopped{false};
+
+  auto graceful_signal_thread = StartGracefulSignalThread(
+      graceful_signal_set, &graceful_signal_thread_stopped);
+
+  auto defer_signal_thread = dingofs::MakeScopedCleanup([&]() {
+    graceful_signal_thread_stopped.store(true);
+    pthread_kill(graceful_signal_thread.native_handle(), SIGHUP);
+    if (graceful_signal_thread.joinable()) graceful_signal_thread.join();
+  });
 
   if (fuse_server->Serve() == 1) return EXIT_FAILURE;
 

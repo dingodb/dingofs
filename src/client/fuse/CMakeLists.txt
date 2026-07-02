@@ -15,6 +15,10 @@
 add_library(fuse_client_lib
     fuse_op.cc
     fuse_server.cc
+    upgrade/handover_client.cc
+    upgrade/handover_controller.cc
+    upgrade/handover_server.cc
+    upgrade/handover_session_impl.cc
 )
 
 target_link_libraries(fuse_client_lib
