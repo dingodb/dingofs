@@ -286,13 +286,23 @@ int FuseServer::SaveOpInitMsg() {
     memcpy(init_fbuf_.mem, fbuf.mem, fbuf.size);
     fuse_session_process_buf(session_, &fbuf);
 
+    // fbuf.mem is allocated by the public fuse_session_receive_buf via a plain
+    // malloc (internal=false); process_buf only reads it and never takes
+    // ownership, so it must be freed here. Use free(), NOT fuse_buf_free():
+    // the latter reverses an internal aligned-alloc offset and would free a
+    // wrong pointer for an externally allocated buffer. INIT (~56B) is never
+    // spliced, so the buffer is always a memory buffer.
+    CHECK(!(fbuf.flags & FUSE_BUF_IS_FD)) << "INIT buf unexpectedly IS_FD";
+    free(fbuf.mem);
+
     return 0;
   }
 
-  // here shouble call fuse_buf_free(&fbuf);
-  // but function fuse_buf_free in libfuse is private, so we can not call it.
-  // In special case, there may be a memory leak here,but rarely occurs and
-  // can be tolerated. fuse_buf_free(&fbuf);
+  // receive_buf may have allocated fbuf.mem before the read failed; free it on
+  // the error path too (this branch previously leaked).
+  if (fbuf.mem != nullptr) {
+    free(fbuf.mem);
+  }
   fuse_session_reset(session_);
 
   return 1;
