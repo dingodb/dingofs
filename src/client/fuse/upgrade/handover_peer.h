@@ -26,7 +26,7 @@ class HandoverPeer {
   virtual ~HandoverPeer() = default;
 
   virtual bool WaitHandoverPrepare() = 0;
-  virtual bool NotifyReadyAndWaitHandoverAck() = 0;
+  virtual bool NotifyReadyToExit() = 0;
   virtual void NotifyHandoverAbort() = 0;
 };
 

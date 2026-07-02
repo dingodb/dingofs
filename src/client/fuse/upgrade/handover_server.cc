@@ -19,7 +19,6 @@
 #include <poll.h>
 #include <sys/eventfd.h>
 #include <sys/socket.h>
-#include <sys/time.h>
 #include <sys/un.h>
 #include <unistd.h>
 
@@ -197,8 +196,7 @@ bool HandoverServer::WaitHandoverPrepare() {
   // The new process sends kPrepare over the UDS before raising SIGHUP, so it is
   // already buffered here. poll() bounds the wait so a dead/closed peer
   // (POLLHUP -> recv EOF) or an alive-but-silent peer (timeout) cannot drive a
-  // drain off a stray SIGHUP. poll does not change the fd's blocking mode, so
-  // the later blocking ACK wait is unaffected.
+  // drain off a stray SIGHUP. poll does not change the fd's blocking mode.
   constexpr int kPrepareTimeoutMs = 5000;
   struct pollfd pfd;
   pfd.fd = fd;
@@ -236,11 +234,12 @@ bool HandoverServer::WaitHandoverPrepare() {
   return true;
 }
 
-bool HandoverServer::NotifyReadyAndWaitHandoverAck() {
+bool HandoverServer::NotifyReadyToExit() {
   // Reaching here means the controller is past the checkpoint (VFS torn down)
-  // and WILL exit regardless of the ACK outcome. Mark committed so the accept
-  // loop stops handing the /dev/fuse fd to any further connector, closing the
-  // window where client_fd_ is briefly cleared but the process has not exited.
+  // and WILL exit regardless of the notify outcome. Mark committed so the
+  // accept loop stops handing the /dev/fuse fd to any further connector,
+  // closing the window where client_fd_ is briefly cleared but the process has
+  // not exited.
   committed_.store(true);
 
   int fd = -1;
@@ -252,39 +251,14 @@ bool HandoverServer::NotifyReadyAndWaitHandoverAck() {
   if (fd < 0) {
     // The controller validates the peer via WaitHandoverPrepare() before
     // draining, so reaching here with no fd means the connection was torn down
-    // mid-handover. Fail the ACK wait instead of blocking forever.
-    LOG(ERROR) << "hot-upgrade: no handover client fd when waiting for ACK";
+    // mid-handover.
+    LOG(ERROR) << "hot-upgrade: no handover client fd when notifying ready";
     return false;
   }
 
   if (!SendHandoverMessage(fd, HandoverMessage::kReadyToExit)) {
     LOG(ERROR) << "hot-upgrade: send READY_TO_EXIT failed, error: "
                << std::strerror(errno);
-    return false;
-  }
-
-  // Bound the ACK wait. The new sends kAck immediately after kReadyToExit, so a
-  // 30s ceiling is generous; on timeout the caller exits anyway (we are past
-  // the checkpoint and cannot resume). Without this the recv would block
-  // forever.
-  struct timeval tv;
-  tv.tv_sec = 30;
-  tv.tv_usec = 0;
-  if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) != 0) {
-    LOG(ERROR) << "hot-upgrade: set ACK receive timeout failed, error: "
-               << std::strerror(errno);
-    return false;
-  }
-
-  HandoverMessage msg;
-  if (!RecvHandoverMessage(fd, &msg)) {
-    LOG(ERROR) << "hot-upgrade: wait ACK failed/timed out, error: "
-               << std::strerror(errno);
-    return false;
-  }
-  if (msg != HandoverMessage::kAck) {
-    LOG(ERROR) << "hot-upgrade: unexpected handover reply: "
-               << static_cast<uint32_t>(msg);
     return false;
   }
 

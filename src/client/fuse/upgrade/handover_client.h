@@ -27,8 +27,8 @@ namespace fuse {
 
 // New-side handover initiator: connects to the old dingo-client's UDS endpoint,
 // receives the live /dev/fuse fd + saved INIT message, runs the new half of the
-// handshake (kPrepare -> SIGHUP -> wait kReadyToExit -> kAck), and waits for
-// the old process to exit. The counterpart of HandoverServer.
+// handshake (kPrepare -> SIGHUP -> wait kReadyToExit). The counterpart of
+// HandoverServer.
 class HandoverClient {
  public:
   // Take over the mount served by an old dingo-client. On success returns the
@@ -49,8 +49,8 @@ class HandoverClient {
                     int* comm_fd);
 
   // Run the new half of the handshake on the open UDS connection: announce
-  // kPrepare, SIGHUP the old, wait for kReadyToExit, then ACK. Returns false on
-  // any failure or a kNack (old rejected and kept serving).
+  // kPrepare, SIGHUP the old, then wait for kReadyToExit. Returns false on any
+  // failure or a kNack (old rejected and kept serving).
   bool Handshake(int comm_fd, int old_pid);
 };
 

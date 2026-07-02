@@ -44,7 +44,7 @@ constexpr auto kWaitTimeout = std::chrono::seconds(5);
 class MockHandoverPeer : public HandoverPeer {
  public:
   MOCK_METHOD(bool, WaitHandoverPrepare, (), (override));
-  MOCK_METHOD(bool, NotifyReadyAndWaitHandoverAck, (), (override));
+  MOCK_METHOD(bool, NotifyReadyToExit, (), (override));
   MOCK_METHOD(void, NotifyHandoverAbort, (), (override));
 };
 
@@ -106,7 +106,7 @@ TEST_F(HandoverControllerTest, HappyPath_DrainCheckpointCommitExits) {
     EXPECT_CALL(peer_, WaitHandoverPrepare()).WillOnce(Return(true));
     EXPECT_CALL(session_, PauseReceive());
     EXPECT_CALL(session_, WaitDrained(100)).WillOnce(Return(0));
-    EXPECT_CALL(peer_, NotifyReadyAndWaitHandoverAck()).WillOnce(Return(true));
+    EXPECT_CALL(peer_, NotifyReadyToExit()).WillOnce(Return(true));
     EXPECT_CALL(session_, Exit()).WillOnce(InvokeWithoutArgs([&] {
       done.Signal();
     }));
@@ -146,7 +146,7 @@ TEST_F(HandoverControllerTest, DrainTimeout_AbortsAndResumes) {
     }));
   }
   EXPECT_CALL(session_, Exit()).Times(0);
-  EXPECT_CALL(peer_, NotifyReadyAndWaitHandoverAck()).Times(0);
+  EXPECT_CALL(peer_, NotifyReadyToExit()).Times(0);
 
   HandoverController controller(Options(), &peer_, &session_);
   controller.SetCheckpoint([&]() -> Status {
@@ -210,15 +210,15 @@ TEST_F(HandoverControllerTest, InvalidPrepare_KeepsServing) {
 }
 
 // Past the checkpoint the VFS is torn down and cannot be resumed: the session
-// must exit even when the new never ACKs (NotifyReadyAndWaitHandoverAck false).
-TEST_F(HandoverControllerTest, CommitExitsEvenIfAckTimesOut) {
+// must exit even when the READY notification cannot reach the new process.
+TEST_F(HandoverControllerTest, CommitExitsEvenIfReadyNotifyFails) {
   Latch done;
   {
     InSequence seq;
     EXPECT_CALL(peer_, WaitHandoverPrepare()).WillOnce(Return(true));
     EXPECT_CALL(session_, PauseReceive());
     EXPECT_CALL(session_, WaitDrained(_)).WillOnce(Return(0));
-    EXPECT_CALL(peer_, NotifyReadyAndWaitHandoverAck()).WillOnce(Return(false));
+    EXPECT_CALL(peer_, NotifyReadyToExit()).WillOnce(Return(false));
     EXPECT_CALL(session_, Exit()).WillOnce(InvokeWithoutArgs([&] {
       done.Signal();
     }));
@@ -248,7 +248,7 @@ TEST_F(HandoverControllerTest, CheckpointFails_Aborts) {
     }));
   }
   EXPECT_CALL(session_, Exit()).Times(0);
-  EXPECT_CALL(peer_, NotifyReadyAndWaitHandoverAck()).Times(0);
+  EXPECT_CALL(peer_, NotifyReadyToExit()).Times(0);
 
   HandoverController controller(Options(), &peer_, &session_);
   controller.SetCheckpoint(
