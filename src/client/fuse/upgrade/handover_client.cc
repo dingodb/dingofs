@@ -113,13 +113,7 @@ bool HandoverClient::Handshake(int comm_fd, int old_pid) {
     return false;
   }
 
-  if (!SendHandoverMessage(comm_fd, HandoverMessage::kAck)) {
-    LOG(ERROR) << "hot-upgrade: send handover ACK failed, error: "
-               << std::strerror(errno);
-    return false;
-  }
-
-  LOG(INFO) << "hot-upgrade: old process is ready to exit and ACKed";
+  LOG(INFO) << "hot-upgrade: old process is ready to exit";
   return true;
 }
 

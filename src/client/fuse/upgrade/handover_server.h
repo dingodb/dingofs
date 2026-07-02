@@ -60,7 +60,7 @@ class HandoverServer : public HandoverPeer {
 
   // ── HandoverPeer (driven by the handover controller) ──
   bool WaitHandoverPrepare() override;
-  bool NotifyReadyAndWaitHandoverAck() override;
+  bool NotifyReadyToExit() override;
   void NotifyHandoverAbort() override;
 
  private:

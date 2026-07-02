@@ -119,16 +119,16 @@ TEST_F(HandoverServerTest, ConcurrentConnectionRejected) {
   server->Stop();
 }
 
-// H1: once the handover is committed (NotifyReadyAndWaitHandoverAck succeeded),
+// H1: once the handover is committed (NotifyReadyToExit succeeded),
 // the server rejects ALL further connectors -- even after the committed peer's
 // fd is cleared -- so the /dev/fuse fd is never handed out twice.
 TEST_F(HandoverServerTest, CommittedRejectsLateConnection) {
   auto server = MakeServer();
   server->Start();
 
-  // new-side peer: take over, then run the kPrepare -> kReadyToExit -> kAck
-  // handshake. Signal once connected so the controller side reads kPrepare only
-  // after client_fd_ is set.
+  // new-side peer: take over, then run the kPrepare -> kReadyToExit handshake.
+  // Signal once connected so the controller side reads kPrepare only after
+  // client_fd_ is set.
   std::promise<void> connected;
   std::thread peer([&]() {
     char buf[128] = {0};
@@ -143,7 +143,6 @@ TEST_F(HandoverServerTest, CommittedRejectsLateConnection) {
     HandoverMessage msg;
     ASSERT_TRUE(RecvHandoverMessage(comm, &msg));
     EXPECT_EQ(msg, HandoverMessage::kReadyToExit);
-    ASSERT_TRUE(SendHandoverMessage(comm, HandoverMessage::kAck));
 
     close(fuse_fd);
     close(comm);
@@ -151,8 +150,8 @@ TEST_F(HandoverServerTest, CommittedRejectsLateConnection) {
 
   // Test thread plays the controller's peer-facing calls.
   connected.get_future().wait();
-  ASSERT_TRUE(server->WaitHandoverPrepare());           // reads kPrepare
-  ASSERT_TRUE(server->NotifyReadyAndWaitHandoverAck());  // commits, waits kAck
+  ASSERT_TRUE(server->WaitHandoverPrepare());  // reads kPrepare
+  ASSERT_TRUE(server->NotifyReadyToExit());    // commits and sends ready
   peer.join();
 
   // committed_ is now set: a fresh connector is rejected regardless of state.

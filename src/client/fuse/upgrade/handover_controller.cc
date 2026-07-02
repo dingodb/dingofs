@@ -254,23 +254,21 @@ void HandoverController::AbortHandover(const Status& status) {
 }
 
 void HandoverController::CommitHandover() {
-  // NotifyReadyAndWaitHandoverAck() sends kReadyToExit ONCE and blocks for the
-  // new process's
-  // kAck. We are past the checkpoint here: the VFS is already stopped + dumped
-  // and cannot be resumed, so there is no rollback if the new never ACKs.
+  // NotifyReadyToExit() sends kReadyToExit ONCE. We are past the checkpoint
+  // here: the VFS is already stopped + dumped and cannot be resumed, so there
+  // is no rollback if the new is gone or cannot receive the notification.
   //
-  // On timeout/failure (new died after kPrepare, or is stuck), log and exit
+  // On notify failure (new died after kPrepare or closed the UDS), log and exit
   // anyway: hanging forever holding a drained mount is worse than exiting, and
   // exiting lets the kernel abort the orphaned mount so a remount/restart can
-  // recover. Do NOT loop-retry NotifyReadyAndWaitHandoverAck(): it would
-  // re-send kReadyToExit, which the new reads only once. The true fix
-  // (resumable until ACK) needs the checkpoint to dump-without-teardown; see
-  // handover-ack-handshake-design.md (decision A).
-  if (!peer_->NotifyReadyAndWaitHandoverAck()) {
-    LOG(ERROR) << "hot-upgrade: new did not ACK within timeout after teardown; "
-                  "exiting anyway, mount may be orphaned until remount";
+  // recover. Do NOT loop-retry NotifyReadyToExit(): it would re-send
+  // kReadyToExit, which the new reads only once. A stronger handover needs the
+  // checkpoint to dump-without-teardown and wait for a post-load ACK.
+  if (!peer_->NotifyReadyToExit()) {
+    LOG(ERROR) << "hot-upgrade: failed to notify new after teardown; exiting "
+                  "anyway, mount may be orphaned until remount";
   } else {
-    LOG(INFO) << "hot-upgrade: new ACKed, exit session for handover";
+    LOG(INFO) << "hot-upgrade: new notified ready, exit session for handover";
   }
 
   session_->Exit();
