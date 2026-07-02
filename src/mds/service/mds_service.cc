@@ -678,7 +678,7 @@ void MDSServiceImpl::DoGetDentry(google::protobuf::RpcController*, const pb::mds
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  Context ctx(request->context(), request->info().request_id(), __func__);
+  Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
   Dentry dentry;
   status = file_system->GetDentry(ctx, request->parent(), request->name(), dentry);
@@ -739,7 +739,7 @@ void MDSServiceImpl::DoListDentry(google::protobuf::RpcController*, const pb::md
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  Context ctx(request->context(), request->info().request_id(), __func__);
+  Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
   std::vector<Dentry> dentries;
   uint32_t limit = request->limit() > 0 ? request->limit() : UINT32_MAX;
@@ -802,7 +802,7 @@ void MDSServiceImpl::DoGetInode(google::protobuf::RpcController*, const pb::mds:
     return ServiceHelper::SetError(response->mutable_error(), pb::error::EILLEGAL_PARAMTETER, "ino is zero");
   }
 
-  Context ctx(request->context(), request->info().request_id(), __func__);
+  Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
   EntryOut entry_out;
   status = file_system->GetInode(ctx, request->ino(), entry_out);
@@ -841,7 +841,7 @@ void MDSServiceImpl::DoBatchGetInode(google::protobuf::RpcController*, const pb:
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  Context ctx(request->context(), request->info().request_id(), __func__);
+  Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
   std::vector<EntryOut> entries;
   status = file_system->BatchGetInode(ctx, Helper::PbRepeatedToVector(request->inoes()), entries);
@@ -882,7 +882,7 @@ void MDSServiceImpl::DoBatchGetXAttr(google::protobuf::RpcController*, const pb:
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  Context ctx(request->context(), request->info().request_id(), __func__);
+  Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
   std::vector<pb::mds::XAttr> xattrs;
   status = file_system->BatchGetXAttr(ctx, Helper::PbRepeatedToVector(request->inoes()), xattrs);
@@ -924,7 +924,7 @@ void MDSServiceImpl::DoLookup(google::protobuf::RpcController* controller, const
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  Context ctx(request->context(), request->info().request_id(), __func__);
+  Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
   EntryOut entry_out;
   status = file_system->Lookup(ctx, request->parent(), request->name(), entry_out);
@@ -977,7 +977,7 @@ void MDSServiceImpl::DoBatchCreate(google::protobuf::RpcController*, const pb::m
     params.push_back(param);
   }
 
-  Context ctx(request->context(), request->info().request_id(), __func__);
+  Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
   EntryOut entry_out;
   status = file_system->BatchCreate(ctx, request->parent(), params, entry_out);
@@ -1055,7 +1055,7 @@ void MDSServiceImpl::DoMkNod(google::protobuf::RpcController*, const pb::mds::Mk
   param.gid = request->gid();
   param.rdev = request->rdev();
 
-  Context ctx(request->context(), request->info().request_id(), __func__);
+  Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
   EntryOut entry_out;
   status = file_system->MkNod(ctx, param, entry_out);
@@ -1105,7 +1105,7 @@ void MDSServiceImpl::DoBatchMkNod(google::protobuf::RpcController*, const pb::md
     params.push_back(std::move(param));
   }
 
-  Context ctx(request->context(), request->info().request_id(), __func__);
+  Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
   EntryOut entry_out;
   status = file_system->BatchMkNod(ctx, params, entry_out);
@@ -1169,7 +1169,7 @@ void MDSServiceImpl::DoMkDir(google::protobuf::RpcController*, const pb::mds::Mk
   param.gid = request->gid();
   param.rdev = request->rdev();
 
-  Context ctx(request->context(), request->info().request_id(), __func__);
+  Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
   EntryOut entry_out;
   status = file_system->MkDir(ctx, param, entry_out);
@@ -1219,7 +1219,7 @@ void MDSServiceImpl::DoBatchMkDir(google::protobuf::RpcController*, const pb::md
     params.push_back(std::move(param));
   }
 
-  Context ctx(request->context(), request->info().request_id(), __func__);
+  Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
   EntryOut entry_out;
   status = file_system->BatchMkDir(ctx, params, entry_out);
@@ -1275,7 +1275,7 @@ void MDSServiceImpl::DoRmDir(google::protobuf::RpcController*, const pb::mds::Rm
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  Context ctx(request->context(), request->info().request_id(), __func__);
+  Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
   Ino ino;
   EntryOut entry_out;
@@ -1315,7 +1315,7 @@ void MDSServiceImpl::DoReadDir(google::protobuf::RpcController*, const pb::mds::
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  Context ctx(request->context(), request->info().request_id(), __func__);
+  Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
   std::vector<EntryOut> entry_outs;
   status = file_system->ReadDir(ctx, request->ino(), request->last_name(), request->limit(), request->with_attr(),
@@ -1363,7 +1363,7 @@ void MDSServiceImpl::DoOpen(google::protobuf::RpcController*, const pb::mds::Ope
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  Context ctx(request->context(), request->info().request_id(), __func__);
+  Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
   FileSystem::OpenParam param;
   param.session_id = request->session_id();
@@ -1438,7 +1438,7 @@ void MDSServiceImpl::DoRelease(google::protobuf::RpcController*, const pb::mds::
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  Context ctx(request->context(), request->info().request_id(), __func__);
+  Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
   status = file_system->Release(ctx, request->ino(), request->session_id());
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
@@ -1473,7 +1473,7 @@ void MDSServiceImpl::DoFlushFile(google::protobuf::RpcController*, const pb::mds
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  Context ctx(request->context(), request->info().request_id(), __func__);
+  Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
   FileSystem::FlushFileParam param{.length = request->length()};
 
@@ -1536,7 +1536,7 @@ void MDSServiceImpl::DoLink(google::protobuf::RpcController*, const pb::mds::Lin
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  Context ctx(request->context(), request->info().request_id(), __func__);
+  Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
   EntryOut entry_out;
   status = file_system->Link(ctx, request->ino(), request->new_parent(), request->new_name(), entry_out);
@@ -1575,7 +1575,7 @@ void MDSServiceImpl::DoUnLink(google::protobuf::RpcController*, const pb::mds::U
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  Context ctx(request->context(), request->info().request_id(), __func__);
+  Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
   EntryOut entry_out;
   status = file_system->UnLink(ctx, request->parent(), request->name(), entry_out);
@@ -1611,7 +1611,7 @@ void MDSServiceImpl::DoBatchUnLink(google::protobuf::RpcController*, const pb::m
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  Context ctx(request->context(), request->info().request_id(), __func__);
+  Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
   EntryOut entry_out;
   status = file_system->BatchUnLink(ctx, request->parent(), Helper::PbRepeatedToVector(request->names()), entry_out);
@@ -1668,7 +1668,7 @@ void MDSServiceImpl::DoSymlink(google::protobuf::RpcController*, const pb::mds::
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  Context ctx(request->context(), request->info().request_id(), __func__);
+  Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
   EntryOut entry_out;
   status = file_system->Symlink(ctx, request->symlink(), request->new_parent(), request->new_name(), request->uid(),
@@ -1707,7 +1707,7 @@ void MDSServiceImpl::DoReadLink(google::protobuf::RpcController*, const pb::mds:
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  Context ctx(request->context(), request->info().request_id(), __func__);
+  Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
   std::string symlink;
   status = file_system->ReadLink(ctx, request->ino(), symlink);
@@ -1745,7 +1745,7 @@ void MDSServiceImpl::DoGetAttr(google::protobuf::RpcController*, const pb::mds::
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  Context ctx(request->context(), request->info().request_id(), __func__);
+  Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
   EntryOut entry_out;
   status = file_system->GetAttr(ctx, request->ino(), entry_out);
@@ -1815,7 +1815,7 @@ void MDSServiceImpl::DoSetAttr(google::protobuf::RpcController*, const pb::mds::
   attr.set_flags(request->flags());
   param.to_set = request->to_set();
 
-  Context ctx(request->context(), request->info().request_id(), __func__);
+  Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
   EntryWithChunkOut entry_out;
   status = file_system->SetAttr(ctx, request->ino(), param, entry_out);
@@ -1874,7 +1874,7 @@ void MDSServiceImpl::DoGetXAttr(google::protobuf::RpcController*, const pb::mds:
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  Context ctx(request->context(), request->info().request_id(), __func__);
+  Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
   std::string value;
   status = file_system->GetXAttr(ctx, request->ino(), request->name(), value);
@@ -1933,7 +1933,7 @@ void MDSServiceImpl::DoSetXAttr(google::protobuf::RpcController*, const pb::mds:
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  Context ctx(request->context(), request->info().request_id(), __func__);
+  Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
   EntryOut entry_out;
   status = file_system->SetXAttr(ctx, request->ino(), request->xattrs(), entry_out);
@@ -1992,7 +1992,7 @@ void MDSServiceImpl::DoRemoveXAttr(google::protobuf::RpcController*, const pb::m
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  Context ctx(request->context(), request->info().request_id(), __func__);
+  Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
   EntryOut entry_out;
   status = file_system->RemoveXAttr(ctx, request->ino(), request->name(), entry_out);
@@ -2052,7 +2052,7 @@ void MDSServiceImpl::DoListXAttr(google::protobuf::RpcController*, const pb::mds
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  Context ctx(request->context(), request->info().request_id(), __func__);
+  Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
   Inode::XAttrMap xattrs;
   status = file_system->GetXAttr(ctx, request->ino(), xattrs);
@@ -2090,7 +2090,7 @@ void MDSServiceImpl::DoRename(google::protobuf::RpcController*, const pb::mds::R
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  Context ctx(request->context(), request->info().request_id(), __func__);
+  Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
   FileSystem::RenameParam param;
   param.old_parent = request->old_parent();
@@ -2100,18 +2100,18 @@ void MDSServiceImpl::DoRename(google::protobuf::RpcController*, const pb::mds::R
   param.old_ancestors = Helper::PbRepeatedToVector(request->old_ancestors());
   param.new_ancestors = Helper::PbRepeatedToVector(request->new_ancestors());
 
-  uint64_t old_parent_version, new_parent_version;
-  std::vector<Ino> effected_inos;
-  status = file_system->CommitRename(ctx, param, old_parent_version, new_parent_version, effected_inos);
+  FileSystem::RenameResult result;
+  status = file_system->CommitRename(ctx, param, result);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     SpanScope::SetStatus(span, status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  response->set_old_parent_version(old_parent_version);
-  response->set_new_parent_version(new_parent_version);
-  Helper::VectorToPbRepeated(effected_inos, response->mutable_effected_inos());
+  response->set_old_parent_version(result.old_parent_version);
+  response->set_new_parent_version(result.new_parent_version);
+  response->set_child_ino(result.child_ino);
+  response->set_deleted_ino(result.deleted_ino);
 }
 
 void MDSServiceImpl::Rename(google::protobuf::RpcController* controller, const pb::mds::RenameRequest* request,
@@ -2173,11 +2173,10 @@ void MDSServiceImpl::DoWriteSlice(google::protobuf::RpcController*, const pb::md
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  Context ctx(request->context(), request->info().request_id(), __func__);
+  Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
   std::vector<ChunkEntry> chunks;
-  status = file_system->WriteSlice(ctx, request->parent(), request->ino(),
-                                   Helper::PbRepeatedToVector(request->delta_slices()), chunks);
+  status = file_system->WriteSlice(ctx, request->ino(), Helper::PbRepeatedToVector(request->delta_slices()), chunks);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     SpanScope::SetStatus(span, status);
@@ -2195,9 +2194,6 @@ void MDSServiceImpl::WriteSlice(google::protobuf::RpcController* controller, con
   auto validate_fn = [&]() -> Status {
     if (request->fs_id() == 0) {
       return Status(pb::error::EILLEGAL_PARAMTETER, "fs_id is 0");
-    }
-    if (request->parent() == 0) {
-      return Status(pb::error::EILLEGAL_PARAMTETER, "parent is 0");
     }
     if (request->ino() == 0) {
       return Status(pb::error::EILLEGAL_PARAMTETER, "ino is 0");
@@ -2236,7 +2232,7 @@ void MDSServiceImpl::DoReadSlice(google::protobuf::RpcController* controller, co
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  Context ctx(request->context(), request->info().request_id(), __func__);
+  Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
   std::vector<ChunkEntry> chunks;
   status =
@@ -2297,7 +2293,7 @@ void MDSServiceImpl::DoCopyFileRange(google::protobuf::RpcController*, const pb:
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  Context ctx(request->context(), request->info().request_id(), __func__);
+  Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
 
   FileSystem::CopyFileRangeParam param;
@@ -2370,7 +2366,7 @@ void MDSServiceImpl::DoFallocate(google::protobuf::RpcController*, const pb::mds
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  Context ctx(request->context(), request->info().request_id(), __func__);
+  Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
   EntryWithChunkOut entry_out;
   status = file_system->Fallocate(ctx, request->ino(), request->mode(), request->offset(), request->len(), entry_out);
@@ -2432,7 +2428,7 @@ void MDSServiceImpl::DoCompactChunk(google::protobuf::RpcController*, const pb::
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  Context ctx(request->context(), request->info().request_id(), __func__);
+  Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
   ChunkEntry chunk;
   FileSystem::CompactChunkParam param = {
@@ -2489,7 +2485,7 @@ void MDSServiceImpl::DoCleanTrashSlice(google::protobuf::RpcController*, const p
 
   auto span = StartSpan("MDSServiceImpl::DoCleanTrashSlice", request->info());
 
-  Context ctx(request->context(), request->info().request_id(), __func__);
+  Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
   auto status =
       gc_processor_->ManualCleanDelSlice(ctx.GetTrace(), request->fs_id(), request->ino(), request->chunk_index());
@@ -2538,7 +2534,7 @@ void MDSServiceImpl::DoCleanDelFile(google::protobuf::RpcController*, const pb::
 
   auto span = StartSpan("MDSServiceImpl::DoCleanDelFile", request->info());
 
-  Context ctx(request->context(), request->info().request_id(), __func__);
+  Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
   auto status = gc_processor_->ManualCleanDelFile(ctx.GetTrace(), request->fs_id(), request->ino());
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
@@ -2595,7 +2591,7 @@ void MDSServiceImpl::DoSetFsQuota(google::protobuf::RpcController*, const pb::md
 
   auto& quota_manager = file_system->GetQuotaManager();
 
-  Context ctx(request->context(), request->info().request_id(), __func__);
+  Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
   status = quota_manager.SetFsQuota(ctx.GetTrace(), request->quota());
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
@@ -2648,7 +2644,7 @@ void MDSServiceImpl::DoGetFsQuota(google::protobuf::RpcController*, const pb::md
 
   auto& quota_manager = file_system->GetQuotaManager();
 
-  Context ctx(request->context(), request->info().request_id(), __func__);
+  Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
   pb::mds::Quota quota;
   status = quota_manager.GetFsQuota(ctx.GetTrace(), ctx.IsBypassCache(), quota);
@@ -2703,7 +2699,7 @@ void MDSServiceImpl::DoSetDirQuota(google::protobuf::RpcController*, const pb::m
 
   auto& quota_manager = file_system->GetQuotaManager();
 
-  Context ctx(request->context(), request->info().request_id(), __func__);
+  Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
   status = quota_manager.SetDirQuota(ctx.GetTrace(), request->ino(), request->quota(), true);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
@@ -2756,7 +2752,7 @@ void MDSServiceImpl::DoGetDirQuota(google::protobuf::RpcController*, const pb::m
 
   auto& quota_manager = file_system->GetQuotaManager();
 
-  Context ctx(request->context(), request->info().request_id(), __func__);
+  Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
   pb::mds::Quota quota;
   status = quota_manager.GetDirQuota(ctx.GetTrace(), request->ino(), request->not_use_fs_quota(), quota);
@@ -2812,7 +2808,7 @@ void MDSServiceImpl::DoDeleteDirQuota(google::protobuf::RpcController*, const pb
 
   auto& quota_manager = file_system->GetQuotaManager();
 
-  Context ctx(request->context(), request->info().request_id(), __func__);
+  Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
   status = quota_manager.DeleteDirQuota(ctx.GetTrace(), request->ino());
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
@@ -2865,7 +2861,7 @@ void MDSServiceImpl::DoLoadDirQuotas(google::protobuf::RpcController*, const pb:
 
   auto& quota_manager = file_system->GetQuotaManager();
 
-  Context ctx(request->context(), request->info().request_id(), __func__);
+  Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
   std::map<uint64_t, pb::mds::Quota> quotas;
   status = quota_manager.LoadDirQuotas(ctx.GetTrace(), quotas);
@@ -2925,7 +2921,7 @@ void MDSServiceImpl::DoSetFsStats(google::protobuf::RpcController*, const pb::md
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
   }
 
-  Context ctx(request->context(), request->info().request_id(), __func__);
+  Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
   status = fs_stat_->UploadFsStat(ctx, fs_id, request->stats());
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
@@ -2978,7 +2974,7 @@ void MDSServiceImpl::DoGetFsStats(google::protobuf::RpcController*, const pb::md
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
   }
 
-  Context ctx(request->context(), request->info().request_id(), __func__);
+  Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
   pb::mds::FsStatsData stats;
   status = fs_stat_->GetFsStat(ctx, fs_id, stats);

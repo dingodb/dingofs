@@ -250,9 +250,10 @@ class MDSClient {
 
   GetDentryResponse GetDentry(Ino parent, const std::string& name);
   ListDentryResponse ListDentry(Ino parent, bool is_only_dir);
-  // Render-silent, paged variant for the client-side tree walk: returns one page
-  // (entries after `last`, up to `limit`) without printing.
-  ListDentryResponse ListDentryPaged(Ino parent, const std::string& last, uint32_t limit, bool is_only_dir);
+  // Render-silent, paged variant for the client-side tree walk: returns one
+  // page (entries after `last`, up to `limit`) without printing.
+  ListDentryResponse ListDentryPaged(Ino parent, const std::string& last,
+                                     uint32_t limit, bool is_only_dir);
   // bypass_cache reads the inode from the store instead of the serving MDS's
   // local cache, which goes stale on non-owner MDSes (no cross-MDS
   // invalidation).
@@ -304,17 +305,18 @@ class MDSClient {
                                             bool allow_trash_parent);
 
   AllocSliceIdResponse AllocSliceId(uint32_t alloc_num, uint64_t min_slice_id);
-  WriteSliceResponse WriteSlice(Ino parent, Ino ino, int64_t chunk_index);
+  WriteSliceResponse WriteSlice(Ino ino, int64_t chunk_index);
   ReadSliceResponse ReadSlice(Ino ino, int64_t chunk_index);
   // Read all chunks [0, chunk_num) of a file in one request (for `info` file
-  // data layout). Always bypasses the chunk cache so the layout is authoritative.
+  // data layout). Always bypasses the chunk cache so the layout is
+  // authoritative.
   ReadSliceResponse ReadSliceAll(Ino ino, int64_t chunk_num);
 
   // dir-stats operations
   GetDirStatResponse GetDirStat(Ino ino);
-  // Single-level check/repair for one directory; the recursive tree walk lives in
-  // the CLI (dir_tree_walker) and calls this per directory routed to the owner.
-  // Render-silent: the caller aggregates and prints.
+  // Single-level check/repair for one directory; the recursive tree walk lives
+  // in the CLI (dir_tree_walker) and calls this per directory routed to the
+  // owner. Render-silent: the caller aggregates and prints.
   SyncDirStatResponse SyncDirStat(Ino ino, bool repair);
 
   // quota operations
@@ -407,7 +409,8 @@ class MdsCommandRunner {
     std::string path;  // absolute fs path, e.g. /a/b/c; resolved to ino if set
     uint32_t depth{2};
     uint32_t entries{10};
-    // concurrency for the client-side directory-tree walk (info -r/summary/syncdirstat)
+    // concurrency for the client-side directory-tree walk (info
+    // -r/summary/syncdirstat)
     uint32_t dir_threads{50};
     bool strict{false};
     bool recursive{false};

@@ -57,11 +57,13 @@ class ParentMemo {
 
  private:
   struct Entry {
-    Ino parent;
-    uint64_t version;
+    Ino parent{0};
+    uint64_t version{0};
     int32_t rename_ref_count{0};
   };
   void UpsertEntry(Ino ino, const Entry& entry);
+
+  std::vector<Ino> GetAncestorsWithoutRepeat(Ino ino);
 
   using Map = absl::flat_hash_map<Ino, Entry>;
 

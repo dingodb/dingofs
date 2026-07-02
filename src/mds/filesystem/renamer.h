@@ -60,7 +60,8 @@ class RenameTask : public TaskRunnable {
   Status GetStatus() { return status_; }
   uint64_t GetOldParentVersion() const { return old_parent_version_; }
   uint64_t GetNewParentVersion() const { return new_parent_version_; }
-  std::vector<Ino> GetEffectedInos() const { return effected_inos_; }
+  Ino GetChildIno() const { return child_ino_; }
+  Ino GetDeletedIno() const { return deleted_ino_; }
 
  private:
   // not delete at here
@@ -72,7 +73,8 @@ class RenameTask : public TaskRunnable {
   Status status_;
   uint64_t old_parent_version_;
   uint64_t new_parent_version_;
-  std::vector<Ino> effected_inos_;
+  Ino child_ino_{0};
+  Ino deleted_ino_{0};
 
   RenameCbFunc cb_;
   FileSystemSPtr fs_;
@@ -96,9 +98,14 @@ class Renamer {
   bool Init();
   bool Destroy();
 
+  struct Result {
+    uint64_t old_parent_version{0};
+    uint64_t new_parent_version{0};
+    Ino child_ino{0};
+    Ino deleted_ino{0};
+  };
   template <typename T>
-  Status Execute(FileSystemSPtr fs, Context& ctx, const T& param, uint64_t& old_parent_version,
-                 uint64_t& new_parent_version, std::vector<Ino>& effected_inos);
+  Status Execute(FileSystemSPtr fs, Context& ctx, const T& param, Result& out);
 
  private:
   bool Execute(TaskRunnablePtr task);
@@ -107,8 +114,7 @@ class Renamer {
 };
 
 template <typename T>
-Status Renamer::Execute(FileSystemSPtr fs, Context& ctx, const T& param, uint64_t& old_parent_version,
-                        uint64_t& new_parent_version, std::vector<Ino>& effected_inos) {
+Status Renamer::Execute(FileSystemSPtr fs, Context& ctx, const T& param, Result& out) {
   auto task = std::make_shared<RenameTask<T> >(fs, &ctx, param, nullptr);
   if (!Execute(task)) {
     return Status(pb::error::EINTERNAL, "commit task fail");
@@ -116,9 +122,10 @@ Status Renamer::Execute(FileSystemSPtr fs, Context& ctx, const T& param, uint64_
 
   task->Wait();
 
-  old_parent_version = task->GetOldParentVersion();
-  new_parent_version = task->GetNewParentVersion();
-  effected_inos = task->GetEffectedInos();
+  out.old_parent_version = task->GetOldParentVersion();
+  out.new_parent_version = task->GetNewParentVersion();
+  out.child_ino = task->GetChildIno();
+  out.deleted_ino = task->GetDeletedIno();
 
   return task->GetStatus();
 }

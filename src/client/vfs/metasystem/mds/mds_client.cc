@@ -1351,14 +1351,19 @@ Status MDSClient::Rename(ContextSPtr& ctx, Ino old_parent,
   if (old_parent != new_parent) {
     parent_memo_.UpsertVersionAndRenameRefCount(old_parent,
                                                 response.old_parent_version());
+
+    if (response.child_ino() != 0)
+      parent_memo_.Upsert(response.child_ino(), new_parent);
   }
 
-  if (old_parent != new_parent) {
-    parent_memo_.UpsertVersionAndRenameRefCount(old_parent,
-                                                response.old_parent_version());
-  }
+  if (response.deleted_ino() != 0) parent_memo_.Delete(response.deleted_ino());
 
-  effected_inos = mds::Helper::PbRepeatedToVector(response.effected_inos());
+  // update effected inodes
+  effected_inos.push_back(old_parent);
+  if (new_parent != old_parent) effected_inos.push_back(new_parent);
+  if (response.child_ino() != 0) effected_inos.push_back(response.child_ino());
+  if (response.deleted_ino() != 0)
+    effected_inos.push_back(response.deleted_ino());
 
   return Status::OK();
 }
@@ -1446,12 +1451,7 @@ Status MDSClient::WriteSlice(
 
   SetAncestorInContext(request, ino);
 
-  Ino parent = 0;
-  CHECK(parent_memo_.GetParent(ino, parent))
-      << "get parent fail from parent cache.";
-
   request.set_fs_id(fs_id_);
-  request.set_parent(parent);
   request.set_ino(ino);
 
   mds::Helper::VectorToPbRepeated(delta_slices, request.mutable_delta_slices());

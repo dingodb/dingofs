@@ -35,11 +35,13 @@ namespace dingofs {
 namespace mds {
 namespace unit_test {
 
-// Drain the in-memory dir-stat delta log (summed per ino) and clear it, mirroring
-// what a flush consumes. The production flush uses GetFlushSnapshot + Compact so a
-// delta arriving mid-flush survives; tests run with inplace workers so nothing
-// races, and this drains everything for per-op delta assertions/isolation.
-static std::map<uint64_t, DirStatDelta> DrainDirStats(dir_stat::DirStatManager& m) {
+// Drain the in-memory dir-stat delta log (summed per ino) and clear it,
+// mirroring what a flush consumes. The production flush uses GetFlushSnapshot +
+// Compact so a delta arriving mid-flush survives; tests run with inplace
+// workers so nothing races, and this drains everything for per-op delta
+// assertions/isolation.
+static std::map<uint64_t, DirStatDelta> DrainDirStats(
+    dir_stat::DirStatManager& m) {
   auto snap = m.GetFlushSnapshot();
   std::map<uint64_t, DirStatDelta> out;
   for (const auto& [ino, fe] : snap) {
@@ -134,10 +136,10 @@ class FileSystemSetTest : public testing::Test {
     mds_meta.SetState(MDSMeta::State::kInit);
 
     auto mds_meta_map = MDSMetaMap::New();
-    fs_set =
-        FileSystemSet::New(coordinator_client, std::move(fs_id_generator),
-                           slice_id_generator, kv_storage, mds_meta,
-                           mds_meta_map, operation_processor, nullptr, nullptr, nullptr);
+    fs_set = FileSystemSet::New(coordinator_client, std::move(fs_id_generator),
+                                slice_id_generator, kv_storage, mds_meta,
+                                mds_meta_map, operation_processor, nullptr,
+                                nullptr, nullptr);
     ASSERT_TRUE(fs_set->Init()) << "init fs set fail.";
   }
 
@@ -176,19 +178,17 @@ class FileSystemTest : public testing::Test {
 
     // KV-backed id generators work with DummyStorage.
     auto inode_id_generator = NewInodeIdGenerator(1000, kv_storage);
-    ASSERT_TRUE(inode_id_generator->Init())
-        << "init inode id generator fail.";
+    ASSERT_TRUE(inode_id_generator->Init()) << "init inode id generator fail.";
 
     auto slice_id_generator = NewSliceIdGenerator(kv_storage);
-    ASSERT_TRUE(slice_id_generator->Init())
-        << "init slice id generator fail.";
+    ASSERT_TRUE(slice_id_generator->Init()) << "init slice id generator fail.";
 
     operation_processor = OperationProcessor::New(kv_storage);
     ASSERT_TRUE(operation_processor->Init()) << "init mutation merger fail.";
 
     // quota worker set (needed to avoid nullptr crash in AsyncUpdateDirUsage).
-    auto quota_worker_set =
-        SimpleWorkerSet::New("fs_test_quota", 1, 1024, false, /*is_inplace_run=*/true);
+    auto quota_worker_set = SimpleWorkerSet::New(
+        "fs_test_quota", 1, 1024, false, /*is_inplace_run=*/true);
     ASSERT_TRUE(quota_worker_set->Init()) << "init quota worker set fail.";
 
     pb::mds::FsInfo fs_info = CreateFsInfo(
@@ -905,9 +905,8 @@ TEST_F(FileSystemTest, RenameWithSameDir) {
   param.new_parent = old_parent_ino;
   param.new_name = new_name;
 
-  std::vector<Ino> effected_inos;
-  auto status = fs->Rename(ctx, param, old_parent_version, new_parent_version,
-                           effected_inos);
+  FileSystem::RenameResult rename_result;
+  auto status = fs->Rename(ctx, param, rename_result);
   ASSERT_TRUE(status.ok()) << "rename fail, error: " << status.error_str();
 
   auto partition = partition_cache.Get(old_parent_ino);
@@ -1006,9 +1005,8 @@ TEST_F(FileSystemTest, RenameWithDiffDir) {
   param.new_parent = old_parent_ino;
   param.new_name = new_name;
 
-  std::vector<Ino> effected_inos;
-  auto status = fs->Rename(ctx, param, old_parent_version, new_parent_version,
-                           effected_inos);
+  FileSystem::RenameResult rename_result;
+  auto status = fs->Rename(ctx, param, rename_result);
   ASSERT_TRUE(status.ok()) << "rename fail, error: " << status.error_str();
 
   {
@@ -1316,12 +1314,25 @@ TEST_F(FileSystemTest, FlushDirStats) {
   ASSERT_TRUE(fs->EnableDirStats());
   Context ctx;
   FileSystem::MkDirParam dp;
-  dp.parent = kRootIno; dp.name = "flush_d"; dp.mode = 0777; dp.uid = 1; dp.gid = 1; dp.rdev = 0;
-  EntryOut dout; ASSERT_TRUE(fs->MkDir(ctx, dp, dout).ok());
+  dp.parent = kRootIno;
+  dp.name = "flush_d";
+  dp.mode = 0777;
+  dp.uid = 1;
+  dp.gid = 1;
+  dp.rdev = 0;
+  EntryOut dout;
+  ASSERT_TRUE(fs->MkDir(ctx, dp, dout).ok());
   Ino d = dout.attr.ino();
 
-  FileSystem::MkNodParam p; p.parent = d; p.name = "x"; p.mode = 0644; p.uid = 1; p.gid = 1; p.rdev = 0;
-  EntryOut o; ASSERT_TRUE(fs->MkNod(ctx, p, o).ok());
+  FileSystem::MkNodParam p;
+  p.parent = d;
+  p.name = "x";
+  p.mode = 0644;
+  p.uid = 1;
+  p.gid = 1;
+  p.rdev = 0;
+  EntryOut o;
+  ASSERT_TRUE(fs->MkNod(ctx, p, o).ok());
 
   ASSERT_TRUE(fs->GetDirStatManager().FlushDirStats().ok());
 
@@ -1340,8 +1351,14 @@ TEST_F(FileSystemTest, MkDirSeedsZeroDirStat) {
   ASSERT_TRUE(fs->EnableDirStats());
   Context ctx;
   FileSystem::MkDirParam dp;
-  dp.parent = kRootIno; dp.name = "seed_d"; dp.mode = 0777; dp.uid = 1; dp.gid = 1; dp.rdev = 0;
-  EntryOut dout; ASSERT_TRUE(fs->MkDir(ctx, dp, dout).ok());
+  dp.parent = kRootIno;
+  dp.name = "seed_d";
+  dp.mode = 0777;
+  dp.uid = 1;
+  dp.gid = 1;
+  dp.rdev = 0;
+  EntryOut dout;
+  ASSERT_TRUE(fs->MkDir(ctx, dp, dout).ok());
   Ino d = dout.attr.ino();
 
   DirStatEntry seeded;
@@ -1349,8 +1366,15 @@ TEST_F(FileSystemTest, MkDirSeedsZeroDirStat) {
   EXPECT_EQ(seeded.inodes(), 0);
   EXPECT_EQ(seeded.length(), 0);
 
-  FileSystem::MkNodParam p; p.parent = d; p.name = "x"; p.mode = 0644; p.uid = 1; p.gid = 1; p.rdev = 0;
-  EntryOut o; ASSERT_TRUE(fs->MkNod(ctx, p, o).ok());
+  FileSystem::MkNodParam p;
+  p.parent = d;
+  p.name = "x";
+  p.mode = 0644;
+  p.uid = 1;
+  p.gid = 1;
+  p.rdev = 0;
+  EntryOut o;
+  ASSERT_TRUE(fs->MkNod(ctx, p, o).ok());
   ASSERT_TRUE(fs->GetDirStatManager().FlushDirStats().ok());
 
   DirStatEntry after;
@@ -1369,7 +1393,12 @@ TEST_F(FileSystemTest, BatchMkDirSeedsZeroDirStat) {
   std::vector<FileSystem::MkDirParam> params;
   for (const auto& name : {"bseed_a", "bseed_b"}) {
     FileSystem::MkDirParam p;
-    p.parent = kRootIno; p.name = name; p.mode = 0777; p.uid = 1; p.gid = 1; p.rdev = 0;
+    p.parent = kRootIno;
+    p.name = name;
+    p.mode = 0777;
+    p.uid = 1;
+    p.gid = 1;
+    p.rdev = 0;
     params.push_back(p);
   }
   EntryOut out;
@@ -1422,26 +1451,34 @@ TEST_F(FileSystemTest, SyncDirStatSingleLevelRepair) {
   mkfile(a, "f1", 1000);
   mkfile(s, "f2", 5000);
 
-  // Single-level: s's direct children are {a (dir), f2 (file, 5000)} -> inodes=2,
-  // dirs=1, length=5000 (f1 lives under a, not s). The stored stat lags (seeded
-  // zero at MkDir plus buffered, un-flushed deltas), so a read-only check reports
-  // one break for s carrying the recomputed (want) value.
+  // Single-level: s's direct children are {a (dir), f2 (file, 5000)} ->
+  // inodes=2, dirs=1, length=5000 (f1 lives under a, not s). The stored stat
+  // lags (seeded zero at MkDir plus buffered, un-flushed deltas), so a
+  // read-only check reports one break for s carrying the recomputed (want)
+  // value.
   std::vector<dir_stat::DirStatManager::DirStatMismatch> mismatches;
-  ASSERT_TRUE(fs->GetDirStatManager().SyncDirStat(ctx, s, /*repair=*/false, mismatches).ok());
+  ASSERT_TRUE(fs->GetDirStatManager()
+                  .SyncDirStat(ctx, s, /*repair=*/false, mismatches)
+                  .ok());
   ASSERT_EQ(mismatches.size(), 1u);
   EXPECT_EQ(mismatches[0].ino, s);
   EXPECT_EQ(mismatches[0].want.inodes(), 2);
   EXPECT_EQ(mismatches[0].want.dirs(), 1);
   EXPECT_EQ(mismatches[0].want.length(), 5000);
 
-  // Repair persists the recomputed value (and discards the buffered delta), so a
-  // subsequent read-only check is clean and the stored record equals CalcDirStat.
+  // Repair persists the recomputed value (and discards the buffered delta), so
+  // a subsequent read-only check is clean and the stored record equals
+  // CalcDirStat.
   mismatches.clear();
-  ASSERT_TRUE(fs->GetDirStatManager().SyncDirStat(ctx, s, /*repair=*/true, mismatches).ok());
+  ASSERT_TRUE(fs->GetDirStatManager()
+                  .SyncDirStat(ctx, s, /*repair=*/true, mismatches)
+                  .ok());
   EXPECT_EQ(mismatches.size(), 1u);
 
   mismatches.clear();
-  ASSERT_TRUE(fs->GetDirStatManager().SyncDirStat(ctx, s, /*repair=*/false, mismatches).ok());
+  ASSERT_TRUE(fs->GetDirStatManager()
+                  .SyncDirStat(ctx, s, /*repair=*/false, mismatches)
+                  .ok());
   EXPECT_TRUE(mismatches.empty());
 
   DirStatEntry calc, stored;
@@ -1473,10 +1510,10 @@ TEST_F(FileSystemTest, GetAttrMissingDirReturnsNotFound) {
 }
 
 // Fallocate that extends a file must charge the growth to the parent dir-stat
-// (and quota). Regression: the delta was computed by re-reading the cached inode
-// AFTER UpsertInodeCache mutated it in place, yielding a constant 0 and silently
-// dropping both the dir-stat and quota updates. The delta is now taken from the
-// operation's txn (FallocateOperation::Result::length_delta).
+// (and quota). Regression: the delta was computed by re-reading the cached
+// inode AFTER UpsertInodeCache mutated it in place, yielding a constant 0 and
+// silently dropping both the dir-stat and quota updates. The delta is now taken
+// from the operation's txn (FallocateOperation::Result::length_delta).
 TEST_F(FileSystemTest, FallocateChargesDirStat) {
   auto fs = Fs();
   ASSERT_TRUE(fs->EnableDirStats());
@@ -1511,13 +1548,16 @@ TEST_F(FileSystemTest, FallocateChargesDirStat) {
 
   // fallocate(mode=0) extends f from 0 to 4096.
   EntryWithChunkOut eo;
-  ASSERT_TRUE(fs->Fallocate(ctx, f, /*mode=*/0, /*offset=*/0, /*len=*/4096, eo).ok());
+  ASSERT_TRUE(
+      fs->Fallocate(ctx, f, /*mode=*/0, /*offset=*/0, /*len=*/4096, eo).ok());
   EXPECT_EQ(eo.attr.length(), 4096u);
 
   // The parent dir-stat length must reflect the 4096-byte growth (folding the
   // buffered delta). Without the fix this stays 0.
   DirStatEntry stat;
-  ASSERT_TRUE(fs->GetDirStatManager().GetDirStat(ctx, d, stat, /*with_pending=*/true).ok());
+  ASSERT_TRUE(fs->GetDirStatManager()
+                  .GetDirStat(ctx, d, stat, /*with_pending=*/true)
+                  .ok());
   EXPECT_EQ(stat.length(), 4096);
   EXPECT_EQ(stat.inodes(), 1);  // just f
   EXPECT_EQ(stat.dirs(), 0);
@@ -1604,7 +1644,8 @@ TEST_F(FileSystemTest, CalcDirStatNoPageBoundaryDoubleCount) {
 
   DirStatEntry st;
   ASSERT_TRUE(fs->CalcDirStat(bypass_ctx, d, st).ok());
-  EXPECT_EQ(st.inodes(), kCount);  // exactly kCount, not kCount + (boundary dups)
+  EXPECT_EQ(st.inodes(),
+            kCount);  // exactly kCount, not kCount + (boundary dups)
 }
 
 }  // namespace unit_test

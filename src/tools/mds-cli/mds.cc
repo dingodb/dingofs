@@ -1256,8 +1256,7 @@ AllocSliceIdResponse MDSClient::AllocSliceId(uint32_t alloc_num,
   return response;
 }
 
-WriteSliceResponse MDSClient::WriteSlice(Ino parent, Ino ino,
-                                         int64_t chunk_index) {
+WriteSliceResponse MDSClient::WriteSlice(Ino ino, int64_t chunk_index) {
   CHECK(fs_id_ > 0) << "fs_id_ is zero";
 
   WriteSliceRequest request;
@@ -1266,7 +1265,6 @@ WriteSliceResponse MDSClient::WriteSlice(Ino parent, Ino ino,
   request.mutable_context()->set_epoch(epoch_);
 
   request.set_fs_id(fs_id_);
-  request.set_parent(parent);
   request.set_ino(ino);
 
   mds::DeltaSliceEntry delta_slice;

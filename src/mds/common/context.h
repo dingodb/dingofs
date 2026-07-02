@@ -28,7 +28,9 @@ class Context {
  public:
   Context() = default;
   Context(const std::string& request_id, const std::string method_name, ReqType req_type = ReqType::kNormal)
-      : req_type_(req_type), request_id_(request_id), method_name_(method_name) {};
+      : req_type_(req_type), request_id_(request_id), method_name_(method_name) {
+    trace_.SetReqType(req_type);
+  }
   Context(const ContextEntry& ctx, const std::string& request_id, const std::string method_name,
           ReqType req_type = ReqType::kNormal)
       : req_type_(req_type),
@@ -40,7 +42,8 @@ class Context {
         method_name_(method_name),
         uid_(ctx.uid()) {
     ancestors_ = {ctx.ancestors().begin(), ctx.ancestors().end()};
-  };
+    trace_.SetReqType(req_type);
+  }
 
   ReqType GetReqType() const { return req_type_; }
 
@@ -68,7 +71,7 @@ class Context {
 
   const uint32_t uid_{0};
 
-  ReqType req_type_{ReqType::kNormal};
+  const ReqType req_type_{ReqType::kNormal};
 
   std::vector<Ino> ancestors_;
 

@@ -53,7 +53,9 @@ class Trace {
     uint64_t write_time_us{0};
   };
 
+  void SetReqType(ReqType req_type) { req_type_ = req_type; }
   ReqType GetReqType() const { return req_type_; }
+  int GetReqTypeInt() const { return static_cast<int>(req_type_); }
   bool IsNormalReq() const { return req_type_ == ReqType::kNormal; }
 
   Time& GetTime() { return time_; }

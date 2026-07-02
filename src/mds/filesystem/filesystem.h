@@ -30,7 +30,6 @@
 #include "mds/common/status.h"
 #include "mds/common/trash.h"
 #include "mds/common/type.h"
-#include "mds/statistics/dir_stat_manager.h"
 #include "mds/filesystem/chunk_cache.h"
 #include "mds/filesystem/dentry.h"
 #include "mds/filesystem/file_session.h"
@@ -44,6 +43,7 @@
 #include "mds/filesystem/store_operation.h"
 #include "mds/mds/mds_meta.h"
 #include "mds/quota/quota.h"
+#include "mds/statistics/dir_stat_manager.h"
 #include "mds/storage/storage.h"
 #include "utils/concurrent/rw_lock.h"
 #include "utils/doubly_map.h"
@@ -231,10 +231,15 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
     std::vector<Ino> old_ancestors;
     std::vector<Ino> new_ancestors;
   };
-  Status Rename(Context& ctx, const RenameParam& param, uint64_t& old_parent_version, uint64_t& new_parent_version,
-                std::vector<Ino>& effected_inos);
-  Status CommitRename(Context& ctx, const RenameParam& param, uint64_t& old_parent_version,
-                      uint64_t& new_parent_version, std::vector<Ino>& effected_inos);
+  struct RenameResult {
+    uint64_t old_parent_version{0};
+    uint64_t new_parent_version{0};
+    Ino child_ino{0};
+    Ino deleted_ino{0};
+  };
+  Status Rename(Context& ctx, const RenameParam& param, RenameResult& out);
+
+  Status CommitRename(Context& ctx, const RenameParam& param, RenameResult& out);
 
   // trash restore
   // dst (parent + name) is always parsed from trash_name. When allow_trash_parent
@@ -244,7 +249,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
                           bool allow_trash_parent = false);
 
   // slice
-  Status WriteSlice(Context& ctx, Ino parent, Ino ino, const std::vector<DeltaSliceEntry>& delta_slices,
+  Status WriteSlice(Context& ctx, Ino ino, const std::vector<DeltaSliceEntry>& delta_slices,
                     std::vector<ChunkEntry>& out_chunks);
   Status ReadSlice(Context& ctx, Ino ino, const std::vector<ChunkDescriptor>& chunk_descriptors,
                    std::vector<ChunkEntry>& chunks);

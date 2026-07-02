@@ -40,7 +40,8 @@ namespace unit_test {
 
 // Drain the in-memory dir-stat delta log (summed per ino) and clear it -- the
 // new manager has no SwapOut; production flush uses GetFlushSnapshot + Compact.
-static std::map<uint64_t, DirStatDelta> DrainDirStats(dir_stat::DirStatManager& m) {
+static std::map<uint64_t, DirStatDelta> DrainDirStats(
+    dir_stat::DirStatManager& m) {
   auto snap = m.GetFlushSnapshot();
   std::map<uint64_t, DirStatDelta> out;
   for (const auto& [ino, fe] : snap) {
@@ -115,8 +116,8 @@ class TrashFileSystemTest : public testing::Test {
 
     // Create a quota worker set (needed to avoid nullptr crash in
     // AsyncUpdateDirUsage).
-    quota_worker_set =
-        SimpleWorkerSet::New("trash_test_quota", 1, 1024, false, /*is_inplace_run=*/true);
+    quota_worker_set = SimpleWorkerSet::New("trash_test_quota", 1, 1024, false,
+                                            /*is_inplace_run=*/true);
     ASSERT_TRUE(quota_worker_set->Init()) << "init quota worker set fail.";
 
     pb::mds::FsInfo fs_info = CreateFsInfoWithTrash(kFsId, "trash_test_fs", 7);
@@ -346,9 +347,8 @@ TEST_F(TrashFileSystemTest, CannotRenameIntoTrash) {
   rename_param.old_name = "rename_source";
   rename_param.new_parent = kTrashInodeId;
   rename_param.new_name = "moved_to_trash";
-  uint64_t old_ver, new_ver;
-  std::vector<Ino> effected;
-  status = fs->Rename(ctx, rename_param, old_ver, new_ver, effected);
+  FileSystem::RenameResult result;
+  status = fs->Rename(ctx, rename_param, result);
   ASSERT_FALSE(status.ok());
   EXPECT_EQ(status.error_code(), pb::error::ENOT_SUPPORT);
 }
@@ -362,9 +362,8 @@ TEST_F(TrashFileSystemTest, CannotRenameDotTrash) {
   rename_param.old_name = kTrashName;
   rename_param.new_parent = kRootIno;
   rename_param.new_name = "renamed_trash";
-  uint64_t old_ver, new_ver;
-  std::vector<Ino> effected;
-  auto status = fs->Rename(ctx, rename_param, old_ver, new_ver, effected);
+  FileSystem::RenameResult result;
+  auto status = fs->Rename(ctx, rename_param, result);
   ASSERT_FALSE(status.ok());
   EXPECT_EQ(status.error_code(), pb::error::ENOT_SUPPORT);
 }
@@ -389,9 +388,8 @@ TEST_F(TrashFileSystemTest, CannotRenameToDotTrash) {
   rename_param.old_name = "rename_to_trash_source";
   rename_param.new_parent = kRootIno;
   rename_param.new_name = kTrashName;
-  uint64_t old_ver, new_ver;
-  std::vector<Ino> effected;
-  status = fs->Rename(ctx, rename_param, old_ver, new_ver, effected);
+  FileSystem::RenameResult result;
+  status = fs->Rename(ctx, rename_param, result);
   ASSERT_FALSE(status.ok());
   EXPECT_EQ(status.error_code(), pb::error::ENOT_SUPPORT);
 }
@@ -440,9 +438,8 @@ TEST_F(TrashFileSystemTest, CannotRenameTrashHourBucketAsNonRoot) {
   rp.old_name = bucket_name;
   rp.new_parent = kRootIno;
   rp.new_name = "evicted_bucket_nonroot";
-  uint64_t ov, nv;
-  std::vector<Ino> eff;
-  auto status = fs->Rename(user_ctx, rp, ov, nv, eff);
+  FileSystem::RenameResult result;
+  auto status = fs->Rename(user_ctx, rp, result);
   ASSERT_FALSE(status.ok());
   EXPECT_EQ(status.error_code(), pb::error::ENOT_SUPPORT);
 }
@@ -484,9 +481,8 @@ TEST_F(TrashFileSystemTest, CannotRenameTrashHourBucketAsRoot) {
   rp.old_name = bucket_name;
   rp.new_parent = kRootIno;
   rp.new_name = "evicted_bucket_root";
-  uint64_t ov, nv;
-  std::vector<Ino> eff;
-  auto status = fs->Rename(root_ctx, rp, ov, nv, eff);
+  FileSystem::RenameResult result;
+  auto status = fs->Rename(root_ctx, rp, result);
   ASSERT_FALSE(status.ok())
       << "even root must not be allowed to rename hour bucket out";
   EXPECT_EQ(status.error_code(), pb::error::ENOT_SUPPORT);
@@ -1110,9 +1106,8 @@ TEST_F(TrashFileSystemTest, RenameFileOutOfTrashSucceeds) {
   rp.old_name = trash_name;
   rp.new_parent = kRootIno;
   rp.new_name = "recovered_file.txt";
-  uint64_t ov = 0, nv = 0;
-  std::vector<Ino> eff;
-  auto status = fs->Rename(ctx, rp, ov, nv, eff);
+  FileSystem::RenameResult result;
+  auto status = fs->Rename(ctx, rp, result);
   ASSERT_TRUE(status.ok()) << "rename file out of trash bucket must succeed: "
                            << status.error_str();
 
@@ -1170,9 +1165,8 @@ TEST_F(TrashFileSystemTest, RenameDirOutOfTrashSucceeds) {
   rp.old_name = trash_name;
   rp.new_parent = kRootIno;
   rp.new_name = "recovered_dir";
-  uint64_t ov = 0, nv = 0;
-  std::vector<Ino> eff;
-  auto status = fs->Rename(ctx, rp, ov, nv, eff);
+  FileSystem::RenameResult result;
+  auto status = fs->Rename(ctx, rp, result);
   ASSERT_TRUE(status.ok()) << "rename dir out of trash must succeed: "
                            << status.error_str();
 
@@ -1232,9 +1226,8 @@ TEST_F(TrashFileSystemTest, RenameFlatGraftedFileOutOfTrashSucceeds) {
   rp.old_name = trash_name;
   rp.new_parent = kRootIno;
   rp.new_name = "recovered_inner.txt";
-  uint64_t ov = 0, nv = 0;
-  std::vector<Ino> eff;
-  auto status = fs->Rename(ctx, rp, ov, nv, eff);
+  FileSystem::RenameResult result;
+  auto status = fs->Rename(ctx, rp, result);
   ASSERT_TRUE(status.ok())
       << "rename flat-grafted file out of trash must succeed: "
       << status.error_str();
@@ -1301,9 +1294,8 @@ TEST_F(TrashFileSystemTest,
   rp.new_parent = dst_ino;
   rp.new_name = trash_name;  // KEY: same name as source, simulating `mv
                              // .trash/.../X dst/`
-  uint64_t ov = 0, nv = 0;
-  std::vector<Ino> eff;
-  auto status = fs->Rename(ctx, rp, ov, nv, eff);
+  FileSystem::RenameResult result;
+  auto status = fs->Rename(ctx, rp, result);
   ASSERT_TRUE(status.ok()) << "rename must succeed: " << status.error_str();
 
   EntryOut lookup;
@@ -1745,10 +1737,11 @@ class TrashDirStatTest : public testing::Test {
     ASSERT_TRUE(slice_id_generator->Init()) << "init slice id generator fail.";
 
     operation_processor = OperationProcessor::New(kv_storage);
-    ASSERT_TRUE(operation_processor->Init()) << "init operation processor fail.";
+    ASSERT_TRUE(operation_processor->Init())
+        << "init operation processor fail.";
 
-    auto quota_worker_set =
-        SimpleWorkerSet::New("trash_ds_quota", 1, 1024, false, /*is_inplace_run=*/true);
+    auto quota_worker_set = SimpleWorkerSet::New(
+        "trash_ds_quota", 1, 1024, false, /*is_inplace_run=*/true);
     ASSERT_TRUE(quota_worker_set->Init()) << "init quota worker set fail.";
 
     pb::mds::FsInfo fs_info = CreateFsInfoWithTrash(
