@@ -69,7 +69,7 @@ DEFINE_validator(mds_store_operation_merge_delay_us, brpc::PassValidate);
 DEFINE_bool(mds_tiny_file_data_enable, false, "enable tiny file data feature.");
 DEFINE_validator(mds_tiny_file_data_enable, brpc::PassValidate);
 
-DEFINE_bool(mds_check_before_create_enable, false, "enable check before create file/dir.");
+DEFINE_bool(mds_check_before_create_enable, true, "enable check before create file/dir.");
 DEFINE_validator(mds_check_before_create_enable, brpc::PassValidate);
 
 DECLARE_uint32(mds_filesession_live_time_s);
@@ -1047,6 +1047,9 @@ Status HardLinkOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_para
     return Status(pb::error::ENOT_FOUND, fmt::format("get child inode({}) fail", dentry_.INo()));
   }
   AttrEntry attr = MetaCodec::DecodeInodeValue(value);
+  if (attr.nlink() == 0) {
+    return Status(pb::error::EDELETED, fmt::format("inode({}) is deleted", dentry_.INo()));
+  }
 
   // update inode nlink
   attr.set_nlink(attr.nlink() + 1);
@@ -1748,15 +1751,11 @@ Status FlushFileOperation::Run(TxnUPtr& txn) {
     }
   }
 
-  if (param_.length > attr.length()) {
-    // int64_t delta_bytes = static_cast<int64_t>(param_.length) - static_cast<int64_t>(attr.length());
-    // if (delta_bytes < 0) {
-    //   if (!param_.is_final) {
-    //     result_.attr = attr;
-    //     return Status::OK();
-    //   }
-    // }
+  if (attr.ino() == 0) {
+    return Status(pb::error::ENOT_FOUND, fmt::format("not found inode({})", ino_));
+  }
 
+  if (param_.length > attr.length()) {
     result_.delta_bytes = static_cast<int64_t>(param_.length) - static_cast<int64_t>(attr.length());
     attr.set_length(param_.length);
   }
@@ -2414,9 +2413,16 @@ Status RenameOperation::Run(TxnUPtr& txn) {
   if (new_parent_attr.ino() == 0 && new_parent_ == kTrashInodeId) {
     new_parent_attr = BuildTrashInodeAttr(fs_id_);
   }
-  CHECK(old_parent_attr.ino() > 0) << "old parent attr is null.";
-  CHECK(new_parent_attr.ino() > 0) << "new parent attr is null.";
-  CHECK(old_dentry.ino() > 0) << "old dentry is null.";
+
+  if (old_parent_attr.ino() == 0) {
+    return Status(pb::error::ENOT_FOUND, fmt::format("not found old parent inode({})", old_parent_));
+  }
+  if (new_parent_attr.ino() == 0) {
+    return Status(pb::error::ENOT_FOUND, fmt::format("not found new parent inode({})", new_parent_));
+  }
+  if (old_dentry.ino() == 0) {
+    return Status(pb::error::ENOT_FOUND, fmt::format("not found old dentry({}/{})", old_parent_, old_name_));
+  }
 
   bool is_exist_new_dentry = (prev_new_dentry.ino() != 0);
 
@@ -4193,10 +4199,12 @@ static std::string GetName(const BatchOperation& batch_operation) {
 static void SetBatchIndex(BatchOperation& batch_operation) {
   uint32_t index = 0;
   for (auto* operation : batch_operation.create_operations) {
+    if (!operation->GetStatus().ok()) continue;
     operation->SetBatchIndex(index++);
   }
 
   for (auto* operation : batch_operation.setattr_operations) {
+    if (!operation->GetStatus().ok()) continue;
     operation->SetBatchIndex(index++);
   }
 }
@@ -4231,8 +4239,6 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
   utils::Duration duration;
 
   SetElapsedTime(batch_operation, "store_pending");
-
-  if (count > 1) SetBatchIndex(batch_operation);
 
   uint32_t mutation_index = 0;
   bool need_parent_key = !IsDir(ino) || conflict_controller_.GetIndexAndIncRunningCount(fs_id, ino, mutation_index) ||
@@ -4367,6 +4373,8 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
 
   if (status.ok()) {
     SetResultAttr(batch_operation, shared_param);
+
+    if (count > 1) SetBatchIndex(batch_operation);
 
   } else {
     SetError(batch_operation, status);

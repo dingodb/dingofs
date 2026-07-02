@@ -14,7 +14,8 @@
 
 #include "client/vfs/metasystem/mds/parent_memo.h"
 
-#include "common/const.h"
+#include <set>
+
 #include "fmt/core.h"
 #include "fmt/ranges.h"
 #include "json/value.h"
@@ -61,10 +62,41 @@ bool ParentMemo::GetVersion(Ino ino, uint64_t& version) {
   return found;
 }
 
+std::vector<Ino> ParentMemo::GetAncestorsWithoutRepeat(Ino ino) {
+  std::vector<Ino> ancestors;
+  ancestors.reserve(32);
+  ancestors.push_back(ino);
+
+  std::set<Ino> seen = {ino};  // to detect loops
+
+  Ino parent;
+  do {
+    if (!GetParent(ino, parent)) break;
+    if (seen.count(parent) > 0) {
+      LOG(ERROR) << fmt::format(
+          "[meta.parent_memo] get ancestors fail, loop detected for ino({}).",
+          ino);
+      break;
+    }
+
+    ancestors.push_back(parent);
+    seen.insert(parent);
+
+    if (parent == kRootIno) break;
+
+    ino = parent;
+
+  } while (true);
+
+  return ancestors;
+}
+
 std::vector<Ino> ParentMemo::GetAncestors(Ino ino) {
   std::vector<Ino> ancestors;
   ancestors.reserve(32);
   ancestors.push_back(ino);
+
+  Ino original_ino = ino;
 
   uint32_t depth = 0;
   Ino parent;
@@ -82,6 +114,8 @@ std::vector<Ino> ParentMemo::GetAncestors(Ino ino) {
     LOG(ERROR) << fmt::format(
         "[meta.parent_memo] get ancestors fail, depth({}/{}) ancestors({}).",
         depth, kMaxDepth, ancestors);
+
+    return GetAncestorsWithoutRepeat(original_ino);
   }
 
   return ancestors;

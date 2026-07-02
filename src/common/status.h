@@ -84,6 +84,7 @@ class Status {
     kNotFit = 31,
     kTimeout = 32,
     kOutOfMemory = 33,
+    kDeleted = 34,
   };
   static const int32_t kNone = 0;
 
@@ -143,6 +144,7 @@ class Status {
   DECLARE_ERROR_STATUS(Stop, kStop);
   DECLARE_ERROR_STATUS(NotFit, kNotFit);
   DECLARE_ERROR_STATUS(OutOfMemory, kOutOfMemory);
+  DECLARE_ERROR_STATUS(Deleted, kDeleted);
 
   // Return a string representation of this status suitable for printing.
   // Returns the string "OK" for success.
@@ -206,6 +208,8 @@ class Status {
         return ETIMEDOUT;
       case kOutOfMemory:
         return ENOMEM;
+      case kDeleted:
+        return ENOENT;
       default:
         return EIO;
     }
