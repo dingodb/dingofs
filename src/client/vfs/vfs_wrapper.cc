@@ -16,8 +16,12 @@
 
 #include "client/vfs/vfs_wrapper.h"
 
+#include <fcntl.h>
+#include <unistd.h>
+
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <fstream>
 #include <memory>
 #include <string>
@@ -31,6 +35,7 @@
 #include "client/vfs/vfs_meta.h"
 #include "common/blockaccess/block_access_log.h"
 #include "common/const.h"
+#include "common/directory.h"
 #include "common/helper.h"
 #include "common/logging.h"
 #include "common/metrics/client/client.h"
@@ -50,7 +55,13 @@ DECLARE_string(log_dir);
 namespace dingofs {
 namespace client {
 
-const std::string kFdStatePath = "/tmp/dingo-client-state.json";
+// State file lives under the dingofs runtime data dir (not /tmp), e.g.
+// $DINGOFS_BASE_DIR/data, /var/dingofs/data (root) or $HOME/.dingofs/data.
+// Old (writer) and new (reader) processes resolve the same path as long as
+// they run with the same uid and DINGOFS_BASE_DIR env -- the same assumption
+// already made for the fd-comm socket dir (GetDefaultDir(kSocketDir)).
+const std::string kFdStateDir = GetDefaultDir(kDataDir);
+const std::string kFdStatePath = kFdStateDir + "/dingo-client-state.json";
 
 using metrics::ClientOpMetricGuard;
 using metrics::VFSRWMetricGuard;
@@ -71,6 +82,72 @@ static Status InitLog() {
 
   CHECK(succ) << "init log failed, unexpected!";
   return Status::OK();
+}
+
+// Atomically publish `content` to `path`: write a sibling temp file, fsync it,
+// rename(2) it over the target (atomic on the same filesystem), then fsync the
+// directory so the rename survives a crash. Because the temp sits in the same
+// dir as the target, the reader (new process) never observes a half-written
+// state file -- it sees either the previous file or the fully renamed one.
+// Returns false and removes the temp on any error so the caller can abort the
+// handover instead of letting the new process load a truncated state.
+static bool AtomicWriteStateFile(const std::string& dir,
+                                 const std::string& path,
+                                 const std::string& content) {
+  if (!dingofs::Helper::CreateDirectory(dir)) {
+    LOG(ERROR) << "create state dir fail, dir: " << dir;
+    return false;
+  }
+
+  const std::string tmp = fmt::format("{}.tmp.{}", path, getpid());
+  int fd = open(tmp.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+  if (fd < 0) {
+    LOG(ERROR) << "open temp state file fail, file: " << tmp
+               << ", error: " << std::strerror(errno);
+    return false;
+  }
+
+  bool ok = false;
+  do {
+    size_t off = 0;
+    while (off < content.size()) {
+      ssize_t n = write(fd, content.data() + off, content.size() - off);
+      if (n < 0) {
+        if (errno == EINTR) continue;
+        LOG(ERROR) << "write temp state file fail, file: " << tmp
+                   << ", error: " << std::strerror(errno);
+        break;
+      }
+      off += static_cast<size_t>(n);
+    }
+    if (off != content.size()) break;
+    if (fsync(fd) != 0) {
+      LOG(ERROR) << "fsync temp state file fail, file: " << tmp
+                 << ", error: " << std::strerror(errno);
+      break;
+    }
+    ok = true;
+  } while (false);
+  close(fd);
+
+  if (!ok) {
+    std::remove(tmp.c_str());
+    return false;
+  }
+
+  if (rename(tmp.c_str(), path.c_str()) != 0) {
+    LOG(ERROR) << "rename state file fail, " << tmp << " -> " << path
+               << ", error: " << std::strerror(errno);
+    std::remove(tmp.c_str());
+    return false;
+  }
+
+  int dfd = open(dir.c_str(), O_RDONLY | O_DIRECTORY);
+  if (dfd >= 0) {
+    fsync(dfd);
+    close(dfd);
+  }
+  return true;
 }
 
 static bool LoadStateFile(int pid, Json::Value& root) {
@@ -268,20 +345,19 @@ bool VFSWrapper::Dump() {
     return false;
   }
 
+  // TODO(hotupgrade): write root["schema_version"] here and verify it in
+  // Load() so a new process refuses to consume an incompatible state file.
   root["epch"] = Json::Value::UInt64(ClientState::GetEpoch());
   root["first_start_time_ms"] =
       Json::Value::UInt64(ClientState::GetFirstStartTime());
 
   const std::string path = fmt::format("{}.{}", kFdStatePath, getpid());
-  std::ofstream file(path);
-  if (!file.is_open()) {
-    LOG(ERROR) << "open dingo-client state file fail, file: " << path;
+  Json::StreamWriterBuilder writer;
+  if (!AtomicWriteStateFile(kFdStateDir, path,
+                            Json::writeString(writer, root))) {
+    LOG(ERROR) << "dump vfs state fail, path: " << path;
     return false;
   }
-
-  Json::StreamWriterBuilder writer;
-  file << Json::writeString(writer, root);
-  file.close();
 
   LOG(INFO) << fmt::format("dump vfs state success, path({}).", path);
   return true;
@@ -290,6 +366,9 @@ bool VFSWrapper::Dump() {
 bool VFSWrapper::Load(const Json::Value& value) {
   auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::Load");
 
+  // TODO(hotupgrade): verify value["schema_version"] matches the running
+  // binary's expected version; refuse the handover (return false) on mismatch
+  // instead of loading a state file produced by an incompatible layout.
   if (!value["epch"].isNull()) {
     ClientState::SetEpoch(value["epch"].asUInt64() + 1);
     LOG(INFO) << "load epoch: " << ClientState::GetEpoch();
