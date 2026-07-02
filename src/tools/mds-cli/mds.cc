@@ -607,7 +607,7 @@ ListDentryResponse MDSClient::ListDentryPaged(Ino parent,
   return response;
 }
 
-GetInodeResponse MDSClient::GetInode(Ino ino) {
+GetInodeResponse MDSClient::GetInode(Ino ino, bool bypass_cache) {
   CHECK(fs_id_ > 0) << "fs_id_ is zero";
   CHECK(ino > 0) << "ino is zero";
 
@@ -615,6 +615,7 @@ GetInodeResponse MDSClient::GetInode(Ino ino) {
   GetInodeResponse response;
 
   request.mutable_context()->set_epoch(epoch_);
+  request.mutable_context()->set_is_bypass_cache(bypass_cache);
 
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
@@ -2242,7 +2243,10 @@ void HandleInfo(MDSClient& mds_client, uint32_t fs_id,
   const std::string os_path = AbsOsPath(options.path);
   const std::string fs_path = MountRelPath(os_path);
 
-  auto inode_resp = mds_client.GetInode(ino);
+  // Bypass the serving MDS's inode cache: `info` accepts any --mds_addr, and a
+  // non-owner MDS would otherwise serve a stale length forever (writes only
+  // refresh the owner's cache).
+  auto inode_resp = mds_client.GetInode(ino, /*bypass_cache=*/true);
   if (inode_resp.error().errcode() != dingofs::pb::error::Errno::OK) {
     std::cerr << "info: get inode fail, error: "
               << inode_resp.ShortDebugString() << "\n";
