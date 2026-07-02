@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_SRC_CLIENT_FUSE_FUSE_UPGRADE_MANAGER_H_
-#define DINGOFS_SRC_CLIENT_FUSE_FUSE_UPGRADE_MANAGER_H_
+#ifndef DINGOFS_SRC_CLIENT_FUSE_UPGRADE_STATE_STORE_H_
+#define DINGOFS_SRC_CLIENT_FUSE_UPGRADE_STATE_STORE_H_
 
 #include <mutex>
 
@@ -29,13 +29,13 @@ enum class FuseUpgradeState : uint8_t {
   kFuseUpgradeNew,  // new fuse process during smooth upgrade
 };
 
-class FuseUpgradeManager {
+class UpgradeStateStore {
  public:
-  FuseUpgradeManager(const FuseUpgradeManager&) = delete;
-  FuseUpgradeManager& operator=(const FuseUpgradeManager&) = delete;
+  UpgradeStateStore(const UpgradeStateStore&) = delete;
+  UpgradeStateStore& operator=(const UpgradeStateStore&) = delete;
 
-  static FuseUpgradeManager& GetInstance() {
-    static FuseUpgradeManager instance_;
+  static UpgradeStateStore& GetInstance() {
+    static UpgradeStateStore instance_;
     return instance_;
   }
 
@@ -60,7 +60,7 @@ class FuseUpgradeManager {
   }
 
  private:
-  FuseUpgradeManager() = default;
+  UpgradeStateStore() = default;
 
   int old_pid_{0};  // pid of the old fuse process
   FuseUpgradeState fuse_state_{
@@ -72,4 +72,4 @@ class FuseUpgradeManager {
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CLIENT_FUSE_FUSE_UPGRADE_MANAGER_H_
+#endif  // DINGOFS_SRC_CLIENT_FUSE_UPGRADE_STATE_STORE_H_

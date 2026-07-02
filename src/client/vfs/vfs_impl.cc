@@ -98,7 +98,7 @@ VFSImpl::VFSImpl(const VFSConfig& vfs_conf, const ClientId& client_id)
     : client_id_(client_id),
       mount_root_path_(
           vfs_conf.mount_root_path.empty() ? "/" : vfs_conf.mount_root_path),
-      vfs_hub_(std::make_unique<VFSHubImpl>(vfs_conf, client_id_)) {};
+      vfs_hub_(std::make_unique<VFSHubImpl>(vfs_conf, client_id_)){};
 
 VFSImpl::VFSImpl(std::unique_ptr<VFSHub> hub)
     : client_id_(), vfs_hub_(std::move(hub)) {

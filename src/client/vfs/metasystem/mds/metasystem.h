@@ -231,7 +231,7 @@ class MDSMetaSystem : public vfs::MetaSystem {
   Status FlushSliceAndFile(ContextSPtr ctx, Ino ino);
   // async flush of single slice
   void AsyncFlushFile(ContextSPtr ctx, Ino ino);
-  // flush slices of all files
+  // flush slices of all files (called internally by Stop)
   void FlushAllFile();
 
   Status CorrectAttr(ContextSPtr ctx, uint64_t time_ns, Attr& attr,

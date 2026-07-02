@@ -60,11 +60,12 @@ DECLARE_uint32(fuse_attr_cache_timeout_s);
 
 DECLARE_bool(fuse_dryrun_bench_mode);
 
-// smooth upgrade
+// hot upgrade (defined at their use sites: drain knobs in fuse_server.cc,
+// fd-get knobs in client/fuse/upgrade/handover_client.cc)
+DECLARE_uint32(fuse_hotupgrade_drain_timeout_ms);
+DECLARE_uint32(fuse_hotupgrade_statfs_interval_ms);
 DECLARE_uint32(fuse_fd_get_max_retries);
 DECLARE_uint32(fuse_fd_get_retry_interval_ms);
-DECLARE_uint32(fuse_check_alive_max_retries);
-DECLARE_uint32(fuse_check_alive_retry_interval_ms);
 
 // vfs meta system log
 DECLARE_bool(vfs_meta_access_logging);

@@ -55,10 +55,9 @@ class VFSWrapper {
   // the old process's persisted state file and skip re-mounting the FS on MDS.
   Status Start(const DingofsConfig& config, int upgrade_from_pid = 0);
 
-  // Normal stop: handover = false.
-  // Graceful-upgrade stop (old process handing off): handover = true.
-  // The old process persists its state for the new process to read and skips
-  // unmounting the FS on MDS so the kernel connection remains intact.
+  // Stop the VFS. With handover=true, skip MDS unmount and persist state for
+  // the new process. It is idempotent after success, so post-exit teardown does
+  // not stop/dump twice.
   Status Stop(bool handover = false);
 
   Status GetInfo(std::string* info);

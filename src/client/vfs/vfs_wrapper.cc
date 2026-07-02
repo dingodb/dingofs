@@ -128,7 +128,13 @@ static bool AtomicWriteStateFile(const std::string& dir,
     }
     ok = true;
   } while (false);
-  close(fd);
+  // A close() error after a successful fsync() can still report a deferred
+  // write-back failure; treat it as a failed publish.
+  if (close(fd) != 0 && ok) {
+    LOG(ERROR) << "close temp state file fail, file: " << tmp
+               << ", error: " << std::strerror(errno);
+    ok = false;
+  }
 
   if (!ok) {
     std::remove(tmp.c_str());
@@ -142,10 +148,30 @@ static bool AtomicWriteStateFile(const std::string& dir,
     return false;
   }
 
+  // fsync the directory so the rename is durable. If this cannot be guaranteed,
+  // fail closed AND remove the just-published file: the rename already replaced
+  // the target, so leaving it would expose the new process to a failed
+  // attempt's residue. The new process must not take over a state file whose
+  // rename may not have reached disk.
   int dfd = open(dir.c_str(), O_RDONLY | O_DIRECTORY);
-  if (dfd >= 0) {
-    fsync(dfd);
+  if (dfd < 0) {
+    LOG(ERROR) << "open state dir for fsync fail, dir: " << dir
+               << ", error: " << std::strerror(errno);
+    std::remove(path.c_str());
+    return false;
+  }
+  if (fsync(dfd) != 0) {
+    LOG(ERROR) << "fsync state dir fail, dir: " << dir
+               << ", error: " << std::strerror(errno);
     close(dfd);
+    std::remove(path.c_str());
+    return false;
+  }
+  if (close(dfd) != 0) {
+    LOG(ERROR) << "close state dir fail, dir: " << dir
+               << ", error: " << std::strerror(errno);
+    std::remove(path.c_str());
+    return false;
   }
   return true;
 }
@@ -327,7 +353,20 @@ Status VFSWrapper::Stop(bool handover) {
       [&]() { return absl::StrFormat("stop: %s", s.ToString()); });
   s = vfs_->Stop(/*skip_unmount=*/handover);
 
+  // The VFS teardown has run; mark stopped so a second Stop() (e.g. the
+  // post-exit FuseOpDestroy after a successful handover gate) is a no-op and
+  // does not stop/dump twice.
+  started_.store(false);
+
   LOG(INFO) << fmt::format("stopped vfs, handover({}).", handover);
+
+  // Handover teardown: dump after vfs_->Stop() so the persisted state reflects
+  // the same stop -> dump order used by normal teardown. This is currently past
+  // the clean rollback point; callers treat a non-OK return here as an
+  // unrecoverable handover fault after the pre-teardown flush has succeeded.
+  if (handover && !s.ok()) {
+    return s;
+  }
 
   if (handover && !Dump()) {
     return Status::InvalidParam("dump vfs state fail");

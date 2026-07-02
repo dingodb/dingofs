@@ -17,24 +17,27 @@
 #include "client/fuse/fuse_server.h"
 
 #include <brpc/reloadable_flags.h>
-#include <sys/socket.h>
 
-#include <chrono>
+#include <cerrno>
 #include <cstdlib>
+#include <cstring>
+#include <memory>
+#include <utility>
 
 #include "absl/strings/str_format.h"
 #include "client/fuse/fuse_common.h"
 #include "client/fuse/fuse_lowlevel_ops_func.h"
-#include "client/fuse/fuse_passfd.h"
-#include "client/fuse/fuse_upgrade_manager.h"
+#include "client/fuse/upgrade/handover_client.h"
+#include "client/fuse/upgrade/handover_controller.h"
+#include "client/fuse/upgrade/handover_server.h"
+#include "client/fuse/upgrade/handover_session_impl.h"
+#include "client/fuse/upgrade/state_store.h"
 #include "common/directory.h"
 #include "common/helper.h"
-#include "common/options/client.h"
+#include "common/status.h"
 #include "fmt/format.h"
 #include "fuse_opt.h"
 #include "glog/logging.h"
-#include "utils/concurrent/concurrent.h"
-#include "utils/scoped_cleanup.h"
 
 using ::dingofs::utils::BufToHexString;
 
@@ -42,20 +45,32 @@ namespace dingofs {
 namespace client {
 namespace fuse {
 
-USING_FLAG(fuse_fd_get_max_retries)
-USING_FLAG(fuse_fd_get_retry_interval_ms)
-USING_FLAG(fuse_check_alive_max_retries)
-USING_FLAG(fuse_check_alive_retry_interval_ms)
-
 // fuse mount options
 DEFINE_string(fuse_mount_options, "default_permissions",
               "mount options for libfuse");
+
 DEFINE_bool(fuse_use_single_thread, false, "use single thread for libfuse");
 DEFINE_validator(fuse_use_single_thread, brpc::PassValidate);
+
 DEFINE_bool(fuse_use_clone_fd, true, "use clone fd for libfuse");
 DEFINE_validator(fuse_use_clone_fd, brpc::PassValidate);
+
 DEFINE_uint32(fuse_max_threads, 64, "max threads for libfuse");
 DEFINE_validator(fuse_max_threads, brpc::PassValidate);
+
+// hot-upgrade controlled drain (#1): the old process drains in-flight FUSE
+// requests and runs the flush+dump checkpoint before exiting on SIGHUP.
+// Declared in common/options/client.h.
+DEFINE_uint32(fuse_hotupgrade_drain_timeout_ms, 30000,
+              "max time to wait for the session to drain before aborting the "
+              "handover and resuming service on the old process");
+DEFINE_uint32(fuse_hotupgrade_statfs_interval_ms, 50,
+              "interval between statfs(2) round-trips used to wake workers "
+              "blocked in read() while draining");
+
+// ===========================================================================
+// Construction / teardown
+// ===========================================================================
 
 FuseServer::FuseServer() = default;
 
@@ -77,11 +92,24 @@ int FuseServer::Init(const std::string& program_name,
   fd_comm_file_ =
       absl::StrFormat("%s/fd_comm_socket.%d", socket_path, getpid());
 
+  // Old-side handover endpoint. Constructed here but only Start()ed in Serve()
+  // after SaveOpInitMsg() fills init_fbuf_, so a connecting new process never
+  // gets an empty INIT. get_dev_fd reads the /dev/fuse fd lazily (the session
+  // is created later, in CreateSession).
+  handover_server_ = std::make_unique<HandoverServer>(
+      fd_comm_file_, [this]() { return GetDevFd(); }, &init_fbuf_);
+
   return 0;
 }
 
 FuseServer::~FuseServer() {
   unlink(fd_comm_file_.c_str());
+
+  // Stop both handover threads BEFORE freeing init_fbuf_: the handover server's
+  // accept loop reads &init_fbuf_ (init_msg_) when handing off, and the
+  // controller drives the server. Stop controller first, then the server.
+  if (handover_controller_) handover_controller_->Stop();
+  if (handover_server_) handover_server_->Stop();
 
   FreeFuseInitBuf();
   fuse_opt_free_args(&args_);
@@ -90,110 +118,15 @@ FuseServer::~FuseServer() {
     fuse_loop_cfg_destroy(config_);
   }
 
-  auto fuse_state = FuseUpgradeManager::GetInstance().GetFuseState();
+  auto fuse_state = UpgradeStateStore::GetInstance().GetFuseState();
   if (fuse_state == FuseUpgradeState::kFuseUpgradeOld) {
     LOG(INFO) << "transfer dingo-client session to others.";
   }
 }
 
-// allocate memory for fuse init message
-void FuseServer::AllocateFuseInitBuf() {
-  // init message size = sizeof(struct fuse_in_header) + sizeof(struct
-  // fuse_init_in),256 bytes is enough
-  init_fbuf_.mem_size = 256;
-  init_fbuf_.size = 0;
-  init_fbuf_.mem = malloc(init_fbuf_.mem_size);
-  memset(init_fbuf_.mem, 0, init_fbuf_.mem_size);
-}
-
-void FuseServer::FreeFuseInitBuf() {
-  if (init_fbuf_.mem != nullptr) {
-    free(init_fbuf_.mem);
-
-    init_fbuf_.mem = nullptr;
-    init_fbuf_.mem_size = 0;
-    init_fbuf_.size = 0;
-  }
-}
-
-int FuseServer::GetDevFd() const { return fuse_session_fd(session_); }
-
-void FuseServer::Shutdown() {
-  LOG(INFO) << "shutdown dingo-client";
-  fuse_session_exit(session_);
-}
-
-void FuseServer::MarkThenShutdown() {
-  LOG(INFO) << "mark dingo-client kFuseUpgradeOld";
-  FuseUpgradeManager::GetInstance().UpdateFuseState(
-      FuseUpgradeState::kFuseUpgradeOld);
-  Shutdown();
-}
-
-void FuseServer::UdsServerFunc() {
-  struct sockaddr_un addr;
-  int server_fd, client_fd;
-  socklen_t addrlen = sizeof(addr);
-
-  // create uds server
-  server_fd = socket(AF_UNIX, SOCK_STREAM, 0);
-  if (server_fd == -1) {
-    LOG(ERROR) << "uds server create failed, file: " << fd_comm_file_
-               << ", error: " << std::strerror(errno);
-    return;
-  }
-  auto defer_close = MakeScopedCleanup([&]() { close(server_fd); });
-  // bind address
-  memset(&addr, 0, sizeof(addr));
-  addr.sun_family = AF_UNIX;
-  strncpy(addr.sun_path, fd_comm_file_.c_str(), sizeof(addr.sun_path) - 1);
-  unlink(fd_comm_file_.c_str());
-  if (bind(server_fd, (struct sockaddr*)&addr, addrlen) == -1) {
-    LOG(ERROR) << "uds server bind failed,, file: " << fd_comm_file_
-               << ", error: " << std::strerror(errno);
-    return;
-  }
-  // listening
-  if (listen(server_fd, 1) == -1) {
-    LOG(ERROR) << "uds server listen failed, file: " << fd_comm_file_
-               << ", error: " << std::strerror(errno);
-    return;
-  }
-
-  LOG(INFO) << "uds server listening on " << fd_comm_file_;
-  while (true) {
-    // accept uds client
-    client_fd = accept(server_fd, (struct sockaddr*)&addr, &addrlen);
-    if (client_fd == -1) {
-      LOG(ERROR) << "uds server accept failed, error: " << std::strerror(errno);
-      continue;
-    }
-
-    // process uds client request
-    int fuse_fd = GetDevFd();
-    int ret = SendFd(client_fd, fuse_fd, init_fbuf_.mem, init_fbuf_.size);
-    if (ret == -1) {
-      LOG(ERROR) << "send fuse fd failed, client_id: " << client_fd;
-    } else {
-      LOG(INFO) << "fuse fd send to client: " << client_fd
-                << ", fd: " << fuse_fd << ", data size: " << init_fbuf_.size;
-    }
-    close(client_fd);
-  }
-}
-
-void FuseServer::UdsServerStart() {
-  if (is_running_.load()) {
-    LOG(INFO) << "dingo-client uds server already started.";
-    return;
-  }
-
-  uds_thread_ = utils::Thread(&FuseServer::UdsServerFunc, this);
-  uds_thread_.detach();
-  is_running_.store(true);
-
-  LOG(INFO) << "dingo-client uds server started.";
-}
+// ===========================================================================
+// Mount-args / INIT-buffer helpers
+// ===========================================================================
 
 int FuseServer::AddMountOptions() {
   CHECK(!program_name_.empty()) << "program_name_ should not be empty";
@@ -217,6 +150,31 @@ int FuseServer::AddMountOptions() {
   return 0;
 }
 
+// allocate memory for fuse init message
+void FuseServer::AllocateFuseInitBuf() {
+  // init message size = sizeof(struct fuse_in_header) + sizeof(struct
+  // fuse_init_in),256 bytes is enough
+  init_fbuf_.mem_size = 256;
+  init_fbuf_.size = 0;
+  init_fbuf_.mem = malloc(init_fbuf_.mem_size);
+  memset(init_fbuf_.mem, 0, init_fbuf_.mem_size);
+}
+
+void FuseServer::FreeFuseInitBuf() {
+  if (init_fbuf_.mem != nullptr) {
+    free(init_fbuf_.mem);
+
+    init_fbuf_.mem = nullptr;
+    init_fbuf_.mem_size = 0;
+    init_fbuf_.size = 0;
+  }
+}
+
+// ===========================================================================
+// FUSE session lifecycle: CreateSession -> SessionMount -> Serve ->
+// SessionUnmount -> DestroySession
+// ===========================================================================
+
 int FuseServer::CreateSession(void* usedata) {
   // create fuse new session
   session_ = fuse_session_new(&args_, &kFuseOp, sizeof(kFuseOp), usedata);
@@ -228,15 +186,6 @@ int FuseServer::CreateSession(void* usedata) {
   return 0;
 }
 
-void FuseServer::DestroySsesion() {
-  LOG(INFO) << "destroy dingo-client session.";
-
-  if (session_ != nullptr) {
-    fuse_remove_signal_handlers(session_);
-    fuse_session_destroy(session_);
-  }
-}
-
 int FuseServer::SessionMount() {
   std::string mountpoint = mount_option_->mount_point;
 
@@ -244,18 +193,27 @@ int FuseServer::SessionMount() {
                            mount_option_->fs_name, mountpoint);
 
   if (CanShutdownGracefully(mountpoint)) {
-    bool is_shutdown = ShutdownGracefully(mountpoint);
-    if (!is_shutdown) {
+    // Take over the mount from the old dingo-client: receive its /dev/fuse fd
+    // (and INIT message into init_fbuf_) and run the handover handshake.
+    HandoverClient client;
+    int fuse_fd = client.TakeOver(mountpoint, &init_fbuf_);
+    if (fuse_fd <= 2) {
       LOG(ERROR) << "smooth upgrade failed, can't mount on: " << mountpoint;
       return 1;
     }
     LOG(INFO) << "old dingo-client is already shutdown";
     // new fuse processes
-    FuseUpgradeManager::GetInstance().UpdateFuseState(
+    UpgradeStateStore::GetInstance().UpdateFuseState(
         FuseUpgradeState::kFuseUpgradeNew);
 
-    // construct new mountpoint
-    mountpoint = absl::StrFormat("/dev/fd/%d", fuse_fd_);
+    // Reuse the received /dev/fuse fd: mounting on /dev/fd/N attaches to the
+    // existing kernel mount instead of creating a new one. OWNERSHIP: on a
+    // successful fuse_session_mount below, libfuse adopts this fd as se->fd
+    // (fuse_lowlevel.c: `se->fd = fd`, no dup) and closes it in
+    // fuse_session_destroy. So FuseServer must NOT close it (would
+    // double-close) nor hold it past mount. (On mount failure the process
+    // aborts, so the fd leaks only in a terminal path.)
+    mountpoint = absl::StrFormat("/dev/fd/%d", fuse_fd);
   }
 
   LOG(INFO) << "start mount on: " << mountpoint;
@@ -270,7 +228,7 @@ int FuseServer::SessionMount() {
 int FuseServer::SaveOpInitMsg() {
   // smooth upgrade do not save fuse init message
   // it's recv from old dingo-client
-  auto fuse_state = FuseUpgradeManager::GetInstance().GetFuseState();
+  auto fuse_state = UpgradeStateStore::GetInstance().GetFuseState();
   if (fuse_state == FuseUpgradeState::kFuseUpgradeNew) return 0;
 
   struct fuse_buf fbuf = {
@@ -317,7 +275,7 @@ void FuseServer::ProcessInitMsg() {
 }
 
 int FuseServer::SessionLoop() {
-  auto fuse_state = FuseUpgradeManager::GetInstance().GetFuseState();
+  auto fuse_state = UpgradeStateStore::GetInstance().GetFuseState();
   if (fuse_state == FuseUpgradeState::kFuseUpgradeNew) {
     ProcessInitMsg();
   }
@@ -332,17 +290,9 @@ int FuseServer::SessionLoop() {
   return fuse_session_loop_mt(session_, config_);
 }
 
-void FuseServer::ExportMetrics(const std::string& key,
-                               const std::string& value) {
-  fd_comm_metrics_.set_value(value);
-  fd_comm_metrics_.expose(butil::StringPiece(key));
-}
-
 int FuseServer::Serve() {
   // export fd_comm_path value for new dingo-client use
   ExportMetrics(kFdCommPathKey, fd_comm_file_);
-
-  UdsServerStart();
 
   LOG(INFO) << fmt::format(
       "dingo-client start loop, singlethread={} max_threads={}.",
@@ -352,6 +302,12 @@ int FuseServer::Serve() {
     LOG(ERROR) << "save fuse init message failed";
     return 1;
   }
+
+  // Start the handover endpoint only AFTER the INIT message is saved, so a new
+  // process can never connect and receive an empty INIT. (init_fbuf_ is already
+  // filled by the upgrade-takeover path for the new process.)
+  handover_server_->Start();
+
   /* Block until ctrl+c or fusermount -u */
   int ret = SessionLoop();
   LOG(INFO) << "dingo-client is shutdown, ret=" << ret;
@@ -360,7 +316,7 @@ int FuseServer::Serve() {
 }
 
 void FuseServer::SessionUnmount() {
-  auto fuse_state = FuseUpgradeManager::GetInstance().GetFuseState();
+  auto fuse_state = UpgradeStateStore::GetInstance().GetFuseState();
 
   if (fuse_state == FuseUpgradeState::kFuseUpgradeOld) {
     LOG(INFO)
@@ -380,65 +336,73 @@ void FuseServer::SessionUnmount() {
   }
 }
 
-// TODO: check the fstype to determain the dingo-client
-bool FuseServer::ShutdownGracefully(const std::string& mountpoint) {
-  // get old dingo-client pid
-  std::string file_name =
-      absl::StrFormat("%s/%s", mountpoint, dingofs::kStatsName);
+void FuseServer::DestroySession() {
+  LOG(INFO) << "destroy dingo-client session.";
 
-  int pid = 0;
-  uint32_t retry = 0;
-  do {
-    pid = GetDingoFusePid(file_name);
-    if (pid > 0) break;
+  // Stop the handover threads BEFORE destroying the session. The controller
+  // drives the session (pause/resume/wait_drained/exit) and may still be mid
+  // handover -- e.g. an external SIGTERM/SIGINT exits the loop while a drain is
+  // in flight. Joining it here guarantees it never touches a freed session.
+  // Stop is idempotent, so the dtor's later Stop is a no-op.
+  if (handover_controller_) handover_controller_->Stop();
+  if (handover_server_) handover_server_->Stop();
 
-    std::this_thread::sleep_for(
-        std::chrono::milliseconds(FLAGS_fuse_fd_get_retry_interval_ms));
-  } while (++retry <= FLAGS_fuse_fd_get_max_retries);
-
-  if (pid <= 0) {
-    LOG(ERROR) << "get pid fail, filepath=" << file_name;
-    return false;
+  if (session_ != nullptr) {
+    fuse_remove_signal_handlers(session_);
+    fuse_session_destroy(session_);
   }
-  LOG(INFO) << "get pid success, pid=" << pid;
+}
 
-  FuseUpgradeManager::GetInstance().SetOldFusePid(pid);
+// ===========================================================================
+// Misc helpers
+// ===========================================================================
 
-  // recv mount fd、fuse_init data from old dingo-client
-  std::string comm_path = GetFdCommFileName(file_name);
-  CHECK(!comm_path.empty());
-  LOG(INFO) << "get socket success, comm_path=" << comm_path;
+int FuseServer::GetDevFd() const { return fuse_session_fd(session_); }
 
-  fuse_fd_ = GetFuseFd(comm_path.c_str(), init_fbuf_.mem, init_fbuf_.mem_size,
-                       &init_fbuf_.size);
-  for (int i = 0; i < FLAGS_fuse_fd_get_max_retries && fuse_fd_ <= 2; i++) {
-    std::this_thread::sleep_for(
-        std::chrono::milliseconds(FLAGS_fuse_fd_get_retry_interval_ms));
-    fuse_fd_ = GetFuseFd(comm_path.c_str(), init_fbuf_.mem, init_fbuf_.mem_size,
-                         &init_fbuf_.size);
-  }
-  if (fuse_fd_ <= 2) {
-    LOG(ERROR) << "recv mount fd fail, comm_path=" << comm_path;
-    return false;
-  }
-  LOG(INFO) << "recv data from " << comm_path << ", mount fd = " << fuse_fd_
-            << ",data size = " << init_fbuf_.size;
+void FuseServer::Shutdown() {
+  LOG(INFO) << "shutdown dingo-client";
+  fuse_session_exit(session_);
+}
 
-  // send kill signal to old dingo-client
-  kill(pid, SIGHUP);
+void FuseServer::ExportMetrics(const std::string& key,
+                               const std::string& value) {
+  fd_comm_metrics_.set_value(value);
+  fd_comm_metrics_.expose(butil::StringPiece(key));
+}
 
-  // check old dingo-client is alive
-  for (int i = 0; i < FLAGS_fuse_check_alive_max_retries; i++) {
-    std::this_thread::sleep_for(
-        std::chrono::milliseconds(FLAGS_fuse_check_alive_retry_interval_ms));
-    if (!CheckProcessAlive(pid)) {
-      return true;
-    }
+// ===========================================================================
+// Hot-upgrade coordination: arm the controller, register the flush checkpoint,
+// and trigger a handover. The handover server (the controller's peer) and the
+// handover client live in their own files.
+// ===========================================================================
 
-    LOG(INFO) << "check old dingo-client is alive: YES";
-  }
+void FuseServer::ArmHandoverController() {
+  CHECK(handover_controller_ == nullptr) << "handover controller already armed";
 
-  return false;
+  HandoverOptions options;
+  options.mountpoint = mount_option_->mount_point;
+  options.drain_timeout_ms = FLAGS_fuse_hotupgrade_drain_timeout_ms;
+  options.statfs_interval_ms = FLAGS_fuse_hotupgrade_statfs_interval_ms;
+  session_handover_ = std::make_unique<HandoverSessionImpl>(session_);
+  handover_controller_ = std::make_unique<HandoverController>(
+      std::move(options), handover_server_.get(), session_handover_.get());
+  handover_controller_->Start();
+}
+
+void FuseServer::SetHandoverCheckpoint(std::function<Status()> checkpoint) {
+  // Called from FuseOpInit during Serve(), after ArmHandoverController().
+  CHECK(handover_controller_ != nullptr) << "handover controller not armed";
+  handover_controller_->SetCheckpoint(std::move(checkpoint));
+}
+
+void FuseServer::TriggerHandover() {
+  // Called from the graceful signal thread on SIGHUP (normal context, not an
+  // async signal handler). Just wakes the handover controller -- the controller
+  // runs the actual drain -> checkpoint -> exit on its own thread. It is armed
+  // in ArmHandoverController() before the signal thread starts, so it is always
+  // present here.
+  CHECK(handover_controller_ != nullptr) << "handover controller not armed";
+  handover_controller_->RequestHandover();
 }
 
 }  // namespace fuse

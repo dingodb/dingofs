@@ -17,79 +17,88 @@
 #ifndef DINGOFS_SRC_CLIENT_FUSE_FUSE_SERVER_H_
 #define DINGOFS_SRC_CLIENT_FUSE_FUSE_SERVER_H_
 
+#include <functional>
+#include <memory>
 #include <string>
 
 #include "bvar/status.h"
 #include "client/fuse/fuse_common.h"
+#include "common/status.h"
 #include "fuse3/fuse.h"
-#include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
 namespace client {
 namespace fuse {
 
+class HandoverController;
+class HandoverServer;
+class HandoverSessionImpl;
+
 class FuseServer {
  public:
   explicit FuseServer();
+
   ~FuseServer();
+
   FuseServer(const FuseServer&) = delete;
   FuseServer& operator=(const FuseServer&) = delete;
 
   int Init(const std::string& program_name, struct MountOption* mount_option);
 
-  int AddMountOptions();
-
+  // FUSE session lifecycle: Create -> Mount -> Serve -> Unmount -> Destroy.
   int CreateSession(void* userdata);
-
-  void DestroySsesion();
-
   int SessionMount();
-
-  void SessionUnmount();
-
   int Serve();
+  void SessionUnmount();
+  void DestroySession();
 
+  // Exit the session loop (fuse_session_exit).
   void Shutdown();
 
-  void MarkThenShutdown();
+  // Hot-upgrade coordination (the handover server/client/controller do the
+  // actual work, in their own files).
+  void ArmHandoverController();
+  // Register the fail-able handover checkpoint run on the old process after the
+  // session is drained and before it exits. A non-OK return rolls the handover
+  // back (resume receive, keep serving). Set once during FuseOpInit, before any
+  // handover can be requested.
+  void SetHandoverCheckpoint(std::function<Status()> checkpoint);
+  // Wake the handover controller; called from the graceful signal thread.
+  void TriggerHandover();
 
  private:
+  int AddMountOptions();
   void AllocateFuseInitBuf();
-
   void FreeFuseInitBuf();
 
-  int GetDevFd() const;
-
-  void UdsServerFunc();
-
+  // Serve() helpers.
   int SaveOpInitMsg();
-
   void ProcessInitMsg();
-
   int SessionLoop();
-
-  bool ShutdownGracefully(const std::string& mountpoint);
-
-  void UdsServerStart();
-
   void ExportMetrics(const std::string& key, const std::string& value);
+
+  int GetDevFd() const;
 
   std::string program_name_;
 
   // libfuse
-  struct fuse_args args_{0, nullptr, 0};
+  struct fuse_args args_ {
+    0, nullptr, 0
+  };
+
   struct fuse_session* session_{nullptr};
   struct fuse_loop_config* config_{nullptr};
   struct MountOption* mount_option_{nullptr};
-  struct fuse_buf init_fbuf_{0};
-
-  // Manager uds thread
-  utils::Thread uds_thread_;
-  utils::Atomic<bool> is_running_{false};
+  struct fuse_buf init_fbuf_ {
+    0
+  };
 
   // Manager smooth upgrade
-  int fuse_fd_{-1};
   std::string fd_comm_file_;
+
+  std::unique_ptr<HandoverServer> handover_server_;
+  std::unique_ptr<HandoverSessionImpl> session_handover_;
+  std::unique_ptr<HandoverController> handover_controller_;
 
   // manager metrics
   bvar::Status<std::string> fd_comm_metrics_;
