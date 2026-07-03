@@ -801,8 +801,11 @@ bool MDSClient::ResolvePath(const std::string& path, Ino& out_ino) {
   // outside the mount would be silently mis-resolved to its OS inode; such a
   // path falls through to the mount-relative walk below instead.
   if (path.size() > 1 && path.front() == '/') {
+    // lstat, not stat: a symlink leaf resolves to the link's own inode
+    // (aligned with the `stat` command's lstat default); ancestors below are
+    // still followed via stat to locate the mount root.
     struct stat st;
-    if (::stat(path.c_str(), &st) == 0) {
+    if (::lstat(path.c_str(), &st) == 0) {
       bool in_mount = (st.st_ino == 1);
       std::string cur = path;
       while (cur.size() > 1 && cur.back() == '/') cur.pop_back();
@@ -1964,12 +1967,28 @@ void PrintTreeTable(const pb::mds::TreeSummary& tree,
 }
 
 // Canonical whole-system absolute path of the user-supplied --path (e.g.
-// /mnt/dingofs/a/b), via realpath. Empty when --path was not given (--ino
-// mode).
+// /mnt/dingofs/a/b). Empty when --path was not given (--ino mode).
+// The FINAL component is never resolved through realpath: a symlink leaf must
+// keep its own name so `info` inspects the link itself, matching the lstat
+// default of the `stat` command (see ResolvePath).
 std::string AbsOsPath(const std::string& input) {
   if (input.empty()) return "";
+  std::string p = input;
+  while (p.size() > 1 && p.back() == '/') p.pop_back();
   char buf[PATH_MAX];
-  if (::realpath(input.c_str(), buf) != nullptr) return buf;
+  auto pos = p.find_last_of('/');
+  std::string leaf = (pos == std::string::npos) ? p : p.substr(pos + 1);
+  // "." / ".." / "/" leaves have no identity of their own -- resolve fully.
+  if (leaf.empty() || leaf == "." || leaf == "..") {
+    if (::realpath(p.c_str(), buf) != nullptr) return buf;
+    return input;
+  }
+  const std::string dir =
+      (pos == std::string::npos) ? "." : (pos == 0 ? "/" : p.substr(0, pos));
+  if (::realpath(dir.c_str(), buf) != nullptr) {
+    std::string d = buf;
+    return (d == "/") ? d + leaf : d + "/" + leaf;
+  }
   return input;  // fall back to the raw arg if realpath fails
 }
 
