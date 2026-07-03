@@ -176,7 +176,7 @@ TEST_F(TrashFileSystemTest, CannotUnlinkTrashDirectory) {
   auto fs = Fs();
   Context ctx;
 
-  EntryOut entry_out;
+  EntryWithPaOut entry_out;
   auto status = fs->UnLink(ctx, kRootIno, kTrashName, entry_out);
   ASSERT_FALSE(status.ok());
   EXPECT_EQ(status.error_code(), pb::error::ENOT_SUPPORT);
@@ -186,9 +186,8 @@ TEST_F(TrashFileSystemTest, CannotRmdirTrashDirectory) {
   auto fs = Fs();
   Context ctx;
 
-  Ino ino;
-  EntryOut entry_out;
-  auto status = fs->RmDir(ctx, kRootIno, kTrashName, ino, entry_out);
+  EntryWithPaOut entry_out;
+  auto status = fs->RmDir(ctx, kRootIno, kTrashName, entry_out);
   ASSERT_FALSE(status.ok());
   EXPECT_EQ(status.error_code(), pb::error::ENOT_SUPPORT);
 }
@@ -205,7 +204,7 @@ TEST_F(TrashFileSystemTest, CannotCreateFileInTrash) {
   param.gid = 0;
   param.rdev = 0;
 
-  EntryOut entry_out;
+  EntryWithPaOut entry_out;
   auto status = fs->MkNod(ctx, param, entry_out);
   ASSERT_FALSE(status.ok());
   EXPECT_EQ(status.error_code(), pb::error::ENOT_SUPPORT);
@@ -261,12 +260,8 @@ TEST_F(TrashFileSystemTest, OpenForWriteOnTrashRootRejected) {
   FileSystem::OpenParam param;
   param.flags = O_WRONLY;
 
-  EntryOut entry_out;
-  std::vector<ChunkEntry> chunks_out;
-  std::string data_out;
-  uint64_t data_version = 0;
-  auto status = fs->Open(ctx, kTrashInodeId, param, entry_out, chunks_out,
-                         data_out, data_version);
+  EntryOutForOpen entry_out;
+  auto status = fs->Open(ctx, kTrashInodeId, param, entry_out);
   ASSERT_FALSE(status.ok());
   EXPECT_EQ(status.error_code(), pb::error::ENOT_SUPPORT)
       << "got: " << status.error_str();
@@ -295,7 +290,7 @@ TEST_F(TrashFileSystemTest, CannotCreateDirInTrash) {
   param.uid = 0;
   param.gid = 0;
 
-  EntryOut entry_out;
+  EntryWithPaOut entry_out;
   auto status = fs->MkDir(ctx, param, entry_out);
   ASSERT_FALSE(status.ok());
   EXPECT_EQ(status.error_code(), pb::error::ENOT_SUPPORT);
@@ -314,12 +309,12 @@ TEST_F(TrashFileSystemTest, CannotLinkIntoTrash) {
   param.gid = 1;
   param.rdev = 0;
 
-  EntryOut entry_out;
+  EntryWithPaOut entry_out;
   auto status = fs->MkNod(ctx, param, entry_out);
   ASSERT_TRUE(status.ok()) << status.error_str();
 
   // Link into trash — should fail.
-  EntryOut link_out;
+  EntryWithPaOut link_out;
   status = fs->Link(ctx, entry_out.attr.ino(), kTrashInodeId, "link_in_trash",
                     link_out);
   ASSERT_FALSE(status.ok());
@@ -338,7 +333,7 @@ TEST_F(TrashFileSystemTest, CannotRenameIntoTrash) {
   param.gid = 1;
   param.rdev = 0;
 
-  EntryOut entry_out;
+  EntryWithPaOut entry_out;
   auto status = fs->MkNod(ctx, param, entry_out);
   ASSERT_TRUE(status.ok()) << status.error_str();
 
@@ -379,7 +374,7 @@ TEST_F(TrashFileSystemTest, CannotRenameToDotTrash) {
   param.uid = 1;
   param.gid = 1;
 
-  EntryOut entry_out;
+  EntryWithPaOut entry_out;
   auto status = fs->MkDir(ctx, param, entry_out);
   ASSERT_TRUE(status.ok()) << status.error_str();
 
@@ -410,9 +405,9 @@ TEST_F(TrashFileSystemTest, CannotRenameTrashHourBucketAsNonRoot) {
   mk.uid = 1;
   mk.gid = 1;
   mk.rdev = 0;
-  EntryOut create_out;
+  EntryWithPaOut create_out;
   ASSERT_TRUE(fs->MkNod(root_ctx, mk, create_out).ok());
-  EntryOut unlink_out;
+  EntryWithPaOut unlink_out;
   ASSERT_TRUE(
       fs->UnLink(root_ctx, kRootIno, "evict_setup_nonroot.txt", unlink_out)
           .ok());
@@ -455,9 +450,9 @@ TEST_F(TrashFileSystemTest, CannotRenameTrashHourBucketAsRoot) {
   mk.uid = 1;
   mk.gid = 1;
   mk.rdev = 0;
-  EntryOut create_out;
+  EntryWithPaOut create_out;
   ASSERT_TRUE(fs->MkNod(root_ctx, mk, create_out).ok());
-  EntryOut unlink_out;
+  EntryWithPaOut unlink_out;
   ASSERT_TRUE(
       fs->UnLink(root_ctx, kRootIno, "evict_setup_root.txt", unlink_out).ok());
 
@@ -508,9 +503,8 @@ TEST_F(TrashFileSystemTest, CannotRmdirTrashSubDirectory) {
   auto fs = Fs();
   Context ctx;
 
-  Ino ino;
-  EntryOut entry_out;
-  auto status = fs->RmDir(ctx, kTrashInodeId, "2026-04-05-14", ino, entry_out);
+  EntryWithPaOut entry_out;
+  auto status = fs->RmDir(ctx, kTrashInodeId, "2026-04-05-14", entry_out);
   ASSERT_FALSE(status.ok());
   EXPECT_EQ(status.error_code(), pb::error::ENOT_SUPPORT);
 }
@@ -529,14 +523,14 @@ TEST_F(TrashFileSystemTest, UnlinkMovesToTrash) {
   param.gid = 1;
   param.rdev = 0;
 
-  EntryOut create_out;
+  EntryWithPaOut create_out;
   auto status = fs->MkNod(ctx, param, create_out);
   ASSERT_TRUE(status.ok()) << "create file fail: " << status.error_str();
   Ino file_ino = create_out.attr.ino();
   ASSERT_GT(file_ino, 0);
 
   // Unlink — with trash enabled, file moves to trash.
-  EntryOut unlink_out;
+  EntryWithPaOut unlink_out;
   status = fs->UnLink(ctx, kRootIno, "trash_unlink_file", unlink_out);
   ASSERT_TRUE(status.ok()) << "unlink fail: " << status.error_str();
 
@@ -563,15 +557,14 @@ TEST_F(TrashFileSystemTest, RmDirMovesToTrash) {
   param.uid = 1;
   param.gid = 1;
 
-  EntryOut create_out;
+  EntryWithPaOut create_out;
   auto status = fs->MkDir(ctx, param, create_out);
   ASSERT_TRUE(status.ok()) << "create dir fail: " << status.error_str();
   Ino dir_ino = create_out.attr.ino();
   ASSERT_GT(dir_ino, 0);
 
-  Ino removed_ino;
-  EntryOut rmdir_out;
-  status = fs->RmDir(ctx, kRootIno, "trash_rmdir_dir", removed_ino, rmdir_out);
+  EntryWithPaOut rmdir_out;
+  status = fs->RmDir(ctx, kRootIno, "trash_rmdir_dir", rmdir_out);
   ASSERT_TRUE(status.ok()) << "rmdir fail: " << status.error_str();
 
   // Original dentry should be gone.
@@ -601,13 +594,13 @@ TEST_F(TrashFileSystemTest, RestoreFromTrashToOriginalPath) {
   param.gid = 1;
   param.rdev = 0;
 
-  EntryOut create_out;
+  EntryWithPaOut create_out;
   auto status = fs->MkNod(ctx, param, create_out);
   ASSERT_TRUE(status.ok()) << status.error_str();
   Ino file_ino = create_out.attr.ino();
 
   // Unlink (moves to trash).
-  EntryOut unlink_out;
+  EntryWithPaOut unlink_out;
   status = fs->UnLink(ctx, kRootIno, "restore_me.txt", unlink_out);
   ASSERT_TRUE(status.ok()) << status.error_str();
 
@@ -671,7 +664,7 @@ TEST_F(TrashFileSystemTest, RestoreTreeRebuildIntoTrashedDirectory) {
   dir_param.mode = 0755;
   dir_param.uid = 1;
   dir_param.gid = 1;
-  EntryOut dir_out;
+  EntryWithPaOut dir_out;
   auto status = fs->MkDir(ctx, dir_param, dir_out);
   ASSERT_TRUE(status.ok()) << status.error_str();
   Ino dir_ino = dir_out.attr.ino();
@@ -683,21 +676,20 @@ TEST_F(TrashFileSystemTest, RestoreTreeRebuildIntoTrashedDirectory) {
   file_param.uid = 1;
   file_param.gid = 1;
   file_param.rdev = 0;
-  EntryOut file_out;
+  EntryWithPaOut file_out;
   status = fs->MkNod(ctx, file_param, file_out);
   ASSERT_TRUE(status.ok()) << status.error_str();
   Ino file_ino = file_out.attr.ino();
 
   // Unlink the child first (so dir becomes empty), then rmdir. Both land in
   // the trash under the same hour bucket.
-  EntryOut unlink_out;
+  EntryWithPaOut unlink_out;
   status = fs->UnLink(ctx, dir_ino, "child.txt", unlink_out);
   ASSERT_TRUE(status.ok()) << status.error_str();
   Ino sub_trash_ino = unlink_out.attr.parents(0);
 
-  Ino removed_ino;
-  EntryOut rmdir_out;
-  status = fs->RmDir(ctx, kRootIno, "tree_dir", removed_ino, rmdir_out);
+  EntryWithPaOut rmdir_out;
+  status = fs->RmDir(ctx, kRootIno, "tree_dir", rmdir_out);
   ASSERT_TRUE(status.ok()) << status.error_str();
 
   // Tree-rebuild the child: dst = dir_ino (a trashed user dir). Must succeed.
@@ -740,17 +732,17 @@ TEST_F(TrashFileSystemTest, RestoreCollisionEExisted) {
   p1.uid = 1;
   p1.gid = 1;
   p1.rdev = 0;
-  EntryOut first;
+  EntryWithPaOut first;
   auto status = fs->MkNod(ctx, p1, first);
   ASSERT_TRUE(status.ok()) << status.error_str();
   Ino first_ino = first.attr.ino();
 
-  EntryOut unlink_out;
+  EntryWithPaOut unlink_out;
   status = fs->UnLink(ctx, kRootIno, "collide.txt", unlink_out);
   ASSERT_TRUE(status.ok()) << status.error_str();
   Ino sub_trash_ino = unlink_out.attr.parents(0);
 
-  EntryOut second;
+  EntryWithPaOut second;
   status = fs->MkNod(ctx, p1, second);
   ASSERT_TRUE(status.ok()) << status.error_str();
   ASSERT_NE(second.attr.ino(), first_ino)
@@ -784,17 +776,17 @@ TEST_F(TrashFileSystemTest, RestoreHardlinkOneOfTwo) {
   param.uid = 1;
   param.gid = 1;
   param.rdev = 0;
-  EntryOut src_out;
+  EntryWithPaOut src_out;
   auto status = fs->MkNod(ctx, param, src_out);
   ASSERT_TRUE(status.ok()) << status.error_str();
   Ino file_ino = src_out.attr.ino();
 
-  EntryOut link_out;
+  EntryWithPaOut link_out;
   status = fs->Link(ctx, file_ino, kRootIno, "hl_dst", link_out);
   ASSERT_TRUE(status.ok()) << "link fail: " << status.error_str();
 
   // Unlink both links — both go to trash.
-  EntryOut unlink_src;
+  EntryWithPaOut unlink_src;
   status = fs->UnLink(ctx, kRootIno, "hl_src", unlink_src);
   ASSERT_TRUE(status.ok()) << status.error_str();
   // hl_src still has a live hardlink (hl_dst at root), so its parents list is
@@ -802,7 +794,7 @@ TEST_F(TrashFileSystemTest, RestoreHardlinkOneOfTwo) {
   Ino sub_trash_ino = FindTrashBucketParent(unlink_src.attr);
   ASSERT_NE(sub_trash_ino, 0u) << "no trash bucket in parents";
 
-  EntryOut unlink_dst;
+  EntryWithPaOut unlink_dst;
   status = fs->UnLink(ctx, kRootIno, "hl_dst", unlink_dst);
   ASSERT_TRUE(status.ok()) << status.error_str();
 
@@ -843,7 +835,7 @@ TEST_F(TrashFileSystemTest, LinkOnPartialTrashSurvivor) {
   mkdir_param.mode = 0755;
   mkdir_param.uid = 0;
   mkdir_param.gid = 0;
-  EntryOut live_dir_out;
+  EntryWithPaOut live_dir_out;
   ASSERT_TRUE(fs->MkDir(ctx, mkdir_param, live_dir_out).ok());
   Ino live_dir_ino = live_dir_out.attr.ino();
 
@@ -854,22 +846,22 @@ TEST_F(TrashFileSystemTest, LinkOnPartialTrashSurvivor) {
   mk.uid = 0;
   mk.gid = 0;
   mk.rdev = 0;
-  EntryOut src_out;
+  EntryWithPaOut src_out;
   ASSERT_TRUE(fs->MkNod(ctx, mk, src_out).ok());
   Ino file_ino = src_out.attr.ino();
 
   // Hardlink under live_dir so parents=[root, live_dir_ino] (no dedup).
-  EntryOut hl_out;
+  EntryWithPaOut hl_out;
   ASSERT_TRUE(fs->Link(ctx, file_ino, live_dir_ino, "hl_live", hl_out).ok());
 
   // Unlink the root copy → trash; live_dir/hl_live remains real.
-  EntryOut unlink_out;
+  EntryWithPaOut unlink_out;
   ASSERT_TRUE(fs->UnLink(ctx, kRootIno, "hl_src", unlink_out).ok());
   // Now parents=[live_dir_ino, trash_X], nlink=2.
 
   // Linking by ino into the live parent must succeed — the partial-trash
   // state is not user-visible because a real dentry still exists.
-  EntryOut new_link_out;
+  EntryWithPaOut new_link_out;
   auto status = fs->Link(ctx, file_ino, live_dir_ino, "hl_new", new_link_out);
   ASSERT_TRUE(status.ok()) << "Link via partial-trash inode: "
                            << status.error_str();
@@ -877,7 +869,7 @@ TEST_F(TrashFileSystemTest, LinkOnPartialTrashSurvivor) {
 
   // Same-directory linking back to root also works (the destination check
   // CheckCreateInTrash does not flag root).
-  EntryOut new_root_out;
+  EntryWithPaOut new_root_out;
   status = fs->Link(ctx, file_ino, kRootIno, "hl_back", new_root_out);
   ASSERT_TRUE(status.ok()) << "Link to root for partial-trash inode: "
                            << status.error_str();
@@ -906,16 +898,16 @@ TEST_F(TrashFileSystemTest, LinkRescuesFullyTrashedInode) {
   mk.uid = 0;
   mk.gid = 0;
   mk.rdev = 0;
-  EntryOut create_out;
+  EntryWithPaOut create_out;
   ASSERT_TRUE(fs->MkNod(ctx, mk, create_out).ok());
   Ino file_ino = create_out.attr.ino();
 
   // Unlink to trash — inode now has no real parents.
-  EntryOut unlink_out;
+  EntryWithPaOut unlink_out;
   ASSERT_TRUE(fs->UnLink(ctx, kRootIno, "to_be_trashed", unlink_out).ok());
 
   // Link by ino into a live parent must succeed.
-  EntryOut link_out;
+  EntryWithPaOut link_out;
   auto status = fs->Link(ctx, file_ino, kRootIno, "rescued", link_out);
   ASSERT_TRUE(status.ok()) << "rescue link: " << status.error_str();
 
@@ -924,7 +916,7 @@ TEST_F(TrashFileSystemTest, LinkRescuesFullyTrashedInode) {
   EXPECT_EQ(look_out.attr.ino(), file_ino);
 
   // Linking the .trash sentinel itself must remain rejected.
-  EntryOut trash_link;
+  EntryWithPaOut trash_link;
   status = fs->Link(ctx, kTrashInodeId, kRootIno, "trash_alias", trash_link);
   ASSERT_FALSE(status.ok());
   EXPECT_EQ(status.error_code(), pb::error::ENOT_SUPPORT);
@@ -978,13 +970,12 @@ TEST_F(TrashFileSystemTest, BucketNlinkStaysFixedAcrossOps) {
     mk.mode = 0755;
     mk.uid = 1;
     mk.gid = 1;
-    EntryOut create_out;
+    EntryWithPaOut create_out;
     ASSERT_TRUE(fs->MkDir(root_ctx, mk, create_out).ok());
 
-    Ino removed_ino;
-    EntryOut rmdir_out;
+    EntryWithPaOut rmdir_out;
     ASSERT_TRUE(
-        fs->RmDir(root_ctx, kRootIno, mk.name, removed_ino, rmdir_out).ok());
+        fs->RmDir(root_ctx, kRootIno, mk.name, rmdir_out).ok());
   }
 
   // Pick any current sub-trash bucket dentry under .trash.
@@ -1023,7 +1014,7 @@ TEST_F(TrashFileSystemTest, BatchUnlinkMovesToTrash) {
   mkdir.mode = 0755;
   mkdir.uid = 1;
   mkdir.gid = 1;
-  EntryOut dir_out;
+  EntryWithPaOut dir_out;
   ASSERT_TRUE(fs->MkDir(ctx, mkdir, dir_out).ok());
   const Ino dir_ino = dir_out.attr.ino();
 
@@ -1037,12 +1028,12 @@ TEST_F(TrashFileSystemTest, BatchUnlinkMovesToTrash) {
     mn.uid = 1;
     mn.gid = 1;
     mn.rdev = 0;
-    EntryOut out_f;
+    EntryWithPaOut out_f;
     ASSERT_TRUE(fs->MkNod(ctx, mn, out_f).ok());
     file_inos.push_back(out_f.attr.ino());
   }
 
-  EntryOut batch_out;
+  EntriesWithPaOut batch_out;
   ASSERT_TRUE(fs->BatchUnLink(ctx, dir_ino, names, batch_out).ok());
 
   // Both files must now appear under the hour bucket.
@@ -1087,11 +1078,11 @@ TEST_F(TrashFileSystemTest, RenameFileOutOfTrashSucceeds) {
   mk.uid = 1;
   mk.gid = 1;
   mk.rdev = 0;
-  EntryOut create_out;
+  EntryWithPaOut create_out;
   ASSERT_TRUE(fs->MkNod(ctx, mk, create_out).ok());
   const Ino file_ino = create_out.attr.ino();
 
-  EntryOut unlink_out;
+  EntryWithPaOut unlink_out;
   ASSERT_TRUE(
       fs->UnLink(ctx, kRootIno, "rename_out_test.txt", unlink_out).ok());
   ASSERT_GT(unlink_out.attr.parents_size(), 0);
@@ -1138,14 +1129,13 @@ TEST_F(TrashFileSystemTest, RenameDirOutOfTrashSucceeds) {
   mk.mode = 0755;
   mk.uid = 1;
   mk.gid = 1;
-  EntryOut create_out;
+  EntryWithPaOut create_out;
   ASSERT_TRUE(fs->MkDir(ctx, mk, create_out).ok());
   const Ino dir_ino = create_out.attr.ino();
 
-  Ino removed = 0;
-  EntryOut rmdir_out;
+  EntryWithPaOut rmdir_out;
   ASSERT_TRUE(
-      fs->RmDir(ctx, kRootIno, "rename_dir_out", removed, rmdir_out).ok());
+      fs->RmDir(ctx, kRootIno, "rename_dir_out", rmdir_out).ok());
 
   Trace trace;
   Ino bucket_ino = 0;
@@ -1190,7 +1180,7 @@ TEST_F(TrashFileSystemTest, RenameFlatGraftedFileOutOfTrashSucceeds) {
   mk_root.mode = 0755;
   mk_root.uid = 1;
   mk_root.gid = 1;
-  EntryOut out_root;
+  EntryWithPaOut out_root;
   ASSERT_TRUE(fs->MkDir(ctx, mk_root, out_root).ok());
   const Ino root_dir_ino = out_root.attr.ino();
 
@@ -1201,19 +1191,18 @@ TEST_F(TrashFileSystemTest, RenameFlatGraftedFileOutOfTrashSucceeds) {
   mn_leaf.uid = 1;
   mn_leaf.gid = 1;
   mn_leaf.rdev = 0;
-  EntryOut out_leaf;
+  EntryWithPaOut out_leaf;
   ASSERT_TRUE(fs->MkNod(ctx, mn_leaf, out_leaf).ok());
   const Ino leaf_ino = out_leaf.attr.ino();
 
-  EntryOut leaf_unlink;
+  EntryWithPaOut leaf_unlink;
   ASSERT_TRUE(fs->UnLink(ctx, root_dir_ino, "inner.txt", leaf_unlink).ok());
   ASSERT_GT(leaf_unlink.attr.parents_size(), 0);
   const Ino bucket_ino = leaf_unlink.attr.parents(0);
   ASSERT_TRUE(IsTrashInode(bucket_ino));
 
-  Ino removed = 0;
-  EntryOut root_rmdir;
-  ASSERT_TRUE(fs->RmDir(ctx, kRootIno, "graft_root", removed, root_rmdir).ok())
+  EntryWithPaOut root_rmdir;
+  ASSERT_TRUE(fs->RmDir(ctx, kRootIno, "graft_root", root_rmdir).ok())
       << "rmdir of now-empty parent must succeed";
 
   // inner.txt's bucket dentry is now flat-grafted: its name encodes
@@ -1264,7 +1253,7 @@ TEST_F(TrashFileSystemTest,
   mk_dst.mode = 0755;
   mk_dst.uid = 1;
   mk_dst.gid = 1;
-  EntryOut dst_out;
+  EntryWithPaOut dst_out;
   ASSERT_TRUE(fs->MkDir(ctx, mk_dst, dst_out).ok());
   const Ino dst_ino = dst_out.attr.ino();
 
@@ -1275,11 +1264,11 @@ TEST_F(TrashFileSystemTest,
   mk_file.uid = 1;
   mk_file.gid = 1;
   mk_file.rdev = 0;
-  EntryOut file_out;
+  EntryWithPaOut file_out;
   ASSERT_TRUE(fs->MkNod(ctx, mk_file, file_out).ok());
   const Ino file_ino = file_out.attr.ino();
 
-  EntryOut unlink_out;
+  EntryWithPaOut unlink_out;
   ASSERT_TRUE(fs->UnLink(ctx, kRootIno, "user_file.txt", unlink_out).ok());
   ASSERT_GT(unlink_out.attr.parents_size(), 0);
   const Ino bucket_ino = unlink_out.attr.parents(0);
@@ -1343,7 +1332,7 @@ TEST_F(TrashFileSystemTest, SymlinkUnlinkMovesToTrash) {
   Context ctx;
 
   const std::string target = "/some/where/foo.txt";
-  EntryOut create_out;
+  EntryWithPaOut create_out;
   auto status =
       fs->Symlink(ctx, target, kRootIno, "lnk_unlink", 1, 1, create_out);
   ASSERT_TRUE(status.ok()) << "create symlink fail: " << status.error_str();
@@ -1351,7 +1340,7 @@ TEST_F(TrashFileSystemTest, SymlinkUnlinkMovesToTrash) {
   ASSERT_GT(sym_ino, 0u);
   ASSERT_EQ(create_out.attr.type(), pb::mds::FileType::SYM_LINK);
 
-  EntryOut unlink_out;
+  EntryWithPaOut unlink_out;
   status = fs->UnLink(ctx, kRootIno, "lnk_unlink", unlink_out);
   ASSERT_TRUE(status.ok()) << "unlink symlink fail: " << status.error_str();
 
@@ -1401,21 +1390,21 @@ TEST_F(TrashFileSystemTest, BatchUnlinkSymlinksOnlyMovesToTrash) {
   mkdir.mode = 0755;
   mkdir.uid = 1;
   mkdir.gid = 1;
-  EntryOut dir_out;
+  EntryWithPaOut dir_out;
   ASSERT_TRUE(fs->MkDir(ctx, mkdir, dir_out).ok());
   const Ino dir_ino = dir_out.attr.ino();
 
   std::vector<std::string> names = {"lnk_batch_a", "lnk_batch_b"};
   std::vector<Ino> sym_inos;
   for (const auto& n : names) {
-    EntryOut out;
+    EntryWithPaOut out;
     ASSERT_TRUE(
         fs->Symlink(ctx, fmt::format("/target/{}", n), dir_ino, n, 1, 1, out)
             .ok());
     sym_inos.push_back(out.attr.ino());
   }
 
-  EntryOut batch_out;
+  EntriesWithPaOut batch_out;
   ASSERT_TRUE(fs->BatchUnLink(ctx, dir_ino, names, batch_out).ok());
 
   auto entries = ScanAllTrashEntries(/*fs_id=*/2000, operation_processor);
@@ -1441,7 +1430,7 @@ TEST_F(TrashFileSystemTest, BatchUnlinkMixedFileSymlinkAllInTrash) {
   mkdir.mode = 0755;
   mkdir.uid = 1;
   mkdir.gid = 1;
-  EntryOut dir_out;
+  EntryWithPaOut dir_out;
   ASSERT_TRUE(fs->MkDir(ctx, mkdir, dir_out).ok());
   const Ino dir_ino = dir_out.attr.ino();
 
@@ -1452,17 +1441,17 @@ TEST_F(TrashFileSystemTest, BatchUnlinkMixedFileSymlinkAllInTrash) {
   mn.uid = 1;
   mn.gid = 1;
   mn.rdev = 0;
-  EntryOut file_out;
+  EntryWithPaOut file_out;
   ASSERT_TRUE(fs->MkNod(ctx, mn, file_out).ok());
   const Ino file_ino = file_out.attr.ino();
 
-  EntryOut sym_out;
+  EntryWithPaOut sym_out;
   ASSERT_TRUE(
       fs->Symlink(ctx, "/target/mix", dir_ino, "mix_lnk", 1, 1, sym_out).ok());
   const Ino sym_ino = sym_out.attr.ino();
 
   std::vector<std::string> names = {"mix_file.txt", "mix_lnk"};
-  EntryOut batch_out;
+  EntriesWithPaOut batch_out;
   ASSERT_TRUE(fs->BatchUnLink(ctx, dir_ino, names, batch_out).ok());
 
   auto entries = ScanAllTrashEntries(/*fs_id=*/2000, operation_processor);
@@ -1488,12 +1477,12 @@ TEST_F(TrashFileSystemTest, RestoreSymlinkFromTrashKeepsTarget) {
   Context ctx;
 
   const std::string target = "/restore/target/x";
-  EntryOut create_out;
+  EntryWithPaOut create_out;
   ASSERT_TRUE(
       fs->Symlink(ctx, target, kRootIno, "lnk_restore", 1, 1, create_out).ok());
   const Ino sym_ino = create_out.attr.ino();
 
-  EntryOut unlink_out;
+  EntryWithPaOut unlink_out;
   ASSERT_TRUE(fs->UnLink(ctx, kRootIno, "lnk_restore", unlink_out).ok());
   ASSERT_GT(unlink_out.attr.parents_size(), 0);
   const Ino bucket_ino = unlink_out.attr.parents(0);
@@ -1518,18 +1507,18 @@ TEST_F(TrashFileSystemTest, RestoreSymlinkCollisionEExisted) {
   auto fs = Fs();
   Context ctx;
 
-  EntryOut first;
+  EntryWithPaOut first;
   ASSERT_TRUE(
       fs->Symlink(ctx, "/orig", kRootIno, "lnk_collide", 1, 1, first).ok());
   const Ino first_ino = first.attr.ino();
 
-  EntryOut unlink_out;
+  EntryWithPaOut unlink_out;
   ASSERT_TRUE(fs->UnLink(ctx, kRootIno, "lnk_collide", unlink_out).ok());
   ASSERT_GT(unlink_out.attr.parents_size(), 0);
   const Ino bucket_ino = unlink_out.attr.parents(0);
 
   // Re-create at the same name — different inode, different target.
-  EntryOut second;
+  EntryWithPaOut second;
   ASSERT_TRUE(
       fs->Symlink(ctx, "/replaced", kRootIno, "lnk_collide", 1, 1, second)
           .ok());
@@ -1556,13 +1545,13 @@ TEST_F(TrashFileSystemTest, SymlinkInTrashAutoExpireCleansInode) {
   auto fs = Fs();
   Context ctx;
 
-  EntryOut sym_out;
+  EntryWithPaOut sym_out;
   ASSERT_TRUE(
       fs->Symlink(ctx, "/expire/target", kRootIno, "lnk_expire", 1, 1, sym_out)
           .ok());
   const Ino sym_ino = sym_out.attr.ino();
 
-  EntryOut unlink_out;
+  EntryWithPaOut unlink_out;
   ASSERT_TRUE(fs->UnLink(ctx, kRootIno, "lnk_expire", unlink_out).ok());
   ASSERT_GT(unlink_out.attr.parents_size(), 0);
   const Ino bucket_ino = unlink_out.attr.parents(0);
@@ -1627,11 +1616,11 @@ static Ino UnlinkAndCaptureBucket(const FileSystemSPtr& fs, Context& ctx,
   param.uid = 1;
   param.gid = 1;
   param.rdev = 0;
-  EntryOut create_out;
+  EntryWithPaOut create_out;
   EXPECT_TRUE(fs->MkNod(ctx, param, create_out).ok());
   out_file_ino = create_out.attr.ino();
 
-  EntryOut unlink_out;
+  EntryWithPaOut unlink_out;
   EXPECT_TRUE(fs->UnLink(ctx, kRootIno, name, unlink_out).ok());
   EXPECT_GT(unlink_out.attr.parents_size(), 0);
   return unlink_out.attr.parents(0);
@@ -1786,7 +1775,7 @@ TEST_F(TrashDirStatTest, TreeRebuildGraftCreditsGraftedIntoDirStat) {
   dp.uid = 1;
   dp.gid = 1;
   dp.rdev = 0;
-  EntryOut dout;
+  EntryWithPaOut dout;
   ASSERT_TRUE(fs->MkDir(ctx, dp, dout).ok());
   Ino sub_ino = dout.attr.ino();
 
@@ -1798,24 +1787,23 @@ TEST_F(TrashDirStatTest, TreeRebuildGraftCreditsGraftedIntoDirStat) {
   fp.uid = 1;
   fp.gid = 1;
   fp.rdev = 0;
-  EntryOut fo;
+  EntryWithPaOut fo;
   ASSERT_TRUE(fs->MkNod(ctx, fp, fo).ok());
   Ino child_ino = fo.attr.ino();
   {
     FileSystem::FlushFileParam ffp;
     ffp.length = 5000;
-    EntryOut ffo;
+    EntryWithFileChangeOut ffo;
     ASSERT_TRUE(fs->FlushFile(ctx, child_ino, ffp, ffo).ok());
   }
 
   // unlink child (-> trash, debits sub), then rmdir sub (-> trash). sub is now
   // a trashed user directory; child is a flat entry in the same hour bucket.
-  EntryOut uo;
+  EntryWithPaOut uo;
   ASSERT_TRUE(fs->UnLink(ctx, sub_ino, "child", uo).ok());
   Ino sub_trash_ino = uo.attr.parents(0);
-  Ino removed = 0;
-  EntryOut ro;
-  ASSERT_TRUE(fs->RmDir(ctx, kRootIno, "sub", removed, ro).ok());
+  EntryWithPaOut ro;
+  ASSERT_TRUE(fs->RmDir(ctx, kRootIno, "sub", ro).ok());
 
   // Drain accumulated deltas so the graft's delta is isolated.
   DrainDirStats(fs->GetDirStatManager());

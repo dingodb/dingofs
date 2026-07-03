@@ -739,7 +739,8 @@ uint64_t FileSystem::GetMdsIdByIno(Ino ino) {
   return target_mds_id;
 }
 
-Status FileSystem::BatchCreate(Context& ctx, Ino parent, const std::vector<MkNodParam>& params, EntryOut& entry_out) {
+Status FileSystem::BatchCreate(Context& ctx, Ino parent, const std::vector<MkNodParam>& params,
+                               EntriesWithPaOut& entry_out) {
   if (!CanServe(ctx)) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
@@ -859,7 +860,7 @@ Status FileSystem::BatchCreate(Context& ctx, Ino parent, const std::vector<MkNod
 // create file, need below steps:
 // 1. create inode
 // 2. create dentry and update parent inode(nlink/mtime/ctime)
-Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_out) {
+Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryWithPaOut& entry_out) {
   if (!CanServe(ctx)) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
@@ -958,7 +959,7 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_
   return Status::OK();
 }
 
-Status FileSystem::BatchMkNod(Context& ctx, const std::vector<MkNodParam>& params, EntryOut& entry_out) {
+Status FileSystem::BatchMkNod(Context& ctx, const std::vector<MkNodParam>& params, EntriesWithPaOut& entry_out) {
   if (!CanServe(ctx)) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
@@ -1072,8 +1073,7 @@ Status FileSystem::BatchMkNod(Context& ctx, const std::vector<MkNodParam>& param
   return Status::OK();
 }
 
-Status FileSystem::Open(Context& ctx, Ino ino, const OpenParam& param, EntryOut& entry_out,
-                        std::vector<ChunkEntry>& chunks_out, std::string& data_out, uint64_t& data_version) {
+Status FileSystem::Open(Context& ctx, Ino ino, const OpenParam& param, EntryOutForOpen& out) {
   if (!CanServe(ctx)) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
@@ -1106,7 +1106,7 @@ Status FileSystem::Open(Context& ctx, Ino ino, const OpenParam& param, EntryOut&
   auto status = GetInode(ctx, ino, inode);
   if (!status.ok()) return status;
 
-  if (inode->Nlink() == 0) {
+  if (inode->IsDeleted()) {
     return Status(pb::error::EDELETED, "file is deleted");
   }
 
@@ -1156,12 +1156,12 @@ Status FileSystem::Open(Context& ctx, Ino ino, const OpenParam& param, EntryOut&
     fetch_from = "cache";
     if (!bypass_cache) {
       // priority take from cache
-      get_chunks_from_cache_fn(chunks_out);
+      get_chunks_from_cache_fn(out.chunks);
     }
 
     // if not enough then fetch from store
-    if (!is_completely_fn(chunks_out, file_length)) {
-      chunks_out.clear();
+    if (!is_completely_fn(out.chunks, file_length)) {
+      out.chunks.clear();
       fetch_from = "store";
       uint32_t chunk_index = 0;
       for (uint64_t offset = 0; offset < file_length; offset += chunk_size) {
@@ -1189,16 +1189,20 @@ Status FileSystem::Open(Context& ctx, Ino ino, const OpenParam& param, EntryOut&
   LOG(INFO) << fmt::format(
       "[fs.{}.{}.{}.{}][{}us] open {} finish, flags({:o}:{}) fetch_chunk({}:{}) fetch_data({}:{}) status({}).", fs_id_,
       ino, ctx.RequestId(), trace.GetReqTypeInt(), duration.ElapsedUs(), param.session_id, flags,
-      dingofs::Helper::DescOpenFlags(flags), fetch_from, chunks_out.empty() ? chunks.size() : chunks_out.size(),
-      param.is_prefetch_data, data.size(), status.error_str());
+      dingofs::Helper::DescOpenFlags(flags), fetch_from, out.chunks.empty() ? chunks.size() : out.chunks.size(),
+      param.is_prefetch_data, out.data_out.size(), status.error_str());
 
   if (!status.ok()) return status;
 
+  if (IsDeleted(attr)) {
+    return Status(pb::error::EDELETED, "file is deleted");
+  }
+
   // set output
-  entry_out.attr = attr;
-  for (auto& chunk : chunks) chunks_out.push_back(chunk);
-  data_out.swap(data);
-  data_version = result.data_version;
+  out.attr = attr;
+  for (auto& chunk : chunks) out.chunks.push_back(chunk);
+  out.data_out.swap(data);
+  out.data_version = result.data_version;
 
   // update quota
   std::string reason = fmt::format("open.{}.{}", request_id, ino);
@@ -1249,14 +1253,14 @@ Status FileSystem::Release(Context& ctx, Ino ino, const std::string& session_id)
   // delete inode cache if nlink == 0
   InodeSPtr inode;
   GetInode(ctx, ino, inode);
-  if (inode != nullptr && inode->Nlink() == 0) {
+  if (inode != nullptr && inode->IsDeleted()) {
     DeleteInodeFromCache(ino);
   }
 
   return Status::OK();
 }
 
-Status FileSystem::FlushFile(Context& ctx, Ino ino, const FlushFileParam& param, EntryOut& entry_out) {
+Status FileSystem::FlushFile(Context& ctx, Ino ino, const FlushFileParam& param, EntryWithFileChangeOut& entry_out) {
   if (!CanServe(ctx)) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
@@ -1308,6 +1312,7 @@ Status FileSystem::FlushFile(Context& ctx, Ino ino, const FlushFileParam& param,
   // set output
   entry_out.attr = attr;
   entry_out.shrink_file = (delta_bytes < 0) ? true : false;
+  entry_out.expand_file = (delta_bytes > 0) ? true : false;
 
   // update quota
   std::string reason = fmt::format("flushfile.{}.{}", request_id, ino);
@@ -1382,7 +1387,7 @@ void FileSystem::AsyncKeepAliveFileSession(const std::vector<FileSessionParam>& 
 // create directory, need below steps:
 // 1. create inode
 // 2. create dentry and update parent inode(nlink/mtime/ctime)
-Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_out) {
+Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryWithPaOut& entry_out) {
   if (!CanServe(ctx)) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
@@ -1477,7 +1482,7 @@ Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_
   return Status::OK();
 }
 
-Status FileSystem::BatchMkDir(Context& ctx, const std::vector<MkDirParam>& params, EntryOut& entry_out) {
+Status FileSystem::BatchMkDir(Context& ctx, const std::vector<MkDirParam>& params, EntriesWithPaOut& entry_out) {
   if (!CanServe(ctx)) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
@@ -1591,7 +1596,7 @@ Status FileSystem::BatchMkDir(Context& ctx, const std::vector<MkDirParam>& param
   return Status::OK();
 }
 
-Status FileSystem::RmDir(Context& ctx, Ino parent, const std::string& name, Ino& ino, EntryOut& entry_out) {
+Status FileSystem::RmDir(Context& ctx, Ino parent, const std::string& name, EntryWithPaOut& entry_out) {
   if (!CanServe(ctx)) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
@@ -1700,7 +1705,7 @@ Status FileSystem::RmDir(Context& ctx, Ino parent, const std::string& name, Ino&
   parent_memo_.Forget(dentry.ino());
 
   // set output
-  ino = dentry.ino();
+  entry_out.attr.set_ino(dentry.ino());
   entry_out.parent_attr = last_parent_inode->ToAttr();
 
   if (IsParentHashPartition()) {
@@ -1714,7 +1719,7 @@ Status FileSystem::RmDir(Context& ctx, Ino parent, const std::string& name, Ino&
 }
 
 Status FileSystem::ReadDir(Context& ctx, Ino ino, const std::string& last_name, uint32_t limit, bool with_attr,
-                           std::vector<EntryOut>& entry_outs) {
+                           std::vector<EntryWithNameOut>& entry_outs) {
   if (!CanServe(ctx)) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
@@ -1738,7 +1743,7 @@ Status FileSystem::ReadDir(Context& ctx, Ino ino, const std::string& last_name, 
   entry_outs.reserve(dentries.size());
 
   for (auto& dentry : dentries) {
-    EntryOut entry_out;
+    EntryWithNameOut entry_out;
     entry_out.name = dentry.Name();
     entry_out.attr.set_ino(dentry.INo());
 
@@ -1768,7 +1773,7 @@ Status FileSystem::ReadDir(Context& ctx, Ino ino, const std::string& last_name, 
 // create hard link for file
 // 1. create dentry and update parent inode(nlink/mtime/ctime)
 // 2. update inode(mtime/ctime/nlink)
-Status FileSystem::Link(Context& ctx, Ino ino, Ino new_parent, const std::string& new_name, EntryOut& entry_out) {
+Status FileSystem::Link(Context& ctx, Ino ino, Ino new_parent, const std::string& new_name, EntryWithPaOut& entry_out) {
   if (!CanServe(ctx)) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
@@ -1841,7 +1846,7 @@ Status FileSystem::Link(Context& ctx, Ino ino, Ino new_parent, const std::string
 // delete hard link for file
 // 1. delete dentry and update parent inode(nlink/mtime/ctime)
 // 3. update inode(nlink/mtime/ctime)
-Status FileSystem::UnLink(Context& ctx, Ino parent, const std::string& name, EntryOut& entry_out) {
+Status FileSystem::UnLink(Context& ctx, Ino parent, const std::string& name, EntryWithPaOut& entry_out) {
   if (!CanServe(ctx)) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
@@ -1912,7 +1917,7 @@ Status FileSystem::UnLink(Context& ctx, Ino parent, const std::string& name, Ent
   const int64_t delta_bytes = (attr.type() == pb::mds::FILE) ? static_cast<int64_t>(attr.length()) : 0;
   if (is_trash_cleanup) {
     // trash unlink
-    if (attr.nlink() == 0) quota_manager_.UpdateFsUsage(-delta_bytes, -1, reason);
+    if (IsDeleted(attr)) quota_manager_.UpdateFsUsage(-delta_bytes, -1, reason);
 
     Ino origin_parent = ParseTrashEntryName(name);
     if (!immediate_trash_quota && origin_parent != 0) {
@@ -1925,7 +1930,7 @@ Status FileSystem::UnLink(Context& ctx, Ino parent, const std::string& name, Ent
       if (immediate_trash_quota) quota_manager_.AsyncUpdateDirUsage(parent, -delta_bytes, -1, reason);
 
     } else {
-      if (attr.nlink() == 0) quota_manager_.UpdateFsUsage(-delta_bytes, -1, reason);
+      if (IsDeleted(attr)) quota_manager_.UpdateFsUsage(-delta_bytes, -1, reason);
       quota_manager_.AsyncUpdateDirUsage(parent, -delta_bytes, -1, reason);
     }
 
@@ -1933,7 +1938,7 @@ Status FileSystem::UnLink(Context& ctx, Ino parent, const std::string& name, Ent
     UpdateDirStat(parent, -delta_bytes, -1, 0, reason);
   }
 
-  if (attr.nlink() == 0) chunk_cache_.Delete(attr.ino());
+  if (IsDeleted(attr)) chunk_cache_.Delete(attr.ino());
 
   // update cache
   UpsertInodeCache(attr, reason);
@@ -1953,7 +1958,8 @@ Status FileSystem::UnLink(Context& ctx, Ino parent, const std::string& name, Ent
   return Status::OK();
 }
 
-Status FileSystem::BatchUnLink(Context& ctx, Ino parent, const std::vector<std::string>& names, EntryOut& entry_out) {
+Status FileSystem::BatchUnLink(Context& ctx, Ino parent, const std::vector<std::string>& names,
+                               EntriesWithPaOut& entry_out) {
   if (!CanServe(ctx)) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
@@ -2035,7 +2041,7 @@ Status FileSystem::BatchUnLink(Context& ctx, Ino parent, const std::vector<std::
 
     if (is_trash_cleanup) {
       // trash unlink
-      if (attr.nlink() == 0) quota_manager_.UpdateFsUsage(-delta_bytes, -1, reason);
+      if (IsDeleted(attr)) quota_manager_.UpdateFsUsage(-delta_bytes, -1, reason);
 
       Ino origin_parent = ParseTrashEntryName(names[i]);
       if (!immediate_trash_quota && origin_parent != 0) {
@@ -2048,7 +2054,7 @@ Status FileSystem::BatchUnLink(Context& ctx, Ino parent, const std::vector<std::
         if (immediate_trash_quota) quota_manager_.AsyncUpdateDirUsage(parent, -delta_bytes, -1, reason);
 
       } else {
-        if (attr.nlink() == 0) quota_manager_.UpdateFsUsage(-delta_bytes, -1, reason);
+        if (IsDeleted(attr)) quota_manager_.UpdateFsUsage(-delta_bytes, -1, reason);
         quota_manager_.AsyncUpdateDirUsage(parent, -delta_bytes, -1, reason);
       }
 
@@ -2056,7 +2062,7 @@ Status FileSystem::BatchUnLink(Context& ctx, Ino parent, const std::vector<std::
       dir_stat_delta.inodes -= 1;
     }
 
-    if (attr.nlink() == 0) chunk_cache_.Delete(attr.ino());
+    if (IsDeleted(attr)) chunk_cache_.Delete(attr.ino());
   }
   if (dir_stat_delta.inodes != 0) {
     UpdateDirStat(parent, dir_stat_delta.length, dir_stat_delta.inodes, 0, reason);
@@ -2085,7 +2091,7 @@ Status FileSystem::BatchUnLink(Context& ctx, Ino parent, const std::vector<std::
 // 2. create dentry
 // 3. update parent inode mtime/ctime/nlink
 Status FileSystem::Symlink(Context& ctx, const std::string& symlink, Ino new_parent, const std::string& new_name,
-                           uint32_t uid, uint32_t gid, EntryOut& entry_out) {
+                           uint32_t uid, uint32_t gid, EntryWithPaOut& entry_out) {
   if (!CanServe(ctx)) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
@@ -2664,7 +2670,7 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, RenameResult& 
   // Trash overwrite keeps nlink unchanged (only parents is rewritten to the sub-trash
   // inode), so trash entries are accounted for when CleanTrashTask reclaims them.
   // Hardlinked survivors (nlink > 0) are still reachable and must not be released here.
-  if (is_exist_new_dentry && prev_new_attr.nlink() == 0) {
+  if (is_exist_new_dentry && IsDeleted(prev_new_attr)) {
     int64_t fs_delta_bytes =
         prev_new_attr.type() == pb::mds::FileType::FILE ? -static_cast<int64_t>(prev_new_attr.length()) : 0;
     quota_manager_.UpdateFsUsage(fs_delta_bytes, -1, reason);

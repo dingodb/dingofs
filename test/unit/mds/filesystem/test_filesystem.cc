@@ -449,7 +449,7 @@ TEST_F(FileSystemTest, MkNod) {
   param.gid = 3;
   param.rdev = 1;
 
-  EntryOut entry_out;
+  EntryWithPaOut entry_out;
   auto status = fs->MkNod(ctx, param, entry_out);
   ASSERT_TRUE(status.ok()) << "create file fail, error: " << status.error_str();
   ASSERT_GT(entry_out.attr.ino(), 0) << "ino is invalid.";
@@ -490,7 +490,7 @@ TEST_F(FileSystemTest, MkDir) {
   param.gid = 3;
   param.rdev = 0;
 
-  EntryOut entry_out;
+  EntryWithPaOut entry_out;
   auto status = fs->MkDir(ctx, param, entry_out);
   ASSERT_TRUE(status.ok()) << "create file fail, error: " << status.error_str();
   ASSERT_GT(entry_out.attr.ino(), 0) << "ino is invalid.";
@@ -533,7 +533,7 @@ TEST_F(FileSystemTest, RmDir) {
   param.gid = 3;
   param.rdev = 0;
 
-  EntryOut entry_out;
+  EntryWithPaOut entry_out;
   auto status = fs->MkDir(ctx, param, entry_out);
   ASSERT_TRUE(status.ok()) << "create file fail, error: " << status.error_str();
   ASSERT_GT(entry_out.attr.ino(), 0) << "ino is invalid.";
@@ -553,11 +553,11 @@ TEST_F(FileSystemTest, RmDir) {
   ASSERT_TRUE(inode != nullptr) << "get inode fail.";
 
   {
-    Ino ino;
-    EntryOut entry_out;
-    status = fs->RmDir(ctx, param.parent, param.name, ino, entry_out);
+    EntryWithPaOut entry_out;
+    status = fs->RmDir(ctx, param.parent, param.name, entry_out);
     ASSERT_TRUE(status.ok())
         << "remove dir fail, error: " << status.error_str();
+    Ino ino = entry_out.attr.ino();
 
     auto partition = partition_cache.Get(ino);
     ASSERT_TRUE(partition == nullptr) << "get partition fail.";
@@ -584,7 +584,7 @@ TEST_F(FileSystemTest, Link) {
   param.gid = 3;
   param.rdev = 1;
 
-  EntryOut entry_out;
+  EntryWithPaOut entry_out;
   auto status = fs->MkNod(ctx, param, entry_out);
   ASSERT_TRUE(status.ok()) << "create file fail, error: " << status.error_str();
   ASSERT_GT(entry_out.attr.ino(), 0) << "ino is invalid.";
@@ -593,7 +593,7 @@ TEST_F(FileSystemTest, Link) {
   ASSERT_TRUE(inode != nullptr) << "get inode fail.";
 
   {
-    EntryOut entry_out;
+    EntryWithPaOut entry_out;
     auto status = fs->Link(ctx, inode->Ino(), kRootIno, "link_file", entry_out);
     ASSERT_TRUE(status.ok()) << "link fail, error: " << status.error_str();
     ASSERT_EQ(inode->Ino(), entry_out.attr.ino()) << "ino is invalid.";
@@ -618,7 +618,7 @@ TEST_F(FileSystemTest, UnLink) {
   param.gid = 3;
   param.rdev = 1;
 
-  EntryOut entry_out;
+  EntryWithPaOut entry_out;
   auto status = fs->MkNod(ctx, param, entry_out);
   ASSERT_TRUE(status.ok()) << "create file fail, error: " << status.error_str();
   ASSERT_GT(entry_out.attr.ino(), 0) << "ino is invalid.";
@@ -627,7 +627,7 @@ TEST_F(FileSystemTest, UnLink) {
   ASSERT_TRUE(inode != nullptr) << "get inode fail.";
 
   {
-    EntryOut entry_out;
+    EntryWithPaOut entry_out;
     auto status = fs->Link(ctx, inode->Ino(), kRootIno, "link_file", entry_out);
     ASSERT_TRUE(status.ok()) << "link fail, error: " << status.error_str();
     ASSERT_EQ(inode->Ino(), entry_out.attr.ino()) << "ino is invalid.";
@@ -656,7 +656,7 @@ TEST_F(FileSystemTest, SymlinkWithFile) {
   param.gid = 3;
   param.rdev = 1;
 
-  EntryOut entry_out;
+  EntryWithPaOut entry_out;
   auto status = fs->MkNod(ctx, param, entry_out);
   ASSERT_TRUE(status.ok()) << "create file fail, error: " << status.error_str();
   ASSERT_GT(entry_out.attr.ino(), 0) << "ino is invalid.";
@@ -667,12 +667,11 @@ TEST_F(FileSystemTest, SymlinkWithFile) {
   {
     std::string symlink = fmt::format("/{}", param.name);
     std::string name = "symlinkwithfile";
-    EntryOut entry_out;
+    EntryWithPaOut entry_out;
     auto status = fs->Symlink(ctx, symlink, kRootIno, name, 1, 3, entry_out);
     ASSERT_TRUE(status.ok())
         << "create symlink fail, error: " << status.error_str();
     ASSERT_GT(entry_out.attr.ino(), 0) << "ino is invalid.";
-    ASSERT_EQ(name, entry_out.name) << "ino is invalid.";
 
     InodeSPtr sym_inode = inode_cache.Get(entry_out.attr.ino());
     ASSERT_TRUE(sym_inode != nullptr) << "get inode fail.";
@@ -699,7 +698,7 @@ TEST_F(FileSystemTest, SymlinkWithDir) {
   param.gid = 3;
   param.rdev = 1;
 
-  EntryOut entry_out;
+  EntryWithPaOut entry_out;
   auto status = fs->MkDir(ctx, param, entry_out);
   ASSERT_TRUE(status.ok()) << "create file fail, error: " << status.error_str();
   ASSERT_GT(entry_out.attr.ino(), 0) << "ino is invalid.";
@@ -710,12 +709,11 @@ TEST_F(FileSystemTest, SymlinkWithDir) {
   {
     std::string symlink = fmt::format("/{}", param.name);
     std::string name = "symlinkwithdir";
-    EntryOut entry_out;
+    EntryWithPaOut entry_out;
     auto status = fs->Symlink(ctx, symlink, kRootIno, name, 1, 3, entry_out);
     ASSERT_TRUE(status.ok())
         << "create symlink fail, error: " << status.error_str();
     ASSERT_GT(entry_out.attr.ino(), 0) << "ino is invalid.";
-    ASSERT_EQ(name, entry_out.name) << "ino is invalid.";
 
     InodeSPtr sym_inode = inode_cache.Get(entry_out.attr.ino());
     ASSERT_TRUE(sym_inode != nullptr) << "get inode fail.";
@@ -742,7 +740,7 @@ TEST_F(FileSystemTest, ReadLink) {
   param.gid = 3;
   param.rdev = 1;
 
-  EntryOut entry_out;
+  EntryWithPaOut entry_out;
   auto status = fs->MkNod(ctx, param, entry_out);
   ASSERT_TRUE(status.ok()) << "create file fail, error: " << status.error_str();
   ASSERT_GT(entry_out.attr.ino(), 0) << "ino is invalid.";
@@ -753,12 +751,11 @@ TEST_F(FileSystemTest, ReadLink) {
   {
     std::string symlink = fmt::format("/{}", param.name);
     std::string name = "symlinkwithfile";
-    EntryOut entry_out;
+    EntryWithPaOut entry_out;
     auto status = fs->Symlink(ctx, symlink, kRootIno, name, 1, 3, entry_out);
     ASSERT_TRUE(status.ok())
         << "create symlink fail, error: " << status.error_str();
     ASSERT_GT(entry_out.attr.ino(), 0) << "ino is invalid.";
-    ASSERT_EQ(name, entry_out.name) << "ino is invalid.";
 
     std::string actual_link;
     status = fs->ReadLink(ctx, entry_out.attr.ino(), actual_link);
@@ -785,7 +782,7 @@ TEST_F(FileSystemTest, SetXAttr) {
   param.gid = 3;
   param.rdev = 1;
 
-  EntryOut entry_out;
+  EntryWithPaOut entry_out;
   auto status = fs->MkNod(ctx, param, entry_out);
   ASSERT_TRUE(status.ok()) << "create file fail, error: " << status.error_str();
   ASSERT_GT(entry_out.attr.ino(), 0) << "ino is invalid.";
@@ -796,7 +793,8 @@ TEST_F(FileSystemTest, SetXAttr) {
   Inode::XAttrMap xattr;
   xattr.insert({"key3", "value3"});
   xattr.insert({"key4", "value4"});
-  status = fs->SetXAttr(ctx, inode->Ino(), xattr, entry_out);
+  EntryOut xattr_out;
+  status = fs->SetXAttr(ctx, inode->Ino(), xattr, xattr_out);
   ASSERT_TRUE(status.ok()) << "set xattr fail, error: " << status.error_str();
 }
 
@@ -817,7 +815,7 @@ TEST_F(FileSystemTest, GetXAttr) {
   param.gid = 3;
   param.rdev = 1;
 
-  EntryOut entry_out;
+  EntryWithPaOut entry_out;
   auto status = fs->MkNod(ctx, param, entry_out);
   ASSERT_TRUE(status.ok()) << "create file fail, error: " << status.error_str();
   ASSERT_GT(entry_out.attr.ino(), 0) << "ino is invalid.";
@@ -828,7 +826,8 @@ TEST_F(FileSystemTest, GetXAttr) {
   Inode::XAttrMap xattr;
   xattr.insert({"key3", "value3"});
   xattr.insert({"key4", "value4"});
-  status = fs->SetXAttr(ctx, inode->Ino(), xattr, entry_out);
+  EntryOut xattr_out;
+  status = fs->SetXAttr(ctx, inode->Ino(), xattr, xattr_out);
   ASSERT_TRUE(status.ok()) << "set xattr fail, error: " << status.error_str();
 
   Inode::XAttrMap actual_xattr;
@@ -870,7 +869,7 @@ TEST_F(FileSystemTest, RenameWithSameDir) {
     param.gid = 3;
     param.rdev = 1;
 
-    EntryOut entry_out;
+    EntryWithPaOut entry_out;
     auto status = fs->MkDir(ctx, param, entry_out);
     ASSERT_TRUE(status.ok())
         << "create file fail, error: " << status.error_str();
@@ -888,7 +887,7 @@ TEST_F(FileSystemTest, RenameWithSameDir) {
     param.gid = 3;
     param.rdev = 1;
 
-    EntryOut entry_out;
+    EntryWithPaOut entry_out;
     auto status = fs->MkNod(ctx, param, entry_out);
     ASSERT_TRUE(status.ok())
         << "create file fail, error: " << status.error_str();
@@ -951,7 +950,7 @@ TEST_F(FileSystemTest, RenameWithDiffDir) {
     param.gid = 3;
     param.rdev = 1;
 
-    EntryOut entry_out;
+    EntryWithPaOut entry_out;
     auto status = fs->MkDir(ctx, param, entry_out);
     ASSERT_TRUE(status.ok())
         << "create file fail, error: " << status.error_str();
@@ -969,7 +968,7 @@ TEST_F(FileSystemTest, RenameWithDiffDir) {
     param.gid = 3;
     param.rdev = 1;
 
-    EntryOut entry_out;
+    EntryWithPaOut entry_out;
     auto status = fs->MkNod(ctx, param, entry_out);
     ASSERT_TRUE(status.ok())
         << "create file fail, error: " << status.error_str();
@@ -986,7 +985,7 @@ TEST_F(FileSystemTest, RenameWithDiffDir) {
     param.gid = 3;
     param.rdev = 1;
 
-    EntryOut entry_out;
+    EntryWithPaOut entry_out;
     auto status = fs->MkDir(ctx, param, entry_out);
     ASSERT_TRUE(status.ok())
         << "create file fail, error: " << status.error_str();
@@ -1086,7 +1085,7 @@ TEST_F(FileSystemTest, CalcDirStat) {
   dp.uid = 1;
   dp.gid = 1;
   dp.rdev = 0;
-  EntryOut dout;
+  EntryWithPaOut dout;
   auto mkdir_status = fs->MkDir(ctx, dp, dout);
   ASSERT_TRUE(mkdir_status.ok()) << "mkdir fail: " << mkdir_status.error_str();
   Ino d = dout.attr.ino();
@@ -1099,13 +1098,13 @@ TEST_F(FileSystemTest, CalcDirStat) {
     p.uid = 1;
     p.gid = 1;
     p.rdev = 0;
-    EntryOut o;
+    EntryWithPaOut o;
     auto mn = fs->MkNod(ctx, p, o);
     EXPECT_TRUE(mn.ok()) << "mknod fail: " << mn.error_str();
     if (len > 0) {
       FileSystem::FlushFileParam fp;
       fp.length = len;
-      EntryOut fo;
+      EntryWithFileChangeOut fo;
       auto sa = fs->FlushFile(ctx, o.attr.ino(), fp, fo);
       EXPECT_TRUE(sa.ok()) << "flushfile fail: " << sa.error_str();
     }
@@ -1133,7 +1132,7 @@ TEST_F(FileSystemTest, CalcDirStatSameDirHardlink) {
   dp.uid = 1;
   dp.gid = 1;
   dp.rdev = 0;
-  EntryOut dout;
+  EntryWithPaOut dout;
   ASSERT_TRUE(fs->MkDir(ctx, dp, dout).ok());
   Ino d = dout.attr.ino();
 
@@ -1144,16 +1143,16 @@ TEST_F(FileSystemTest, CalcDirStatSameDirHardlink) {
   p.uid = 1;
   p.gid = 1;
   p.rdev = 0;
-  EntryOut o;
+  EntryWithPaOut o;
   ASSERT_TRUE(fs->MkNod(ctx, p, o).ok());
   Ino f = o.attr.ino();
   FileSystem::FlushFileParam fp;
   fp.length = 7777;
-  EntryOut fo;
+  EntryWithFileChangeOut fo;
   ASSERT_TRUE(fs->FlushFile(ctx, f, fp, fo).ok());
 
   // hardlink the file under a second name in the SAME directory.
-  EntryOut lo;
+  EntryWithPaOut lo;
   ASSERT_TRUE(fs->Link(ctx, f, d, "f_hl", lo).ok());
 
   DirStatEntry st;
@@ -1175,7 +1174,7 @@ TEST_F(FileSystemTest, UpdateDirStatOnWrite) {
   dp.uid = 1;
   dp.gid = 1;
   dp.rdev = 0;
-  EntryOut dout;
+  EntryWithPaOut dout;
   ASSERT_TRUE(fs->MkDir(ctx, dp, dout).ok());
   Ino d = dout.attr.ino();
   DrainDirStats(fs->GetDirStatManager());  // drain whatever accumulated so far
@@ -1188,7 +1187,7 @@ TEST_F(FileSystemTest, UpdateDirStatOnWrite) {
   p.uid = 1;
   p.gid = 1;
   p.rdev = 0;
-  EntryOut o;
+  EntryWithPaOut o;
   ASSERT_TRUE(fs->MkNod(ctx, p, o).ok());
   {
     auto deltas = DrainDirStats(fs->GetDirStatManager());
@@ -1202,7 +1201,7 @@ TEST_F(FileSystemTest, UpdateDirStatOnWrite) {
   {
     FileSystem::FlushFileParam fp;
     fp.length = 5000;
-    EntryOut fo;
+    EntryWithFileChangeOut fo;
     ASSERT_TRUE(fs->FlushFile(ctx, o.attr.ino(), fp, fo).ok());
     auto deltas = DrainDirStats(fs->GetDirStatManager());
     ASSERT_TRUE(deltas.count(d));
@@ -1212,7 +1211,7 @@ TEST_F(FileSystemTest, UpdateDirStatOnWrite) {
 
   // unlink g (file length now 5000): -1 inode, -5000 length.
   {
-    EntryOut uo;
+    EntryWithPaOut uo;
     ASSERT_TRUE(fs->UnLink(ctx, d, "g", uo).ok());
     auto deltas = DrainDirStats(fs->GetDirStatManager());
     ASSERT_TRUE(deltas.count(d));
@@ -1231,7 +1230,7 @@ TEST_F(FileSystemTest, UpdateDirStatOnWrite) {
     sp.uid = 1;
     sp.gid = 1;
     sp.rdev = 0;
-    EntryOut so;
+    EntryWithPaOut so;
     ASSERT_TRUE(fs->MkDir(ctx, sp, so).ok());
     {
       auto deltas = DrainDirStats(fs->GetDirStatManager());
@@ -1240,8 +1239,9 @@ TEST_F(FileSystemTest, UpdateDirStatOnWrite) {
       EXPECT_EQ(deltas[d].length, 0);
     }
     Ino sub_ino = 0;
-    EntryOut ro;
-    ASSERT_TRUE(fs->RmDir(ctx, d, "sub", sub_ino, ro).ok());
+    EntryWithPaOut ro;
+    ASSERT_TRUE(fs->RmDir(ctx, d, "sub", ro).ok());
+    sub_ino = ro.attr.ino();
     auto deltas = DrainDirStats(fs->GetDirStatManager());
     ASSERT_TRUE(deltas.count(d));
     EXPECT_EQ(deltas[d].inodes, -1);
@@ -1250,7 +1250,7 @@ TEST_F(FileSystemTest, UpdateDirStatOnWrite) {
 
   // symlink under d: +1 inode, +0 length (non-FILE).
   {
-    EntryOut sym_out;
+    EntryWithPaOut sym_out;
     ASSERT_TRUE(fs->Symlink(ctx, "/target", d, "lnk", 1, 1, sym_out).ok());
     auto deltas = DrainDirStats(fs->GetDirStatManager());
     ASSERT_TRUE(deltas.count(d));
@@ -1274,7 +1274,7 @@ TEST_F(FileSystemTest, UpdateDirStatMatchesCalc) {
   dp.uid = 1;
   dp.gid = 1;
   dp.rdev = 0;
-  EntryOut dout;
+  EntryWithPaOut dout;
   ASSERT_TRUE(fs->MkDir(ctx, dp, dout).ok());
   Ino d = dout.attr.ino();
   DrainDirStats(fs->GetDirStatManager());  // drain
@@ -1287,12 +1287,12 @@ TEST_F(FileSystemTest, UpdateDirStatMatchesCalc) {
     p.uid = 1;
     p.gid = 1;
     p.rdev = 0;
-    EntryOut o;
+    EntryWithPaOut o;
     ASSERT_TRUE(fs->MkNod(ctx, p, o).ok());
     if (len > 0) {
       FileSystem::FlushFileParam fp;
       fp.length = len;
-      EntryOut fo;
+      EntryWithFileChangeOut fo;
       ASSERT_TRUE(fs->FlushFile(ctx, o.attr.ino(), fp, fo).ok());
     }
   };
@@ -1320,7 +1320,7 @@ TEST_F(FileSystemTest, FlushDirStats) {
   dp.uid = 1;
   dp.gid = 1;
   dp.rdev = 0;
-  EntryOut dout;
+  EntryWithPaOut dout;
   ASSERT_TRUE(fs->MkDir(ctx, dp, dout).ok());
   Ino d = dout.attr.ino();
 
@@ -1331,7 +1331,7 @@ TEST_F(FileSystemTest, FlushDirStats) {
   p.uid = 1;
   p.gid = 1;
   p.rdev = 0;
-  EntryOut o;
+  EntryWithPaOut o;
   ASSERT_TRUE(fs->MkNod(ctx, p, o).ok());
 
   ASSERT_TRUE(fs->GetDirStatManager().FlushDirStats().ok());
@@ -1357,7 +1357,7 @@ TEST_F(FileSystemTest, MkDirSeedsZeroDirStat) {
   dp.uid = 1;
   dp.gid = 1;
   dp.rdev = 0;
-  EntryOut dout;
+  EntryWithPaOut dout;
   ASSERT_TRUE(fs->MkDir(ctx, dp, dout).ok());
   Ino d = dout.attr.ino();
 
@@ -1373,7 +1373,7 @@ TEST_F(FileSystemTest, MkDirSeedsZeroDirStat) {
   p.uid = 1;
   p.gid = 1;
   p.rdev = 0;
-  EntryOut o;
+  EntryWithPaOut o;
   ASSERT_TRUE(fs->MkNod(ctx, p, o).ok());
   ASSERT_TRUE(fs->GetDirStatManager().FlushDirStats().ok());
 
@@ -1401,7 +1401,7 @@ TEST_F(FileSystemTest, BatchMkDirSeedsZeroDirStat) {
     p.rdev = 0;
     params.push_back(p);
   }
-  EntryOut out;
+  EntriesWithPaOut out;
   ASSERT_TRUE(fs->BatchMkDir(ctx, params, out).ok());
   ASSERT_FALSE(out.attrs.empty());
 
@@ -1424,7 +1424,7 @@ TEST_F(FileSystemTest, SyncDirStatSingleLevelRepair) {
     p.uid = 1;
     p.gid = 1;
     p.rdev = 0;
-    EntryOut o;
+    EntryWithPaOut o;
     EXPECT_TRUE(fs->MkDir(ctx, p, o).ok());
     return o.attr.ino();
   };
@@ -1436,12 +1436,12 @@ TEST_F(FileSystemTest, SyncDirStatSingleLevelRepair) {
     p.uid = 1;
     p.gid = 1;
     p.rdev = 0;
-    EntryOut o;
+    EntryWithPaOut o;
     ASSERT_TRUE(fs->MkNod(ctx, p, o).ok());
     if (len > 0) {
       FileSystem::FlushFileParam fp;
       fp.length = len;
-      EntryOut fo;
+      EntryWithFileChangeOut fo;
       ASSERT_TRUE(fs->FlushFile(ctx, o.attr.ino(), fp, fo).ok());
     }
   };
@@ -1526,7 +1526,7 @@ TEST_F(FileSystemTest, FallocateChargesDirStat) {
     p.uid = 1;
     p.gid = 1;
     p.rdev = 0;
-    EntryOut o;
+    EntryWithPaOut o;
     EXPECT_TRUE(fs->MkDir(ctx, p, o).ok());
     return o.attr.ino();
   };
@@ -1538,7 +1538,7 @@ TEST_F(FileSystemTest, FallocateChargesDirStat) {
     p.uid = 1;
     p.gid = 1;
     p.rdev = 0;
-    EntryOut o;
+    EntryWithPaOut o;
     EXPECT_TRUE(fs->MkNod(ctx, p, o).ok());
     return o.attr.ino();
   };
@@ -1577,7 +1577,7 @@ TEST_F(FileSystemTest, BatchUnLinkAggregatesDirStatDelta) {
   dp.uid = 1;
   dp.gid = 1;
   dp.rdev = 0;
-  EntryOut dout;
+  EntryWithPaOut dout;
   ASSERT_TRUE(fs->MkDir(ctx, dp, dout).ok());
   Ino d = dout.attr.ino();
 
@@ -1590,13 +1590,13 @@ TEST_F(FileSystemTest, BatchUnLinkAggregatesDirStatDelta) {
     p.uid = 1;
     p.gid = 1;
     p.rdev = 0;
-    EntryOut o;
+    EntryWithPaOut o;
     ASSERT_TRUE(fs->MkNod(ctx, p, o).ok());
   }
 
   DrainDirStats(fs->GetDirStatManager());  // drain create deltas
 
-  EntryOut out;
+  EntriesWithPaOut out;
   ASSERT_TRUE(fs->BatchUnLink(ctx, d, names, out).ok());
 
   auto deltas = DrainDirStats(fs->GetDirStatManager());
@@ -1618,7 +1618,7 @@ TEST_F(FileSystemTest, CalcDirStatNoPageBoundaryDoubleCount) {
   dp.uid = 1;
   dp.gid = 1;
   dp.rdev = 0;
-  EntryOut dout;
+  EntryWithPaOut dout;
   ASSERT_TRUE(fs->MkDir(ctx, dp, dout).ok());
   Ino d = dout.attr.ino();
 
@@ -1633,7 +1633,7 @@ TEST_F(FileSystemTest, CalcDirStatNoPageBoundaryDoubleCount) {
     p.uid = 1;
     p.gid = 1;
     p.rdev = 0;
-    EntryOut o;
+    EntryWithPaOut o;
     ASSERT_TRUE(fs->MkNod(ctx, p, o).ok());
   }
 

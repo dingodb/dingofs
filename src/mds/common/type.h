@@ -213,6 +213,8 @@ enum class ReqType : uint8_t {
   kRetryToSecondary = 2,
 };
 
+inline bool IsDeleted(const AttrEntry& attr_entry) { return attr_entry.nlink() == 0; }
+
 }  // namespace mds
 }  // namespace dingofs
 

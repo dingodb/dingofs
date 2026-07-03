@@ -437,7 +437,7 @@ Status LocalMetaSystem::Close(ContextSPtr, Ino ino, uint64_t) {
   if (is_erased) {
     // clean inode cache
     auto inode = GetInodeFromCache(ino);
-    if (inode != nullptr && inode->Nlink() == 0) DeleteInodeFromCache(ino);
+    if (inode != nullptr && inode->IsDeleted()) DeleteInodeFromCache(ino);
   }
 
   return Status::OK();
@@ -910,7 +910,7 @@ Status LocalMetaSystem::Unlink(ContextSPtr, Ino parent,
 
     // write to leveldb
     std::vector<KeyValue> kvs;
-    if (attr_entry.nlink() == 0) {
+    if (mds::IsDeleted(attr_entry)) {
       kvs.push_back({KeyValue::OpType::kDelete, inode_key, ""});
 
       // save delete file info
@@ -932,7 +932,7 @@ Status LocalMetaSystem::Unlink(ContextSPtr, Ino parent,
   PutInodeToCache(attr_entry);
   PutInodeToCache(parent_attr_entry);
 
-  if (attr_entry.nlink() == 0) {
+  if (mds::IsDeleted(attr_entry)) {
     UpdateFsUsage(-static_cast<int64_t>(attr_entry.length()), -1, "unlink");
   }
 
@@ -1570,7 +1570,7 @@ Status LocalMetaSystem::Rename(ContextSPtr, Ino old_parent,
   if (is_exist_new_dentry) {
     int64_t fs_delta_bytes = 0;
     if (prev_new_attr_entry.type() == pb::mds::FileType::FILE &&
-        prev_new_attr_entry.nlink() == 0) {
+        mds::IsDeleted(prev_new_attr_entry)) {
       fs_delta_bytes -= prev_new_attr_entry.length();
     }
     UpdateFsUsage(fs_delta_bytes, -1, "rename");
