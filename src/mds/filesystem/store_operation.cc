@@ -1047,7 +1047,7 @@ Status HardLinkOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_para
     return Status(pb::error::ENOT_FOUND, fmt::format("get child inode({}) fail", dentry_.INo()));
   }
   AttrEntry attr = MetaCodec::DecodeInodeValue(value);
-  if (attr.nlink() == 0) {
+  if (IsDeleted(attr)) {
     return Status(pb::error::EDELETED, fmt::format("inode({}) is deleted", dentry_.INo()));
   }
 
@@ -1674,7 +1674,7 @@ Status OpenFileOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_para
   auto& attr = shared_param.attr;
   const auto& prefetch_kvs = shared_param.prefetch_kvs;
 
-  if (attr.nlink() == 0) {
+  if (IsDeleted(attr)) {
     return Status(pb::error::EDELETED, "file is deleted");
   }
 

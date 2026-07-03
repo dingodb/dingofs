@@ -45,7 +45,6 @@
 #include "mds/quota/quota.h"
 #include "mds/statistics/dir_stat_manager.h"
 #include "mds/storage/storage.h"
-#include "utils/concurrent/rw_lock.h"
 #include "utils/doubly_map.h"
 
 namespace dingofs {
@@ -62,22 +61,45 @@ using GcProcessorSPtr = std::shared_ptr<GcProcessor>;
 
 struct EntryOut {
   EntryOut() = default;
-  using AttrEntry = Inode::AttrEntry;
-
   explicit EntryOut(const AttrEntry& attr) : attr(attr) {}
 
-  std::string name;
-  AttrEntry parent_attr;
   AttrEntry attr;
-  std::vector<AttrEntry> attrs;
+};
+
+struct EntryWithNameOut {
+  EntryWithNameOut() = default;
+  explicit EntryWithNameOut(const AttrEntry& attr) : attr(attr) {}
+
+  AttrEntry attr;
+  std::string name;
+};
+
+struct EntryWithFileChangeOut {
+  EntryWithFileChangeOut() = default;
+  explicit EntryWithFileChangeOut(const AttrEntry& attr) : attr(attr) {}
+
+  AttrEntry attr;
   bool shrink_file{false};
   bool expand_file{false};
 };
 
+struct EntryWithPaOut {
+  EntryWithPaOut() = default;
+  explicit EntryWithPaOut(const AttrEntry& attr) : attr(attr) {}
+
+  AttrEntry parent_attr;
+  AttrEntry attr;
+};
+
+struct EntriesWithPaOut {
+  EntriesWithPaOut() = default;
+
+  AttrEntry parent_attr;
+  std::vector<AttrEntry> attrs;
+};
+
 struct EntryWithChunkOut {
   EntryWithChunkOut() = default;
-  using AttrEntry = Inode::AttrEntry;
-
   explicit EntryWithChunkOut(const AttrEntry& attr) : attr(attr) {}
 
   AttrEntry attr;
@@ -85,6 +107,13 @@ struct EntryWithChunkOut {
   bool shrink_file{false};
   bool expand_file{false};
   std::vector<ChunkEntry> chunks;
+};
+
+struct EntryOutForOpen {
+  AttrEntry attr;
+  std::vector<ChunkEntry> chunks;
+  std::string data_out;
+  uint64_t data_version{0};
 };
 
 class FileSystem : public std::enable_shared_from_this<FileSystem> {
@@ -156,9 +185,9 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
     std::string session_id;
   };
 
-  Status BatchCreate(Context& ctx, Ino parent, const std::vector<MkNodParam>& params, EntryOut& entry_out);
-  Status MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_out);
-  Status BatchMkNod(Context& ctx, const std::vector<MkNodParam>& params, EntryOut& entry_out);
+  Status BatchCreate(Context& ctx, Ino parent, const std::vector<MkNodParam>& params, EntriesWithPaOut& entry_out);
+  Status MkNod(Context& ctx, const MkNodParam& param, EntryWithPaOut& entry_out);
+  Status BatchMkNod(Context& ctx, const std::vector<MkNodParam>& params, EntriesWithPaOut& entry_out);
   struct OpenParam {
     std::string session_id;
     uint32_t flags{0};
@@ -166,8 +195,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
     bool is_prefetch_data{false};
     std::map<uint32_t, uint64_t> chunk_version_map;
   };
-  Status Open(Context& ctx, Ino ino, const OpenParam& param, EntryOut& entry_out, std::vector<ChunkEntry>& chunks_out,
-              std::string& data_out, uint64_t& data_version);
+  Status Open(Context& ctx, Ino ino, const OpenParam& param, EntryOutForOpen& out);
   Status Release(Context& ctx, Ino ino, const std::string& session_id);
 
   struct FlushFileParam {
@@ -175,7 +203,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
     std::string data;
     bool is_final{false};
   };
-  Status FlushFile(Context& ctx, Ino ino, const FlushFileParam& param, EntryOut& entry_out);
+  Status FlushFile(Context& ctx, Ino ino, const FlushFileParam& param, EntryWithFileChangeOut& entry_out);
   using FileSessionParam = pb::mds::HeartbeatRequest::FileSession;
   void AsyncKeepAliveFileSession(const std::vector<FileSessionParam>& file_sessions);
 
@@ -189,20 +217,20 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
     Ino parent{0};
     uint64_t rdev{0};
   };
-  Status MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_out);
-  Status BatchMkDir(Context& ctx, const std::vector<MkDirParam>& params, EntryOut& entry_out);
-  Status RmDir(Context& ctx, Ino parent, const std::string& name, Ino& ino, EntryOut& entry_out);
+  Status MkDir(Context& ctx, const MkDirParam& param, EntryWithPaOut& entry_out);
+  Status BatchMkDir(Context& ctx, const std::vector<MkDirParam>& params, EntriesWithPaOut& entry_out);
+  Status RmDir(Context& ctx, Ino parent, const std::string& name, EntryWithPaOut& entry_out);
   Status ReadDir(Context& ctx, Ino ino, const std::string& last_name, uint32_t limit, bool with_attr,
-                 std::vector<EntryOut>& entry_outs);
+                 std::vector<EntryWithNameOut>& entry_outs);
 
   // create hard link
-  Status Link(Context& ctx, Ino ino, Ino new_parent, const std::string& new_name, EntryOut& entry_out);
+  Status Link(Context& ctx, Ino ino, Ino new_parent, const std::string& new_name, EntryWithPaOut& entry_out);
   // delete link
-  Status UnLink(Context& ctx, Ino parent, const std::string& name, EntryOut& entry_out);
-  Status BatchUnLink(Context& ctx, Ino parent, const std::vector<std::string>& names, EntryOut& entry_out);
+  Status UnLink(Context& ctx, Ino parent, const std::string& name, EntryWithPaOut& entry_out);
+  Status BatchUnLink(Context& ctx, Ino parent, const std::vector<std::string>& names, EntriesWithPaOut& entry_out);
   // create symbolic link
   Status Symlink(Context& ctx, const std::string& symlink, Ino new_parent, const std::string& new_name, uint32_t uid,
-                 uint32_t gid, EntryOut& entry_out);
+                 uint32_t gid, EntryWithPaOut& entry_out);
   // read symbolic link
   Status ReadLink(Context& ctx, Ino ino, std::string& link);
 

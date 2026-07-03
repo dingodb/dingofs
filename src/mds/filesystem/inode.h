@@ -143,6 +143,10 @@ class Inode {
     utils::ReadLockGuard lk(lock_);
     return nlink_;
   }
+  bool IsDeleted() const {
+    utils::ReadLockGuard lk(lock_);
+    return nlink_ == 0;
+  }
   std::string Symlink() const {
     utils::ReadLockGuard lk(lock_);
     return symlink_;

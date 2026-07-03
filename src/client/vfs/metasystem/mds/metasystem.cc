@@ -726,7 +726,14 @@ Status MDSMetaSystem::DoOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
       ino, fh, flags, dingofs::Helper::DescOpenFlags(flags), session_id,
       is_prefetch_chunk, chunks.size(), is_prefetch_data, tiny_file_data.size(),
       status.ToString());
+
   if (!status.ok()) return status;
+
+  if (mds::IsDeleted(attr_entry)) {
+    LOG(WARNING) << fmt::format(
+        "[meta.fs.{}.{}] open file skipped, file is deleted.", ino, fh);
+    return Status::NotExist("file is deleted");
+  }
 
   // update inode cache
   InodeSPtr inode = PutInodeToCache(attr_entry);
@@ -851,6 +858,12 @@ Status MDSMetaSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) {
 
   auto inode = GetInodeFromCache(ino);
   if (inode != nullptr) {
+    if (inode->IsDeleted()) {
+      LOG(WARNING) << fmt::format(
+          "[meta.fs.{}.{}] open file skipped, file is deleted.", ino, fh);
+      return Status::NotExist("file is deleted");
+    }
+
     file_session->SetInode(inode);
 
     if (!(flags & O_TRUNC)) {
@@ -1379,7 +1392,7 @@ Status MDSMetaSystem::Unlink(ContextSPtr ctx, Ino parent,
 
   PutInodeToCache(attr_entry);
   PutInodeToCache(parent_attr_entry);
-  if (attr_entry.nlink() == 0) {
+  if (mds::IsDeleted(attr_entry)) {
     DeleteInodeFromCache(attr_entry.ino());
   }
 

@@ -327,7 +327,7 @@ bool DirQuotaMap::GetParent(Ino ino, Ino& parent) {
 
   auto& result = operation.GetResult();
   auto& attr = result.attr_with_mutation.attr;
-  if (attr.nlink() == 0) {
+  if (IsDeleted(attr)) {
     LOG(WARNING) << fmt::format("[quota.{}.{}] query parent fail, file is deleted.", fs_id_, ino);
     return false;
   }

@@ -979,7 +979,7 @@ void MDSServiceImpl::DoBatchCreate(google::protobuf::RpcController*, const pb::m
 
   Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
-  EntryOut entry_out;
+  EntriesWithPaOut entry_out;
   status = file_system->BatchCreate(ctx, request->parent(), params, entry_out);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
@@ -1057,7 +1057,7 @@ void MDSServiceImpl::DoMkNod(google::protobuf::RpcController*, const pb::mds::Mk
 
   Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
-  EntryOut entry_out;
+  EntryWithPaOut entry_out;
   status = file_system->MkNod(ctx, param, entry_out);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
@@ -1107,7 +1107,7 @@ void MDSServiceImpl::DoBatchMkNod(google::protobuf::RpcController*, const pb::md
 
   Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
-  EntryOut entry_out;
+  EntriesWithPaOut entry_out;
   status = file_system->BatchMkNod(ctx, params, entry_out);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
@@ -1171,7 +1171,7 @@ void MDSServiceImpl::DoMkDir(google::protobuf::RpcController*, const pb::mds::Mk
 
   Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
-  EntryOut entry_out;
+  EntryWithPaOut entry_out;
   status = file_system->MkDir(ctx, param, entry_out);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
@@ -1221,7 +1221,7 @@ void MDSServiceImpl::DoBatchMkDir(google::protobuf::RpcController*, const pb::md
 
   Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
-  EntryOut entry_out;
+  EntriesWithPaOut entry_out;
   status = file_system->BatchMkDir(ctx, params, entry_out);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
@@ -1277,16 +1277,15 @@ void MDSServiceImpl::DoRmDir(google::protobuf::RpcController*, const pb::mds::Rm
 
   Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
-  Ino ino;
-  EntryOut entry_out;
-  status = file_system->RmDir(ctx, request->parent(), request->name(), ino, entry_out);
+  EntryWithPaOut entry_out;
+  status = file_system->RmDir(ctx, request->parent(), request->name(), entry_out);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     SpanScope::SetStatus(span, status);
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  response->set_ino(ino);
+  response->set_ino(entry_out.attr.ino());
   response->mutable_parent_inode()->Swap(&entry_out.parent_attr);
 }
 
@@ -1317,7 +1316,7 @@ void MDSServiceImpl::DoReadDir(google::protobuf::RpcController*, const pb::mds::
 
   Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
-  std::vector<EntryOut> entry_outs;
+  std::vector<EntryWithNameOut> entry_outs;
   status = file_system->ReadDir(ctx, request->ino(), request->last_name(), request->limit(), request->with_attr(),
                                 entry_outs);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
@@ -1375,11 +1374,8 @@ void MDSServiceImpl::DoOpen(google::protobuf::RpcController*, const pb::mds::Ope
     param.chunk_version_map.emplace(cd.index(), cd.version());
   }
 
-  EntryOut entry_out;
-  std::vector<ChunkEntry> chunks;
-  std::string data;
-  uint64_t data_version = 0;
-  status = file_system->Open(ctx, request->ino(), param, entry_out, chunks, data, data_version);
+  EntryOutForOpen entry_out;
+  status = file_system->Open(ctx, request->ino(), param, entry_out);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     SpanScope::SetStatus(span, status);
@@ -1387,9 +1383,9 @@ void MDSServiceImpl::DoOpen(google::protobuf::RpcController*, const pb::mds::Ope
   }
 
   response->mutable_inode()->Swap(&entry_out.attr);
-  Helper::VectorToPbRepeated(chunks, response->mutable_chunks());
-  response->set_data(std::move(data));
-  response->set_data_version(data_version);
+  Helper::VectorToPbRepeated(entry_out.chunks, response->mutable_chunks());
+  response->set_data(std::move(entry_out.data_out));
+  response->set_data_version(entry_out.data_version);
 }
 
 void MDSServiceImpl::Open(google::protobuf::RpcController* controller, const pb::mds::OpenRequest* request,
@@ -1481,7 +1477,7 @@ void MDSServiceImpl::DoFlushFile(google::protobuf::RpcController*, const pb::mds
   param.data.swap(*mut_request->mutable_data());  // zero copy
   param.is_final = request->is_final();
 
-  EntryOut entry_out;
+  EntryWithFileChangeOut entry_out;
   status = file_system->FlushFile(ctx, request->ino(), param, entry_out);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
@@ -1538,7 +1534,7 @@ void MDSServiceImpl::DoLink(google::protobuf::RpcController*, const pb::mds::Lin
 
   Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
-  EntryOut entry_out;
+  EntryWithPaOut entry_out;
   status = file_system->Link(ctx, request->ino(), request->new_parent(), request->new_name(), entry_out);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
@@ -1577,7 +1573,7 @@ void MDSServiceImpl::DoUnLink(google::protobuf::RpcController*, const pb::mds::U
 
   Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
-  EntryOut entry_out;
+  EntryWithPaOut entry_out;
   status = file_system->UnLink(ctx, request->parent(), request->name(), entry_out);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
@@ -1613,7 +1609,7 @@ void MDSServiceImpl::DoBatchUnLink(google::protobuf::RpcController*, const pb::m
 
   Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
-  EntryOut entry_out;
+  EntriesWithPaOut entry_out;
   status = file_system->BatchUnLink(ctx, request->parent(), Helper::PbRepeatedToVector(request->names()), entry_out);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
@@ -1670,7 +1666,7 @@ void MDSServiceImpl::DoSymlink(google::protobuf::RpcController*, const pb::mds::
 
   Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
-  EntryOut entry_out;
+  EntryWithPaOut entry_out;
   status = file_system->Symlink(ctx, request->symlink(), request->new_parent(), request->new_name(), request->uid(),
                                 request->gid(), entry_out);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
