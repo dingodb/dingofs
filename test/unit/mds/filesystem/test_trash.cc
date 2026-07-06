@@ -1823,6 +1823,189 @@ TEST_F(TrashDirStatTest, TreeRebuildGraftCreditsGraftedIntoDirStat) {
   EXPECT_EQ(deltas[sub_ino].length, 5000);
 }
 
+// Regression: with immediate_trash_quota, per-dir QUOTA follows the same
+// symmetric attach/detach model as dir-stat. A tree-rebuild graft attaches
+// the entry onto a trashed user directory, so that directory's quota must be
+// credited right there -- the ancestor walk truncates at the trash-range
+// boundary (IsTrashInode is a reserved-range check, the trashed dir itself is
+// a normal ino), so the credit settles exactly the rebuilt subtree's interior.
+// Without the graft credit, a later put_back carries the child along with
+// only the directory's own (0,+1) leg and the child's trash-move debit is
+// never reversed (the two-phase-restore quota-loss bug).
+TEST_F(TrashDirStatTest, TreeRebuildGraftCreditsInteriorQuota) {
+  auto fs = Fs();
+  Context ctx;
+  auto& quota_mgr = fs->GetQuotaManager();
+
+  auto set_quota = [&](Ino ino) {
+    Trace trace;
+    QuotaEntry entry;
+    entry.set_max_bytes(int64_t{1} << 40);
+    entry.set_max_inodes(int64_t{1} << 20);
+    // is_lead=false: local UpsertQuota only, no store write / buddy notify.
+    ASSERT_TRUE(quota_mgr.SetDirQuota(trace, ino, entry, false).ok());
+  };
+  auto usage = [&](Ino ino, int64_t& bytes, int64_t& inodes) {
+    Trace trace;
+    QuotaEntry entry;
+    ASSERT_TRUE(
+        quota_mgr.GetDirQuota(trace, ino, /*not_use_fs_quota=*/true, entry)
+            .ok());
+    bytes = entry.used_bytes();
+    inodes = entry.used_inodes();
+  };
+
+  // Quotas on root and (once created) qsub, BEFORE any charged activity.
+  set_quota(kRootIno);
+
+  FileSystem::MkDirParam dp;
+  dp.parent = kRootIno;
+  dp.name = "qsub";
+  dp.mode = 0755;
+  dp.uid = 1;
+  dp.gid = 1;
+  dp.rdev = 0;
+  EntryWithPaOut dout;
+  ASSERT_TRUE(fs->MkDir(ctx, dp, dout).ok());
+  Ino sub_ino = dout.attr.ino();
+  set_quota(sub_ino);
+
+  FileSystem::MkNodParam fp;
+  fp.parent = sub_ino;
+  fp.name = "qchild";
+  fp.mode = 0644;
+  fp.uid = 1;
+  fp.gid = 1;
+  fp.rdev = 0;
+  EntryWithPaOut fo;
+  ASSERT_TRUE(fs->MkNod(ctx, fp, fo).ok());
+  Ino child_ino = fo.attr.ino();
+  {
+    FileSystem::FlushFileParam ffp;
+    ffp.length = 5000;
+    EntryWithFileChangeOut ffo;
+    ASSERT_TRUE(fs->FlushFile(ctx, child_ino, ffp, ffo).ok());
+  }
+
+  int64_t bytes = 0, inodes = 0;
+  usage(sub_ino, bytes, inodes);
+  ASSERT_EQ(bytes, 5000);
+  ASSERT_EQ(inodes, 1);
+  usage(kRootIno, bytes, inodes);
+  ASSERT_EQ(bytes, 5000);
+  ASSERT_EQ(inodes, 2);  // qsub + qchild
+
+  // Trash-move both: unlink qchild (debits sub chain), rmdir qsub (debits
+  // root chain).
+  EntryWithPaOut uo;
+  ASSERT_TRUE(fs->UnLink(ctx, sub_ino, "qchild", uo).ok());
+  Ino bucket_ino = uo.attr.parents(0);
+  EntryWithPaOut ro;
+  ASSERT_TRUE(fs->RmDir(ctx, kRootIno, "qsub", ro).ok());
+
+  usage(sub_ino, bytes, inodes);
+  ASSERT_EQ(bytes, 0);
+  ASSERT_EQ(inodes, 0);
+  usage(kRootIno, bytes, inodes);
+  ASSERT_EQ(bytes, 0);
+  ASSERT_EQ(inodes, 0);
+
+  // Simulate another MDS's stale parent memo: under parent-hash partitioning
+  // the rmdir-to-trash is processed by the parent's owner (which Forgets),
+  // while qsub's own owner still remembers qsub -> root from before the
+  // trash-move. The graft credit must not trust the memo -- it resolves
+  // ancestry from the store (bypass_parent_memo), where qsub's parents are
+  // already [bucket], keeping the boundary truncation deterministic.
+  fs->GetParentMemo().Remeber(sub_ino, kRootIno);
+
+  // Tree-rebuild: graft qchild back onto the trashed qsub. The graft must
+  // credit qsub's own quota (+5000,+1) and NOT leak past the trash boundary
+  // to root.
+  std::string child_trash_name =
+      BuildTrashEntryName(sub_ino, child_ino, "qchild");
+  auto status = fs->RestoreFromTrash(ctx, bucket_ino, child_trash_name,
+                                     /*allow_trash_parent=*/true);
+  ASSERT_TRUE(status.ok()) << "tree-rebuild graft fail: " << status.error_str();
+
+  usage(sub_ino, bytes, inodes);
+  EXPECT_EQ(bytes, 5000) << "graft must credit the grafted-into dir's quota";
+  EXPECT_EQ(inodes, 1) << "graft must credit the grafted-into dir's quota";
+  usage(kRootIno, bytes, inodes);
+  EXPECT_EQ(bytes, 0) << "graft credit must truncate at the trash boundary";
+  EXPECT_EQ(inodes, 0) << "graft credit must truncate at the trash boundary";
+
+  // put_back qsub: settles exactly one hop into the live chain -- root gets
+  // the dir's own (0,+1); the carried child stays settled inside qsub (no
+  // double credit). Root's missing (5000,+1) for the carried child is the
+  // documented ancestor residual, owned by the restore tool's reconcile step.
+  // qsub's trash entry lives in the same hour bucket as qchild's (both moved
+  // within this test run); look it up from the inode to stay robust.
+  Trace trace;
+  GetInodeAttrOperation attr_op(trace, /*fs_id=*/3000, sub_ino);
+  ASSERT_TRUE(operation_processor->RunAlone(&attr_op).ok());
+  Ino sub_bucket_ino =
+      attr_op.GetResult().attr_with_mutation.attr.parents(0);
+  std::string sub_trash_name = BuildTrashEntryName(kRootIno, sub_ino, "qsub");
+  status = fs->RestoreFromTrash(ctx, sub_bucket_ino, sub_trash_name);
+  ASSERT_TRUE(status.ok()) << "put_back fail: " << status.error_str();
+
+  usage(sub_ino, bytes, inodes);
+  EXPECT_EQ(bytes, 5000) << "put_back must not re-credit the carried child";
+  EXPECT_EQ(inodes, 1) << "put_back must not re-credit the carried child";
+  usage(kRootIno, bytes, inodes);
+  EXPECT_EQ(bytes, 0);
+  EXPECT_EQ(inodes, 1) << "put_back settles the dir's own (0,+1) on root";
+}
+
+// Regression: ScanDirShardOperation's missing-inode guard (added to surface
+// dirs deleted underfoot) must exempt the virtual trash root. Server-side
+// Lookup(kTrashInodeId, <hour bucket>) is served by a ShardPartition whose
+// shard scan finds the bucket dentries but no inode key -- kTrashInodeId has
+// no inode KV record by design. This is exactly how the mds-cli RestoreTrash
+// entry path resolves the hour bucket; without the exemption it fails with
+// ENOT_FOUND "dir inode not found(kTrashInodeId)".
+TEST_F(TrashFileSystemTest, LookupHourBucketUnderTrashRoot) {
+  auto fs = Fs();
+  Context ctx;
+
+  // Trash a probe file so the current hour bucket exists.
+  FileSystem::MkNodParam param;
+  param.parent = kRootIno;
+  param.name = "bucket_lookup_probe.txt";
+  param.mode = 0644;
+  param.uid = 1;
+  param.gid = 1;
+  param.rdev = 0;
+  EntryWithPaOut create_out;
+  ASSERT_TRUE(fs->MkNod(ctx, param, create_out).ok());
+  EntryWithPaOut unlink_out;
+  ASSERT_TRUE(
+      fs->UnLink(ctx, kRootIno, "bucket_lookup_probe.txt", unlink_out).ok());
+  ASSERT_GT(unlink_out.attr.parents_size(), 0);
+  Ino bucket_ino = unlink_out.attr.parents(0);
+
+  // Find the bucket's name among the trash root's dentries.
+  Trace trace;
+  std::string bucket_name;
+  ScanDentryOperation scan_op(trace, /*fs_id=*/2000, kTrashInodeId,
+                              [&](const DentryEntry& d) -> bool {
+                                if (d.ino() == bucket_ino) {
+                                  bucket_name = d.name();
+                                  return false;
+                                }
+                                return true;
+                              });
+  ASSERT_TRUE(operation_processor->RunAlone(&scan_op).ok());
+  ASSERT_FALSE(bucket_name.empty()) << "hour bucket dentry not found";
+
+  // Server-side lookup of the bucket under the virtual trash root.
+  EntryOut lookup_out;
+  auto status = fs->Lookup(ctx, kTrashInodeId, bucket_name, lookup_out);
+  ASSERT_TRUE(status.ok()) << "lookup .trash/" << bucket_name
+                           << " fail: " << status.error_str();
+  EXPECT_EQ(lookup_out.attr.ino(), bucket_ino);
+}
+
 }  // namespace unit_test
 }  // namespace mds
 }  // namespace dingofs

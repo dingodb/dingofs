@@ -3905,21 +3905,31 @@ Status FileSystem::RestoreFromTrash(Context& ctx, Ino trash_parent, const std::s
   // Quota.
   //  - immediate_trash_quota=false: nothing to do. Trash-move didn't touch
   //    per-dir quota, so there's no debit to reverse.
-  //  - immediate_trash_quota=true, regular restore (!allow_trash_parent):
-  //    credit back per-dir quota to actual_dst_parent. That's the inverse of
-  //    the trash-move debit -- invariant is "one debit per trash-move, one
-  //    credit per regular restore, zero on tree-rebuild legs."
-  //  - tree-rebuild (allow_trash_parent): the entry stays inside trash; do
-  //    not credit. The debit will balance only when/if a later regular
-  //    restore fires, or the entry is finally purged by GC.
+  //  - immediate_trash_quota=true: symmetric attach/detach model, same as
+  //    dir-stat below -- one debit per detach (trash-move), one credit per
+  //    attach (any restore leg, tree-rebuild grafts included). The ancestor
+  //    walk truncates at the trash-range boundary (the grafted-into dir is a
+  //    normal ino; the hour bucket is not), so a graft settles exactly the
+  //    rebuilt subtree's interior quotas, and put_back settles one hop into
+  //    the live chain. Crediting only on regular restores is NOT enough: a
+  //    put_back of a rebuilt directory carries the grafted children along
+  //    with no restore leg of their own, permanently losing their credits.
+  //    What stays unsettled is the live ancestors' share of a carried
+  //    subtree (put_back credits just the dir's own (0,+1)); that residual
+  //    is owned by the restore tool's ancestor-reconcile step.
   //  - FS-level usage is untouched in all cases -- trash-move never debits
   //    it (nlink is preserved) and it's released only when CleanTrashTask
   //    actually purges the inode.
-  if (GetFsInfo().immediate_trash_quota() && !allow_trash_parent) {
+  if (GetFsInfo().immediate_trash_quota()) {
     const int64_t delta_bytes =
         file_attr.type() == pb::mds::FileType::FILE ? static_cast<int64_t>(file_attr.length()) : 0;
     std::string reason = fmt::format("trash-restore.{}.{}", trash_parent, trash_name);
-    quota_manager_.AsyncUpdateDirUsage(actual_dst_parent, delta_bytes, 1, reason);
+    // bypass_parent_memo: the boundary truncation must hold on any MDS. A
+    // stale memo entry (recorded before the trash-move, never invalidated
+    // cross-MDS) would walk this credit straight past the bucket into the
+    // live ancestors -- and if the rebuilt tree is later purged instead of
+    // put back, that credit is never re-debited.
+    quota_manager_.AsyncUpdateDirUsage(actual_dst_parent, delta_bytes, 1, reason, /*bypass_parent_memo=*/true);
   }
 
   // dir-stat: any restore re-adds the dentry to actual_dst_parent, so credit
