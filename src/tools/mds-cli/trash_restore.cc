@@ -231,13 +231,13 @@ void TrashRestore::DoRestoreHour(const std::string& hour) {
   // the trash boundary -- and the per-dir quota credit for the file is lost.
   // The same ordering matters between dirs themselves when restoring a
   // multi-level subtree (qt/a/b/c/...): c's restore would see b as still in
-  // trash unless b is restored first, etc. Sorting dir entries ASCENDING by
-  // their original parent ino (parsed out of the trash entry name) gives the
-  // right topo order under DingoFS's monotonic ino allocation -- a parent
-  // dir is always created before its children, so parent_ino < child_ino,
-  // which means every ancestor sorts before its descendants. Numerical sort
-  // is required: lex sort on the name would mis-order "99-..." vs "100-..."
-  // (because '1' < '9').
+  // trash unless b is restored first, etc. A numeric sort by ino is NOT a
+  // valid topo order: under parent-hash partitioning each owner MDS
+  // allocates inos from its own segment, so a parent dir's ino can be
+  // LARGER than its child's. Order dirs topologically instead (Kahn over
+  // the trashed-dir forest): a dir is ready once its original parent is not
+  // among the still-pending trashed dirs -- i.e. the parent is live or was
+  // restored earlier in this loop.
   std::vector<pb::mds::Dentry> dirs;
   std::vector<pb::mds::Dentry> files;
   dirs.reserve(entries.size());
@@ -249,11 +249,31 @@ void TrashRestore::DoRestoreHour(const std::string& hour) {
       files.push_back(std::move(d));
     }
   }
-  std::sort(dirs.begin(), dirs.end(),
-            [](const pb::mds::Dentry& a, const pb::mds::Dentry& b) {
-              return ParseTrashEntryName(a.name()) <
-                     ParseTrashEntryName(b.name());
-            });
+  {
+    std::unordered_set<Ino> pending_dir_inos;
+    for (const auto& d : dirs) pending_dir_inos.insert(d.ino());
+
+    std::vector<pb::mds::Dentry> ordered;
+    ordered.reserve(dirs.size());
+    bool progress = true;
+    while (!dirs.empty() && progress) {
+      progress = false;
+      for (auto it = dirs.begin(); it != dirs.end();) {
+        if (pending_dir_inos.count(ParseTrashEntryName(it->name())) == 0) {
+          pending_dir_inos.erase(it->ino());
+          ordered.push_back(std::move(*it));
+          it = dirs.erase(it);
+          progress = true;
+        } else {
+          ++it;
+        }
+      }
+    }
+    // Leftovers (unparseable names or a parent cycle, which cannot happen in
+    // a healthy tree): append as-is; RestoreOne handles per-entry failure.
+    for (auto& d : dirs) ordered.push_back(std::move(d));
+    dirs = std::move(ordered);
+  }
 
   // In tree-rebuild mode, we only restore entries whose original parent was
   // also trashed (and therefore appears in this bucket as a directory). Build
