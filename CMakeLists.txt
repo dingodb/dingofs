@@ -130,6 +130,20 @@ execute_process(
   OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 
+# proto/ is the dingofs-proto git submodule; record its commit id so the
+# dashboard Git section can show which proto revision was built against.
+execute_process(
+  COMMAND git -C ${PROJECT_SOURCE_DIR}/proto log -1 --format=%h
+  OUTPUT_VARIABLE PROTO_GIT_COMMIT_ID
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+  ERROR_QUIET
+)
+
+if(NOT PROTO_GIT_COMMIT_ID)
+  set(PROTO_GIT_COMMIT_ID "unknown")
+  message(WARNING "Proto git commit id is unknown")
+endif()
+
 if(NOT GIT_VERSION)
   set(GIT_VERSION "unknown")
   message(WARNING "Git version is unknown")
@@ -147,6 +161,7 @@ message(STATUS "Git commit mail: ${GIT_COMMIT_MAIL}")
 message(STATUS "Git commit time: ${GIT_COMMIT_TIME}")
 message(STATUS "Git last commit id: ${GIT_LAST_COMMIT_ID}")
 message(STATUS "Git branch name: ${GIT_BRANCH_NAME}")
+message(STATUS "Proto git commit id: ${PROTO_GIT_COMMIT_ID}")
 
 add_definitions(-DGIT_VERSION="${GIT_VERSION}")
 add_definitions(-DGIT_TAG_NAME="${GIT_TAG_NAME}")
@@ -155,6 +170,7 @@ add_definitions(-DGIT_COMMIT_MAIL="${GIT_COMMIT_MAIL}")
 add_definitions(-DGIT_COMMIT_TIME="${GIT_COMMIT_TIME}")
 add_definitions(-DGIT_LAST_COMMIT_ID="${GIT_LAST_COMMIT_ID}")
 add_definitions(-DGIT_BRANCH_NAME="${GIT_BRANCH_NAME}")
+add_definitions(-DPROTO_GIT_COMMIT_ID="${PROTO_GIT_COMMIT_ID}")
 add_definitions(-DDINGOFS_BUILD_TYPE="${CMAKE_BUILD_TYPE}")
 
 if(USE_CICD_BUILD)

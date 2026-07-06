@@ -29,6 +29,7 @@ static const std::string kGitVersion = GIT_VERSION;
 static const std::string kGitTagName = GIT_TAG_NAME;
 static const std::string kGitBranchName = GIT_BRANCH_NAME;
 static const std::string kGitLastCommit = GIT_LAST_COMMIT_ID;
+static const std::string kProtoGitCommit = PROTO_GIT_COMMIT_ID;
 static const std::string kGitCommitUser = GIT_COMMIT_USER;
 static const std::string kGitCommitMail = GIT_COMMIT_MAIL;
 static const std::string kGitCommitTime = GIT_COMMIT_TIME;
@@ -70,6 +71,7 @@ std::string DingoVersionString() {
   oss << fmt::format("DINGOFS GIT_LAST_TAG:[{}]\n", kGitTagName.c_str());
   oss << fmt::format("DINGOFS GIT_BRANCH_NAME:[{}]\n", kGitBranchName.c_str());
   oss << fmt::format("DINGOFS GIT_COMMIT_HASH:[{}]\n", kGitLastCommit.c_str());
+  oss << fmt::format("DINGOFS PROTO_COMMIT_HASH:[{}]\n", kProtoGitCommit.c_str());
   oss << fmt::format("DINGOFS BUILD_TYPE:[{}]\n", kDingoFsBuildType.c_str());
   oss << GetBuildFlag() << "\n";
 
@@ -94,6 +96,7 @@ void DingoLogVersion() {
   LOG(INFO) << "DINGOFS GIT_LAST_TAG:[" << kGitTagName << "]";
   LOG(INFO) << "DINGOFS GIT_BRANCH_NAME:[" << kGitBranchName << "]";
   LOG(INFO) << "DINGOFS GIT_COMMIT_HASH:[" << kGitLastCommit << "]";
+  LOG(INFO) << "DINGOFS PROTO_COMMIT_HASH:[" << kProtoGitCommit << "]";
   LOG(INFO) << "DINGOFS BUILD_TYPE:[" << kDingoFsBuildType << "]";
   LOG(INFO) << GetBuildFlag();
   LOG(INFO) << "PID: " << getpid();
@@ -103,6 +106,7 @@ std::vector<std::pair<std::string, std::string>> DingoVersion() {
   std::vector<std::pair<std::string, std::string>> result;
   result.emplace_back("BRANCH", kGitBranchName);
   result.emplace_back("COMMIT_HASH", kGitLastCommit);
+  result.emplace_back("PROTO_COMMIT_HASH", kProtoGitCommit);
   result.emplace_back("COMMIT_USER", kGitCommitUser);
   result.emplace_back("COMMIT_MAIL", kGitCommitMail);
   result.emplace_back("COMMIT_TIME", kGitCommitTime);
@@ -122,4 +126,6 @@ std::string GetGitVersion() { return kGitVersion; }
 std::string GetGitCommitHash() { return kGitLastCommit; }
 
 std::string GetGitCommitTime() { return kGitCommitTime; }
+
+std::string GetProtoGitCommitHash() { return kProtoGitCommit; }
 }  // namespace dingofs

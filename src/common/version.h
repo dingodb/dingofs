@@ -53,6 +53,10 @@ namespace dingofs {
 #define GIT_LAST_COMMIT_ID "unknown"
 #endif
 
+#ifndef PROTO_GIT_COMMIT_ID
+#define PROTO_GIT_COMMIT_ID "unknown"
+#endif
+
 std::string DingoVersionString();
 std::string DingoShortVersionString();
 
@@ -63,6 +67,7 @@ void ExposeDingoVersion();
 std::string GetGitVersion();
 std::string GetGitCommitHash();
 std::string GetGitCommitTime();
+std::string GetProtoGitCommitHash();
 
 }  // namespace dingofs
 
