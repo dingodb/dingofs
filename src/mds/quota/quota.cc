@@ -189,7 +189,8 @@ void DirQuotaMap::UpsertQuota(Ino ino, const QuotaEntry& quota, const std::strin
   }
 }
 
-void DirQuotaMap::UpdateUsage(Ino ino, int64_t byte_delta, int64_t inode_delta, const std::string& reason) {
+void DirQuotaMap::UpdateUsage(Ino ino, int64_t byte_delta, int64_t inode_delta, const std::string& reason,
+                              bool bypass_parent_memo) {
   Ino curr_ino = ino;
   while (true) {
     auto quota = GetQuota(curr_ino);
@@ -198,7 +199,7 @@ void DirQuotaMap::UpdateUsage(Ino ino, int64_t byte_delta, int64_t inode_delta, 
     if (curr_ino == kRootIno) break;
 
     Ino parent;
-    if (!GetParent(curr_ino, parent)) break;
+    if (!GetParent(curr_ino, parent, bypass_parent_memo)) break;
 
     curr_ino = parent;
   }
@@ -303,7 +304,7 @@ QuotaSPtr DirQuotaMap::GetQuota(Ino ino) {
   return (it != quota_map_.end()) ? it->second : nullptr;
 }
 
-bool DirQuotaMap::GetParent(Ino ino, Ino& parent) {
+bool DirQuotaMap::GetParent(Ino ino, Ino& parent, bool bypass_parent_memo) {
   // Stop the quota walk at the trash boundary: kTrashInodeId is virtual (no
   // KV record) and sub_trash buckets carry no quota. Any caller hitting an
   // ino in the trash range has already reached the top of the relevant
@@ -312,7 +313,12 @@ bool DirQuotaMap::GetParent(Ino ino, Ino& parent) {
     return false;
   }
 
-  if (parent_memo_.GetParent(ino, parent)) {
+  // The memo has no cross-MDS invalidation: after a trash-move processed on
+  // another MDS, a locally cached entry still points at the pre-trash parent
+  // and would carry the walk across the trash boundary. Callers on the
+  // restore path bypass it and resolve from the store (cold path, few hops);
+  // the fresh value still gets Remeber'd below.
+  if (!bypass_parent_memo && parent_memo_.GetParent(ino, parent)) {
     return true;
   }
 
@@ -350,7 +356,9 @@ bool DirQuotaMap::HasQuota() {
   return !quota_map_.empty();
 }
 
-void UpdateDirUsageTask::Run() { quota_manager_.UpdateDirUsage(parent_, byte_delta_, inode_delta_, reason_); }
+void UpdateDirUsageTask::Run() {
+  quota_manager_.UpdateDirUsage(parent_, byte_delta_, inode_delta_, reason_, bypass_parent_memo_);
+}
 
 void DeleteDirQuotaTask::Run() {
   class Trace trace;
@@ -393,14 +401,16 @@ void QuotaManager::UpdateFsUsage(int64_t byte_delta, int64_t inode_delta, const 
   fs_quota_.UpdateUsage(byte_delta, inode_delta, reason);
 }
 
-void QuotaManager::UpdateDirUsage(Ino parent, int64_t byte_delta, int64_t inode_delta, const std::string& reason) {
-  dir_quota_map_.UpdateUsage(parent, byte_delta, inode_delta, reason);
+void QuotaManager::UpdateDirUsage(Ino parent, int64_t byte_delta, int64_t inode_delta, const std::string& reason,
+                                  bool bypass_parent_memo) {
+  dir_quota_map_.UpdateUsage(parent, byte_delta, inode_delta, reason, bypass_parent_memo);
 }
 
-void QuotaManager::AsyncUpdateDirUsage(Ino parent, int64_t byte_delta, int64_t inode_delta, const std::string& reason) {
+void QuotaManager::AsyncUpdateDirUsage(Ino parent, int64_t byte_delta, int64_t inode_delta, const std::string& reason,
+                                       bool bypass_parent_memo) {
   const uint32_t fs_id = fs_info_->GetFsId();
 
-  auto task = UpdateDirUsageTask::New(*this, parent, byte_delta, inode_delta, reason);
+  auto task = UpdateDirUsageTask::New(*this, parent, byte_delta, inode_delta, reason, bypass_parent_memo);
 
   if (!worker_set_->ExecuteHash(parent, task)) {
     LOG(ERROR) << fmt::format(

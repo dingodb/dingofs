@@ -3635,7 +3635,10 @@ Status ScanDirShardOperation::Run(TxnUPtr& txn) {
 
   if (!status.ok()) return status;
 
-  if (result_.attr_with_mutation.attr.ino() == 0) {
+  // kTrashInodeId is virtual -- no inode KV record by design -- so its shard
+  // scans legitimately come back with bucket dentries but no inode key. The
+  // missing-inode guard below is for real directories deleted underfoot.
+  if (result_.attr_with_mutation.attr.ino() == 0 && ino_ != kTrashInodeId) {
     return Status(pb::error::ENOT_FOUND, fmt::format("dir inode not found({})", ino_));
   }
 

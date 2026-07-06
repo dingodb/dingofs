@@ -342,6 +342,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   InodeCache& GetInodeCache() { return inode_cache_; }
 
   quota::QuotaManager& GetQuotaManager() { return quota_manager_; }
+  ParentMemo& GetParentMemo() { return parent_memo_; }
 
   dir_stat::DirStatManager& GetDirStatManager() { return dir_stat_manager_; }
   // Read live from fs_info_ so a runtime toggle (propagated via RefreshFsInfo)

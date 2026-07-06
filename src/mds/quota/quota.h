@@ -96,7 +96,12 @@ class DirQuotaMap {
 
   void UpsertQuota(Ino ino, const QuotaEntry& quota, const std::string& reason);
 
-  void UpdateUsage(Ino ino, int64_t byte_delta, int64_t inode_delta, const std::string& reason);
+  // bypass_parent_memo: resolve every ancestor hop from the store instead of
+  // the parent memo. Restore-path credits need this -- another MDS may hold a
+  // stale memo entry recorded before a trash-move, and trusting it would walk
+  // the credit straight through the trash boundary.
+  void UpdateUsage(Ino ino, int64_t byte_delta, int64_t inode_delta, const std::string& reason,
+                   bool bypass_parent_memo = false);
 
   void DeleteQuota(Ino ino, const std::string& uuid);
 
@@ -110,7 +115,7 @@ class DirQuotaMap {
 
  private:
   QuotaSPtr GetQuota(Ino ino);
-  bool GetParent(Ino ino, Ino& parent);
+  bool GetParent(Ino ino, Ino& parent, bool bypass_parent_memo = false);
   bool HasQuota();
 
   uint32_t fs_id_{0};
@@ -128,18 +133,20 @@ using UpdateDirUsageTaskSPtr = std::shared_ptr<UpdateDirUsageTask>;
 class UpdateDirUsageTask : public TaskRunnable {
  public:
   UpdateDirUsageTask(QuotaManager& quota_manager, Ino parent, int64_t byte_delta, int64_t inode_delta,
-                     const std::string& reason)
+                     const std::string& reason, bool bypass_parent_memo)
       : quota_manager_(quota_manager),
         parent_(parent),
         byte_delta_(byte_delta),
         inode_delta_(inode_delta),
-        reason_(reason) {}
+        reason_(reason),
+        bypass_parent_memo_(bypass_parent_memo) {}
 
   ~UpdateDirUsageTask() override = default;
 
   static UpdateDirUsageTaskSPtr New(QuotaManager& quota_manager, Ino parent, int64_t byte_delta, int64_t inode_delta,
-                                    const std::string& reason) {
-    return std::make_shared<UpdateDirUsageTask>(quota_manager, parent, byte_delta, inode_delta, reason);
+                                    const std::string& reason, bool bypass_parent_memo = false) {
+    return std::make_shared<UpdateDirUsageTask>(quota_manager, parent, byte_delta, inode_delta, reason,
+                                                bypass_parent_memo);
   }
 
   std::string Type() override { return "UpdateDirUsageTask"; }
@@ -154,6 +161,7 @@ class UpdateDirUsageTask : public TaskRunnable {
   int64_t inode_delta_;
 
   const std::string reason_;
+  bool bypass_parent_memo_{false};
 };
 
 class DeleteDirQuotaTask;
@@ -207,8 +215,10 @@ class QuotaManager {
   Status LoadDirQuotas(Trace& trace, std::map<Ino, QuotaEntry>& quota_entry_map);
 
   void UpdateFsUsage(int64_t byte_delta, int64_t inode_delta, const std::string& reason);
-  void UpdateDirUsage(Ino parent, int64_t byte_delta, int64_t inode_delta, const std::string& reason);
-  void AsyncUpdateDirUsage(Ino parent, int64_t byte_delta, int64_t inode_delta, const std::string& reason);
+  void UpdateDirUsage(Ino parent, int64_t byte_delta, int64_t inode_delta, const std::string& reason,
+                      bool bypass_parent_memo = false);
+  void AsyncUpdateDirUsage(Ino parent, int64_t byte_delta, int64_t inode_delta, const std::string& reason,
+                           bool bypass_parent_memo = false);
 
   bool CheckQuota(Trace& trace, Ino ino, int64_t byte_delta, int64_t inode_delta);
   QuotaSPtr GetNearestDirQuota(Ino ino);
