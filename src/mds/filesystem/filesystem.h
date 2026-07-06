@@ -273,8 +273,12 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   // dst (parent + name) is always parsed from trash_name. When allow_trash_parent
   // is true, the parsed dst parent may itself be a trashed directory (tree-rebuild
   // mode); it may never be the trash root or an hour bucket.
+  // carried_bytes/carried_inodes: totals of the subtree assembled inside a
+  // DIRECTORY entry (tree-rebuild grafts), excluding the dir itself. Enlarges
+  // the put-back per-dir quota credit so carried children settle their
+  // trash-move debits; ignored on graft legs and non-directory entries.
   Status RestoreFromTrash(Context& ctx, Ino trash_parent, const std::string& trash_name,
-                          bool allow_trash_parent = false);
+                          bool allow_trash_parent = false, uint64_t carried_bytes = 0, uint64_t carried_inodes = 0);
 
   // slice
   Status WriteSlice(Context& ctx, Ino ino, const std::vector<DeltaSliceEntry>& delta_slices,

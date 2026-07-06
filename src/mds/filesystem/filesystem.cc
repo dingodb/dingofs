@@ -3834,7 +3834,7 @@ Status FileSystem::DescribePartitionShard(Ino ino, Json::Value& value) {
 }
 
 Status FileSystem::RestoreFromTrash(Context& ctx, Ino trash_parent, const std::string& trash_name,
-                                    bool allow_trash_parent) {
+                                    bool allow_trash_parent, uint64_t carried_bytes, uint64_t carried_inodes) {
   // dst (parent + name) is always parsed from trash_name.
   Ino actual_dst_parent = 0, orig_ino = 0;
   std::string actual_dst_name;
@@ -3921,15 +3921,30 @@ Status FileSystem::RestoreFromTrash(Context& ctx, Ino trash_parent, const std::s
   //    it (nlink is preserved) and it's released only when CleanTrashTask
   //    actually purges the inode.
   if (GetFsInfo().immediate_trash_quota()) {
-    const int64_t delta_bytes =
+    int64_t delta_bytes =
         file_attr.type() == pb::mds::FileType::FILE ? static_cast<int64_t>(file_attr.length()) : 0;
+    int64_t delta_inodes = 1;
+    // Carried settlement: a directory put back after tree-rebuild carries its
+    // grafted subtree along with no restore leg of its own for the children.
+    // The restore tool measures the assembled subtree (dir-stats skeleton
+    // walk) and passes the totals; fold them into this one credit so the
+    // carried children's trash-move debits are settled on the live chain.
+    // Graft legs and files never carry (the tool sends 0; ignore defensively).
+    if (!allow_trash_parent && file_attr.type() == pb::mds::FileType::DIRECTORY) {
+      delta_bytes += static_cast<int64_t>(carried_bytes);
+      delta_inodes += static_cast<int64_t>(carried_inodes);
+    } else if (carried_bytes != 0 || carried_inodes != 0) {
+      LOG(WARNING) << fmt::format("[fs.{}.{}] ignore carried({},{}) on non-put-back-dir leg {}.", fs_id_,
+                                  ctx.RequestId(), carried_bytes, carried_inodes, trash_name);
+    }
     std::string reason = fmt::format("trash-restore.{}.{}", trash_parent, trash_name);
     // bypass_parent_memo: the boundary truncation must hold on any MDS. A
     // stale memo entry (recorded before the trash-move, never invalidated
     // cross-MDS) would walk this credit straight past the bucket into the
     // live ancestors -- and if the rebuilt tree is later purged instead of
     // put back, that credit is never re-debited.
-    quota_manager_.AsyncUpdateDirUsage(actual_dst_parent, delta_bytes, 1, reason, /*bypass_parent_memo=*/true);
+    quota_manager_.AsyncUpdateDirUsage(actual_dst_parent, delta_bytes, delta_inodes, reason,
+                                       /*bypass_parent_memo=*/true);
   }
 
   // dir-stat: any restore re-adds the dentry to actual_dst_parent, so credit

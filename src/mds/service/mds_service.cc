@@ -3533,8 +3533,9 @@ void MDSServiceImpl::RestoreFromTrash(google::protobuf::RpcController* controlle
 
   Context ctx(request->context(), request->info().request_id(), __func__);
 
-  auto status =
-      file_system->RestoreFromTrash(ctx, request->trash_parent(), request->trash_name(), request->allow_trash_parent());
+  auto status = file_system->RestoreFromTrash(ctx, request->trash_parent(), request->trash_name(),
+                                              request->allow_trash_parent(), request->carried_bytes(),
+                                              request->carried_inodes());
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (!status.ok()) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());

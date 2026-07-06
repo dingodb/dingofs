@@ -1957,6 +1957,135 @@ TEST_F(TrashDirStatTest, TreeRebuildGraftCreditsInteriorQuota) {
   EXPECT_EQ(inodes, 1) << "put_back settles the dir's own (0,+1) on root";
 }
 
+// Carried settlement: a directory put back after tree-rebuild rides its
+// grafted subtree out of trash with no restore leg for the children. The
+// restore tool measures the assembled subtree and passes carried totals; the
+// put_back credit must be enlarged by exactly that amount -- and ONLY on the
+// put_back-of-directory leg: graft legs and file legs must ignore carried.
+TEST_F(TrashDirStatTest, PutBackConsumesCarried) {
+  auto fs = Fs();
+  Context ctx;
+  auto& quota_mgr = fs->GetQuotaManager();
+
+  auto set_quota = [&](Ino ino) {
+    Trace trace;
+    QuotaEntry entry;
+    entry.set_max_bytes(int64_t{1} << 40);
+    entry.set_max_inodes(int64_t{1} << 20);
+    ASSERT_TRUE(quota_mgr.SetDirQuota(trace, ino, entry, false).ok());
+  };
+  auto usage = [&](Ino ino, int64_t& bytes, int64_t& inodes) {
+    Trace trace;
+    QuotaEntry entry;
+    ASSERT_TRUE(
+        quota_mgr.GetDirQuota(trace, ino, /*not_use_fs_quota=*/true, entry)
+            .ok());
+    bytes = entry.used_bytes();
+    inodes = entry.used_inodes();
+  };
+  auto mkdir = [&](Ino parent, const std::string& name) -> Ino {
+    FileSystem::MkDirParam dp;
+    dp.parent = parent;
+    dp.name = name;
+    dp.mode = 0755;
+    dp.uid = 1;
+    dp.gid = 1;
+    dp.rdev = 0;
+    EntryWithPaOut out;
+    EXPECT_TRUE(fs->MkDir(ctx, dp, out).ok());
+    return out.attr.ino();
+  };
+  auto mknod = [&](Ino parent, const std::string& name,
+                   uint64_t length) -> Ino {
+    FileSystem::MkNodParam fp;
+    fp.parent = parent;
+    fp.name = name;
+    fp.mode = 0644;
+    fp.uid = 1;
+    fp.gid = 1;
+    fp.rdev = 0;
+    EntryWithPaOut out;
+    EXPECT_TRUE(fs->MkNod(ctx, fp, out).ok());
+    if (length > 0) {
+      FileSystem::FlushFileParam ffp;
+      ffp.length = length;
+      EntryWithFileChangeOut ffo;
+      EXPECT_TRUE(fs->FlushFile(ctx, out.attr.ino(), ffp, ffo).ok());
+    }
+    return out.attr.ino();
+  };
+
+  // Quota on qc_top only (the reported production shape); qc_sub has none.
+  Ino top_ino = mkdir(kRootIno, "qc_top");
+  set_quota(top_ino);
+  Ino sub_ino = mkdir(top_ino, "qc_sub");
+  Ino child_ino = mknod(sub_ino, "qc_child", 5000);
+
+  int64_t bytes = 0, inodes = 0;
+  usage(top_ino, bytes, inodes);
+  ASSERT_EQ(bytes, 5000);
+  ASSERT_EQ(inodes, 2);  // qc_sub + qc_child
+
+  // Trash-move the whole content.
+  EntryWithPaOut uo;
+  ASSERT_TRUE(fs->UnLink(ctx, sub_ino, "qc_child", uo).ok());
+  Ino bucket_ino = uo.attr.parents(0);
+  EntryWithPaOut ro;
+  ASSERT_TRUE(fs->RmDir(ctx, top_ino, "qc_sub", ro).ok());
+  usage(top_ino, bytes, inodes);
+  ASSERT_EQ(bytes, 0);
+  ASSERT_EQ(inodes, 0);
+
+  // Tree-rebuild graft with a bogus carried: MUST be ignored on graft legs.
+  std::string child_trash_name =
+      BuildTrashEntryName(sub_ino, child_ino, "qc_child");
+  ASSERT_TRUE(fs->RestoreFromTrash(ctx, bucket_ino, child_trash_name,
+                                   /*allow_trash_parent=*/true,
+                                   /*carried_bytes=*/999,
+                                   /*carried_inodes=*/9)
+                  .ok());
+  usage(top_ino, bytes, inodes);
+  EXPECT_EQ(bytes, 0) << "graft leg must ignore carried";
+  EXPECT_EQ(inodes, 0) << "graft leg must ignore carried";
+
+  // put_back qc_sub with the carried totals of its assembled subtree
+  // (qc_child: 5000 bytes, 1 entry): qc_top gets carried + the dir's own
+  // (0,+1) in one credit, restoring its full baseline.
+  Trace trace;
+  GetInodeAttrOperation attr_op(trace, /*fs_id=*/3000, sub_ino);
+  ASSERT_TRUE(operation_processor->RunAlone(&attr_op).ok());
+  Ino sub_bucket_ino = attr_op.GetResult().attr_with_mutation.attr.parents(0);
+  std::string sub_trash_name =
+      BuildTrashEntryName(top_ino, sub_ino, "qc_sub");
+  ASSERT_TRUE(fs->RestoreFromTrash(ctx, sub_bucket_ino, sub_trash_name,
+                                   /*allow_trash_parent=*/false,
+                                   /*carried_bytes=*/5000,
+                                   /*carried_inodes=*/1)
+                  .ok());
+  usage(top_ino, bytes, inodes);
+  EXPECT_EQ(bytes, 5000) << "put_back must settle carried on the live chain";
+  EXPECT_EQ(inodes, 2) << "put_back must settle carried + the dir's own +1";
+
+  // FILE put_back with a bogus carried: MUST be ignored. qc_f is a flat
+  // bucket entry; its credit is exactly (length, +1).
+  Ino f_ino = mknod(top_ino, "qc_f", 700);
+  EntryWithPaOut uo2;
+  ASSERT_TRUE(fs->UnLink(ctx, top_ino, "qc_f", uo2).ok());
+  Ino f_bucket_ino = uo2.attr.parents(0);
+  usage(top_ino, bytes, inodes);
+  ASSERT_EQ(bytes, 5000);
+  ASSERT_EQ(inodes, 2);
+  std::string f_trash_name = BuildTrashEntryName(top_ino, f_ino, "qc_f");
+  ASSERT_TRUE(fs->RestoreFromTrash(ctx, f_bucket_ino, f_trash_name,
+                                   /*allow_trash_parent=*/false,
+                                   /*carried_bytes=*/777,
+                                   /*carried_inodes=*/7)
+                  .ok());
+  usage(top_ino, bytes, inodes);
+  EXPECT_EQ(bytes, 5700) << "file leg must ignore carried (credit = length)";
+  EXPECT_EQ(inodes, 3) << "file leg must ignore carried (credit = +1)";
+}
+
 // Regression: ScanDirShardOperation's missing-inode guard (added to surface
 // dirs deleted underfoot) must exempt the virtual trash root. Server-side
 // Lookup(kTrashInodeId, <hour bucket>) is served by a ShardPartition whose

@@ -309,6 +309,61 @@ void TrashRestore::DoRestoreHour(const std::string& hour) {
                            failed_.load());
 }
 
+bool TrashRestore::ComputeCarried(Ino dir_ino, uint64_t& bytes,
+                                  uint64_t& inodes) {
+  bytes = 0;
+  inodes = 0;
+
+  std::vector<Ino> pending{dir_ino};
+  while (!pending.empty()) {
+    Ino dir = pending.back();
+    pending.pop_back();
+
+    // Both the stat and the child listing must come from the directory's
+    // owner MDS: dir-stat deltas accumulate on the owner (operations are
+    // routed by parent), and only the owner's accumulated view is complete
+    // without waiting for a flush cycle.
+    MDSClient* owner = ClientForParent(dir);
+    if (owner == nullptr) {
+      LOG(ERROR) << fmt::format("no owner mds for dir({})", dir);
+      return false;
+    }
+
+    auto stat_resp = owner->GetDirStat(dir);
+    if (stat_resp.error().errcode() != pb::error::OK) {
+      LOG(ERROR) << fmt::format("get dir stat({}) fail: {} ({})", dir,
+                                stat_resp.error().errmsg(),
+                                static_cast<int>(stat_resp.error().errcode()));
+      return false;
+    }
+    bytes += static_cast<uint64_t>(stat_resp.dir_stat().length());
+    inodes += static_cast<uint64_t>(stat_resp.dir_stat().inodes());
+
+    // Descend the directory skeleton only; files are already accounted for
+    // by the per-dir stats.
+    std::string last;
+    while (true) {
+      auto list_resp =
+          owner->ListDentryPaged(dir, last, kListDentryBatch, /*is_only_dir=*/true);
+      if (list_resp.error().errcode() != pb::error::OK) {
+        LOG(ERROR) << fmt::format("list dir({}) fail: {} ({})", dir,
+                                  list_resp.error().errmsg(),
+                                  static_cast<int>(list_resp.error().errcode()));
+        return false;
+      }
+      for (const auto& d : list_resp.dentries()) {
+        pending.push_back(d.ino());
+        last = d.name();
+      }
+      if (static_cast<uint32_t>(list_resp.dentries_size()) < kListDentryBatch) {
+        break;
+      }
+    }
+  }
+
+  return true;
+}
+
 void TrashRestore::WorkerLoop(Ino bucket_ino) {
   while (true) {
     pb::mds::Dentry dentry;
@@ -351,8 +406,30 @@ void TrashRestore::RestoreOne(Ino bucket_ino, const pb::mds::Dentry& dentry) {
     failed_.fetch_add(1);
     return;
   }
+
+  // put_back of a directory carries whatever subtree was assembled inside it
+  // by a (possibly much earlier) tree-rebuild run -- the bucket's history is
+  // unknowable from this invocation, so every directory is probed. The
+  // carried totals ride with the request and enlarge the server's per-dir
+  // quota credit on the live ancestor chain; a wrong (understated) value
+  // would silently re-open the accounting hole, hence fail-loud.
+  uint64_t carried_bytes = 0, carried_inodes = 0;
+  if (options_.put_back && dentry.type() == pb::mds::FileType::DIRECTORY) {
+    if (!ComputeCarried(dentry.ino(), carried_bytes, carried_inodes)) {
+      LOG(ERROR) << fmt::format(
+          "compute carried totals for '{}' fail, skip restore", dentry.name());
+      failed_.fetch_add(1);
+      return;
+    }
+    if (carried_bytes != 0 || carried_inodes != 0) {
+      LOG(INFO) << fmt::format("carried totals for '{}': bytes({}) inodes({})",
+                               dentry.name(), carried_bytes, carried_inodes);
+    }
+  }
+
   auto resp = mds_client->RestoreFromTrash(bucket_ino, dentry.name(), kRootUid,
-                                           allow_trash_parent);
+                                           allow_trash_parent, carried_bytes,
+                                           carried_inodes);
   if (resp.error().errcode() == pb::error::OK) {
     restored_.fetch_add(1);
   } else {

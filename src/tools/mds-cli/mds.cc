@@ -1213,7 +1213,7 @@ RenameResponse MDSClient::Rename(Ino old_parent, const std::string& old_name,
 
 RestoreFromTrashResponse MDSClient::RestoreFromTrash(
     Ino trash_parent, const std::string& trash_name, uint32_t uid,
-    bool allow_trash_parent) {
+    bool allow_trash_parent, uint64_t carried_bytes, uint64_t carried_inodes) {
   CHECK(fs_id_ > 0) << "fs_id_ is zero";
 
   RestoreFromTrashRequest request;
@@ -1226,6 +1226,8 @@ RestoreFromTrashResponse MDSClient::RestoreFromTrash(
   request.set_trash_name(trash_name);
   request.set_uid(uid);
   request.set_allow_trash_parent(allow_trash_parent);
+  request.set_carried_bytes(carried_bytes);
+  request.set_carried_inodes(carried_inodes);
 
   auto status = interaction_->SendRequest("MDSService", "RestoreFromTrash",
                                           request, response);
