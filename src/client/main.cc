@@ -211,11 +211,14 @@ int main(int argc, char* argv[]) {
     return EXIT_FAILURE;
   }
 
-  struct MountOption mount_option {
-    .mount_point = mountpoint, .fs_name = fs_name,
-    .metasystem_type = metasystem_type, .mds_addrs = mds_addrs,
-    .storage_info = storage_info, .meta_url = argv[1],
-    .subdir = dingofs::client::FLAGS_fuse_subdir,
+  struct MountOption mount_option{
+      .mount_point = mountpoint,
+      .fs_name = fs_name,
+      .metasystem_type = metasystem_type,
+      .mds_addrs = mds_addrs,
+      .storage_info = storage_info,
+      .meta_url = argv[1],
+      .subdir = dingofs::client::FLAGS_fuse_subdir,
   };
 
   fuse_server = new FuseServer();
@@ -234,6 +237,7 @@ int main(int argc, char* argv[]) {
   LOG(INFO) << dingofs::GenCurrentFlags();
   // print version
   LOG(INFO) << dingofs::DingoShortVersionString();
+  LOG(INFO) << dingofs::DingoVersionString();
   // print dingo eureka version
   LOG(INFO) << FormatDingoEurekaVersion();
 
