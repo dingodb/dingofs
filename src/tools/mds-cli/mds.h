@@ -302,7 +302,9 @@ class MDSClient {
   RestoreFromTrashResponse RestoreFromTrash(Ino trash_parent,
                                             const std::string& trash_name,
                                             uint32_t uid,
-                                            bool allow_trash_parent);
+                                            bool allow_trash_parent,
+                                            uint64_t carried_bytes = 0,
+                                            uint64_t carried_inodes = 0);
 
   AllocSliceIdResponse AllocSliceId(uint32_t alloc_num, uint64_t min_slice_id);
   WriteSliceResponse WriteSlice(Ino ino, int64_t chunk_index);

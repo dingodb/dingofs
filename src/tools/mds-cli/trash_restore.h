@@ -83,6 +83,15 @@ class TrashRestore {
   // it to another MDS.
   MDSClient* ClientForParent(Ino parent);
 
+  // Totals of the subtree currently assembled inside trashed directory
+  // `dir_ino` (tree-rebuild grafts), excluding the directory itself: walks
+  // the directory skeleton only (ListDentry is_only_dir + per-dir GetDirStat,
+  // both owner-routed) and sums the single-level dir-stats. A never-rebuilt
+  // directory costs two RPCs and yields (0,0). Returns false on any RPC
+  // failure -- the caller must then fail the entry rather than restore it
+  // with an understated carried amount.
+  bool ComputeCarried(Ino dir_ino, uint64_t& bytes, uint64_t& inodes);
+
   Options options_;
   std::unique_ptr<MDSClient> client_;
 
