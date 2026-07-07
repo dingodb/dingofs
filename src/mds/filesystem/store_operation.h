@@ -2793,21 +2793,29 @@ class OperationProcessor : public std::enable_shared_from_this<OperationProcesso
   Status CreateTable(const std::string& table_name, const Range& range, int64_t& table_id);
 
  private:
+  struct Dispatcher {
+    std::thread thread;
+    std::mutex thread_mutex;
+    std::condition_variable thread_cond;
+
+    butil::MPSCQueue<Operation*> operations;
+    Dispatcher() = default;
+  };
+
   using BatchOperationMap =
       absl::flat_hash_map<Operation::Key, BatchOperation, Operation::Key::Hash, Operation::Key::Eq>;
   static void Grouping(std::vector<Operation*>& operations, BatchOperationMap& batch_operation_map);
-  void ProcessOperation();
+
+  uint32_t GetDispatcherIndex(const Operation::Key& key) const { return (key.ino + key.fs_id) % dispatchers_.size(); }
+
+  void ProcessOperation(Dispatcher& dispatcher);
   void LaunchExecuteBatchOperation(BatchOperation&& batch_operation);
   void ExecuteBatchOperation(BatchOperation& batch_operation);
 
-  // use std thread
-  std::thread thread_;
-  std::mutex thread_mutex_;
-  std::condition_variable thread_cond_;
+  // use unique_ptr because Dispatcher holds non-movable members (mutex/condition_variable).
+  std::vector<std::unique_ptr<Dispatcher>> dispatchers_;
 
   std::atomic<bool> is_stop_{false};
-
-  butil::MPSCQueue<Operation*> operations_;
 
   ConflictController conflict_controller_;
 
