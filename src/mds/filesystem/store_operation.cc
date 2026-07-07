@@ -768,7 +768,7 @@ Status MkDirOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) 
   if (IsCheckBeforeCreate()) {
     std::string dentry_value = FindValue(prefetch_index, dentry_key);
     if (!dentry_value.empty()) {
-      return Status(pb::error::EEXISTED, fmt::format("dentry({}) already exist", dentry_key));
+      return Status(pb::error::EEXISTED, fmt::format("dentry({}/{}) already exist", parent, dentry_.Name()));
     }
   }
 
@@ -820,7 +820,7 @@ Status BatchMkDirOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_pa
     if (IsCheckBeforeCreate()) {
       std::string dentry_value = FindValue(prefetch_index, dentry_key);
       if (!dentry_value.empty()) {
-        return Status(pb::error::EEXISTED, fmt::format("dentry({}) already exist", dentry_key));
+        return Status(pb::error::EEXISTED, fmt::format("dentry({}/{}) already exist", parent, dentry.Name()));
       }
     }
 
@@ -862,7 +862,7 @@ Status MkNodOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) 
   if (IsCheckBeforeCreate()) {
     std::string dentry_value = FindValue(prefetch_index, dentry_key);
     if (!dentry_value.empty()) {
-      return Status(pb::error::EEXISTED, fmt::format("dentry({}) already exist", dentry_key));
+      return Status(pb::error::EEXISTED, fmt::format("dentry({}/{}) already exist", parent, dentry_.Name()));
     }
   }
 
@@ -918,7 +918,7 @@ Status BatchMkNodOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_pa
     if (IsCheckBeforeCreate()) {
       std::string dentry_value = FindValue(prefetch_index, dentry_key);
       if (!dentry_value.empty()) {
-        return Status(pb::error::EEXISTED, fmt::format("dentry({}) already exist", dentry_key));
+        return Status(pb::error::EEXISTED, fmt::format("dentry({}/{}) already exist", parent, dentry.Name()));
       }
     }
 
@@ -982,7 +982,7 @@ Status BatchCreateFileOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shar
     if (IsCheckBeforeCreate()) {
       std::string dentry_value = FindValue(prefetch_index, dentry_key);
       if (!dentry_value.empty()) {
-        return Status(pb::error::EEXISTED, fmt::format("dentry({}) already exist", dentry_key));
+        return Status(pb::error::EEXISTED, fmt::format("dentry({}/{}) already exist", parent, dentry.Name()));
       }
     }
 
@@ -1036,7 +1036,7 @@ Status HardLinkOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_para
   if (IsCheckBeforeCreate()) {
     std::string dentry_value = FindValue(prefetch_index, dentry_key);
     if (!dentry_value.empty()) {
-      return Status(pb::error::EEXISTED, fmt::format("dentry({}) already exist", dentry_key));
+      return Status(pb::error::EEXISTED, fmt::format("dentry({}/{}) already exist", parent, dentry_.Name()));
     }
   }
 
@@ -1101,7 +1101,7 @@ Status SymLinkOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param
   if (IsCheckBeforeCreate()) {
     std::string dentry_value = FindValue(prefetch_index, dentry_key);
     if (!dentry_value.empty()) {
-      return Status(pb::error::EEXISTED, fmt::format("dentry({}) already exist", dentry_key));
+      return Status(pb::error::EEXISTED, fmt::format("dentry({}/{}) already exist", parent, dentry_.Name()));
     }
   }
 
