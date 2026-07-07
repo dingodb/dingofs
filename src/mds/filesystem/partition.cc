@@ -231,7 +231,7 @@ Status ShardPartition::Scan(const std::string& trace_id, const std::string& star
     size_t before_size = dentries.size();
     shard->Scan(next_name, remaining, is_only_dir, dentries);
 
-    LOG(INFO) << fmt::format(
+    LOG_DEBUG << fmt::format(
         "[partition.{}.{}.{}] scan dentry, shard({}) limit({}) before_size({}) after_size({}) start_name({}) range{}",
         fs_id_, ino_, trace_id, shard->ID(), limit, before_size, dentries.size(), start_name, range.ToString());
 
@@ -478,7 +478,7 @@ Status ShardPartition::FetchDirShard(const Range& range, DirShardSPtr& out_shard
 }
 
 bool ShardPartition::Refresh(uint64_t new_version) {
-  LOG(INFO) << fmt::format("[partition.{}.{}] refresh partition, version({}->{}) delta_version({}).", fs_id_, ino_,
+  LOG_DEBUG << fmt::format("[partition.{}.{}] refresh partition, version({}->{}) delta_version({}).", fs_id_, ino_,
                            base_version_, new_version, delta_version_);
 
   utils::WriteLockGuard lk(lock_);
@@ -607,7 +607,7 @@ size_t ShardPartition::CleanExpired(uint64_t expire_s) {
   for (auto it = shard_map_.begin(); it != shard_map_.end();) {
     auto& shard = it->second;
     if (shard->LastActiveTimeS() < expire_s) {
-      LOG(INFO) << fmt::format("[partition.{}.{}] clean expired shard, {}, last_active_time_s({}).", fs_id_, ino_,
+      LOG_DEBUG << fmt::format("[partition.{}.{}] clean expired shard, {}, last_active_time_s({}).", fs_id_, ino_,
                                shard->ToString(), shard->LastActiveTimeS());
       auto tmp_it = it++;
       shard_map_.erase(tmp_it);
@@ -706,13 +706,13 @@ PartitionPtr PartitionCache::PutIf(const PartitionPtr& partition) {
 }
 
 void PartitionCache::Delete(Ino ino) {
-  LOG(INFO) << fmt::format("[cache.partition.{}] delete partition ino({}).", fs_id_, ino);
+  LOG_DEBUG << fmt::format("[cache.partition.{}] delete partition ino({}).", fs_id_, ino);
 
   shard_map_.withWLock([ino](Map& map) { map.erase(ino); }, ino);
 }
 
 void PartitionCache::DeleteIf(std::function<bool(const Ino&)>&& f) {  // NOLINT
-  LOG(INFO) << fmt::format("[cache.partition.{}] batch delete inode.", fs_id_);
+  LOG_DEBUG << fmt::format("[cache.partition.{}] batch delete inode.", fs_id_);
 
   shard_map_.iterateWLock([&](Map& map) {
     for (auto it = map.begin(); it != map.end();) {

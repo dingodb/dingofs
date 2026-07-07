@@ -34,20 +34,15 @@ static const uint32_t kMaxNotFoundCount = 30;
 Quota::Quota(uint32_t fs_id, Ino ino, const QuotaEntry& quota) : fs_id_(fs_id), ino_(ino), quota_(quota) {
   last_time_ns_ = utils::TimestampNs();
 
-  LOG(INFO) << fmt::format("[quota.{}.{}] create quota, detail({}).", fs_id_, ino_, quota.ShortDebugString());
+  LOG_DEBUG << fmt::format("[quota.{}.{}] create quota, detail({}).", fs_id_, ino_, quota.ShortDebugString());
 }
 
 UsageEntry Quota::GetDeltaAccumulatedUsage(uint64_t& timepoint) {
-  int64_t bytes = 0, inodes = 0;
-  for (auto& usage : delta_usages_) {
-    bytes += usage.bytes();
-    inodes += usage.inodes();
-    timepoint = usage.time_ns();
-  }
+  if (!delta_usages_.empty()) timepoint = delta_usages_.back().time_ns();
 
   UsageEntry usage;
-  usage.set_bytes(bytes);
-  usage.set_inodes(inodes);
+  usage.set_bytes(delta_bytes_);
+  usage.set_inodes(delta_inodes_);
 
   return usage;
 }
@@ -67,6 +62,8 @@ UsageEntry Quota::CompactDeltaUsage(uint64_t timepoint) {
     if (delta_usage.time_ns() > timepoint) break;
     usage.set_bytes(usage.bytes() + delta_usage.bytes());
     usage.set_inodes(usage.inodes() + delta_usage.inodes());
+    delta_bytes_ -= delta_usage.bytes();
+    delta_inodes_ -= delta_usage.inodes();
     delta_usages_.pop_front();
   }
 
@@ -74,7 +71,7 @@ UsageEntry Quota::CompactDeltaUsage(uint64_t timepoint) {
 }
 
 void Quota::UpdateUsage(int64_t byte_delta, int64_t inode_delta, const std::string& reason) {
-  LOG(INFO) << fmt::format("[quota.{}.{}] update usage, byte_delta({}) inode_delta({}) reason({}).", fs_id_, ino_,
+  LOG_DEBUG << fmt::format("[quota.{}.{}] update usage, byte_delta({}) inode_delta({}) reason({}).", fs_id_, ino_,
                            byte_delta, inode_delta, reason);
 
   {
@@ -89,6 +86,8 @@ void Quota::UpdateUsage(int64_t byte_delta, int64_t inode_delta, const std::stri
     usage.set_inodes(inode_delta);
     usage.set_time_ns(time_ns);
     delta_usages_.push_back(std::move(usage));
+    delta_bytes_ += byte_delta;
+    delta_inodes_ += inode_delta;
   }
 }
 
@@ -103,7 +102,7 @@ bool Quota::Check(int64_t byte_delta, int64_t inode_delta) {
 
   if ((quota_.max_bytes() > 0 && used_bytes > quota_.max_bytes()) ||
       (quota_.max_inodes() > 0 && used_inodes > quota_.max_inodes())) {
-    LOG(INFO) << fmt::format("[quota.{}.{}] check fail, bytes({}/{}/{}), inodes({}/{}/{}).", fs_id_, ino_, byte_delta,
+    LOG_DEBUG << fmt::format("[quota.{}.{}] check fail, bytes({}/{}/{}), inodes({}/{}/{}).", fs_id_, ino_, byte_delta,
                              usage.bytes(), quota_.max_bytes(), inode_delta, usage.inodes(), quota_.max_inodes());
     return false;
   }
@@ -345,7 +344,7 @@ bool DirQuotaMap::GetParent(Ino ino, Ino& parent, bool bypass_parent_memo) {
 
   parent_memo_.Remeber(ino, parent);
 
-  LOG(INFO) << fmt::format("[quota.{}.{}] query parent finish, parent({}).", fs_id_, ino, parent);
+  LOG_DEBUG << fmt::format("[quota.{}.{}] query parent finish, parent({}).", fs_id_, ino, parent);
 
   return true;
 }

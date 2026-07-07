@@ -44,7 +44,7 @@ void DirStatManager::AsyncUpdateDirStat(Ino parent, int64_t length_delta, int64_
 
 void DirStatManager::UpdateDirStat(Ino parent, int64_t length_delta, int64_t inode_delta, int64_t dir_delta,
                                    const std::string& reason) {
-  LOG(INFO) << fmt::format(
+  LOG_DEBUG << fmt::format(
       "[dirstat.{}.{}] update dir stat, length_delta({}) inode_delta({}) dir_delta({}) reason({}).", fs_id_, parent,
       length_delta, inode_delta, dir_delta, reason);
 

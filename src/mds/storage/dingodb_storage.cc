@@ -361,7 +361,7 @@ TxnUPtr DingodbStorage::NewTxn(Txn::IsolationLevel isolation_level) {
 DingodbTxn::~DingodbTxn() {
   dingodb::sdk::TraceMetrics metrics;
   txn_->GetTraceMetrics(metrics);
-  LOG(INFO) << fmt::format("[storage.{}] trace {}.", ID(), metrics.ToString());
+  LOG_DEBUG << fmt::format("[storage.{}] trace {}.", ID(), metrics.ToString());
 }
 
 int64_t DingodbTxn::ID() const { return txn_->ID(); }
