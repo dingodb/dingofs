@@ -64,7 +64,7 @@ DEFINE_validator(mds_txn_timeout_ms, brpc::PassValidate);
 DEFINE_bool(mds_store_operation_wait_multi_time, true, "wait multi time before retry.");
 DEFINE_validator(mds_store_operation_wait_multi_time, brpc::PassValidate);
 
-DEFINE_uint32(mds_store_operation_merge_delay_us, 20, "merge operation delay us.");
+DEFINE_uint32(mds_store_operation_merge_delay_us, 10, "merge operation delay us.");
 DEFINE_validator(mds_store_operation_merge_delay_us, brpc::PassValidate);
 
 DEFINE_bool(mds_tiny_file_data_enable, false, "enable tiny file data feature.");
@@ -73,12 +73,15 @@ DEFINE_validator(mds_tiny_file_data_enable, brpc::PassValidate);
 DEFINE_bool(mds_check_before_create_enable, true, "enable check before create file/dir.");
 DEFINE_validator(mds_check_before_create_enable, brpc::PassValidate);
 
+DEFINE_uint32(mds_store_operation_dispatcher_num, 4, "number of store operation dispatchers.");
+DEFINE_validator(mds_store_operation_dispatcher_num, brpc::PassValidate);
+
 DECLARE_uint32(mds_filesession_live_time_s);
 
 static const uint32_t kOpNameBufInitSize = 128;
 static const uint32_t kCleanCompactedSliceIntervalS = 180;  // 3 minutes
 
-static constexpr uint32_t kTryMaxCount = 10;
+static constexpr uint32_t kTryMaxCount = 5;
 
 static uint32_t CalWaitTimeUs(int retry) {
   // exponential backoff
@@ -3976,15 +3979,23 @@ OperationProcessor::OperationProcessor(KVStorageSPtr kv_storage) : kv_storage_(k
 }
 
 bool OperationProcessor::Init() {
-  thread_ = std::thread([this] {
-    // set thread name for better debugging
-    utils::SetThreadName("store_operate");
+  dispatchers_.reserve(FLAGS_mds_store_operation_dispatcher_num);
+  for (uint32_t i = 0; i < FLAGS_mds_store_operation_dispatcher_num; ++i) {
+    dispatchers_.push_back(std::make_unique<Dispatcher>());
+  }
 
-    // bind cpu
-    utils::BindThreadToCpu(utils::GetCpuCount() - 1);
+  for (uint32_t i = 0; i < dispatchers_.size(); ++i) {
+    auto* dispatcher = dispatchers_[i].get();
+    dispatcher->thread = std::thread([this, i, dispatcher] {
+      // set thread name for better debugging
+      utils::SetThreadName("store_operate");
 
-    ProcessOperation();
-  });
+      // bind cpu
+      utils::BindThreadToCpu(utils::GetCpuCount() - (i + 1));
+
+      ProcessOperation(*dispatcher);
+    });
+  }
 
   if (!async_worker_->Init()) {
     LOG(FATAL) << fmt::format("[operation] async worker init fail.");
@@ -3997,9 +4008,12 @@ bool OperationProcessor::Init() {
 bool OperationProcessor::Destroy() {
   is_stop_.store(true);
 
-  thread_cond_.notify_all();
-
-  if (thread_.joinable()) thread_.join();
+  for (auto& dispatcher : dispatchers_) {
+    dispatcher->thread_cond.notify_all();
+    if (dispatcher->thread.joinable()) {
+      dispatcher->thread.join();
+    }
+  }
 
   async_worker_->Destroy();
 
@@ -4011,9 +4025,16 @@ bool OperationProcessor::RunBatched(Operation* operation) {
     return false;
   }
 
-  operations_.Enqueue(operation);
+  if (dispatchers_.size() == 1) {
+    auto& dispatcher = dispatchers_.front();
+    dispatcher->operations.Enqueue(operation);
+    dispatcher->thread_cond.notify_one();
 
-  thread_cond_.notify_one();
+  } else {
+    auto& dispatcher = dispatchers_[GetDispatcherIndex(operation->GroupingKey())];
+    dispatcher->operations.Enqueue(operation);
+    dispatcher->thread_cond.notify_one();
+  }
 
   return true;
 }
@@ -4127,7 +4148,11 @@ void OperationProcessor::Grouping(std::vector<Operation*>& operations, BatchOper
   }
 }
 
-void OperationProcessor::ProcessOperation() {
+void OperationProcessor::ProcessOperation(Dispatcher& dispatcher) {
+  auto& operations = dispatcher.operations;
+  auto& thread_mutex = dispatcher.thread_mutex;
+  auto& thread_cond = dispatcher.thread_cond;
+
   std::vector<Operation*> stage_operations;
   stage_operations.reserve(FLAGS_mds_store_operation_batch_size);
 
@@ -4138,9 +4163,9 @@ void OperationProcessor::ProcessOperation() {
     operation = nullptr;
     stage_operations.clear();
 
-    while (!operations_.Dequeue(operation) && !is_stop_.load(std::memory_order_relaxed)) {
-      std::unique_lock<std::mutex> lk(thread_mutex_);
-      thread_cond_.wait(lk);
+    while (!operations.Dequeue(operation) && !is_stop_.load(std::memory_order_relaxed)) {
+      std::unique_lock<std::mutex> lk(thread_mutex);
+      thread_cond.wait(lk);
       lk.unlock();
     }
 
@@ -4168,7 +4193,7 @@ void OperationProcessor::ProcessOperation() {
       }
 
     } while (stage_operations.size() < FLAGS_mds_store_operation_batch_size &&
-             (operations_.Dequeue(operation) || ++try_count < kTryMaxCount));
+             (operations.Dequeue(operation) || ++try_count < kTryMaxCount));
 
     // grouping operations
     Grouping(stage_operations, batch_operation_map);
@@ -4179,7 +4204,7 @@ void OperationProcessor::ProcessOperation() {
   }
 
   // print pending operations
-  while (operations_.Dequeue(operation)) {
+  while (operations.Dequeue(operation)) {
     LOG(INFO) << fmt::format("[operation] pending operation type({}) ino({}).", operation->OpName(),
                              operation->GetIno());
   }

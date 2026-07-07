@@ -254,7 +254,7 @@ bool StoreAutoIncrementIdGenerator::GenID(uint32_t num, uint64_t min_slice_id, u
     // Lock-free bump allocator. The steady-state path is a single CAS on next_id_;
     // only bundle refill (rare) touches storage, and refill is non-blocking: just
     // one elected thread does the IO while others back off and retry the fast path.
-    constexpr int kMaxAttempts = 100000;  // livelock guard
+    constexpr int kMaxAttempts = 10;  // livelock guard
     for (int attempt = 0; attempt < kMaxAttempts; ++attempt) {
       if (BAIDU_UNLIKELY(is_destroyed_.load(std::memory_order_acquire))) {
         LOG(ERROR) << fmt::format("[idalloc.{}] id generator is destroyed.", name_);
@@ -294,13 +294,14 @@ bool StoreAutoIncrementIdGenerator::GenID(uint32_t num, uint64_t min_slice_id, u
       } else {
         // Another thread is refilling; back off and retry the fast path.
         bthread_yield();
+        // bthread_usleep(10);
       }
     }
 
     LOG(WARNING) << fmt::format("[idalloc.{}] gen id give up after {} attempts.", name_, kMaxAttempts);
 
     // sleep 3ms
-    bthread_usleep(3000);
+    bthread_usleep(500);
 
   } while (true);
 

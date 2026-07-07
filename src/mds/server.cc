@@ -63,7 +63,7 @@ DEFINE_uint32(mds_quota_worker_max_pending_num, 1000000, "quota worker max pendi
 
 const std::string kDirStatWorkerSetName = "DIR_STAT_WORKER_SET";
 DEFINE_uint32(mds_dir_stat_worker_num, 24, "dir stat worker number");
-DEFINE_uint32(mds_dir_stat_worker_max_pending_num, 4096, "dir stat worker max pending number");
+DEFINE_uint32(mds_dir_stat_worker_max_pending_num, 1000000, "dir stat worker max pending number");
 
 // crontab config
 DEFINE_uint32(mds_crontab_heartbeat_interval_s, 5, "heartbeat interval seconds");
@@ -270,13 +270,13 @@ bool Server::InitFileSystem() {
   CHECK(quota_worker_set_->Init()) << "init quota worker set fail.";
 
   dir_stat_worker_set_ = ExecqWorkerSet::NewUnique(kDirStatWorkerSetName, FLAGS_mds_dir_stat_worker_num,
-                                                   FLAGS_mds_dir_stat_worker_max_pending_num);
+                                                   FLAGS_mds_dir_stat_worker_max_pending_num, true);
   CHECK(dir_stat_worker_set_ != nullptr) << "new dir stat worker set fail.";
   CHECK(dir_stat_worker_set_->Init()) << "init dir stat worker set fail.";
 
-  file_system_set_ = FileSystemSet::New(coordinator_client_, std::move(fs_id_generator), slice_id_generator, kv_storage_,
-                                        self_mds_meta_, mds_meta_map_, operation_processor_, quota_worker_set_,
-                                        dir_stat_worker_set_, notify_buddy_);
+  file_system_set_ = FileSystemSet::New(coordinator_client_, std::move(fs_id_generator), slice_id_generator,
+                                        kv_storage_, self_mds_meta_, mds_meta_map_, operation_processor_,
+                                        quota_worker_set_, dir_stat_worker_set_, notify_buddy_);
   CHECK(file_system_set_ != nullptr) << "new FileSystem fail.";
 
   return file_system_set_->Init();
