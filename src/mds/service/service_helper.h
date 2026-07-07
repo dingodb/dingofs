@@ -182,7 +182,7 @@ void ServiceClosure<T, U>::Run() {
 
   } else {
     bool is_timeout = (request_->info().timeout_ms() > 0 && elapsed_time_us >= request_->info().timeout_ms() * 1000);
-    LOG(INFO) << fmt::format("[service.{}][request_id({})][{}us] request {}, request({}) response({})", method_name_,
+    LOG_DEBUG << fmt::format("[service.{}][request_id({})][{}us] request {}, request({}) response({})", method_name_,
                              request_->info().request_id(), elapsed_time_us, is_timeout ? "timeout" : "finish",
                              request_->ShortDebugString().substr(0, FLAGS_mds_service_log_print_max_length),
                              response_->ShortDebugString().substr(0, FLAGS_mds_service_log_print_max_length));

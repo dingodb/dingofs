@@ -493,7 +493,7 @@ bool ShardStoreAutoIncrementIdGenerator::GenID(uint32_t num, uint64_t min_slice_
       },
       shard_pos);
 
-  LOG(INFO) << fmt::format("[idalloc.{}] alloc id({}) num({}).", name_, id, num);
+  LOG_DEBUG << fmt::format("[idalloc.{}] alloc id({}) num({}).", name_, id, num);
 
   return ret;
 }

@@ -217,7 +217,7 @@ void NotifyBuddy::SendMessage(uint64_t mds_id, BatchMessage& batch_message) {
         mut_refresh_inode->mutable_inode()->Swap(&refresh_inode_message->attr);
         mut_refresh_inode->mutable_attr_mutation()->Swap(&refresh_inode_message->mutation);
 
-        LOG(INFO) << fmt::format("[notify.{}] refresh inode, inode({}).", mds_id,
+        LOG_DEBUG << fmt::format("[notify.{}] refresh inode, inode({}).", mds_id,
                                  mut_refresh_inode->inode().ShortDebugString());
 
       } break;

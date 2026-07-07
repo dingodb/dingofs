@@ -34,6 +34,7 @@
 #include "bthread/bthread.h"
 #include "bthread/types.h"
 #include "common/const.h"
+#include "common/logging.h"
 #include "common/meta.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mds.pb.h"
@@ -1368,7 +1369,7 @@ Status UpsertChunkOperation::Run(TxnUPtr& txn) {
     auto value = FindValue(kvs, key);
     if (!value.empty()) chunk = MetaCodec::DecodeChunkValue(value);
 
-    LOG(INFO) << fmt::format(
+    LOG_DEBUG << fmt::format(
         "[operation.{}.{}] upsert chunk, chunk_index({}), keys({}) kvs({}) value({}) old_chunk({}).", fs_id, ino_,
         chunk_index, keys.size(), kvs.size(), value.size(), chunk.ShortDebugString());
 
@@ -2354,7 +2355,7 @@ Status CleanTrashBucketOperation::Run(TxnUPtr& txn) {
 Status RenameOperation::Run(TxnUPtr& txn) {
   uint64_t time_ns = GetTime();
 
-  LOG(INFO) << fmt::format("[operation.{}] rename old_parent({}), old_name({}), new_parent_ino({}), new_name({}).",
+  LOG_DEBUG << fmt::format("[operation.{}] rename old_parent({}), old_name({}), new_parent_ino({}), new_name({}).",
                            fs_id_, old_parent_, old_name_, new_parent_, new_name_);
 
   bool is_same_parent = (old_parent_ == new_parent_);
@@ -2387,7 +2388,7 @@ Status RenameOperation::Run(TxnUPtr& txn) {
 
   std::vector<KeyValue> kvs;
   auto status = txn->BatchGet(keys, kvs);
-  LOG(INFO) << fmt::format("[operation.{}] kvs size({})", fs_id_, kvs.size());
+  LOG_DEBUG << fmt::format("[operation.{}] kvs size({})", fs_id_, kvs.size());
   if (!status.ok()) return status;
 
   if (kvs.size() < 2) {
@@ -2704,7 +2705,7 @@ Status CompactChunkOperation::Run(TxnUPtr& txn) {
 
   chunk.set_version(chunk.version() + 1);
 
-  LOG(INFO) << fmt::format(
+  LOG_DEBUG << fmt::format(
       "[operation.{}.{}.{}] compact chunk, pos[{},{}] slice_id[{},{}] new_slices({}) old_slices({}) final_slices({}).",
       fs_id, ino_, chunk_index, param_.start_pos, param_.end_pos, param_.start_slice_id, param_.end_slice_id,
       Helper::ToString(param_.new_slices), old_slice_size, chunk.slices_size());
@@ -4102,7 +4103,7 @@ Status OperationProcessor::RunAlone(Operation* operation) {
 
   trace.RecordElapsedTime("store_operate");
 
-  LOG(INFO) << fmt::format("[operation.{}.{}][{}][{}us] alone run {} finish, txn({}) retry({}) status({}).", fs_id, ino,
+  LOG_DEBUG << fmt::format("[operation.{}.{}][{}][{}us] alone run {} finish, txn({}) retry({}) status({}).", fs_id, ino,
                            txn_id, duration.ElapsedUs(), operation->OpName(), commit_type, retry, status.error_str());
 
   if (!status.ok()) {
@@ -4205,7 +4206,7 @@ void OperationProcessor::ProcessOperation(Dispatcher& dispatcher) {
 
   // print pending operations
   while (operations.Dequeue(operation)) {
-    LOG(INFO) << fmt::format("[operation] pending operation type({}) ino({}).", operation->OpName(),
+    LOG_DEBUG << fmt::format("[operation] pending operation type({}) ino({}).", operation->OpName(),
                              operation->GetIno());
   }
 }
@@ -4423,7 +4424,7 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
 
   SetElapsedTime(batch_operation, "store_txn");
 
-  LOG(INFO) << fmt::format(
+  LOG_DEBUG << fmt::format(
       "[operation.{}.{}][{}][{}us] batch run ({}) finish, count({}) parent_key({},{}) txn({}) retry({}) status({}) "
       "attr({}).",
       fs_id, ino, txn_id, duration.ElapsedUs(), op_names, count, need_parent_key, mutation_index, commit_type, retry,

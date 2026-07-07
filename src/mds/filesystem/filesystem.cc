@@ -392,7 +392,7 @@ Status FileSystem::GetPartitionFromStore(Context& ctx, Ino parent, const std::st
       attr = operation.GetResult().attr_with_mutation.ToCompleteAttr();
     }
     out_partition = ShardPartition::New(operation_processor_, attr);
-    LOG(INFO) << fmt::format("[fs.{}.{}.{}.{}][{}us] fetch partition (trash, no-cache), version({}) reason({}).",
+    LOG_DEBUG << fmt::format("[fs.{}.{}.{}.{}][{}us] fetch partition (trash, no-cache), version({}) reason({}).",
                              fs_id_, parent, method_name, request_id, duration.ElapsedUs(), attr.version(), reason);
     return Status::OK();
   }
@@ -408,7 +408,7 @@ Status FileSystem::GetPartitionFromStore(Context& ctx, Ino parent, const std::st
 
   UpsertInodeCache(attr_with_mutation, reason);
 
-  LOG(INFO) << fmt::format("[fs.{}.{}.{}.{}][{}us] fetch partition, version({}) shard_boundaries({}) reason({}).",
+  LOG_DEBUG << fmt::format("[fs.{}.{}.{}.{}][{}us] fetch partition, version({}) shard_boundaries({}) reason({}).",
                            fs_id_, parent, method_name, request_id, duration.ElapsedUs(), attr.version(),
                            Helper::VectorToString(Helper::PbRepeatedToVector(attr.shard_boundaries())), reason);
 
@@ -421,7 +421,7 @@ Status FileSystem::GetDentryFromStore(Ino parent, const std::string& name, Dentr
 
   auto status = RunOperation(&operation);
   if (!status.ok()) return status;
-  LOG(INFO) << fmt::format("[fs.{}] fetch dentry({}/{}).", fs_id_, parent, name);
+  LOG_DEBUG << fmt::format("[fs.{}] fetch dentry({}/{}).", fs_id_, parent, name);
 
   auto& result = operation.GetResult();
   dentry = Dentry(result.dentry);
@@ -512,7 +512,7 @@ Status FileSystem::GetInodeFromStore(Context& ctx, Ino ino, const std::string& r
 
   out_inode = is_cache ? UpsertInodeCache(attr_with_mutation, reason) : Inode::New(attr_with_mutation);
 
-  LOG(INFO) << fmt::format("[fs.{}.{}.{}.{}] fetch inode, version({}) is_cache({}) reason({}).", fs_id_, method_name,
+  LOG_DEBUG << fmt::format("[fs.{}.{}.{}.{}] fetch inode, version({}) is_cache({}) reason({}).", fs_id_, method_name,
                            request_id, ino, attr_with_mutation.attr.version(), is_cache, reason);
 
   return Status::OK();
@@ -534,7 +534,7 @@ Status FileSystem::BatchGetInodeFromStore(Context& ctx, std::vector<uint64_t> in
     out_inodes.push_back(is_cache ? UpsertInodeCache(attr_with_mutation, reason) : Inode::New(attr_with_mutation));
 
     const auto& attr = attr_with_mutation.attr;
-    LOG(INFO) << fmt::format("[fs.{}.{}.{}.{}] fetch inode, version({}) is_cache({}) reason({}).", fs_id_, method_name,
+    LOG_DEBUG << fmt::format("[fs.{}.{}.{}.{}] fetch inode, version({}) is_cache({}) reason({}).", fs_id_, method_name,
                              request_id, attr.ino(), attr.version(), is_cache, reason);
   }
 
@@ -647,7 +647,7 @@ Status FileSystem::CreateRoot() {
   CreateRootOperation operation(trace, dentry, attr);
 
   auto status = RunOperation(&operation);
-  LOG(INFO) << fmt::format("[fs.{}][{}us] create root finish, status({}).", fs_id_, duration.ElapsedUs(),
+  LOG_DEBUG << fmt::format("[fs.{}][{}us] create root finish, status({}).", fs_id_, duration.ElapsedUs(),
                            status.error_str());
 
   if (!status.ok()) return status;
@@ -702,7 +702,7 @@ Status FileSystem::Lookup(Context& ctx, Ino parent, const std::string& name, Ent
 
   entry_out.attr = inode->ToAttr();
 
-  LOG(INFO) << fmt::format("[fs.{}.{}.{}][{}us] lookup ({}/{}) version({}) ptr({}).", fs_id_, ctx.RequestId(),
+  LOG_DEBUG << fmt::format("[fs.{}.{}.{}][{}us] lookup ({}/{}) version({}) ptr({}).", fs_id_, ctx.RequestId(),
                            trace.GetReqTypeInt(), duration.ElapsedUs(), parent, name, entry_out.attr.version(),
                            (void*)inode.get());
 
@@ -813,7 +813,7 @@ Status FileSystem::BatchCreate(Context& ctx, Ino parent, const std::vector<MkNod
 
   status = RunOperation(&operation);
 
-  LOG(INFO) << fmt::format("[fs.{}.{}.{}][{}us] create {} finish, status({}).", fs_id_, ctx.RequestId(),
+  LOG_DEBUG << fmt::format("[fs.{}.{}.{}][{}us] create {} finish, status({}).", fs_id_, ctx.RequestId(),
                            trace.GetReqTypeInt(), duration.ElapsedUs(), names, status.error_str());
 
   if (!status.ok()) return status;
@@ -938,7 +938,7 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryWithPaOut& 
 
   status = RunOperation(&operation);
 
-  LOG(INFO) << fmt::format("[fs.{}.{}.{}][{}us] mknod {} finish, status({}).", fs_id_, ctx.RequestId(),
+  LOG_DEBUG << fmt::format("[fs.{}.{}.{}][{}us] mknod {} finish, status({}).", fs_id_, ctx.RequestId(),
                            trace.GetReqTypeInt(), duration.ElapsedUs(), param.name, status.error_str());
   trace.RecordElapsedTime("resume");
 
@@ -1057,7 +1057,7 @@ Status FileSystem::BatchMkNod(Context& ctx, const std::vector<MkNodParam>& param
   BatchMkNodOperation operation(trace, parent_inode, dentries, attrs);
   status = RunOperation(&operation);
 
-  LOG(INFO) << fmt::format("[fs.{}.{}.{}][{}us] mknod {}/{} finish, status({}).", fs_id_, ctx.RequestId(),
+  LOG_DEBUG << fmt::format("[fs.{}.{}.{}][{}us] mknod {}/{} finish, status({}).", fs_id_, ctx.RequestId(),
                            trace.GetReqTypeInt(), duration.ElapsedUs(), parent, join_name, status.error_str());
 
   if (!status.ok()) return status;
@@ -1206,7 +1206,7 @@ Status FileSystem::Open(Context& ctx, Ino ino, const OpenParam& param, EntryOutF
   auto& chunks = result.chunks;
   auto& data = result.data;
 
-  LOG(INFO) << fmt::format(
+  LOG_DEBUG << fmt::format(
       "[fs.{}.{}.{}.{}][{}us] open {} finish, flags({:o}:{}) fetch_chunk({}:{}) fetch_data({}:{}) status({}).", fs_id_,
       ino, ctx.RequestId(), trace.GetReqTypeInt(), duration.ElapsedUs(), param.session_id, flags,
       dingofs::Helper::DescOpenFlags(flags), fetch_from, out.chunks.empty() ? chunks.size() : out.chunks.size(),
@@ -1263,7 +1263,7 @@ Status FileSystem::Release(Context& ctx, Ino ino, const std::string& session_id)
   auto status = RunOperation(&operation);
   if (!status.ok()) return status;
 
-  LOG(INFO) << fmt::format("[fs.{}.{}.{}][{}us] release finish, ino({}) session_id({}) status({}).", fs_id_,
+  LOG_DEBUG << fmt::format("[fs.{}.{}.{}][{}us] release finish, ino({}) session_id({}) status({}).", fs_id_,
                            ctx.RequestId(), trace.GetReqTypeInt(), duration.ElapsedUs(), ino, session_id,
                            status.error_str());
 
@@ -1323,7 +1323,7 @@ Status FileSystem::FlushFile(Context& ctx, Ino ino, const FlushFileParam& param,
   auto& attr = result.attr;
   int64_t delta_bytes = result.delta_bytes;
 
-  LOG(INFO) << fmt::format("[fs.{}.{}.{}.{}][{}us] flush file finish, delta_bytes({}) version({}) status({}).", fs_id_,
+  LOG_DEBUG << fmt::format("[fs.{}.{}.{}.{}][{}us] flush file finish, delta_bytes({}) version({}) status({}).", fs_id_,
                            ino, ctx.RequestId(), trace.GetReqTypeInt(), duration.ElapsedUs(), delta_bytes,
                            attr.version(), status.error_str());
 
@@ -1390,7 +1390,7 @@ void FileSystem::AsyncKeepAliveFileSession(const std::vector<FileSessionParam>& 
         KeepAliveFileSessionOperation operation(trace, fs_id, op_param);
 
         auto status = param->filesystem.RunOperation(&operation);
-        LOG(INFO) << fmt::format("[meta.fs.{}] keep alive file session finish, ino({}), status({}).", fs_id, ino_str,
+        LOG_DEBUG << fmt::format("[meta.fs.{}] keep alive file session finish, ino({}), status({}).", fs_id, ino_str,
                                  status.error_str());
 
         delete param;
@@ -1465,7 +1465,7 @@ Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryWithPaOut& 
 
   status = RunOperation(&operation);
 
-  LOG(INFO) << fmt::format("[fs.{}.{}.{}][{}us] mkdir {} finish, status({}).", fs_id_, ctx.RequestId(),
+  LOG_DEBUG << fmt::format("[fs.{}.{}.{}][{}us] mkdir {} finish, status({}).", fs_id_, ctx.RequestId(),
                            trace.GetReqTypeInt(), duration.ElapsedUs(), param.name, status.error_str());
 
   if (!status.ok()) return status;
@@ -1578,7 +1578,7 @@ Status FileSystem::BatchMkDir(Context& ctx, const std::vector<MkDirParam>& param
 
   status = RunOperation(&operation);
 
-  LOG(INFO) << fmt::format("[fs.{}.{}.{}][{}us] mkdir {}/{} finish, status({}).", fs_id_, ctx.RequestId(),
+  LOG_DEBUG << fmt::format("[fs.{}.{}.{}][{}us] mkdir {}/{} finish, status({}).", fs_id_, ctx.RequestId(),
                            trace.GetReqTypeInt(), duration.ElapsedUs(), parent, join_name, status.error_str());
 
   if (!status.ok()) return status;
@@ -1669,7 +1669,7 @@ Status FileSystem::RmDir(Context& ctx, Ino parent, const std::string& name, Entr
 
   auto& result = operation.GetResult();
 
-  LOG(INFO) << fmt::format("[fs.{}.{}.{}][{}us] rmdir {}/{} finish, trash({},{}) status({}).", fs_id_, ctx.RequestId(),
+  LOG_DEBUG << fmt::format("[fs.{}.{}.{}][{}us] rmdir {}/{} finish, trash({},{}) status({}).", fs_id_, ctx.RequestId(),
                            trace.GetReqTypeInt(), duration.ElapsedUs(), parent, name, enable_trash,
                            immediate_trash_quota, status.error_str());
   if (!status.ok()) return status;
@@ -1784,7 +1784,7 @@ Status FileSystem::ReadDir(Context& ctx, Ino ino, const std::string& last_name, 
     entry_outs.push_back(std::move(entry_out));
   }
 
-  LOG(INFO) << fmt::format("[fs.{}.{}.{}][{}us] readdir {}/{} finish, dentries({}).", fs_id_, ctx.RequestId(),
+  LOG_DEBUG << fmt::format("[fs.{}.{}.{}][{}us] readdir {}/{} finish, dentries({}).", fs_id_, ctx.RequestId(),
                            trace.GetReqTypeInt(), duration.ElapsedUs(), ino, last_name, entry_outs.size());
 
   return Status::OK();
@@ -1831,7 +1831,7 @@ Status FileSystem::Link(Context& ctx, Ino ino, Ino new_parent, const std::string
   HardLinkOperation operation(trace, parent_inode, dentry);
   status = RunOperation(&operation);
 
-  LOG(INFO) << fmt::format("[fs.{}.{}.{}][{}us] link {} -> {}/{} finish, status({}).", fs_id, ctx.RequestId(),
+  LOG_DEBUG << fmt::format("[fs.{}.{}.{}][{}us] link {} -> {}/{} finish, status({}).", fs_id, ctx.RequestId(),
                            trace.GetReqTypeInt(), duration.ElapsedUs(), ino, new_parent, new_name, status.error_str());
 
   if (!status.ok()) return status;
@@ -1920,7 +1920,7 @@ Status FileSystem::UnLink(Context& ctx, Ino parent, const std::string& name, Ent
   auto& parent_attr_or_mutation = result.parent_attr_or_mutation;
   auto& attr = result.child_attr;
 
-  LOG(INFO) << fmt::format("[fs.{}.{}.{}][{}us] unlink {}/{} finish, nlink({}) trash({},{}) status({}).", fs_id_,
+  LOG_DEBUG << fmt::format("[fs.{}.{}.{}][{}us] unlink {}/{} finish, nlink({}) trash({},{}) status({}).", fs_id_,
                            ctx.RequestId(), trace.GetReqTypeInt(), duration.ElapsedUs(), parent, name, attr.nlink(),
                            enable_trash, immediate_trash_quota, status.error_str());
 
@@ -2043,7 +2043,7 @@ Status FileSystem::BatchUnLink(Context& ctx, Ino parent, const std::vector<std::
   auto& parent_attr_or_mutation = result.parent_attr_or_mutation;
   auto& child_attrs = result.child_attrs;
 
-  LOG(INFO) << fmt::format("[fs.{}.{}.{}][{}us] unlink {}/{} finish, trash({},{}) status({}).", fs_id_, ctx.RequestId(),
+  LOG_DEBUG << fmt::format("[fs.{}.{}.{}][{}us] unlink {}/{} finish, trash({},{}) status({}).", fs_id_, ctx.RequestId(),
                            trace.GetReqTypeInt(), duration.ElapsedUs(), parent, join_name, enable_trash,
                            immediate_trash_quota, status.error_str());
 
@@ -2173,7 +2173,7 @@ Status FileSystem::Symlink(Context& ctx, const std::string& symlink, Ino new_par
 
   status = RunOperation(&operation);
 
-  LOG(INFO) << fmt::format("[fs.{}.{}.{}][{}us] symlink {}/{} finish,  status({}).", fs_id_, ctx.RequestId(),
+  LOG_DEBUG << fmt::format("[fs.{}.{}.{}][{}us] symlink {}/{} finish,  status({}).", fs_id_, ctx.RequestId(),
                            trace.GetReqTypeInt(), duration.ElapsedUs(), new_parent, new_name, status.error_str());
 
   if (!status.ok()) return status;
@@ -2275,7 +2275,7 @@ Status FileSystem::SetAttr(Context& ctx, Ino ino, const SetAttrParam& param, Ent
 
   status = RunOperation(&operation);
 
-  LOG(INFO) << fmt::format("[fs.{}.{}.{}][{}us] setattr {} finish, status({}).", fs_id_, ctx.RequestId(),
+  LOG_DEBUG << fmt::format("[fs.{}.{}.{}][{}us] setattr {} finish, status({}).", fs_id_, ctx.RequestId(),
                            trace.GetReqTypeInt(), duration.ElapsedUs(), ino, status.error_str());
 
   if (!status.ok()) return status;
@@ -2370,7 +2370,7 @@ Status FileSystem::SetXAttr(Context& ctx, Ino ino, const Inode::XAttrMap& xattrs
 
   status = RunOperation(&operation);
 
-  LOG(INFO) << fmt::format("[fs.{}.{}.{}][{}us] setxattr {} finish, status({}).", fs_id_, ctx.RequestId(),
+  LOG_DEBUG << fmt::format("[fs.{}.{}.{}][{}us] setxattr {} finish, status({}).", fs_id_, ctx.RequestId(),
                            trace.GetReqTypeInt(), duration.ElapsedUs(), ino, status.error_str());
 
   if (!status.ok()) return status;
@@ -2417,7 +2417,7 @@ Status FileSystem::RemoveXAttr(Context& ctx, Ino ino, const std::string& name, E
 
   status = RunOperation(&operation);
 
-  LOG(INFO) << fmt::format("[fs.{}.{}.{}][{}us] removexattr {} finish, status({}).", fs_id_, ctx.RequestId(),
+  LOG_DEBUG << fmt::format("[fs.{}.{}.{}][{}us] removexattr {} finish, status({}).", fs_id_, ctx.RequestId(),
                            trace.GetReqTypeInt(), duration.ElapsedUs(), ino, status.error_str());
 
   if (!status.ok()) return status;
@@ -2586,7 +2586,7 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, RenameResult& 
   bool is_same_parent = result.is_same_parent;
   bool is_exist_new_dentry = result.is_exist_new_dentry;
 
-  LOG(INFO) << fmt::format(
+  LOG_DEBUG << fmt::format(
       "[fs.{}.{}.{}][{}us] rename {}/{} -> {}/{} finish, state({},{}) version({},{}) "
       "status({}).",
       fs_id_, ctx.RequestId(), trace.GetReqTypeInt(), duration.ElapsedUs(), old_parent, old_name, new_parent, new_name,
@@ -2791,7 +2791,7 @@ Status FileSystem::WriteSlice(Context& ctx, Ino ino, const std::vector<DeltaSlic
   auto& effected_chunks = result.effected_chunks;
 
   for (auto& chunk : effected_chunks) {
-    LOG(INFO) << fmt::format("[fs.{}.{}.{}.{}][{}us] writeslice finish, chunk({},{}).", fs_id_, ino, ctx.RequestId(),
+    LOG_DEBUG << fmt::format("[fs.{}.{}.{}.{}][{}us] writeslice finish, chunk({},{}).", fs_id_, ino, ctx.RequestId(),
                              trace.GetReqTypeInt(), duration.ElapsedUs(), chunk.index(), chunk.version());
   }
 
@@ -2867,7 +2867,7 @@ Status FileSystem::ReadSlice(Context& ctx, Ino ino, const std::vector<ChunkDescr
 
   auto status = RunOperation(&operation);
 
-  LOG(INFO) << fmt::format("[fs.{}.{}.{}][{}us] readslice {}/{} finish, miss({}) status({}).", fs_id_, ctx.RequestId(),
+  LOG_DEBUG << fmt::format("[fs.{}.{}.{}][{}us] readslice {}/{} finish, miss({}) status({}).", fs_id_, ctx.RequestId(),
                            trace.GetReqTypeInt(), duration.ElapsedUs(), ino, param_desc,
                            Helper::VectorToString(miss_chunk_indexes), status.error_str());
 
@@ -2919,7 +2919,7 @@ Status FileSystem::CopyFileRange(Context& ctx, const CopyFileRangeParam& param, 
 
   auto status = RunOperation(&operation);
 
-  LOG(INFO) << fmt::format("[fs.{}.{}.{}][{}us] copyfilerange {}->{} finish, param({}|{}|{}) status({}).", fs_id_,
+  LOG_DEBUG << fmt::format("[fs.{}.{}.{}][{}us] copyfilerange {}->{} finish, param({}|{}|{}) status({}).", fs_id_,
                            ctx.RequestId(), trace.GetReqTypeInt(), duration.ElapsedUs(), param.src_ino, param.dst_ino,
                            param.src_off, param.dst_off, param.len, status.error_str());
 
@@ -3038,7 +3038,7 @@ Status FileSystem::Fallocate(Context& ctx, Ino ino, int32_t mode, uint64_t offse
 
   FallocateOperation operation(trace, param);
 
-  LOG(INFO) << fmt::format("[fs.{}.{}.{}][{}us] fallocate finish, param({}|{}|{}|{}|{}) status({}).", fs_id_, ino,
+  LOG_DEBUG << fmt::format("[fs.{}.{}.{}][{}us] fallocate finish, param({}|{}|{}|{}|{}) status({}).", fs_id_, ino,
                            ctx.RequestId(), trace.GetReqTypeInt(), duration.ElapsedUs(), parse_mode_fn(mode), offset,
                            len, slice_id, slice_num, status.error_str());
 
@@ -3114,7 +3114,7 @@ Status FileSystem::CompactChunk(Context& ctx, Ino ino, uint32_t index, const Com
 
   chunk_out = chunk;
 
-  LOG(INFO) << fmt::format("[fs.{}.{}.{}.{}.{}][{}us] compactchunk finish, param({}|{}|{}) version({}->{}) status({}).",
+  LOG_DEBUG << fmt::format("[fs.{}.{}.{}.{}.{}][{}us] compactchunk finish, param({}|{}|{}) version({}->{}) status({}).",
                            fs_id_, ino, index, ctx.RequestId(), trace.GetReqTypeInt(), duration.ElapsedUs(),
                            param.start_slice_id, param.end_slice_id, param.new_slices.size(), param.version,
                            chunk.version(), status.error_str());

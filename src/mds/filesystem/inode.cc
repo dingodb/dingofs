@@ -81,7 +81,7 @@ void Inode::ApplyMutation(const AttrWithMutation& attr_with_mutation) {
 }
 
 void Inode::PutIf(const AttrEntry& attr, const std::string& reason) {
-  LOG(INFO) << fmt::format("[inode.{}.{}] update attr, version({}-{}) in_base_version({}) reason({}).", fs_id_, ino_,
+  LOG_DEBUG << fmt::format("[inode.{}.{}] update attr, version({}-{}) in_base_version({}) reason({}).", fs_id_, ino_,
                            base_version_, total_delta_version_, attr.version(), reason);
 
   utils::WriteLockGuard lk(lock_);
@@ -94,7 +94,7 @@ void Inode::PutIf(const AttrEntry& attr, const std::string& reason) {
 void Inode::PutIf(const AttrWithMutation& attr_with_mutation, const std::string& reason) {
   const auto& attr = attr_with_mutation.attr;
 
-  LOG(INFO) << fmt::format("[inode.{}.{}] update attr with mutation, version({}-{}) in_version({}-{}) reason({}).",
+  LOG_DEBUG << fmt::format("[inode.{}.{}] update attr with mutation, version({}-{}) in_version({}-{}) reason({}).",
                            fs_id_, ino_, base_version_, total_delta_version_, attr_with_mutation.BaseVersion(),
                            attr_with_mutation.TotalDeltaVersion(), reason);
 
@@ -109,7 +109,7 @@ AttrEntry Inode::PutByMutation(const AttrMutationEntry& mutation, const std::str
   CHECK(mutation.index() < kDirAttrMutationNum)
       << fmt::format("invalid mutation index({}), should be less than {}.", mutation.index(), kDirAttrMutationNum);
 
-  LOG(INFO) << fmt::format("[inode.{}.{}] update attr by mutation, version({}-{}) in_delta_version({}_{}) reason({}).",
+  LOG_DEBUG << fmt::format("[inode.{}.{}] update attr by mutation, version({}-{}) in_delta_version({}_{}) reason({}).",
                            fs_id_, ino_, base_version_, total_delta_version_, mutation.index(),
                            mutation.delta_version(), reason);
 
@@ -250,7 +250,7 @@ void InodeCache::Delete(Ino ino) {
 };
 
 void InodeCache::DeleteIf(std::function<bool(const Ino&)>&& f) {  // NOLINT
-  LOG(INFO) << fmt::format("[cache.inode.{}] batch delete inode.", fs_id_);
+  LOG_DEBUG << fmt::format("[cache.inode.{}] batch delete inode.", fs_id_);
 
   shard_map_.iterateWLock([&](Map& map) {
     for (auto it = map.begin(); it != map.end();) {

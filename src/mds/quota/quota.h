@@ -80,6 +80,10 @@ class Quota {
 
   QuotaEntry quota_;
   std::deque<UsageEntry> delta_usages_;
+  // running aggregate of delta_usages_, kept in sync on push/compact so
+  // per-request quota checks are O(1) instead of scanning the deque
+  int64_t delta_bytes_{0};
+  int64_t delta_inodes_{0};
 
   uint64_t last_time_ns_{0};
 
