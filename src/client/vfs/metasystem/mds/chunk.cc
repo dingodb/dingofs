@@ -704,6 +704,18 @@ void ChunkCache::CleanExpired(uint64_t expire_s) {
   shard_map_.iterateWLock([&](Map& map) {
     for (auto it = map.begin(); it != map.end();) {
       if (it->second->GetLastActiveTimeS() < expire_s) {
+        if (it->second->HasUncommitedSlice()) {
+          // Data safety guard: do not erase staged/committing slices. A future
+          // cleanup path should force-commit and escalate if the same ChunkSet
+          // stays dirty across repeated expiry rounds.
+          LOG_EVERY_N(WARNING, 100) << fmt::format(
+              "[meta.chunkcache] skip clean expired chunkset ino({}) with "
+              "uncommited slice.",
+              it->first);
+          ++it;
+          continue;
+        }
+
         auto temp = it++;
         map.erase(temp);
         clean_count_ << 1;

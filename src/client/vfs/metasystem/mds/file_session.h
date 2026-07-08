@@ -22,6 +22,7 @@
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -59,10 +60,17 @@ class FileSession {
   void SetInode(InodeSPtr inode) { inode_ = inode; }
   InodeSPtr& GetInode() { return inode_; }
 
-  ChunkSetSPtr& GetChunkSet() {
+  ChunkSetSPtr GetChunkSet() {
+    std::lock_guard<std::mutex> guard(chunk_set_mutex_);
     CHECK(chunk_set_ != nullptr)
         << fmt::format("chunk_set is nullptr, ino({}).", ino_);
     return chunk_set_;
+  }
+  void SetChunkSet(ChunkSetSPtr chunk_set) {
+    CHECK(chunk_set != nullptr)
+        << fmt::format("chunk_set is nullptr, ino({}).", ino_);
+    std::lock_guard<std::mutex> guard(chunk_set_mutex_);
+    chunk_set_ = chunk_set;
   }
 
   void AddSession(uint64_t fh, const std::string& session_id, uint32_t flags);
@@ -95,6 +103,10 @@ class FileSession {
   absl::flat_hash_map<uint64_t, SessionInfo> session_id_map_;
 
   InodeSPtr inode_;
+
+  // Guards chunk_set_ rebinding on successful O_TRUNC while other fhs of the
+  // same inode may concurrently flush through the shared FileSession.
+  std::mutex chunk_set_mutex_;
   ChunkSetSPtr chunk_set_;
 
   uint64_t last_keep_alive_time_s_{utils::Timestamp()};

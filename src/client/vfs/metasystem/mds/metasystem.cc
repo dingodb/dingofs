@@ -704,13 +704,17 @@ Status MDSMetaSystem::DoOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
   file_session->SetInode(inode);
 
   // truncate file, forget chunk memo and delete chunk cache
+  ChunkSetSPtr chunk_set;
   if (flags & O_TRUNC) {
     chunk_memo_.Forget(ino);
     chunk_cache_.Delete(ino);
+    chunk_set = chunk_cache_.GetOrCreate(ino);
+    file_session->SetChunkSet(chunk_set);
+  } else {
+    chunk_set = file_session->GetChunkSet();
   }
 
   // update chunk cache
-  auto& chunk_set = file_session->GetChunkSet();
   if (!chunks.empty()) chunk_set->Put(chunks, "open");
 
   // update chunk memo
@@ -918,9 +922,27 @@ void MDSMetaSystem::AsyncClose(ContextSPtr ctx, Ino ino, uint64_t fh,
 Status MDSMetaSystem::Close(ContextSPtr ctx, Ino ino, uint64_t fh) {
   AssertStop();
 
-  std::string session_id = file_session_map_.GetSessionID(ino, fh);
+  auto file_session = file_session_map_.GetSession(ino);
+  CHECK(file_session != nullptr)
+      << fmt::format("get file session fail, ino({}) fh({}).", ino, fh);
+
+  std::string session_id = file_session->GetSessionID(fh);
   CHECK(!session_id.empty())
       << fmt::format("get file session fail, ino({}) fh({}).", ino, fh);
+
+  uint32_t flags = file_session->GetFlags(fh);
+  Status flush_status = Status::OK();
+  if ((flags & O_WRONLY) || (flags & O_RDWR)) {
+    // VFS release closes the data writer before meta close, so all slices
+    // produced by this fd have already reached MetaSystem::WriteSlice().  This
+    // barrier turns any remaining staged slice metadata into committed MDS
+    // WriteSlice RPCs before the file session is released.
+    flush_status = FlushSliceAndFile(ctx, ino);
+    if (!flush_status.ok()) {
+      LOG(ERROR) << fmt::format("[meta.fs.{}.{}] close flush fail, error({}).",
+                                ino, fh, flush_status.ToString());
+    }
+  }
 
   file_session_map_.Delete(ino, fh);
 
@@ -929,7 +951,7 @@ Status MDSMetaSystem::Close(ContextSPtr ctx, Ino ino, uint64_t fh) {
 
   AsyncClose(ctx, ino, fh, session_id);
 
-  return Status::OK();
+  return flush_status;
 }
 
 Status MDSMetaSystem::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
@@ -1028,7 +1050,7 @@ Status MDSMetaSystem::Write(ContextSPtr, Ino ino, const char* buf,
   CHECK(file_session != nullptr)
       << fmt::format("file session is nullptr, ino({}) fh({}).", ino, fh);
 
-  auto& chunk_set = file_session->GetChunkSet();
+  auto chunk_set = file_session->GetChunkSet();
   chunk_set->SetLastWriteLength(offset, size);
 
   if (FLAGS_vfs_tiny_file_data_enable) {
@@ -1260,7 +1282,16 @@ Status MDSMetaSystem::Unlink(ContextSPtr ctx, Ino parent,
   PutInodeToCache(parent_attr_entry);
   if (attr_entry.nlink() == 0) {
     DeleteInodeFromCache(attr_entry.ino());
-    chunk_cache_.Delete(attr_entry.ino());
+    if (file_session_map_.GetSession(attr_entry.ino()) == nullptr) {
+      chunk_cache_.Delete(attr_entry.ino());
+    } else {
+      // POSIX permits write/read through an already-open fd after unlink.
+      // Keep its ChunkSet bound to the live FileSession; deleting it here would
+      // split the FileSession view from future WriteSlice's chunk_cache view.
+      LOG(INFO) << fmt::format(
+          "[meta.fs.{}] keep chunk cache for unlinked open file.",
+          attr_entry.ino());
+    }
   }
 
   return Status::OK();
@@ -1591,7 +1622,7 @@ Status MDSMetaSystem::FlushSliceAndFile(ContextSPtr ctx, Ino ino) {
   CHECK(file_session != nullptr)
       << fmt::format("file session is nullptr, ino({}).", ino);
 
-  auto& chunk_set = file_session->GetChunkSet();
+  auto chunk_set = file_session->GetChunkSet();
 
   LOG(INFO) << fmt::format("[meta.fs.{}] flush all slice.", ino);
 
@@ -1635,7 +1666,7 @@ void MDSMetaSystem::AsyncFlushFile(ContextSPtr ctx, Ino ino) {
             if (file_session != nullptr) {
               LOG(INFO) << fmt::format("[meta.fs.{}] async flush file.", ino);
 
-              auto& chunk_set = file_session->GetChunkSet();
+              auto chunk_set = file_session->GetChunkSet();
               self.DoFlushFile(param->ctx, self.GetInode(file_session),
                                chunk_set, false);
               chunk_set->ResetFlush();

@@ -14,3 +14,4 @@
 
 add_subdirectory(compaction)
 add_subdirectory(data)
+add_subdirectory(metasystem)

@@ -118,7 +118,8 @@ bool FileSession::Dump(Json::Value& value) {
 
   // dump chunk_set_
   Json::Value chunk_set_value = Json::objectValue;
-  chunk_set_->Dump(chunk_set_value);
+  auto chunk_set = GetChunkSet();
+  chunk_set->Dump(chunk_set_value);
   value["chunk_set"] = chunk_set_value;
 
   return true;
