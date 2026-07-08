@@ -706,7 +706,7 @@ Status MDSMetaSystem::DoOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
   // truncate file, forget chunk memo and delete chunk cache
   if (flags & O_TRUNC) {
     chunk_memo_.Forget(ino);
-    chunk_cache_.Delete(ino);
+    chunk_cache_.Reset(ino);
   }
 
   // update chunk cache
@@ -1260,7 +1260,6 @@ Status MDSMetaSystem::Unlink(ContextSPtr ctx, Ino parent,
   PutInodeToCache(parent_attr_entry);
   if (attr_entry.nlink() == 0) {
     DeleteInodeFromCache(attr_entry.ino());
-    chunk_cache_.Delete(attr_entry.ino());
   }
 
   return Status::OK();

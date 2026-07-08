@@ -661,8 +661,10 @@ ChunkSetSPtr ChunkCache::GetOrCreate(Ino ino) {
   return chunk_set;
 }
 
-void ChunkCache::Delete(Ino ino) {
-  shard_map_.withWLock([ino](Map& map) { map.erase(ino); }, ino);
+void ChunkCache::Reset(Ino ino) {
+  // shard_map_.withWLock([ino](Map& map) { map.erase(ino); }, ino);
+  auto chunkset = Get(ino);
+  if (chunkset != nullptr) chunkset->Reset();
 }
 
 bool ChunkCache::HasUncommitedSlice() {

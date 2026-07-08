@@ -324,6 +324,8 @@ class ChunkSet {
   ChunkSPtr Get(uint32_t index) {
     utils::ReadLockGuard guard(lock_);
 
+    last_active_s_ = utils::Timestamp();
+
     auto it = chunk_map_.find(index);
     return (it != chunk_map_.end()) ? it->second : nullptr;
   }
@@ -386,6 +388,24 @@ class ChunkSet {
     last_flush_ms_ = utils::TimestampMs();
   }
 
+  void Reset() {
+    utils::WriteLockGuard guard(lock_);
+
+    chunk_map_.clear();
+    commit_task_map_.clear();
+    committing_chunk_index_set_.clear();
+
+    last_write_length_ = 0;
+    last_write_time_ns_ = utils::TimestampNs();
+    last_commited_length_ = 0;
+    last_commited_length_changed_ = false;
+    last_commit_ms_ = utils::TimestampMs();
+    flushing_ = false;
+    last_flush_ms_ = utils::TimestampMs();
+
+    last_active_s_ = utils::Timestamp();
+  }
+
   size_t Size() const { return GetChunkSize(); }
   size_t Bytes() const;
 
@@ -437,7 +457,7 @@ class ChunkCache {
 
   ChunkSetSPtr Get(Ino ino);
   ChunkSetSPtr GetOrCreate(Ino ino);
-  void Delete(Ino ino);
+  void Reset(Ino ino);
 
   bool HasUncommitedSlice();
 
