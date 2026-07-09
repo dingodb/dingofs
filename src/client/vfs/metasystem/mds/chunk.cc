@@ -347,6 +347,8 @@ void ChunkSet::Append(uint32_t index, const std::vector<Slice>& slices) {
     chunk->AppendSlice(slices);
     chunk_map_.emplace(index, chunk);
   }
+
+  last_active_s_ = utils::Timestamp();
 }
 
 void ChunkSet::Put(const std::vector<ChunkEntry>& chunks, const char* reason) {
@@ -360,10 +362,14 @@ void ChunkSet::Put(const std::vector<ChunkEntry>& chunks, const char* reason) {
       chunk_map_.emplace(chunk.index(), Chunk::New(ino_, chunk, reason));
     }
   }
+
+  last_active_s_ = utils::Timestamp();
 }
 
 uint64_t ChunkSet::GetVersion(uint32_t index) {
   utils::ReadLockGuard guard(lock_);
+
+  last_active_s_ = utils::Timestamp();
 
   auto it = chunk_map_.find(index);
   if (it != chunk_map_.end()) {
@@ -375,6 +381,8 @@ uint64_t ChunkSet::GetVersion(uint32_t index) {
 
 std::vector<std::pair<uint32_t, uint64_t>> ChunkSet::GetAllVersion() {
   utils::ReadLockGuard guard(lock_);
+
+  last_active_s_ = utils::Timestamp();
 
   std::vector<std::pair<uint32_t, uint64_t>> versions;
 
@@ -388,6 +396,8 @@ std::vector<std::pair<uint32_t, uint64_t>> ChunkSet::GetAllVersion() {
 std::vector<ChunkSPtr> ChunkSet::GetAll() {
   utils::ReadLockGuard guard(lock_);
 
+  last_active_s_ = utils::Timestamp();
+
   std::vector<ChunkSPtr> chunks;
   chunks.reserve(chunk_map_.size());
   for (const auto& [index, chunk] : chunk_map_) {
@@ -400,6 +410,8 @@ std::vector<ChunkSPtr> ChunkSet::GetAll() {
 bool ChunkSet::HasStage() {
   utils::ReadLockGuard guard(lock_);
 
+  last_active_s_ = utils::Timestamp();
+
   for (const auto& [index, chunk] : chunk_map_) {
     if (chunk->HasStage()) return true;
   }
@@ -409,6 +421,8 @@ bool ChunkSet::HasStage() {
 
 bool ChunkSet::HasCommitting() {
   utils::ReadLockGuard guard(lock_);
+
+  last_active_s_ = utils::Timestamp();
 
   for (const auto& [index, chunk] : chunk_map_) {
     if (chunk->HasCommitting()) return true;
@@ -479,6 +493,8 @@ void ChunkSet::FinishCommitTask(uint64_t task_id,
                                 const std::vector<ChunkEntry>& chunks) {
   utils::WriteLockGuard guard(lock_);
 
+  last_active_s_ = utils::Timestamp();
+
   auto task_it = commit_task_map_.find(task_id);
   CHECK(task_it != commit_task_map_.end()) << fmt::format(
       "[meta.chunkset.{}] finish commit task fail, task({}) not found.", ino_,
@@ -519,6 +535,8 @@ std::vector<CommitTaskSPtr> ChunkSet::ListCommitTask() {
     tasks.push_back(task);
   }
 
+  last_active_s_ = utils::Timestamp();
+
   return tasks;
 }
 
@@ -530,6 +548,8 @@ bool ChunkSet::HasUncommitedSlice() {
   for (const auto& [_, chunk] : chunk_map_) {
     if (chunk->HasStage() || chunk->HasCommitting()) return true;
   }
+
+  last_active_s_ = utils::Timestamp();
 
   return false;
 }
@@ -650,6 +670,8 @@ ChunkSetSPtr ChunkCache::GetOrCreate(Ino ino) {
         auto it = map.find(ino);
         if (it != map.end()) {
           chunk_set = it->second;
+          chunk_set->UpdateLastActiveTimeS();
+
         } else {
           chunk_set = ChunkSet::New(ino);
           map.emplace(ino, chunk_set);
@@ -707,10 +729,11 @@ void ChunkCache::CleanExpired(uint64_t expire_s) {
     for (auto it = map.begin(); it != map.end();) {
       if (it->second->GetLastActiveTimeS() < expire_s) {
         auto temp = it++;
-        map.erase(temp);
-        clean_count_ << 1;
         LOG_DEBUG << fmt::format(
             "[meta.chunkcache] clean expired chunkset ino({}).", temp->first);
+
+        map.erase(temp);
+        clean_count_ << 1;
 
       } else {
         ++it;

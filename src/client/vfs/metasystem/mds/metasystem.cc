@@ -703,14 +703,14 @@ Status MDSMetaSystem::DoOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
   InodeSPtr inode = PutInodeToCache(attr_entry);
   file_session->SetInode(inode);
 
+  // update chunk cache
+  auto& chunk_set = file_session->GetChunkSet();
+
   // truncate file, forget chunk memo and delete chunk cache
   if (flags & O_TRUNC) {
     chunk_memo_.Forget(ino);
-    chunk_cache_.Reset(ino);
+    chunk_set->Reset();
   }
-
-  // update chunk cache
-  auto& chunk_set = file_session->GetChunkSet();
   if (!chunks.empty()) chunk_set->Put(chunks, "open");
 
   // update chunk memo
