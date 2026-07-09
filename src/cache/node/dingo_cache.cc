@@ -132,15 +132,19 @@ int DingoCache::Run(int argc, char** argv) {
     return rc;
   }
 
-  utils::BindNumaOrDie();
-  GlobalInitOrDie();
-
+  // Daemonize before any heavy initialization. DaemonizeExec re-execs the same
+  // binary, so slab pool allocation and RDMA memory registration must happen in
+  // the re-exec'd process, not the parent: otherwise fork() runs while ~1GB of
+  // RDMA-pinned memory is held and fails with ENOMEM under heuristic overcommit.
   if (FLAGS_daemonize) {
     if (!utils::DaemonizeExec(orig_args)) {
       std::cerr << "failed to daemonize process.\n";
       return -1;
     }
   }
+
+  utils::BindNumaOrDie();
+  GlobalInitOrDie();
 
   PrintShortInfo();
   ExposeDingoVersion();
