@@ -693,6 +693,7 @@ Status FileSystem::Lookup(Context& ctx, Ino parent, const std::string& name, Ent
     status = partition->Get(name, dentry);
   }
   if (!status.ok()) return status;
+  trace.RecordElapsedTime("prepare");
 
   InodeSPtr inode;
   status = GetInode(ctx, 0, dentry.INo(), inode);
@@ -705,6 +706,8 @@ Status FileSystem::Lookup(Context& ctx, Ino parent, const std::string& name, Ent
   LOG_DEBUG << fmt::format("[fs.{}.{}.{}][{}us] lookup ({}/{}) version({}) ptr({}).", fs_id_, ctx.RequestId(),
                            trace.GetReqTypeInt(), duration.ElapsedUs(), parent, name, entry_out.attr.version(),
                            (void*)inode.get());
+
+  trace.RecordElapsedTime("post_handle");
 
   return Status::OK();
 }
@@ -815,40 +818,30 @@ Status FileSystem::BatchCreate(Context& ctx, Ino parent, const std::vector<MkNod
 
   LOG_DEBUG << fmt::format("[fs.{}.{}.{}][{}us] create {} finish, status({}).", fs_id_, ctx.RequestId(),
                            trace.GetReqTypeInt(), duration.ElapsedUs(), names, status.error_str());
+  trace.RecordElapsedTime("resume");
 
   if (!status.ok()) return status;
 
   auto& result = operation.GetResult();
   auto& parent_attr_or_mutation = result.parent_attr_or_mutation;
 
-  // trace.RecordElapsedTime("post_handle_1");
-
   // update cache
   for (auto& file_session : file_sessions) file_session_manager_.Put(file_session);
 
-  // trace.RecordElapsedTime("post_handle_2");
-
   std::string reason = fmt::format("create.{}.{}.{}", request_id, parent, names);
   for (auto& attr : attrs) UpsertInodeCache(attr, reason);
-  // trace.RecordElapsedTime("post_handle_3");
 
   AttrEntry last_parent_attr = parent_inode->ToAttr();
-  // trace.RecordElapsedTime("post_handle_4");
 
   for (auto& dentry : dentries) AddDentryToPartition(parent, dentry, last_parent_attr.version());
-  // trace.RecordElapsedTime("post_handle_5");
 
   // update quota
   quota_manager_.AsyncUpdateFsUsage(0, params.size(), reason);
   quota_manager_.AsyncUpdateDirUsage(parent, 0, params.size(), reason);
   UpdateDirStat(parent, 0, static_cast<int64_t>(params.size()), 0, reason);
 
-  // trace.RecordElapsedTime("post_handle_6");
-
   // update parent memo
   for (auto& dentry : dentries) parent_memo_.Remeber(dentry.INo(), parent);
-
-  // trace.RecordElapsedTime("post_handle_7");
 
   // set output
   entry_out.parent_attr = last_parent_attr;
@@ -1059,6 +1052,7 @@ Status FileSystem::BatchMkNod(Context& ctx, const std::vector<MkNodParam>& param
 
   LOG_DEBUG << fmt::format("[fs.{}.{}.{}][{}us] mknod {}/{} finish, status({}).", fs_id_, ctx.RequestId(),
                            trace.GetReqTypeInt(), duration.ElapsedUs(), parent, join_name, status.error_str());
+  trace.RecordElapsedTime("resume");
 
   if (!status.ok()) return status;
 
@@ -1198,6 +1192,8 @@ Status FileSystem::Open(Context& ctx, Ino ino, const OpenParam& param, EntryOutF
 
   OpenFileOperation operation(trace, flags, *file_session, chunk_size, prefetch_chunks, param.is_prefetch_data);
 
+  trace.RecordElapsedTime("prepare");
+
   status = RunOperation(&operation);
 
   auto& result = operation.GetResult();
@@ -1211,6 +1207,7 @@ Status FileSystem::Open(Context& ctx, Ino ino, const OpenParam& param, EntryOutF
       ino, ctx.RequestId(), trace.GetReqTypeInt(), duration.ElapsedUs(), param.session_id, flags,
       dingofs::Helper::DescOpenFlags(flags), fetch_from, out.chunks.empty() ? chunks.size() : out.chunks.size(),
       param.is_prefetch_data, out.data_out.size(), status.error_str());
+  trace.RecordElapsedTime("resume");
 
   if (!status.ok()) return status;
 
@@ -1246,6 +1243,8 @@ Status FileSystem::Open(Context& ctx, Ino ino, const OpenParam& param, EntryOutF
     for (auto& chunk : chunks) chunk_cache_.PutIf(ino, std::move(chunk));
   }
 
+  trace.RecordElapsedTime("post_handle");
+
   return Status::OK();
 }
 
@@ -1260,7 +1259,11 @@ Status FileSystem::Release(Context& ctx, Ino ino, const std::string& session_id)
 
   CloseFileOperation operation(trace, fs_id_, ino, session_id);
 
+  trace.RecordElapsedTime("prepare");
+
   auto status = RunOperation(&operation);
+  trace.RecordElapsedTime("resume");
+
   if (!status.ok()) return status;
 
   LOG_DEBUG << fmt::format("[fs.{}.{}.{}][{}us] release finish, ino({}) session_id({}) status({}).", fs_id_,
@@ -1276,6 +1279,8 @@ Status FileSystem::Release(Context& ctx, Ino ino, const std::string& session_id)
   if (inode != nullptr && inode->IsDeleted()) {
     DeleteInodeFromCache(ino);
   }
+
+  trace.RecordElapsedTime("post_handle");
 
   return Status::OK();
 }
@@ -1313,9 +1318,12 @@ Status FileSystem::FlushFile(Context& ctx, Ino ino, const FlushFileParam& param,
     return Status(pb::error::EALLOC_ID, "generate slice id fail");
   }
 
+  trace.RecordElapsedTime("prepare");
+
   FlushFileOperation operation(trace, fs_id_, ino, extra_param);
 
   status = RunOperation(&operation);
+  trace.RecordElapsedTime("resume");
 
   if (!status.ok()) return status;
 
@@ -1326,8 +1334,6 @@ Status FileSystem::FlushFile(Context& ctx, Ino ino, const FlushFileParam& param,
   LOG_DEBUG << fmt::format("[fs.{}.{}.{}.{}][{}us] flush file finish, delta_bytes({}) version({}) status({}).", fs_id_,
                            ino, ctx.RequestId(), trace.GetReqTypeInt(), duration.ElapsedUs(), delta_bytes,
                            attr.version(), status.error_str());
-
-  if (!status.ok()) return status;
 
   // set output
   entry_out.attr = attr;
@@ -1350,6 +1356,8 @@ Status FileSystem::FlushFile(Context& ctx, Ino ino, const FlushFileParam& param,
 
   // update cache
   UpsertInodeCache(attr, reason);
+
+  trace.RecordElapsedTime("post_handle");
 
   return Status::OK();
 }
@@ -1463,10 +1471,13 @@ Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryWithPaOut& 
   // update backend store
   MkDirOperation operation(trace, dentry, attr);
 
+  trace.RecordElapsedTime("prepare");
+
   status = RunOperation(&operation);
 
   LOG_DEBUG << fmt::format("[fs.{}.{}.{}][{}us] mkdir {} finish, status({}).", fs_id_, ctx.RequestId(),
                            trace.GetReqTypeInt(), duration.ElapsedUs(), param.name, status.error_str());
+  trace.RecordElapsedTime("resume");
 
   if (!status.ok()) return status;
 
@@ -1498,6 +1509,8 @@ Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryWithPaOut& 
   if (operation.GetBatchIndex() == 0 && IsParentHashPartition()) {
     NotifyBuddyRefreshInode(parent_attr, reason);
   }
+
+  trace.RecordElapsedTime("post_handle");
 
   return Status::OK();
 }
@@ -1576,10 +1589,13 @@ Status FileSystem::BatchMkDir(Context& ctx, const std::vector<MkDirParam>& param
   // update backend store
   BatchMkDirOperation operation(trace, dentries, attrs);
 
+  trace.RecordElapsedTime("prepare");
+
   status = RunOperation(&operation);
 
   LOG_DEBUG << fmt::format("[fs.{}.{}.{}][{}us] mkdir {}/{} finish, status({}).", fs_id_, ctx.RequestId(),
                            trace.GetReqTypeInt(), duration.ElapsedUs(), parent, join_name, status.error_str());
+  trace.RecordElapsedTime("resume");
 
   if (!status.ok()) return status;
 
@@ -1612,6 +1628,8 @@ Status FileSystem::BatchMkDir(Context& ctx, const std::vector<MkDirParam>& param
   if (operation.GetBatchIndex() == 0 && IsParentHashPartition()) {
     NotifyBuddyRefreshInode(parent_attr, reason);
   }
+
+  trace.RecordElapsedTime("post_handle");
 
   return Status::OK();
 }
@@ -1665,6 +1683,9 @@ Status FileSystem::RmDir(Context& ctx, Ino parent, const std::string& name, Entr
   }
 
   RmDirOperation operation(trace, fs_id_, parent, name, pre_dentry.INo(), trash);
+
+  trace.RecordElapsedTime("prepare");
+
   status = RunOperation(&operation);
 
   auto& result = operation.GetResult();
@@ -1672,6 +1693,7 @@ Status FileSystem::RmDir(Context& ctx, Ino parent, const std::string& name, Entr
   LOG_DEBUG << fmt::format("[fs.{}.{}.{}][{}us] rmdir {}/{} finish, trash({},{}) status({}).", fs_id_, ctx.RequestId(),
                            trace.GetReqTypeInt(), duration.ElapsedUs(), parent, name, enable_trash,
                            immediate_trash_quota, status.error_str());
+  trace.RecordElapsedTime("resume");
   if (!status.ok()) return status;
 
   auto& parent_attr = result.parent_attr;
@@ -1735,6 +1757,8 @@ Status FileSystem::RmDir(Context& ctx, Ino parent, const std::string& name, Entr
     partition_cache_.Delete(dentry.ino());
   }
 
+  trace.RecordElapsedTime("post_handle");
+
   return Status::OK();
 }
 
@@ -1759,6 +1783,7 @@ Status FileSystem::ReadDir(Context& ctx, Ino ino, const std::string& last_name, 
     status = partition->Scan(ctx.RequestId(), last_name, limit, false, dentries);
   }
   if (!status.ok()) return status;
+  trace.RecordElapsedTime("prepare");
 
   entry_outs.reserve(dentries.size());
 
@@ -1786,6 +1811,8 @@ Status FileSystem::ReadDir(Context& ctx, Ino ino, const std::string& last_name, 
 
   LOG_DEBUG << fmt::format("[fs.{}.{}.{}][{}us] readdir {}/{} finish, dentries({}).", fs_id_, ctx.RequestId(),
                            trace.GetReqTypeInt(), duration.ElapsedUs(), ino, last_name, entry_outs.size());
+
+  trace.RecordElapsedTime("post_handle");
 
   return Status::OK();
 }
@@ -1829,10 +1856,13 @@ Status FileSystem::Link(Context& ctx, Ino ino, Ino new_parent, const std::string
   utils::Duration duration;
 
   HardLinkOperation operation(trace, parent_inode, dentry);
+  trace.RecordElapsedTime("prepare");
+
   status = RunOperation(&operation);
 
   LOG_DEBUG << fmt::format("[fs.{}.{}.{}][{}us] link {} -> {}/{} finish, status({}).", fs_id, ctx.RequestId(),
                            trace.GetReqTypeInt(), duration.ElapsedUs(), ino, new_parent, new_name, status.error_str());
+  trace.RecordElapsedTime("resume");
 
   if (!status.ok()) return status;
 
@@ -1859,6 +1889,8 @@ Status FileSystem::Link(Context& ctx, Ino ino, Ino new_parent, const std::string
     std::vector<Ino> parents = Helper::PbRepeatedToVector(last_parent_attr.parents());
     NotifyBuddyRefreshInode(parents, parent_attr_or_mutation, reason);
   }
+
+  trace.RecordElapsedTime("post_handle");
 
   return Status::OK();
 }
@@ -1914,6 +1946,8 @@ Status FileSystem::UnLink(Context& ctx, Ino parent, const std::string& name, Ent
   const bool immediate_trash_quota = IsImmediateTrashQuota();
 
   UnlinkOperation operation(trace, parent_inode, dentry, trash);
+  trace.RecordElapsedTime("prepare");
+
   status = RunOperation(&operation);
 
   auto& result = operation.GetResult();
@@ -1923,6 +1957,7 @@ Status FileSystem::UnLink(Context& ctx, Ino parent, const std::string& name, Ent
   LOG_DEBUG << fmt::format("[fs.{}.{}.{}][{}us] unlink {}/{} finish, nlink({}) trash({},{}) status({}).", fs_id_,
                            ctx.RequestId(), trace.GetReqTypeInt(), duration.ElapsedUs(), parent, name, attr.nlink(),
                            enable_trash, immediate_trash_quota, status.error_str());
+  trace.RecordElapsedTime("resume");
 
   if (!status.ok()) return status;
 
@@ -1974,6 +2009,8 @@ Status FileSystem::UnLink(Context& ctx, Ino parent, const std::string& name, Ent
     std::vector<Ino> parents = Helper::PbRepeatedToVector(last_parent_attr.parents());
     NotifyBuddyRefreshInode(parents, parent_attr_or_mutation, reason);
   }
+
+  trace.RecordElapsedTime("post_handle");
 
   return Status::OK();
 }
@@ -2037,6 +2074,8 @@ Status FileSystem::BatchUnLink(Context& ctx, Ino parent, const std::vector<std::
   // update backend store
   BatchUnlinkOperation operation(trace, parent_inode, dentries, trash);
 
+  trace.RecordElapsedTime("prepare");
+
   status = RunOperation(&operation);
 
   auto& result = operation.GetResult();
@@ -2046,6 +2085,7 @@ Status FileSystem::BatchUnLink(Context& ctx, Ino parent, const std::vector<std::
   LOG_DEBUG << fmt::format("[fs.{}.{}.{}][{}us] unlink {}/{} finish, trash({},{}) status({}).", fs_id_, ctx.RequestId(),
                            trace.GetReqTypeInt(), duration.ElapsedUs(), parent, join_name, enable_trash,
                            immediate_trash_quota, status.error_str());
+  trace.RecordElapsedTime("resume");
 
   if (!status.ok()) return status;
 
@@ -2102,6 +2142,8 @@ Status FileSystem::BatchUnLink(Context& ctx, Ino parent, const std::vector<std::
     std::vector<Ino> parents = Helper::PbRepeatedToVector(last_parent_attr.parents());
     NotifyBuddyRefreshInode(parents, parent_attr_or_mutation, reason);
   }
+
+  trace.RecordElapsedTime("post_handle");
 
   return Status::OK();
 }
@@ -2171,10 +2213,13 @@ Status FileSystem::Symlink(Context& ctx, const std::string& symlink, Ino new_par
   // update backend store
   SymLinkOperation operation(trace, parent_inode, dentry, attr);
 
+  trace.RecordElapsedTime("prepare");
+
   status = RunOperation(&operation);
 
   LOG_DEBUG << fmt::format("[fs.{}.{}.{}][{}us] symlink {}/{} finish,  status({}).", fs_id_, ctx.RequestId(),
                            trace.GetReqTypeInt(), duration.ElapsedUs(), new_parent, new_name, status.error_str());
+  trace.RecordElapsedTime("resume");
 
   if (!status.ok()) return status;
 
@@ -2204,6 +2249,8 @@ Status FileSystem::Symlink(Context& ctx, const std::string& symlink, Ino new_par
     NotifyBuddyRefreshInode(parents, parent_attr_or_mutation, reason);
   }
 
+  trace.RecordElapsedTime("post_handle");
+
   return Status::OK();
 }
 
@@ -2212,15 +2259,19 @@ Status FileSystem::ReadLink(Context& ctx, Ino ino, std::string& link) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
 
+  auto& trace = ctx.GetTrace();
+
   InodeSPtr inode;
   auto status = GetInode(ctx, ino, inode);
   if (!status.ok()) return status;
+  trace.RecordElapsedTime("prepare");
 
   if (inode->Type() != pb::mds::FileType::SYM_LINK) {
     return Status(pb::error::EILLEGAL_PARAMTETER, "not symlink inode");
   }
 
   link = inode->Symlink();
+  trace.RecordElapsedTime("post_handle");
 
   return Status::OK();
 }
@@ -2230,11 +2281,15 @@ Status FileSystem::GetAttr(Context& ctx, Ino ino, EntryOut& entry_out) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
 
+  auto& trace = ctx.GetTrace();
+
   InodeSPtr inode;
   auto status = GetInode(ctx, ino, inode);
   if (!status.ok()) return status;
+  trace.RecordElapsedTime("prepare");
 
   entry_out.attr = inode->ToAttr();
+  trace.RecordElapsedTime("post_handle");
 
   return Status::OK();
 }
@@ -2273,10 +2328,13 @@ Status FileSystem::SetAttr(Context& ctx, Ino ino, const SetAttrParam& param, Ent
   // update backend store
   UpdateAttrOperation operation(trace, ino, param.to_set, param.attr, extra_param);
 
+  trace.RecordElapsedTime("prepare");
+
   status = RunOperation(&operation);
 
   LOG_DEBUG << fmt::format("[fs.{}.{}.{}][{}us] setattr {} finish, status({}).", fs_id_, ctx.RequestId(),
                            trace.GetReqTypeInt(), duration.ElapsedUs(), ino, status.error_str());
+  trace.RecordElapsedTime("resume");
 
   if (!status.ok()) return status;
 
@@ -2314,6 +2372,8 @@ Status FileSystem::SetAttr(Context& ctx, Ino ino, const SetAttrParam& param, Ent
     NotifyBuddyRefreshInode(attr, reason);
   }
 
+  trace.RecordElapsedTime("post_handle");
+
   return Status::OK();
 }
 
@@ -2324,11 +2384,15 @@ Status FileSystem::GetXAttr(Context& ctx, Ino ino, Inode::XAttrMap& xattr) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
 
+  auto& trace = ctx.GetTrace();
+
   InodeSPtr inode;
   auto status = GetInode(ctx, ino, inode);
   if (!status.ok()) return status;
+  trace.RecordElapsedTime("prepare");
 
   xattr = inode->XAttrs();
+  trace.RecordElapsedTime("post_handle");
 
   return Status::OK();
 }
@@ -2338,11 +2402,15 @@ Status FileSystem::GetXAttr(Context& ctx, Ino ino, const std::string& name, std:
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
 
+  auto& trace = ctx.GetTrace();
+
   InodeSPtr inode;
   auto status = GetInode(ctx, ino, inode);
   if (!status.ok()) return status;
+  trace.RecordElapsedTime("prepare");
 
   value = inode->XAttr(name);
+  trace.RecordElapsedTime("post_handle");
 
   return Status::OK();
 }
@@ -2368,10 +2436,13 @@ Status FileSystem::SetXAttr(Context& ctx, Ino ino, const Inode::XAttrMap& xattrs
   // update backend store
   UpdateXAttrOperation operation(trace, fs_id_, ino, xattrs);
 
+  trace.RecordElapsedTime("prepare");
+
   status = RunOperation(&operation);
 
   LOG_DEBUG << fmt::format("[fs.{}.{}.{}][{}us] setxattr {} finish, status({}).", fs_id_, ctx.RequestId(),
                            trace.GetReqTypeInt(), duration.ElapsedUs(), ino, status.error_str());
+  trace.RecordElapsedTime("resume");
 
   if (!status.ok()) return status;
 
@@ -2390,6 +2461,8 @@ Status FileSystem::SetXAttr(Context& ctx, Ino ino, const Inode::XAttrMap& xattrs
   if (operation.GetBatchIndex() == 0 && IsDir(ino) && IsParentHashPartition()) {
     NotifyBuddyRefreshInode(attr, reason);
   }
+
+  trace.RecordElapsedTime("post_handle");
 
   return Status::OK();
 }
@@ -2415,10 +2488,13 @@ Status FileSystem::RemoveXAttr(Context& ctx, Ino ino, const std::string& name, E
   // update backend store
   RemoveXAttrOperation operation(trace, fs_id_, ino, name);
 
+  trace.RecordElapsedTime("prepare");
+
   status = RunOperation(&operation);
 
   LOG_DEBUG << fmt::format("[fs.{}.{}.{}][{}us] removexattr {} finish, status({}).", fs_id_, ctx.RequestId(),
                            trace.GetReqTypeInt(), duration.ElapsedUs(), ino, status.error_str());
+  trace.RecordElapsedTime("resume");
 
   if (!status.ok()) return status;
 
@@ -2437,6 +2513,8 @@ Status FileSystem::RemoveXAttr(Context& ctx, Ino ino, const std::string& name, E
   if (operation.GetBatchIndex() == 0 && IsDir(ino) && IsParentHashPartition()) {
     NotifyBuddyRefreshInode(attr, reason);
   }
+
+  trace.RecordElapsedTime("post_handle");
 
   return Status::OK();
 }
@@ -2570,6 +2648,8 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, RenameResult& 
 
   RenameOperation operation(trace, fs_id_, old_parent, old_name, new_parent, new_name, trash);
 
+  trace.RecordElapsedTime("prepare");
+
   status = RunOperation(&operation);
 
   auto& result = operation.GetResult();
@@ -2591,6 +2671,7 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, RenameResult& 
       "status({}).",
       fs_id_, ctx.RequestId(), trace.GetReqTypeInt(), duration.ElapsedUs(), old_parent, old_name, new_parent, new_name,
       is_same_parent, is_exist_new_dentry, old_parent_attr.version(), new_parent_attr.version(), status.error_str());
+  trace.RecordElapsedTime("resume");
 
   if (!status.ok()) return status;
 
@@ -2747,6 +2828,8 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, RenameResult& 
     last_trash_bucket_ino_.store(0, std::memory_order_release);
   }
 
+  trace.RecordElapsedTime("post_handle");
+
   return Status::OK();
 }
 
@@ -2755,14 +2838,20 @@ Status FileSystem::CommitRename(Context& ctx, const RenameParam& param, RenameRe
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
 
+  auto& trace = ctx.GetTrace();
   Renamer::Result result;
+  trace.RecordElapsedTime("prepare");
+
   auto status = renamer_.Execute<RenameParam>(GetSelfPtr(), ctx, param, result);
+  trace.RecordElapsedTime("resume");
   if (!status.ok()) return status;
 
   out.old_parent_version = result.old_parent_version;
   out.new_parent_version = result.new_parent_version;
   out.child_ino = result.child_ino;
   out.deleted_ino = result.deleted_ino;
+
+  trace.RecordElapsedTime("post_handle");
 
   return status;
 }
@@ -2784,7 +2873,11 @@ Status FileSystem::WriteSlice(Context& ctx, Ino ino, const std::vector<DeltaSlic
   // update backend store
   UpsertChunkOperation operation(trace, GetFsInfo(), ino, delta_slices);
 
+  trace.RecordElapsedTime("prepare");
+
   status = RunOperation(&operation);
+  trace.RecordElapsedTime("resume");
+
   if (!status.ok()) return status;
 
   auto& result = operation.GetResult();
@@ -2823,6 +2916,8 @@ Status FileSystem::WriteSlice(Context& ctx, Ino ino, const std::vector<DeltaSlic
 
     chunk_cache_.PutIf(ino, std::move(chunk));
   }
+
+  trace.RecordElapsedTime("post_handle");
 
   return Status::OK();
 }
@@ -2865,11 +2960,14 @@ Status FileSystem::ReadSlice(Context& ctx, Ino ino, const std::vector<ChunkDescr
   // get chunk from backend store
   GetChunkOperation operation(trace, fs_id_, ino, miss_chunk_indexes);
 
+  trace.RecordElapsedTime("prepare");
+
   auto status = RunOperation(&operation);
 
   LOG_DEBUG << fmt::format("[fs.{}.{}.{}][{}us] readslice {}/{} finish, miss({}) status({}).", fs_id_, ctx.RequestId(),
                            trace.GetReqTypeInt(), duration.ElapsedUs(), ino, param_desc,
                            Helper::VectorToString(miss_chunk_indexes), status.error_str());
+  trace.RecordElapsedTime("resume");
 
   if (!status.ok() && status.error_code() != pb::error::ENOT_FOUND) {
     return status;
@@ -2884,6 +2982,8 @@ Status FileSystem::ReadSlice(Context& ctx, Ino ino, const std::vector<ChunkDescr
       chunk_cache_.PutIf(ino, std::move(chunk));
     }
   }
+
+  trace.RecordElapsedTime("post_handle");
 
   return Status::OK();
 }
@@ -2917,11 +3017,14 @@ Status FileSystem::CopyFileRange(Context& ctx, const CopyFileRangeParam& param, 
 
   CopyFileRangeOperation operation(trace, GetFsInfo(), op_param);
 
+  trace.RecordElapsedTime("prepare");
+
   auto status = RunOperation(&operation);
 
   LOG_DEBUG << fmt::format("[fs.{}.{}.{}][{}us] copyfilerange {}->{} finish, param({}|{}|{}) status({}).", fs_id_,
                            ctx.RequestId(), trace.GetReqTypeInt(), duration.ElapsedUs(), param.src_ino, param.dst_ino,
                            param.src_off, param.dst_off, param.len, status.error_str());
+  trace.RecordElapsedTime("resume");
 
   if (!status.ok()) return status;
 
@@ -2954,6 +3057,8 @@ Status FileSystem::CopyFileRange(Context& ctx, const CopyFileRangeParam& param, 
   entry_out.attr = dst_attr;
   entry_out.delta_bytes = bytes_copied;
   entry_out.chunks.swap(effect_chunks);
+
+  trace.RecordElapsedTime("post_handle");
 
   return Status::OK();
 }
@@ -3038,11 +3143,15 @@ Status FileSystem::Fallocate(Context& ctx, Ino ino, int32_t mode, uint64_t offse
 
   FallocateOperation operation(trace, param);
 
+  trace.RecordElapsedTime("prepare");
+
   LOG_DEBUG << fmt::format("[fs.{}.{}.{}][{}us] fallocate finish, param({}|{}|{}|{}|{}) status({}).", fs_id_, ino,
                            ctx.RequestId(), trace.GetReqTypeInt(), duration.ElapsedUs(), parse_mode_fn(mode), offset,
                            len, slice_id, slice_num, status.error_str());
 
   status = RunOperation(&operation);
+  trace.RecordElapsedTime("resume");
+
   if (!status.ok()) return status;
 
   auto& result = operation.GetResult();
@@ -3084,6 +3193,8 @@ Status FileSystem::Fallocate(Context& ctx, Ino ino, int32_t mode, uint64_t offse
     }
   }
 
+  trace.RecordElapsedTime("post_handle");
+
   return Status::OK();
 }
 
@@ -3107,6 +3218,8 @@ Status FileSystem::CompactChunk(Context& ctx, Ino ino, uint32_t index, const Com
   };
   CompactChunkOperation operation(trace, fs_id_, ino, chunk_param);
 
+  trace.RecordElapsedTime("prepare");
+
   auto status = RunOperation(&operation);
 
   auto& result = operation.GetResult();
@@ -3118,10 +3231,13 @@ Status FileSystem::CompactChunk(Context& ctx, Ino ino, uint32_t index, const Com
                            fs_id_, ino, index, ctx.RequestId(), trace.GetReqTypeInt(), duration.ElapsedUs(),
                            param.start_slice_id, param.end_slice_id, param.new_slices.size(), param.version,
                            chunk.version(), status.error_str());
+  trace.RecordElapsedTime("resume");
   if (!status.ok()) return status;
 
   // update chunk cache
   chunk_cache_.PutIf(ino, std::move(chunk));
+
+  trace.RecordElapsedTime("post_handle");
 
   return Status::OK();
 }
@@ -3879,10 +3995,13 @@ Status FileSystem::RestoreFromTrash(Context& ctx, Ino trash_parent, const std::s
   RestoreFromTrashOperation operation(trace, fs_id_, trash_parent, trash_name, actual_dst_parent, actual_dst_name,
                                       allow_trash_parent, orig_ino);
 
+  trace.RecordElapsedTime("prepare");
+
   auto status = RunOperation(&operation);
 
   LOG(INFO) << fmt::format("[fs.{}.{}] restore {} from trash to {}/{}, status({}).", fs_id_, ctx.RequestId(),
                            trash_name, actual_dst_parent, actual_dst_name, status.error_str());
+  trace.RecordElapsedTime("resume");
 
   if (!status.ok()) return status;
 
@@ -3942,8 +4061,7 @@ Status FileSystem::RestoreFromTrash(Context& ctx, Ino trash_parent, const std::s
   //    it (nlink is preserved) and it's released only when CleanTrashTask
   //    actually purges the inode.
   if (GetFsInfo().immediate_trash_quota()) {
-    int64_t delta_bytes =
-        file_attr.type() == pb::mds::FileType::FILE ? static_cast<int64_t>(file_attr.length()) : 0;
+    int64_t delta_bytes = file_attr.type() == pb::mds::FileType::FILE ? static_cast<int64_t>(file_attr.length()) : 0;
     int64_t delta_inodes = 1;
     // Carried settlement: a directory put back after tree-rebuild carries its
     // grafted subtree along with no restore leg of its own for the children.
@@ -3983,6 +4101,8 @@ Status FileSystem::RestoreFromTrash(Context& ctx, Ino trash_parent, const std::s
                   file_attr.type() == pb::mds::FileType::FILE ? static_cast<int64_t>(file_attr.length()) : 0, 1,
                   /*dir_delta=*/file_attr.type() == pb::mds::FileType::DIRECTORY ? 1 : 0, cache_reason);
   }
+
+  trace.RecordElapsedTime("post_handle");
 
   return status;
 }

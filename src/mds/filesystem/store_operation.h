@@ -688,7 +688,11 @@ class BatchCreateFileOperation : public Operation {
  public:
   BatchCreateFileOperation(Trace& trace, InodeSPtr parent_inode, const std::vector<Dentry>& dentries,
                            const std::vector<AttrEntry>& attrs, const std::vector<FileSessionSPtr>& file_sessions)
-      : Operation(trace), dentries_(dentries), attrs_(attrs), file_sessions_(file_sessions) {};
+      : Operation(trace),
+        parent_inode_(parent_inode),
+        dentries_(dentries),
+        attrs_(attrs),
+        file_sessions_(file_sessions) {};
   ~BatchCreateFileOperation() override = default;
 
   struct Result {
