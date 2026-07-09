@@ -87,7 +87,7 @@ Status DirIterator::Fetch(ContextSPtr& ctx) {
     return status;
   }
 
-  LOG(INFO) << fmt::format(
+  LOG_DEBUG << fmt::format(
       "[dir_iterator.{}.{}] readdir success, offset({}) last_name({}) "
       "curr_batch_size({}) batch_size({}).",
       ino_, fh_, offset_, last_name_, entries_.size(), entries.size());

@@ -50,7 +50,7 @@ void WriteSliceOperation::BatchRun(MDSClient& mds_client,
     operation->PreHandle(delta_slice_entries);
   }
 
-  LOG(INFO) << fmt::format(
+  LOG_DEBUG << fmt::format(
       "[meta.batch_processor.{}] execute batch operation, "
       "delta_slice_entries({}).",
       ino, delta_slice_entries.size());
@@ -339,7 +339,7 @@ void BatchProcessor::ProcessOperation() {
 
   // print pending operations
   while (operations_.Dequeue(operation)) {
-    LOG(INFO) << fmt::format(
+    LOG_DEBUG << fmt::format(
         "[meta.batch_processor] pending operation type({}) ino({}).",
         operation->OpName(), operation->GetIno());
   }

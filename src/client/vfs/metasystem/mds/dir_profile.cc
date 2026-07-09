@@ -14,11 +14,11 @@
 
 #include "client/vfs/metasystem/mds/dir_profile.h"
 
-#include <algorithm>
 #include <cstdint>
 #include <utility>
 #include <vector>
 
+#include "common/logging.h"
 #include "common/options/client.h"
 #include "utils/concurrent/concurrent.h"
 #include "utils/time.h"
@@ -53,7 +53,7 @@ void DirProfile::Finalize() {
   expire_ts_ = utils::Timestamp() + FLAGS_vfs_meta_warmup_small_file_ttl_s;
   is_finalized_ = true;
 
-  LOG(INFO) << fmt::format(
+  LOG_DEBUG << fmt::format(
       "[meta.dir_profile.{}.{}] finalize dir profile, total_children({}),"
       "small_file_count({}),is_small_file_dir({}).",
       parent_ino_, fh_, total_children_, small_file_inos_.size(),
@@ -99,7 +99,7 @@ std::vector<Ino> DirProfile::GenWarmupInos() {
   open_inos_.clear();
 
   if (!candidates.empty()) {
-    LOG(INFO) << fmt::format(
+    LOG_DEBUG << fmt::format(
         "[meta.dir_profile.{}.{}] gen warmup inodes, candidates({}), "
         "total_small_files({}),warmed_count({}).",
         parent_ino_, fh_, candidates.size(), small_file_inos_.size(),
@@ -138,7 +138,7 @@ void DirProfileCache::Put(DirProfileSPtr& dir_profile) {
       ino);
 
   if (is_put) {
-    LOG(INFO) << fmt::format(
+    LOG_DEBUG << fmt::format(
         "[meta.dir_profile.{}.{}] put dir profile, total_children({}).", ino,
         dir_profile->Fh(), dir_profile->TotalChildren());
   }

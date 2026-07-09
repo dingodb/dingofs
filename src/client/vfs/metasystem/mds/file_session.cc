@@ -175,7 +175,7 @@ FileSessionSPtr FileSessionMap::Put(Ino ino, uint64_t fh,
   CHECK(fh != 0) << "fh is zero.";
   CHECK(!session_id.empty()) << "session_id is empty.";
 
-  LOG(INFO) << fmt::format(
+  LOG_DEBUG << fmt::format(
       "[meta.filesession.{}.{}] add file session, session_id({}).", ino, fh,
       session_id);
 
@@ -217,7 +217,7 @@ void FileSessionMap::Delete(Ino ino, uint64_t fh) {
       },
       ino);
 
-  LOG(INFO) << fmt::format(
+  LOG_DEBUG << fmt::format(
       "[meta.filesession.{}.{}] delete file session, ref_count({}).", ino, fh,
       ref_count);
 }

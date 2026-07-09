@@ -664,7 +664,7 @@ Status MDSMetaSystem::MkNod(ContextSPtr ctx, Ino parent,
     attr_entry = result.attr_entry;
     parent_attr_entry = result.parent_attr_entry;
 
-    LOG(INFO) << fmt::format("[meta.fs] mknod {}/{} attr({}) parent_attr({})",
+    LOG_DEBUG << fmt::format("[meta.fs] mknod {}/{} attr({}) parent_attr({})",
                              parent, name, attr_entry.ShortDebugString(),
                              parent_attr_entry.ShortDebugString());
 
@@ -727,7 +727,7 @@ Status MDSMetaSystem::DoOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
       ctx, ino, flags, session_id, is_prefetch_chunk, chunk_descriptors,
       is_prefetch_data, attr_entry, chunks, tiny_file_data, data_version);
 
-  LOG(INFO) << fmt::format(
+  LOG_DEBUG << fmt::format(
       "[meta.fs.{}.{}] open file flags({:o}:{}) session_id({}) "
       "chunks({}:{}) tiny_file_data({}:{}) status({}).",
       ino, fh, flags, dingofs::Helper::DescOpenFlags(flags), session_id,
@@ -898,7 +898,7 @@ DirProfileSPtr MDSMetaSystem::GetDirProfile(Ino ino) {
   if (parents.empty()) return nullptr;
   Ino parent = parents.front();
 
-  LOG(INFO) << fmt::format("[meta.fs.{}] get dir profile, parent({}).", ino,
+  LOG_DEBUG << fmt::format("[meta.fs.{}] get dir profile, parent({}).", ino,
                            parent);
 
   return dir_profile_cache_->Get(parent);
@@ -908,7 +908,7 @@ void MDSMetaSystem::WarmupSmallFiles(const std::vector<Ino>& inoes) {
   if (warmup_manager_ == nullptr) return;
 
   for (Ino ino : inoes) {
-    LOG(INFO) << fmt::format("[meta.fs] submit warmup task, ino({}).", ino);
+    LOG_DEBUG << fmt::format("[meta.fs] submit warmup task, ino({}).", ino);
     // warmup_manager_->SubmitTask(WarmupTaskContext(ino));
   }
 }
@@ -916,7 +916,7 @@ void MDSMetaSystem::WarmupSmallFiles(const std::vector<Ino>& inoes) {
 Status MDSMetaSystem::Flush(ContextSPtr ctx, Ino ino, uint64_t fh) {
   AssertStop();
 
-  LOG(INFO) << fmt::format("[meta.fs.{}.{}] flush.", ino, fh);
+  LOG_DEBUG << fmt::format("[meta.fs.{}.{}] flush.", ino, fh);
 
   auto file_session = file_session_map_.GetSession(ino);
   CHECK(file_session != nullptr)
@@ -926,7 +926,7 @@ Status MDSMetaSystem::Flush(ContextSPtr ctx, Ino ino, uint64_t fh) {
 
   // only flush when file opened with write flag
   if (!(flags & O_WRONLY || flags & O_RDWR)) {
-    LOG(INFO) << fmt::format(
+    LOG_DEBUG << fmt::format(
         "[meta.fs.{}.{}] flush skipped, file opened with read flag.", ino, fh);
     return Status::OK();
   }
@@ -1006,7 +1006,7 @@ Status MDSMetaSystem::Close(ContextSPtr ctx, Ino ino, uint64_t fh) {
 
   file_session_map_.Delete(ino, fh);
 
-  LOG(INFO) << fmt::format("[meta.fs.{}.{}] close file session_id({}).", ino,
+  LOG_DEBUG << fmt::format("[meta.fs.{}.{}] close file session_id({}).", ino,
                            fh, session_id);
 
   AsyncClose(ctx, ino, fh, session_id);
@@ -1103,7 +1103,7 @@ Status MDSMetaSystem::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
     for (const auto& chunk : chunks) {
       chunk_memo_.Remember(ino, chunk.index(), chunk.version());
 
-      LOG(INFO) << fmt::format("[meta.fs.{}.{}.{}] fetch slice, version({}).",
+      LOG_DEBUG << fmt::format("[meta.fs.{}.{}.{}] fetch slice, version({}).",
                                ino, fh, index, chunk.version());
     }
 
@@ -1225,7 +1225,7 @@ Status MDSMetaSystem::MkDir(ContextSPtr ctx, Ino parent,
     attr_entry = result.attr_entry;
     parent_attr_entry = result.parent_attr_entry;
 
-    LOG(INFO) << fmt::format("[meta.fs] mkdir {}/{} attr({}) parent_attr({})",
+    LOG_DEBUG << fmt::format("[meta.fs] mkdir {}/{} attr({}) parent_attr({})",
                              parent, name, attr_entry.ShortDebugString(),
                              parent_attr_entry.ShortDebugString());
 
@@ -1384,7 +1384,7 @@ Status MDSMetaSystem::Unlink(ContextSPtr ctx, Ino parent,
     attr_entry = result.attr_entry;
     parent_attr_entry = result.parent_attr_entry;
 
-    LOG(INFO) << fmt::format("[meta.fs] unlink {}/{} attr({}) parent_attr({})",
+    LOG_DEBUG << fmt::format("[meta.fs] unlink {}/{} attr({}) parent_attr({})",
                              parent, name, attr_entry.ShortDebugString(),
                              parent_attr_entry.ShortDebugString());
 
@@ -1722,7 +1722,7 @@ Status MDSMetaSystem::DoFlushFile(ContextSPtr ctx, InodeSPtr inode,
   uint64_t last_write_length = is_final ? chunk_set->GetLastWriteLength()
                                         : chunk_set->GetLastComitedLength();
   if (last_write_length == 0) {
-    LOG(INFO) << fmt::format(
+    LOG_DEBUG << fmt::format(
         "[meta.fs.{}] flush file skip cause no write data, length({}).", ino,
         inode->Length());
     return Status::OK();
@@ -1730,7 +1730,7 @@ Status MDSMetaSystem::DoFlushFile(ContextSPtr ctx, InodeSPtr inode,
 
   if (last_write_length <= inode->Length()) last_write_length = 0;
   if (!is_final && last_write_length == 0) {
-    LOG(INFO) << fmt::format(
+    LOG_DEBUG << fmt::format(
         "[meta.fs.{}] flush file skip cause no length expand, length({}).", ino,
         inode->Length());
     return Status::OK();
@@ -1769,7 +1769,7 @@ void MDSMetaSystem::LaunchWriteSlice(ContextSPtr& ctx, ChunkSetSPtr chunk_set,
                                      CommitTaskSPtr task) {
   Ino ino = chunk_set->GetIno();
 
-  LOG(INFO) << fmt::format("[meta.fs.{}] launch write slice {}.", ino,
+  LOG_DEBUG << fmt::format("[meta.fs.{}] launch write slice {}.", ino,
                            task->Describe());
 
   auto operation = std::make_shared<WriteSliceOperation>(
@@ -1779,7 +1779,7 @@ void MDSMetaSystem::LaunchWriteSlice(ContextSPtr& ctx, ChunkSetSPtr chunk_set,
         task->SetDone(status);
 
         if (status.ok()) {
-          LOG(INFO) << fmt::format(
+          LOG_DEBUG << fmt::format(
               "[meta.fs.{}] flush delta slice done, task({}) status({}).", ino,
               task->TaskID(), status.ToString());
 
@@ -1816,7 +1816,7 @@ void MDSMetaSystem::AsyncFlushSlice(ContextSPtr& ctx, ChunkSetSPtr chunk_set,
     }
   }
 
-  LOG(INFO) << fmt::format(
+  LOG_DEBUG << fmt::format(
       "[meta.fs.{}] async flush task new({}) launch({}) total({}).", ino,
       new_task_count, launched_count, tasks.size());
 
@@ -1847,7 +1847,7 @@ Status MDSMetaSystem::FlushSliceAndFile(ContextSPtr ctx, Ino ino) {
 
   auto& chunk_set = file_session->GetChunkSet();
 
-  LOG(INFO) << fmt::format("[meta.fs.{}] flush all slice.", ino);
+  LOG_DEBUG << fmt::format("[meta.fs.{}] flush all slice.", ino);
 
   do {
     bool has_stage = chunk_set->HasStage();
@@ -1855,7 +1855,7 @@ Status MDSMetaSystem::FlushSliceAndFile(ContextSPtr ctx, Ino ino) {
     bool has_commit_task = chunk_set->HasCommitTask();
     if (!has_stage && !has_committing && !has_commit_task) break;
 
-    LOG(INFO) << fmt::format(
+    LOG_DEBUG << fmt::format(
         "[meta.fs.{}] flush all slice loop, has_stage({}) has_committing({}) "
         "has_commit_task({}).",
         ino, has_stage, has_committing, has_commit_task);
@@ -1887,7 +1887,7 @@ void MDSMetaSystem::AsyncFlushFile(ContextSPtr ctx, Ino ino) {
             Ino ino = param->ino;
             auto file_session = self.file_session_map_.GetSession(ino);
             if (file_session != nullptr) {
-              LOG(INFO) << fmt::format("[meta.fs.{}] async flush file.", ino);
+              LOG_DEBUG << fmt::format("[meta.fs.{}] async flush file.", ino);
 
               auto& chunk_set = file_session->GetChunkSet();
               self.DoFlushFile(param->ctx, self.GetInode(file_session),
@@ -1907,7 +1907,7 @@ void MDSMetaSystem::AsyncFlushFile(ContextSPtr ctx, Ino ino) {
 void MDSMetaSystem::FlushAllFile() {
   auto file_sessions = file_session_map_.GetAllSession();
 
-  LOG(INFO) << fmt::format("[meta.fs] flush all file, count({}).",
+  LOG_DEBUG << fmt::format("[meta.fs] flush all file, count({}).",
                            file_sessions.size());
 
   do {
@@ -1932,7 +1932,7 @@ void MDSMetaSystem::FlushAllFile() {
     }
     if (!has_uncommited) break;
 
-    LOG(INFO) << "[meta.fs] flush all slice loop, still has uncommited slice.";
+    LOG_DEBUG << "[meta.fs] flush all slice loop, still has uncommited slice.";
 
   } while (true);
 }
@@ -1940,7 +1940,7 @@ void MDSMetaSystem::FlushAllFile() {
 Status MDSMetaSystem::CorrectAttr(ContextSPtr ctx, uint64_t time_ns, Attr& attr,
                                   bool& is_amend, const std::string& caller) {
   if (modify_time_memo_.ModifiedSince(attr.ino, time_ns)) {
-    LOG(INFO) << fmt::format("[meta.fs.{}] correct attr, caller({}).", attr.ino,
+    LOG_DEBUG << fmt::format("[meta.fs.{}] correct attr, caller({}).", attr.ino,
                              caller);
     // correct attr, fetch latest attr from mds
     AttrEntry attr_entry;
@@ -1969,7 +1969,7 @@ bool MDSMetaSystem::CorrectAttrLength(Attr& attr, const std::string& caller) {
     auto chunk_set = file_session->GetChunkSet();
     uint64_t last_write_length = chunk_set->GetLastWriteLength();
     if (last_write_length != 0) {
-      LOG(INFO) << fmt::format("[meta.fs.{}] correct length, caller({}).",
+      LOG_DEBUG << fmt::format("[meta.fs.{}] correct length, caller({}).",
                                attr.ino, caller);
 
       attr.length = std::max(last_write_length, attr.length);
