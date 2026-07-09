@@ -337,7 +337,7 @@ Status RPC::SendRequest(const EndPoint& endpoint,
 
     if (response.error().errcode() == pb::error::OK) {
       if constexpr (std::is_same_v<Response, pb::mds::ReadSliceResponse>) {
-        LOG(INFO) << fmt::format(
+        LOG_DEBUG << fmt::format(
             "[meta.rpc][{}][{}][{}us] success, retry({}) request({}) "
             "response({}) doing({}).",
             EndPointToStr(endpoint), api_name, elapsed_us, retry,
@@ -345,7 +345,7 @@ Status RPC::SendRequest(const EndPoint& endpoint,
             DoingReqCount());
 
       } else if constexpr (std::is_same_v<Response, pb::mds::OpenResponse>) {
-        LOG(INFO) << fmt::format(
+        LOG_DEBUG << fmt::format(
             "[meta.rpc][{}][{}][{}us] success, retry({}) request({}) "
             "response({}) doing({}).",
             EndPointToStr(endpoint), api_name, elapsed_us, retry,
@@ -354,7 +354,7 @@ Status RPC::SendRequest(const EndPoint& endpoint,
 
       } else if constexpr (std::is_same_v<Response,
                                           pb::mds::FlushFileResponse>) {
-        LOG(INFO) << fmt::format(
+        LOG_DEBUG << fmt::format(
             "[meta.rpc][{}][{}][{}us] success, retry({}) request({}) "
             "response({}) doing({}).",
             EndPointToStr(endpoint), api_name, elapsed_us, retry,
@@ -362,7 +362,7 @@ Status RPC::SendRequest(const EndPoint& endpoint,
             DoingReqCount());
 
       } else {
-        LOG(INFO) << fmt::format(
+        LOG_DEBUG << fmt::format(
             "[meta.rpc][{}][{}][{}us] success, retry({}) request({}) "
             "response({}) doing({}).",
             EndPointToStr(endpoint), api_name, elapsed_us, retry,
@@ -377,7 +377,7 @@ Status RPC::SendRequest(const EndPoint& endpoint,
         api_name == "RmDir") {
       // rmdir on a non-empty directory is a normal posix outcome(ENOTEMPTY),
       // e.g. git/rsync probe rmdir and ignore the failure, so log as INFO
-      LOG(INFO) << fmt::format(
+      LOG_DEBUG << fmt::format(
           "[meta.rpc][{}][{}][{}us] fail, retry({}) request({}) response({}) "
           "doing({}) error({} {}).",
           EndPointToStr(endpoint), api_name, elapsed_us, retry,
