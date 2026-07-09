@@ -357,6 +357,7 @@ class ChunkSet {
 
   bool HasUncommitedSlice();
 
+  void UpdateLastActiveTimeS() { last_active_s_ = utils::Timestamp(); }
   uint64_t GetLastActiveTimeS() const;
 
   bool IsFlushing() const {
