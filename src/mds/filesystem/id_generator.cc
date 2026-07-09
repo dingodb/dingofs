@@ -59,7 +59,7 @@ DEFINE_uint32(mds_ino_generator_batch_size, 100000, "ino generator batch size.")
 DEFINE_validator(mds_ino_generator_batch_size, brpc::PassValidate);
 
 // all mds share the same inode generator
-DEFINE_bool(mds_ino_generator_share_enable, false, "Inode generator share enable.");
+DEFINE_bool(mds_ino_generator_share_enable, true, "Inode generator share enable.");
 DEFINE_bool(mds_slice_id_generator_share_enable, true, "Slice ID generator share enable.");
 
 static uint32_t CalWaitTimeUs(int retry) {

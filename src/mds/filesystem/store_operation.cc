@@ -2645,17 +2645,18 @@ Status CompactChunkOperation::Run(TxnUPtr& txn) {
   CHECK(chunk.index() == chunk_index) << "chunk index not match.";
 
   const auto& slices = chunk.slices();
-  if (param_.start_pos >= slices.size() || slices.at(param_.start_pos).id() != param_.start_slice_id) {
+  uint32_t slice_size = static_cast<uint32_t>(slices.size());
+  if (param_.start_pos >= slice_size || slices.at(param_.start_pos).id() != param_.start_slice_id) {
     result_.chunk = chunk;
     return Status(pb::error::EILLEGAL_PARAMTETER,
                   fmt::format("not match start slice id({})",
-                              param_.start_pos >= slices.size() ? 0 : slices.at(param_.start_pos).id()));
+                              param_.start_pos >= slice_size ? 0 : slices.at(param_.start_pos).id()));
   }
-  if (param_.end_pos >= slices.size() || slices.at(param_.end_pos).id() != param_.end_slice_id) {
+  if (param_.end_pos >= slice_size || slices.at(param_.end_pos).id() != param_.end_slice_id) {
     result_.chunk = chunk;
-    return Status(pb::error::EILLEGAL_PARAMTETER,
-                  fmt::format("not match end slice id({})",
-                              param_.end_pos >= slices.size() ? 0 : slices.at(param_.end_pos).id()));
+    return Status(
+        pb::error::EILLEGAL_PARAMTETER,
+        fmt::format("not match end slice id({})", param_.end_pos >= slice_size ? 0 : slices.at(param_.end_pos).id()));
   }
 
   // generate trash slice list
