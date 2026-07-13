@@ -53,6 +53,8 @@ class DummyStorage : public KVStorage {
   Status Delete(const std::string& key) override;
   Status Delete(const std::vector<std::string>& keys) override;
 
+  Status Gc(uint32_t seconds) override { return Status::OK(); }  // NOLINT
+
   TxnUPtr NewTxn(Txn::IsolationLevel isolation_level = Txn::kSnapshotIsolation) override;
 
  private:
@@ -61,8 +63,7 @@ class DummyStorage : public KVStorage {
   // Atomically verifies that none of `if_absent_keys` already exist, then
   // applies `writes` (last-write-wins per key). Used by DummyTxn::Commit to
   // make PutIfAbsent semantics race-free against concurrent committers.
-  Status ApplyTxn(const std::map<std::string, KeyValue>& writes,
-                  const std::set<std::string>& if_absent_keys);
+  Status ApplyTxn(const std::map<std::string, KeyValue>& writes, const std::set<std::string>& if_absent_keys);
 
   struct Table {
     std::string name;

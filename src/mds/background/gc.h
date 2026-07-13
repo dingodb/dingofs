@@ -233,9 +233,8 @@ class CleanExpiredFileSessionTask : public TaskRunnable {
 
 class CleanTrashTask : public TaskRunnable {
  public:
-  CleanTrashTask(OperationProcessorSPtr operation_processor, TaskMemoSPtr task_memo,
-                 FileSystemSetSPtr file_system_set, uint32_t fs_id, Ino sub_trash_ino,
-                 const std::string& bucket_name)
+  CleanTrashTask(OperationProcessorSPtr operation_processor, TaskMemoSPtr task_memo, FileSystemSetSPtr file_system_set,
+                 uint32_t fs_id, Ino sub_trash_ino, const std::string& bucket_name)
       : operation_processor_(operation_processor),
         task_memo_(task_memo),
         file_system_set_(file_system_set),
@@ -266,8 +265,8 @@ class CleanTrashTask : public TaskRunnable {
   // rmdir's all collected directories; tracks its own failures. Safe to call
   // after a partial DrainBucketFiles -- non-empty dirs simply fail with
   // ENOTEMPTY and contribute to `failed`.
-  void RmdirBucketDirs(FileSystemSPtr fs, bool immediate_quota, class Trace& trace,
-                       const std::vector<Dentry>& all_dirs, uint32_t& processed, uint32_t& failed);
+  void RmdirBucketDirs(FileSystemSPtr fs, bool immediate_quota, class Trace& trace, const std::vector<Dentry>& all_dirs,
+                       uint32_t& processed, uint32_t& failed);
 
   // CleanTrashBucketOperation + logging; only called when drain was clean.
   void DeleteBucketAtomic(class Trace& trace, uint32_t processed);
@@ -322,6 +321,8 @@ class GcProcessor {
   void ScanExpiredFileSession(const FsInfoEntry& fs_info);
   void ScanDelFs(const FsInfoEntry& fs_info);
   void ScanTrash(const FsInfoEntry& fs_info);
+
+  void GcKvStorage();
 
   static bool ShouldDeleteFile(const AttrEntry& attr);
   static bool ShouldCleanFileSession(const FileSessionEntry& file_session, const std::set<std::string>& alive_clients);

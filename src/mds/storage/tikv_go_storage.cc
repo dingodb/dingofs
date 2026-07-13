@@ -14,8 +14,6 @@
 
 #include "mds/storage/tikv_go_storage.h"
 
-#include <butil/compiler_specific.h>
-
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -25,6 +23,7 @@
 #include <utility>
 #include <vector>
 
+#include "butil/compiler_specific.h"
 #include "dingofs/error.pb.h"
 #include "fmt/core.h"
 #include "glog/logging.h"
@@ -142,6 +141,25 @@ static Status ParseAsyncKVResult(void* vr, std::vector<KeyValue>& kvs) {
   return Status::OK();
 }
 
+static Status ParseAsyncUInt64Result(void* vr, uint64_t* out_value = nullptr) {
+  auto* res = static_cast<CAsyncUInt64Result*>(vr);
+  if (res == nullptr) {
+    return Status(pb::error::EBACKEND_STORE, "null result from go bridge");
+  }
+
+  if (res->error != nullptr && res->error_len > 0) {
+    std::string err_msg(res->error, res->error_len);
+    if (err_msg.find("retryable:") != std::string::npos || err_msg.find("write conflict") != std::string::npos) {
+      return Status(pb::error::ESTORE_MAYBE_RETRY, fmt::format("tikv-go err({})", err_msg));
+    }
+    return Status(pb::error::EBACKEND_STORE, fmt::format("tikv-go err({})", err_msg));
+  }
+
+  if (out_value != nullptr) *out_value = res->value;
+
+  return Status::OK();
+}
+
 // ---------------------------------------------------------------------------
 // TikvGoStorage
 // ---------------------------------------------------------------------------
@@ -252,6 +270,28 @@ Status TikvGoStorage::Delete(const std::vector<std::string>& keys) {
   }
 
   return txn.Commit();
+}
+
+Status TikvGoStorage::Gc(uint32_t seconds) {
+  if (BAIDU_UNLIKELY(client_handle_ == 0)) {
+    return Status(pb::error::ESTORE_MAYBE_RETRY, "client not initialized");
+  }
+
+  AsyncContextHolder ctx;
+  auto* holder = MakeHolder(&ctx);
+  tikv_go_client_gc_async(static_cast<GoUint64>(client_handle_), static_cast<GoUint64>(seconds),
+                          reinterpret_cast<GoUintptr>(TikvGoTxn::OnAsyncComplete), reinterpret_cast<GoUintptr>(holder));
+  ctx->sem.Acquire();
+
+  // physical time in milliseconds, the time before which all data is safe to delete.
+  uint64_t safepoint_ms = 0;
+  Status status = ParseAsyncUInt64Result(ctx->result, &safepoint_ms);
+  tikv_go_free_uint64_result(static_cast<CAsyncUInt64Result*>(ctx->result));
+
+  LOG(INFO) << fmt::format("[storage] tikv-go gc, life_time({}s) safepoint({}/{}) status({}).", seconds, safepoint_ms,
+                           utils::FormatMsTime(safepoint_ms), status.error_str());
+
+  return status;
 }
 
 TxnUPtr TikvGoStorage::NewTxn(Txn::IsolationLevel isolation_level) {
