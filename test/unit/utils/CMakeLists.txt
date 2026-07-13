@@ -23,6 +23,7 @@ add_executable(test_utils ${UTILS_TEST_SRCS})
 target_compile_options(test_utils PUBLIC)
 
 target_link_libraries(test_utils
+    test_coverage
     mds_common
 
     dingofs_utils

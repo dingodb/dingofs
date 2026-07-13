@@ -27,6 +27,7 @@ add_executable(test_mds
 
 
 target_link_libraries(test_mds
+  test_coverage
   PROTO_OBJS
 
   $<TARGET_OBJECTS:test_mds_common>

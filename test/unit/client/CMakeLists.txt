@@ -20,6 +20,8 @@ add_executable(test_client
 )
 
 target_link_libraries(test_client
+  test_coverage
+  
   $<TARGET_OBJECTS:test_compact_utils>
   $<TARGET_OBJECTS:test_compactor>
   $<TARGET_OBJECTS:test_client_vfs_data>

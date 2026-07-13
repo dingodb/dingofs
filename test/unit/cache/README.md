@@ -17,10 +17,7 @@ cmake -S . -B build \
   -DBUILD_UNIT_TESTS=ON \
   -DCMAKE_BUILD_TYPE=Debug \
   -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
-  -DCMAKE_C_FLAGS="--coverage -O0 -g -fprofile-update=atomic" \
-  -DCMAKE_CXX_FLAGS="--coverage -O0 -g -fprofile-update=atomic" \
-  -DCMAKE_EXE_LINKER_FLAGS="--coverage" \
-  -DCMAKE_SHARED_LINKER_FLAGS="--coverage" \
+  -DENABLE_COVERAGE=ON \
 && cmake --build build --target test_cache -j 32
 ```
 

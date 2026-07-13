@@ -828,10 +828,12 @@ TEST_F(TrashFileSystemTest, LinkOnPartialTrashSurvivor) {
   auto fs = Fs();
   Context ctx;
 
-  // /live_dir/ holds the surviving hardlink; /hl_src lives at root.
+  // /partial_trash_live_dir/ holds the surviving hardlink;
+  // /partial_trash_hl_src lives at root. Keep names unique because this fixture
+  // intentionally shares one filesystem across its test cases.
   FileSystem::MkDirParam mkdir_param;
   mkdir_param.parent = kRootIno;
-  mkdir_param.name = "live_dir";
+  mkdir_param.name = "partial_trash_live_dir";
   mkdir_param.mode = 0755;
   mkdir_param.uid = 0;
   mkdir_param.gid = 0;
@@ -841,7 +843,7 @@ TEST_F(TrashFileSystemTest, LinkOnPartialTrashSurvivor) {
 
   FileSystem::MkNodParam mk;
   mk.parent = kRootIno;
-  mk.name = "hl_src";
+  mk.name = "partial_trash_hl_src";
   mk.mode = 0644;
   mk.uid = 0;
   mk.gid = 0;
@@ -852,17 +854,21 @@ TEST_F(TrashFileSystemTest, LinkOnPartialTrashSurvivor) {
 
   // Hardlink under live_dir so parents=[root, live_dir_ino] (no dedup).
   EntryWithPaOut hl_out;
-  ASSERT_TRUE(fs->Link(ctx, file_ino, live_dir_ino, "hl_live", hl_out).ok());
+  ASSERT_TRUE(
+      fs->Link(ctx, file_ino, live_dir_ino, "partial_trash_hl_live", hl_out)
+          .ok());
 
   // Unlink the root copy → trash; live_dir/hl_live remains real.
   EntryWithPaOut unlink_out;
-  ASSERT_TRUE(fs->UnLink(ctx, kRootIno, "hl_src", unlink_out).ok());
+  ASSERT_TRUE(
+      fs->UnLink(ctx, kRootIno, "partial_trash_hl_src", unlink_out).ok());
   // Now parents=[live_dir_ino, trash_X], nlink=2.
 
   // Linking by ino into the live parent must succeed — the partial-trash
   // state is not user-visible because a real dentry still exists.
   EntryWithPaOut new_link_out;
-  auto status = fs->Link(ctx, file_ino, live_dir_ino, "hl_new", new_link_out);
+  auto status = fs->Link(ctx, file_ino, live_dir_ino, "partial_trash_hl_new",
+                         new_link_out);
   ASSERT_TRUE(status.ok()) << "Link via partial-trash inode: "
                            << status.error_str();
   EXPECT_EQ(new_link_out.attr.ino(), file_ino);
@@ -870,16 +876,19 @@ TEST_F(TrashFileSystemTest, LinkOnPartialTrashSurvivor) {
   // Same-directory linking back to root also works (the destination check
   // CheckCreateInTrash does not flag root).
   EntryWithPaOut new_root_out;
-  status = fs->Link(ctx, file_ino, kRootIno, "hl_back", new_root_out);
+  status =
+      fs->Link(ctx, file_ino, kRootIno, "partial_trash_hl_back", new_root_out);
   ASSERT_TRUE(status.ok()) << "Link to root for partial-trash inode: "
                            << status.error_str();
 
   // Lookup confirms both new links resolve to the same inode.
   EntryOut look_new;
-  ASSERT_TRUE(fs->Lookup(ctx, live_dir_ino, "hl_new", look_new).ok());
+  ASSERT_TRUE(
+      fs->Lookup(ctx, live_dir_ino, "partial_trash_hl_new", look_new).ok());
   EXPECT_EQ(look_new.attr.ino(), file_ino);
   EntryOut look_back;
-  ASSERT_TRUE(fs->Lookup(ctx, kRootIno, "hl_back", look_back).ok());
+  ASSERT_TRUE(
+      fs->Lookup(ctx, kRootIno, "partial_trash_hl_back", look_back).ok());
   EXPECT_EQ(look_back.attr.ino(), file_ino);
 }
 
