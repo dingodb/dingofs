@@ -24,11 +24,11 @@
 
 #include <algorithm>
 #include <atomic>
-#include <chrono>
 #include <cstdint>
 #include <memory>
 #include <mutex>
 #include <utility>
+#include <vector>
 
 #include "client/vfs/common/helper.h"
 #include "client/vfs/hub/vfs_hub.h"
@@ -36,15 +36,9 @@
 #include "common/callback.h"
 #include "common/status.h"
 
-DEFINE_int32(vfs_flush_timeout_seconds, 300,
-             "Timeout in seconds for waiting inflight block uploads in "
-             "DoFlush. Used by WaitInflightWithTimeout.");
-
 namespace dingofs {
 namespace client {
 namespace vfs {
-
-#define METHOD_NAME() ("SliceWriter::" + std::string(__FUNCTION__))
 
 BlockData* SliceWriter::FindBlockDataUnlocked(uint32_t block_index) {
   auto iter = block_datas_.find(block_index);
@@ -74,65 +68,44 @@ BlockData* SliceWriter::CreateBlockDataUnlocked(uint32_t block_index,
   return new_iter->second.get();
 }
 
-// --- reference counting ---
-
-void SliceWriter::IncRef() {
-  int32_t prev = refs_.fetch_add(1, std::memory_order_relaxed);
-  CHECK_GE(prev, 0) << UUID() << " IncRef on dead object";
-}
-
-void SliceWriter::DecRef() {
-  int32_t prev = refs_.fetch_sub(1, std::memory_order_acq_rel);
-  CHECK_GE(prev, 1) << UUID() << " DecRef underflow";
-  if (prev == 1) {
-    VLOG(4) << fmt::format("{} DecRef -> 0, destroying", UUID());
-    delete this;
-  }
-}
-
 // --- slice_id async pre-allocation ---
 
 void SliceWriter::StartPrepareSliceId() {
-  // Hold a ref for the async work to prevent use-after-free if SliceWriter
-  // is destroyed before write_background_executor picks up the lambda (high
-  // load + short SliceWriter lifetime). Mirrors the pattern in
-  // UploadBlockAsync.
-  IncRef();
-  vfs_hub_->GetWriteBackgroundExecutor()->Execute([this]() {
-    PrepareSliceId();
-    DecRef();
-  });
-}
+  auto state = slice_id_state_;
+  auto* meta = vfs_hub_->GetMetaSystem();
+  auto* trace_manager = vfs_hub_->GetTraceManager();
+  Ino ino = context_.ino;
+  std::string uuid = UUID();
 
-void SliceWriter::PrepareSliceId() {
-  auto span =
-      vfs_hub_->GetTraceManager()->StartSpan("SliceWriter::PrepareSliceId");
-  auto ctx = SpanScope::GetContext(span);
+  // VFSHub drains write_background_executor before MetaSystem/TraceManager.
+  // The task owns only SliceIdState and immutable values, never SliceWriter.
+  vfs_hub_->GetWriteBackgroundExecutor()->Execute([state = std::move(state),
+                                                   meta, trace_manager, ino,
+                                                   uuid = std::move(uuid)]() {
+    auto span = trace_manager->StartSpan("SliceWriter::PrepareSliceId");
+    auto ctx = SpanScope::GetContext(span);
+    uint64_t slice_id = 0;
+    Status s = meta->NewSliceId(ctx, ino, &slice_id);
 
-  uint64_t slice_id = 0;
-  Status s =
-      vfs_hub_->GetMetaSystem()->NewSliceId(ctx, context_.ino, &slice_id);
-
-  VLOG(2) << fmt::format("{} PrepareSliceId status={}", UUID(), s.ToString());
-
-  if (s.ok()) {
-    CHECK_GT(slice_id, 0);
-    // CAS: only publish our id if DoFlush's sync fallback hasn't already
-    // stored one. Whoever's NewSliceId returns first wins; the later one's
-    // id is abandoned (MDS-side leak).
-    uint64_t expected = 0;
-    if (!slice_id_.compare_exchange_strong(expected, slice_id,
-                                           std::memory_order_acq_rel,
-                                           std::memory_order_acquire)) {
-      VLOG(2) << fmt::format(
-          "{} PrepareSliceId raced DoFlush sync fallback, abandoning our id {}",
-          UUID(), slice_id);
+    VLOG(2) << fmt::format("{} PrepareSliceId status={}", uuid, s.ToString());
+    if (s.ok()) {
+      CHECK_GT(slice_id, 0);
+      if (!state->Publish(slice_id)) {
+        // INFO on purpose: the abandoned id still shows up as a vfs_meta
+        // new_slice_id record with no downstream write_slice/block_access
+        // trace; without this line a miscompare analyst reads it as a lost
+        // write.
+        LOG(INFO) << fmt::format(
+            "{} PrepareSliceId raced DoFlush fallback, abandoning id {} "
+            "(winner {})",
+            uuid, slice_id, state->Get());
+      }
+    } else {
+      LOG(WARNING) << fmt::format(
+          "{} PrepareSliceId failed: {}, DoFlush will retry synchronously",
+          uuid, s.ToString());
     }
-  } else {
-    LOG(WARNING) << fmt::format(
-        "{} PrepareSliceId failed: {}, DoFlush will retry synchronously",
-        UUID(), s.ToString());
-  }
+  });
 }
 
 // --- Write with streaming upload ---
@@ -172,6 +145,8 @@ Status SliceWriter::Write(ContextSPtr ctx, const char* buf, int32_t size,
 
   {
     std::lock_guard<std::mutex> lg(write_flush_mutex_);
+    CHECK(!flush_requested_) << fmt::format(
+        "{} Write called after FlushAsync closed the write epoch", UUID());
 
     std::vector<BlockApply> applies;
     std::vector<Reserved> reserved;        // every block's new pages this call
@@ -249,12 +224,10 @@ Status SliceWriter::Write(ContextSPtr ctx, const char* buf, int32_t size,
                            UUID(), old_len, ToStringUnlocked());
 
     // ---- Trigger streaming upload ----
-    // After FlushAsync, let DoFlush be the sole uploader (Step 5 takes
-    // block_datas_ wholesale). Skipping FlushUpTo here is not required for
-    // correctness - ChunkWriter's slice_mutex_ already prevents Write after
-    // FlushAsync on the same slice - but it keeps the upload path single-
-    // sourced once flushing starts.
-    if (len_ >= context_.block_size && !flushing_) {
+    // flush_requested_ was checked under this same lock, so this writer still
+    // belongs to its write epoch. ChunkWriter normally enforces the same
+    // ownership transition; the local CHECK makes violations fail loudly.
+    if (len_ >= context_.block_size) {
       FlushUpTo(len_);
     }
   }
@@ -268,7 +241,7 @@ Status SliceWriter::Write(ContextSPtr ctx, const char* buf, int32_t size,
 // --- FlushUpTo: upload all blocks with end <= written_len ---
 
 void SliceWriter::FlushUpTo(int32_t written_len) {
-  uint64_t sid = slice_id_.load(std::memory_order_acquire);
+  uint64_t sid = slice_id_state_->Get();
   if (sid == 0) {
     LOG(INFO) << fmt::format(
         "{} FlushUpTo skipped: slice_id not ready (pending or alloc failed)",
@@ -282,10 +255,13 @@ void SliceWriter::FlushUpTo(int32_t written_len) {
   for (auto it = block_datas_.begin(); it != block_datas_.end();) {
     int32_t end = (it->first + 1) * block_size;
     if (end <= written_len) {
-      inflight_.fetch_add(1, std::memory_order_relaxed);
+      flush_barrier_->TrackStreamingUpload(FlushBarrier::BlockInfo{
+          .index = it->first,
+          .size = static_cast<uint32_t>(it->second->Len()),
+          .start_us = static_cast<uint64_t>(butil::cpuwide_time_us())});
       BlockData* raw = it->second.release();
 
-      UploadBlockAsync(sid, it->first, raw);
+      SubmitBlockUpload(sid, it->first, raw);
 
       it = block_datas_.erase(it);
       ++blocks_uploaded;
@@ -295,8 +271,6 @@ void SliceWriter::FlushUpTo(int32_t written_len) {
   }
 
   if (blocks_uploaded > 0) {
-    total_blocks_streamed_.fetch_add(blocks_uploaded,
-                                     std::memory_order_relaxed);
     VLOG(2) << fmt::format(
         "{} FlushUpTo uploaded={}, remaining={}, written_len={}", UUID(),
         blocks_uploaded, block_datas_.size(), written_len);
@@ -305,10 +279,10 @@ void SliceWriter::FlushUpTo(int32_t written_len) {
 
 // --- Async block upload ---
 
-void SliceWriter::UploadBlockAsync(uint64_t slice_id, uint32_t block_index,
-                                   BlockData* block_data) {
+void SliceWriter::SubmitBlockUpload(uint64_t slice_id, uint32_t block_index,
+                                    BlockData* block_data) {
   auto span =
-      vfs_hub_->GetTraceManager()->StartSpan("SliceWriter::UploadBlockAsync");
+      vfs_hub_->GetTraceManager()->StartSpan("SliceWriter::SubmitBlockUpload");
 
   BlockKey key(slice_id, block_index, block_data->Len());
   BlockHandle handle(context_.fs_id, key);
@@ -323,75 +297,51 @@ void SliceWriter::UploadBlockAsync(uint64_t slice_id, uint32_t block_index,
   }
   req.write_back = writeback;
 
-  VLOG(4) << fmt::format("{} UploadBlockAsync key={}, block_index={}, len={}",
+  VLOG(4) << fmt::format("{} SubmitBlockUpload key={}, block_index={}, len={}",
                          UUID(), key.StoreKey(), block_index,
                          block_data->Len());
 
-  // Hold a ref for the async callback to prevent use-after-free if
-  // SliceWriter is destroyed (e.g. flush timeout) before callback fires.
-  IncRef();
-  auto on_done = [this, block_data, span](Status s) {
+  auto barrier = flush_barrier_;
+  auto* cb_executor = vfs_hub_->GetCBExecutor();
+  std::string uuid = UUID();
+  std::string store_key = key.StoreKey();
+
+  // VFSHub drains BlockStore before CBExecutor. Upload callbacks retain only
+  // the barrier, immutable diagnostics, and BlockData, never SliceWriter.
+  auto on_done = [barrier = std::move(barrier), block_data, span, cb_executor,
+                  uuid = std::move(uuid),
+                  store_key = std::move(store_key)](Status s) mutable {
     SpanScope::End(span);
-    vfs_hub_->GetCBExecutor()->Execute([this, block_data, s]() {
-      OnBlockUploaded(block_data, s);
-      DecRef();  // release the ref held by IncRef above; may delete this
-    });
+    cb_executor->Execute(
+        [barrier = std::move(barrier), block_data, uuid = std::move(uuid),
+         store_key = std::move(store_key), s = std::move(s)]() mutable {
+          HandleUploadCompletion(std::move(barrier), block_data,
+                                 std::move(uuid), std::move(store_key),
+                                 std::move(s));
+        });
   };
 
   vfs_hub_->GetBlockStore()->PutAsync(SpanScope::GetContext(span), req,
                                       std::move(on_done));
 }
 
-// --- Upload completion callback (runs on CBExecutor) ---
+void SliceWriter::HandleUploadCompletion(std::shared_ptr<FlushBarrier> barrier,
+                                         BlockData* block_data,
+                                         std::string uuid,
+                                         std::string store_key, Status status) {
+  std::unique_ptr<BlockData> owner(block_data);
+  uint32_t block_index = owner->BlockIndex();
 
-void SliceWriter::OnBlockUploaded(BlockData* block_data, Status s) {
-  VLOG(4) << fmt::format("{} OnBlockUploaded block_index={}, status={}", UUID(),
-                         block_data->BlockIndex(), s.ToString());
-
-  // 1. Release memory (always, even on error)
-  delete block_data;
-
-  // 2. Record first error (first-error-wins)
-  if (!s.ok()) {
-    LOG(WARNING) << fmt::format("{} Block upload failed: {}", UUID(),
-                                s.ToString());
-    std::lock_guard<std::mutex> lg(error_mutex_);
-    if (upload_error_.ok()) {
-      upload_error_ = s;
-    }
+  if (!status.ok()) {
+    LOG(WARNING) << fmt::format("{} Block upload key={}, index={} failed: {}",
+                                uuid, store_key, block_index,
+                                status.ToString());
+  } else {
+    VLOG(4) << fmt::format("{} Block upload key={}, index={} succeeded", uuid,
+                           store_key, block_index);
   }
 
-  // 3. Observability
-  total_blocks_uploaded_.fetch_add(1, std::memory_order_relaxed);
-
-  // 4. Decrement inflight and notify DoFlush waiter
-  uint32_t prev = inflight_.fetch_sub(1, std::memory_order_release);
-  CHECK_GE(prev, 1) << "inflight underflow";
-
-  if (prev == 1) {
-    std::lock_guard<std::mutex> lg(inflight_mutex_);
-    inflight_cv_.notify_all();
-  }
-}
-
-// --- WaitInflightWithTimeout ---
-
-bool SliceWriter::WaitInflightWithTimeout(std::chrono::seconds timeout) {
-  auto deadline = std::chrono::steady_clock::now() + timeout;
-
-  std::unique_lock<std::mutex> lock(inflight_mutex_);
-  while (inflight_.load(std::memory_order_acquire) > 0) {
-    auto status = inflight_cv_.wait_until(lock, deadline);
-    if (status == std::cv_status::timeout) {
-      if (inflight_.load(std::memory_order_acquire) > 0) {
-        LOG(ERROR) << fmt::format(
-            "{} WaitInflight timeout after {}s, inflight={}", UUID(),
-            timeout.count(), inflight_.load(std::memory_order_relaxed));
-        return false;
-      }
-    }
-  }
-  return true;
+  barrier->FinishUpload(block_index, status);
 }
 
 // --- FlushAsync / DoFlush ---
@@ -401,148 +351,139 @@ void SliceWriter::FlushAsync(StatusCallback cb) {
 
   {
     std::lock_guard<std::mutex> lg(write_flush_mutex_);
-    CHECK(!flushing_) << fmt::format(
-        "{} Flushing already in progress, unexpected state", UUID());
-    flushing_ = true;
-    flush_cb_.swap(cb);
+    CHECK(!flush_requested_) << fmt::format(
+        "{} FlushAsync already requested, unexpected state", UUID());
+    flush_requested_ = true;
   }
 
-  // Hold a ref for the async work to prevent use-after-free if SliceWriter
-  // is destroyed before FlushExecutor picks up the lambda.
-  IncRef();
-  vfs_hub_->GetFlushExecutor()->Execute([this]() {
-    DoFlush();
-    DecRef();
-  });
+  auto self = shared_from_this();
+  vfs_hub_->GetFlushExecutor()->Execute(
+      [self = std::move(self), cb = std::move(cb)]() mutable {
+        self->DoFlush(std::move(cb));
+      });
 }
 
-void SliceWriter::DoFlush() {
+StatusCallback SliceWriter::MakeFlushCompletion(StatusCallback cb) {
+  auto completion_state = flush_completion_state_;
+  auto* cb_executor = vfs_hub_->GetCBExecutor();
+  std::string uuid = UUID();
+  return [completion_state = std::move(completion_state), cb_executor,
+          uuid = std::move(uuid), cb = std::move(cb)](Status status) mutable {
+    cb_executor->Execute([completion_state = std::move(completion_state),
+                          uuid = std::move(uuid), cb = std::move(cb),
+                          status = std::move(status)]() mutable {
+      VLOG(4) << fmt::format("{} CompleteFlush status: {}", uuid,
+                             status.ToString());
+      completion_state->MarkCompleted();
+      cb(std::move(status));
+    });
+  };
+}
+
+Status SliceWriter::GetOrAllocateSliceId(ContextSPtr ctx, uint64_t* slice_id) {
+  *slice_id = slice_id_state_->Get();
+  if (*slice_id != 0) {
+    return Status::OK();
+  }
+
+  VLOG(2) << fmt::format(
+      "{} DoFlush: prepared slice id not ready, allocating synchronously",
+      UUID());
+  Status status =
+      vfs_hub_->GetMetaSystem()->NewSliceId(ctx, context_.ino, slice_id);
+  if (!status.ok()) {
+    return status;
+  }
+  CHECK_GT(*slice_id, 0);
+
+  // The asynchronous preparation may publish between the initial read and
+  // this allocation. Keep the first published id and abandon the other one.
+  if (!slice_id_state_->Publish(*slice_id)) {
+    uint64_t winner = slice_id_state_->Get();
+    // INFO on purpose: see the matching abandon log in PrepareSliceId.
+    LOG(INFO) << fmt::format(
+        "{} DoFlush fallback raced PrepareSliceId, abandoning id {} "
+        "(winner {})",
+        UUID(), *slice_id, winner);
+    *slice_id = winner;
+  }
+  return Status::OK();
+}
+
+std::map<uint32_t, BlockDataUPtr> SliceWriter::TakeRemainingBlocks() {
+  std::lock_guard<std::mutex> lock(write_flush_mutex_);
+  return std::move(block_datas_);
+}
+
+std::vector<FlushBarrier::BlockInfo> SliceWriter::DescribeUploads(
+    const std::map<uint32_t, BlockDataUPtr>& blocks) {
+  std::vector<FlushBarrier::BlockInfo> uploads;
+  uploads.reserve(blocks.size());
+  for (const auto& [index, block_data] : blocks) {
+    uploads.push_back(FlushBarrier::BlockInfo{
+        .index = index,
+        .size = static_cast<uint32_t>(block_data->Len()),
+        .start_us = static_cast<uint64_t>(butil::cpuwide_time_us())});
+  }
+  return uploads;
+}
+
+void SliceWriter::SubmitUploads(uint64_t slice_id,
+                                std::map<uint32_t, BlockDataUPtr> blocks) {
+  for (auto& [index, block_data] : blocks) {
+    SubmitBlockUpload(slice_id, index, block_data.release());
+  }
+}
+
+void SliceWriter::DoFlush(StatusCallback cb) {
   auto span = vfs_hub_->GetTraceManager()->StartSpan("SliceWriter::DoFlush");
   auto ctx = SpanScope::GetContext(span);
   uint64_t start_us = butil::cpuwide_time_us();
 
   VLOG(2) << fmt::format("{} DoFlush start", UUID());
 
+  StatusCallback done = MakeFlushCompletion(std::move(cb));
+
   // === Step 1: Check existing upload errors (fast fail) ===
-  {
-    std::lock_guard<std::mutex> lg(error_mutex_);
-    if (!upload_error_.ok()) {
-      LOG(WARNING) << fmt::format("{} DoFlush early fail: {}", UUID(),
-                                  upload_error_.ToString());
-      FlushDone(upload_error_);
-      return;
-    }
-  }
-
-  // === Step 2: Wait for streaming inflight blocks to complete ===
-  auto timeout = std::chrono::seconds(FLAGS_vfs_flush_timeout_seconds);
-  if (!WaitInflightWithTimeout(timeout)) {
-    LOG(ERROR) << fmt::format("{} DoFlush timeout waiting inflight blocks",
-                              UUID());
-    FlushDone(Status::Internal("DoFlush timeout waiting inflight"));
+  Status existing_error = flush_barrier_->FirstError();
+  if (!existing_error.ok()) {
+    LOG(WARNING) << fmt::format("{} DoFlush early fail: {}", UUID(),
+                                existing_error.ToString());
+    flush_barrier_->AbortFlush(existing_error, std::move(done));
     return;
   }
 
-  // === Step 3: Re-check errors (inflight callbacks may have added new ones)
-  // ===
-  {
-    std::lock_guard<std::mutex> lg(error_mutex_);
-    if (!upload_error_.ok()) {
-      FlushDone(upload_error_);
-      return;
-    }
-  }
-
-  // === Step 4: Ensure slice_id ===
-  uint64_t sid = slice_id_.load(std::memory_order_acquire);
-  if (sid == 0) {
-    VLOG(2) << fmt::format(
-        "{} DoFlush: prepareSliceId not ready, falling back to sync NewSliceId",
-        UUID());
-
-    Status s = vfs_hub_->GetMetaSystem()->NewSliceId(ctx, context_.ino, &sid);
-    if (!s.ok()) {
-      LOG(ERROR) << fmt::format("{} DoFlush NewSliceId failed: {}", UUID(),
-                                s.ToString());
-      FlushDone(s);
-      return;
-    }
-    // CAS: if PrepareSliceId landed between our load and now, use its id and
-    // abandon ours (MDS leaks our allocation, but that's cheaper than mixing
-    // ids mid-flush). If we win, slice_id_ becomes sid.
-    uint64_t expected = 0;
-    if (!slice_id_.compare_exchange_strong(expected, sid,
-                                           std::memory_order_acq_rel,
-                                           std::memory_order_acquire)) {
-      sid = expected;
-    }
-  }
-
-  // === Step 5: Upload remaining blocks (partial + any not yet streamed) ===
-  std::map<uint32_t, BlockDataUPtr> remaining;
-  {
-    std::lock_guard<std::mutex> lg(write_flush_mutex_);
-    remaining = std::move(block_datas_);
-  }
-
-  if (remaining.empty()) {
-    uint64_t elapsed_us = butil::cpuwide_time_us() - start_us;
-    VLOG(2) << fmt::format(
-        "{} DoFlush done (no remaining), elapsed_us={}, "
-        "total_streamed={}, total_uploaded={}",
-        UUID(), elapsed_us,
-        total_blocks_streamed_.load(std::memory_order_relaxed),
-        total_blocks_uploaded_.load(std::memory_order_relaxed));
-    FlushDone(Status::OK());
+  // === Step 2: Ensure slice_id ===
+  uint64_t sid = 0;
+  Status id_status = GetOrAllocateSliceId(ctx, &sid);
+  if (!id_status.ok()) {
+    LOG(ERROR) << fmt::format("{} DoFlush NewSliceId failed: {}", UUID(),
+                              id_status.ToString());
+    flush_barrier_->AbortFlush(id_status, std::move(done));
     return;
   }
 
-  VLOG(2) << fmt::format("{} DoFlush uploading {} remaining blocks", UUID(),
-                         remaining.size());
+  // === Step 3: Take remaining blocks (partial + any not yet streamed) ===
+  auto remaining = TakeRemainingBlocks();
 
-  for (auto& [index, block_data] : remaining) {
-    inflight_.fetch_add(1, std::memory_order_relaxed);
-    UploadBlockAsync(sid, index, block_data.release());
-  }
-  remaining.clear();
-
-  // === Step 6: Wait for remaining blocks to complete ===
-  if (!WaitInflightWithTimeout(timeout)) {
-    LOG(ERROR) << fmt::format("{} DoFlush timeout waiting remaining blocks",
-                              UUID());
-    FlushDone(Status::Internal("DoFlush timeout waiting remaining"));
-    return;
-  }
-
-  // === Step 7: Final error check ===
-  Status final_status;
-  {
-    std::lock_guard<std::mutex> lg(error_mutex_);
-    final_status = upload_error_;
-  }
-
-  uint64_t elapsed_us = butil::cpuwide_time_us() - start_us;
   VLOG(2) << fmt::format(
-      "{} DoFlush done, status={}, elapsed_us={}, "
-      "total_streamed={}, total_uploaded={}",
-      UUID(), final_status.ToString(), elapsed_us,
-      total_blocks_streamed_.load(std::memory_order_relaxed),
-      total_blocks_uploaded_.load(std::memory_order_relaxed));
-  FlushDone(final_status);
-}
+      "{} DoFlush merging remaining={}, streaming_inflight={}", UUID(),
+      remaining.size(), flush_barrier_->Inflight());
 
-void SliceWriter::FlushDone(Status s) {
-  VLOG(4) << fmt::format("{} FlushDone status: {}", UUID(), s.ToString());
+  auto remaining_uploads = DescribeUploads(remaining);
 
-  flushed_.store(true, std::memory_order_relaxed);
-
-  StatusCallback cb;
-  {
-    std::lock_guard<std::mutex> lg(write_flush_mutex_);
-    cb.swap(flush_cb_);
+  // === Step 4: Atomically register every final upload. ===
+  if (!flush_barrier_->RegisterFinalUploads(remaining_uploads,
+                                            std::move(done))) {
+    return;
   }
 
-  cb(s);
+  // === Step 5: Submit remaining blocks without waiting for streaming. ===
+  SubmitUploads(sid, std::move(remaining));
+
+  VLOG(2) << fmt::format("{} DoFlush submitted remaining={}, elapsed_us={}",
+                         UUID(), remaining_uploads.size(),
+                         butil::cpuwide_time_us() - start_us);
 }
 
 Slice SliceWriter::GetCommitSlice() {
@@ -552,7 +493,7 @@ Slice SliceWriter::GetCommitSlice() {
     len = len_;
   }
 
-  uint64_t sid = slice_id_.load(std::memory_order_acquire);
+  uint64_t sid = slice_id_state_->Get();
   // Caller (ChunkFlushTask) must only call this after a successful flush,
   // at which point either PrepareSliceId or DoFlush's sync fallback has
   // published a valid id via CAS. A zero id here means contract violation.

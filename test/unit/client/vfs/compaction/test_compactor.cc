@@ -214,23 +214,8 @@ TEST_F(CompactorTest, Stop_WaitsForInflight) {
   compact_thread.join();
 }
 
-// 10. Regression for compactor SliceWriter heap-alloc fix.
-//
-// Pre-fix bug: compactor_impl.cc DoCompact had
-//   `SliceWriter writer(ctx, vfs_hub_, offset_in_chunk);` on the STACK.
-// SliceWriter is governed by manual ref counting that calls `delete this`
-// from DecRef→0; firing operator delete on a stack address aborts with
-// `free(): invalid pointer`. The crash window is the µs between
-// FlushAsync's flush-lambda DecRef and the compactor stack frame exit:
-// two threads end up running ~SliceWriter on the same stack address.
-//
-// Fix: heap-allocate with `new SliceWriter(...)` + IncRef owner ref +
-// ScopedCleanup-DecRef, matching ChunkWriter::CreateSliceUnlocked's
-// pattern. The last DecRef triggers `delete this` on a real heap address.
-//
-// Each ForceCompact below drives DoCompact end-to-end through SliceWriter
-// Write+FlushAsync+sync.Wait+GetCommitSlice. With the bug, at least one
-// iteration aborts; with the fix, all 20 succeed.
+// 10. Repeatedly drive compaction through the shared-owned SliceWriter path.
+// This guards its async FlushAsync lifetime and end-to-end commit result.
 TEST_F(CompactorTest, RegressionHeapAllocSliceWriter_RepeatedDoCompact_Stable) {
   for (int i = 0; i < 20; ++i) {
     // 4 MB non-zero slice; ForceCompact bypasses Skip() logic and forces

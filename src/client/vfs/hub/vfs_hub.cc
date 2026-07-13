@@ -457,6 +457,9 @@ Status VFSHubImpl::Stop(bool skip_unmount) {
     write_background_executor_->Stop();
   }
 
+  // DoFlush is the last writer-side producer of BlockStore uploads. Drain it
+  // before shutting BlockStore down. Upload completion no longer schedules
+  // work back to FlushExecutor, so this dependency is one-way.
   if (flush_executor_ != nullptr) {
     flush_executor_->Stop();
   }
@@ -481,6 +484,12 @@ Status VFSHubImpl::Stop(bool skip_unmount) {
     block_store_->Shutdown();
   }
 
+  // BlockStore::Shutdown has invoked every accepted upload callback. Drain
+  // CBExecutor while MetaSystem is still available to completion callbacks.
+  if (cb_executor_ != nullptr) {
+    cb_executor_->Stop();
+  }
+
   // read_cleanup_executor_ is the consumer of read completions (it erases
   // finished read requests); stop it only after block_store_ has joined every
   // read bthread, otherwise a straggler completion submits to a dead executor.
@@ -491,18 +500,13 @@ Status VFSHubImpl::Stop(bool skip_unmount) {
   // meta_wrapper_ can stop after block_store_: the metasystem flushes to MDS
   // via RPC and never pushes data through block_store_, and its only background
   // producer (write_background_executor_'s slice_id pre-allocation) was already
-  // drained above. Block-store completions firing during Shutdown() touch only
-  // read_cleanup_executor_ / cb_executor_, never meta.
+  // drained above. Block-store completions are drained by CBExecutor above.
   if (meta_wrapper_ != nullptr) {
     meta_wrapper_->Stop(skip_unmount);
   }
 
   if (trace_manager_ != nullptr) {
     if (FLAGS_enable_trace) trace_manager_->Stop();
-  }
-
-  if (cb_executor_ != nullptr) {
-    cb_executor_->Stop();
   }
 
   if (logclean_manager_ != nullptr) {

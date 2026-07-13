@@ -73,29 +73,6 @@ class FlushTasksTest : public test::VFSTestBase {
     EXPECT_CALL(*mock_hub_, GetTraceManager()).Times(AnyNumber());
   }
 
-  // Create a SliceWriter that has written data and is ready to flush.
-  SliceWriter* MakeFlushedSliceWriter(uint64_t slice_id) {
-    SliceDataContext ctx = MakeSliceContext();
-    auto* sw = new SliceWriter(ctx, mock_hub_, 0);
-    sw->IncRef();
-    std::vector<char> buf(4096, 'X');
-    CHECK(sw->Write(ctx_, buf.data(), 4096, 0).ok());
-
-    // Set expectations for the flush.
-    EXPECT_CALL(*mock_meta_system_, NewSliceId(_, _, _))
-        .WillOnce(DoAll(SetArgPointee<2>(slice_id), Return(Status::OK())));
-    EXPECT_CALL(*mock_block_store_, PutAsync(_, _, _))
-        .WillRepeatedly(Invoke(
-            [](ContextSPtr, PutReq, StatusCallback cb) { cb(Status::OK()); }));
-
-    test::AsyncWaiter waiter;
-    waiter.Expect(1);
-    sw->FlushAsync([&waiter](Status) { waiter.Done(); });
-    waiter.Wait();
-
-    return sw;
-  }
-
   std::unique_ptr<TraceManager> trace_manager_;
 };
 
@@ -138,8 +115,7 @@ TEST_F(FlushTasksTest, ChunkFlushTask_AllSlices_Success) {
     uint64_t seq = ctx.seq;
     // Each slice starts at its own chunk offset (offset by kPageSize each).
     uint64_t chunk_off = static_cast<uint64_t>(i) * kPageSize;
-    auto* sw = new SliceWriter(ctx, mock_hub_, chunk_off);
-    sw->IncRef();
+    auto sw = std::make_shared<SliceWriter>(ctx, mock_hub_, chunk_off);
     std::vector<char> buf(kPageSize, static_cast<char>('A' + i));
     ASSERT_TRUE(sw->Write(ctx_, buf.data(), kPageSize, chunk_off).ok());
     slices.emplace(seq, sw);
@@ -170,8 +146,7 @@ TEST_F(FlushTasksTest, ChunkFlushTask_SliceFail_Propagated) {
 
   SliceDataContext ctx = MakeSliceContext();
   uint64_t seq = ctx.seq;
-  auto* sw = new SliceWriter(ctx, mock_hub_, 0);
-  sw->IncRef();
+  auto sw = std::make_shared<SliceWriter>(ctx, mock_hub_, 0);
   std::vector<char> buf(kPageSize, 'F');
   ASSERT_TRUE(sw->Write(ctx_, buf.data(), kPageSize, 0).ok());
 
@@ -213,8 +188,7 @@ TEST_F(FlushTasksTest, ChunkFlushTask_Concurrent_ExactlyOnce) {
     SliceDataContext ctx = MakeSliceContext();
     uint64_t seq = ctx.seq;
     uint64_t chunk_off = static_cast<uint64_t>(i) * kPageSize;
-    auto* sw = new SliceWriter(ctx, mock_hub_, chunk_off);
-    sw->IncRef();
+    auto sw = std::make_shared<SliceWriter>(ctx, mock_hub_, chunk_off);
     std::vector<char> buf(kPageSize, static_cast<char>('a' + i));
     ASSERT_TRUE(sw->Write(ctx_, buf.data(), kPageSize, chunk_off).ok());
     slices.emplace(seq, sw);

@@ -19,6 +19,7 @@
 #include <gtest/gtest.h>
 
 #include <cstring>
+#include <future>
 #include <memory>
 #include <string>
 
@@ -55,17 +56,6 @@ inline uint32_t HandleSize(const BlockHandle& h) {
 }
 }  // namespace
 
-// RAII guard: calls DecRef on scope exit
-struct SliceWriterGuard {
-  SliceWriter* sw;
-  explicit SliceWriterGuard(SliceWriter* s) : sw(s) {}
-  ~SliceWriterGuard() {
-    if (sw) sw->DecRef();
-  }
-  SliceWriterGuard(const SliceWriterGuard&) = delete;
-  SliceWriterGuard& operator=(const SliceWriterGuard&) = delete;
-};
-
 // Block size: 4 MiB, Chunk size: 64 MiB, page size: 4 KiB
 static constexpr uint64_t kBlockSize = 4 * 1024 * 1024;
 static constexpr uint64_t kChunkSize = 64 * 1024 * 1024;
@@ -89,8 +79,8 @@ class SliceWriterTest : public test::VFSTestBase {
     EXPECT_CALL(*mock_hub_, GetTraceManager()).Times(AnyNumber());
 
     context_ = std::make_unique<SliceDataContext>(MakeContext());
-    sw_ = new SliceWriter(*context_, mock_hub_, /*chunk_offset=*/0);
-    sw_->IncRef();
+    sw_ = std::make_shared<SliceWriter>(*context_, mock_hub_,
+                                        /*chunk_offset=*/0);
   }
 
   // Helper: allocate and fill a buffer of given size with a repeated byte val.
@@ -105,14 +95,7 @@ class SliceWriterTest : public test::VFSTestBase {
 
   std::unique_ptr<TraceManager> trace_manager_;
   std::unique_ptr<SliceDataContext> context_;
-  SliceWriter* sw_{nullptr};
-
-  void TearDown() override {
-    if (sw_) {
-      sw_->DecRef();
-      sw_ = nullptr;
-    }
-  }
+  SliceWriterPtr sw_;
 };
 
 // 1. Write 4096 bytes at offset 0; verify Len() == 4096.
@@ -147,12 +130,9 @@ TEST_F(SliceWriterTest, Write_CrossBlock_PoolExhaustion_AtomicRollback) {
       std::make_unique<WriteMemPool>(block_pages * kPageSize, kPageSize);
   ON_CALL(*mock_hub_, GetWriteMemPool()).WillByDefault(Return(tiny.get()));
 
-  // Use a LOCAL SliceWriter (not the fixture's sw_, which is torn down after
-  // `tiny`): the guard DecRefs it at scope exit, BEFORE `tiny` is destroyed, so
-  // pages from the final successful write are freed into a still-alive pool.
-  auto* sw = new SliceWriter(*context_, mock_hub_, /*chunk_offset=*/0);
-  sw->IncRef();
-  SliceWriterGuard guard(sw);
+  // Use a local SliceWriter so its pages are freed before `tiny` is destroyed.
+  auto sw = std::make_shared<SliceWriter>(*context_, mock_hub_,
+                                          /*chunk_offset=*/0);
 
   // block_size + 1 page spans block0 (full) + block1 (1 page) -> 1 page short.
   const int32_t write_size = static_cast<int32_t>(kBlockSize + kPageSize);
@@ -177,7 +157,7 @@ TEST_F(SliceWriterTest, Write_CrossBlock_PoolExhaustion_AtomicRollback) {
 }
 
 // 3. Write data, mock NewSliceId returns id=42, mock PutAsync succeeds.
-//    Verify callback called with OK, IsFlushed()==true,
+//    Verify callback called with OK, IsFlushCompleted()==true,
 //    GetCommitSlice().id==42.
 TEST_F(SliceWriterTest, FlushAsync_BasicSuccess) {
   EXPECT_CALL(*mock_meta_system_, NewSliceId(_, _, _))
@@ -197,7 +177,7 @@ TEST_F(SliceWriterTest, FlushAsync_BasicSuccess) {
   });
   waiter.Wait();
 
-  EXPECT_TRUE(sw_->IsFlushed());
+  EXPECT_TRUE(sw_->IsFlushCompleted());
   EXPECT_EQ(sw_->GetCommitSlice().id, 42u);
 }
 
@@ -268,7 +248,8 @@ TEST_F(SliceWriterTest, FlushAsync_BlockStore_PutAsync_Fails) {
   waiter.Wait();
 }
 
-// 7. Call FlushAsync twice; second call should CHECK-fail due to flushing_
+// 7. Call FlushAsync twice; second call should CHECK-fail due to the
+// flush_requested_
 // gate.
 //    We only test that the first FlushAsync completes successfully.
 TEST_F(SliceWriterTest, FlushAsync_OnlyCalledOnce) {
@@ -289,8 +270,8 @@ TEST_F(SliceWriterTest, FlushAsync_OnlyCalledOnce) {
   });
   waiter.Wait();
 
-  // After the first flush completes, IsFlushed() must be true.
-  EXPECT_TRUE(sw_->IsFlushed());
+  // After the first flush completes, IsFlushCompleted() must be true.
+  EXPECT_TRUE(sw_->IsFlushCompleted());
   // The SliceWriter enforces single-flush via CHECK; we do not call
   // FlushAsync a second time here to avoid a crash in the test process.
 }
@@ -316,7 +297,7 @@ TEST_F(SliceWriterTest, Write_ZeroData_FlushSucceeds) {
   });
   waiter.Wait();
 
-  EXPECT_TRUE(sw_->IsFlushed());
+  EXPECT_TRUE(sw_->IsFlushCompleted());
 }
 
 // 9. After multiple writes, verify total length via Len().
@@ -340,7 +321,7 @@ TEST_F(SliceWriterTest, GetWrittenLength_CorrectValue) {
 TEST_F(SliceWriterTest, NoWrites_LenIsZero) {
   // A fresh SliceWriter with no writes must have Len() == 0.
   EXPECT_EQ(sw_->Len(), 0u);
-  EXPECT_FALSE(sw_->IsFlushed());
+  EXPECT_FALSE(sw_->IsFlushCompleted());
   EXPECT_EQ(sw_->ChunkOffset(), 0u);
 }
 
@@ -361,10 +342,8 @@ class SliceWriterSliceRelativeTest : public test::VFSTestBase {
   }
 
   // Create a SliceWriter starting at the given chunk_offset.
-  SliceWriter* MakeSliceWriter(int32_t chunk_offset) {
-    auto* sw = new SliceWriter(*context_, mock_hub_, chunk_offset);
-    sw->IncRef();
-    return sw;
+  SliceWriterPtr MakeSliceWriter(int32_t chunk_offset) {
+    return std::make_shared<SliceWriter>(*context_, mock_hub_, chunk_offset);
   }
 
   std::vector<char> MakeBuf(uint64_t size, char val = 'A') {
@@ -382,7 +361,6 @@ TEST_F(SliceWriterSliceRelativeTest, Write_SliceRelative_StartsFromZero) {
   const int32_t kStartOffset = 5 * 1024 * 1024;  // 5MB
   const int32_t kWriteSize = 9 * 1024 * 1024;    // 9MB
   auto sw = MakeSliceWriter(kStartOffset);
-  SliceWriterGuard guard(sw);
 
   // Capture all block indices from PutAsync calls.
   std::vector<uint32_t> captured_indices;
@@ -422,7 +400,6 @@ TEST_F(SliceWriterSliceRelativeTest, Write_MultiBlock_Sequential) {
   const int32_t kStartOffset = 5 * 1024 * 1024;
   const int32_t kWriteSize = 9 * 1024 * 1024;
   auto sw = MakeSliceWriter(kStartOffset);
-  SliceWriterGuard guard(sw);
 
   // Capture block index -> data size.
   std::map<uint32_t, size_t> block_sizes;
@@ -458,7 +435,6 @@ TEST_F(SliceWriterSliceRelativeTest, Write_MultiBlock_Sequential) {
 // 3. Four 1MB writes → single block (index=0), total Len()=4MB.
 TEST_F(SliceWriterSliceRelativeTest, Write_MultipleSmallWrites_SameBlock) {
   auto sw = MakeSliceWriter(0);
-  SliceWriterGuard guard(sw);
   const int32_t kSmallSize = 1 * 1024 * 1024;
 
   for (int i = 0; i < 4; ++i) {
@@ -496,7 +472,6 @@ TEST_F(SliceWriterSliceRelativeTest, Write_MultipleSmallWrites_SameBlock) {
 // 4. Write(3MB) + Write(2MB) crosses block boundary → two blocks.
 TEST_F(SliceWriterSliceRelativeTest, Write_SmallWrites_CrossBoundary) {
   auto sw = MakeSliceWriter(0);
-  SliceWriterGuard guard(sw);
   const int32_t k3MB = 3 * 1024 * 1024;
   const int32_t k2MB = 2 * 1024 * 1024;
 
@@ -538,7 +513,6 @@ TEST_F(SliceWriterSliceRelativeTest, Flush_LastBlock_ActualSize) {
   const int32_t kStartOffset = 5 * 1024 * 1024;
   const int32_t kWriteSize = 9 * 1024 * 1024;
   auto sw = MakeSliceWriter(kStartOffset);
-  SliceWriterGuard guard(sw);
 
   // Capture BlockKey.size per block_index.
   std::map<uint32_t, uint32_t> key_sizes;
@@ -575,7 +549,6 @@ TEST_F(SliceWriterSliceRelativeTest, Flush_LastBlock_ActualSize) {
 // 6. Write(100 bytes) → one block, BlockKey.size=100.
 TEST_F(SliceWriterSliceRelativeTest, Write_SingleBlockLessThanBlockSize) {
   auto sw = MakeSliceWriter(0);
-  SliceWriterGuard guard(sw);
 
   uint32_t captured_key_size = 0;
   EXPECT_CALL(*mock_block_store_, PutAsync(_, _, _))
@@ -607,7 +580,6 @@ TEST_F(SliceWriterSliceRelativeTest, Write_SingleBlockLessThanBlockSize) {
 TEST_F(SliceWriterSliceRelativeTest, Write_ReverseWrite_CheckFails) {
   const int32_t k4MB = 4 * 1024 * 1024;
   auto sw = MakeSliceWriter(k4MB);
-  SliceWriterGuard guard(sw);
 
   // First write at offset 4MB (the starting chunk_offset).
   auto buf1 = MakeBuf(k4MB);
@@ -624,7 +596,6 @@ TEST_F(SliceWriterSliceRelativeTest, Write_ReverseWrite_CheckFails) {
 TEST_F(SliceWriterSliceRelativeTest, Write_ForwardGap_CheckFails) {
   const int32_t k4MB = 4 * 1024 * 1024;
   auto sw = MakeSliceWriter(k4MB);
-  SliceWriterGuard guard(sw);
 
   auto buf1 = MakeBuf(k4MB);
   ASSERT_TRUE(sw->Write(ctx_, buf1.data(), k4MB, k4MB).ok());
@@ -638,7 +609,6 @@ TEST_F(SliceWriterSliceRelativeTest, Write_ForwardGap_CheckFails) {
 TEST_F(SliceWriterSliceRelativeTest, Write_WrongStartOffset_CheckFails) {
   const int32_t k4MB = 4 * 1024 * 1024;
   auto sw = MakeSliceWriter(k4MB);  // ctor sets chunk_offset_ = 4MB
-  SliceWriterGuard guard(sw);
 
   // Slice starts at 4MB; writing at 0 / 2MB / 6MB are all != End() -> reject.
   auto buf = MakeBuf(k4MB);
@@ -650,7 +620,6 @@ TEST_F(SliceWriterSliceRelativeTest, Write_WrongStartOffset_CheckFails) {
 TEST_F(SliceWriterSliceRelativeTest, ChunkOffset_StableAfterWrites) {
   const int32_t kStart = 5 * 1024 * 1024;
   auto sw = MakeSliceWriter(kStart);
-  SliceWriterGuard guard(sw);
 
   EXPECT_EQ(sw->ChunkOffset(), kStart);
 
@@ -671,7 +640,6 @@ TEST_F(SliceWriterSliceRelativeTest, GetCommitSlice_CorrectFields) {
   const int32_t kStartOffset = 5 * 1024 * 1024;
   const int32_t kWriteSize = 9 * 1024 * 1024;
   auto sw = MakeSliceWriter(kStartOffset);
-  SliceWriterGuard guard(sw);
 
   EXPECT_CALL(*mock_meta_system_, NewSliceId(_, _, _))
       .WillOnce(DoAll(SetArgPointee<2>(200u), Return(Status::OK())));
@@ -702,8 +670,6 @@ TEST_F(SliceWriterSliceRelativeTest, GetCommitSlice_CorrectFields) {
 }  // namespace client
 }  // namespace dingofs
 
-DECLARE_int32(vfs_flush_timeout_seconds);
-
 namespace dingofs {
 namespace client {
 namespace vfs {
@@ -723,9 +689,8 @@ class SliceWriterStreamingTest : public test::VFSTestBase {
     context_ = std::make_unique<SliceDataContext>(MakeContext());
   }
 
-  SliceWriter* MakeStreamingWriter(int32_t chunk_offset = 0) {
-    auto* sw = new SliceWriter(*context_, mock_hub_, chunk_offset);
-    sw->IncRef();
+  SliceWriterPtr MakeStreamingWriter(int32_t chunk_offset = 0) {
+    auto sw = std::make_shared<SliceWriter>(*context_, mock_hub_, chunk_offset);
     sw->StartPrepareSliceId();
     return sw;
   }
@@ -772,7 +737,6 @@ TEST_F(SliceWriterStreamingTest, UT1_FlushUpTo_OnlyFullBlocks) {
       }));
 
   auto sw = MakeStreamingWriter(0);
-  SliceWriterGuard guard(sw);
   WaitWriteBackgroundExecutorIdle();  // slice_id_ = 42
 
   // Write 10MB = 2 full blocks (4MB each) + 2MB partial
@@ -804,7 +768,7 @@ TEST_F(SliceWriterStreamingTest, UT1_FlushUpTo_OnlyFullBlocks) {
     std::sort(uploaded_indices.begin(), uploaded_indices.end());
     EXPECT_EQ(uploaded_indices[2], 2u);
   }
-  EXPECT_TRUE(sw->IsFlushed());
+  EXPECT_TRUE(sw->IsFlushCompleted());
   EXPECT_EQ(sw->GetCommitSlice().id, 42u);
 }
 
@@ -833,7 +797,6 @@ TEST_F(SliceWriterStreamingTest, UT2_SliceId_DelayedArrival_CatchUp) {
       }));
 
   auto sw = MakeStreamingWriter(0);
-  SliceWriterGuard guard(sw);
   // Do NOT WaitWriteBackgroundExecutorIdle — PrepareSliceId is blocked
 
   // Write 8MB = 2 full blocks. slice_id_==0, FlushUpTo skips.
@@ -873,7 +836,7 @@ TEST_F(SliceWriterStreamingTest, UT2_SliceId_DelayedArrival_CatchUp) {
     waiter.Done();
   });
   waiter.Wait();
-  EXPECT_TRUE(sw->IsFlushed());
+  EXPECT_TRUE(sw->IsFlushCompleted());
 }
 
 // UT-3: Second PutAsync returns error. FlushAsync callback receives error.
@@ -893,7 +856,6 @@ TEST_F(SliceWriterStreamingTest, UT3_UploadError_Propagation) {
       }));
 
   auto sw = MakeStreamingWriter(0);
-  SliceWriterGuard guard(sw);
   WaitWriteBackgroundExecutorIdle();
 
   // Write 8MB = 2 blocks. block[0] OK, block[1] fails.
@@ -908,54 +870,6 @@ TEST_F(SliceWriterStreamingTest, UT3_UploadError_Propagation) {
     waiter.Done();
   });
   waiter.Wait();
-}
-
-// UT-4: PutAsync callback held (not called). WaitInflightWithTimeout times out.
-TEST_F(SliceWriterStreamingTest, UT4_WaitInflight_Timeout) {
-  FLAGS_vfs_flush_timeout_seconds = 2;  // Short timeout for testing
-
-  EXPECT_CALL(*mock_meta_system_, NewSliceId(_, _, _))
-      .WillOnce(DoAll(SetArgPointee<2>(42u), Return(Status::OK())));
-
-  std::vector<StatusCallback> held_cbs;
-  std::mutex mu;
-  EXPECT_CALL(*mock_block_store_, PutAsync(_, _, _))
-      .WillRepeatedly(Invoke([&](ContextSPtr, PutReq, StatusCallback cb) {
-        std::lock_guard<std::mutex> lk(mu);
-        held_cbs.push_back(std::move(cb));  // Hold, don't call
-      }));
-
-  auto sw = MakeStreamingWriter(0);
-  SliceWriterGuard guard(sw);
-  WaitWriteBackgroundExecutorIdle();
-
-  // Write 4MB = 1 full block. PutAsync held → inflight_=1
-  auto buf = MakeBuf(4 * 1024 * 1024);
-  ASSERT_TRUE(sw->Write(ctx_, buf.data(), 4 * 1024 * 1024, 0).ok());
-
-  test::AsyncWaiter waiter;
-  waiter.Expect(1);
-  auto start = std::chrono::steady_clock::now();
-  sw->FlushAsync([&](Status s) {
-    EXPECT_FALSE(s.ok());
-    waiter.Done();
-  });
-  waiter.Wait(std::chrono::seconds(10));
-
-  auto elapsed = std::chrono::steady_clock::now() - start;
-  EXPECT_GE(elapsed, std::chrono::seconds(1));
-  EXPECT_LE(elapsed, std::chrono::seconds(5));
-
-  // Cleanup: release held callbacks to avoid dangling references
-  {
-    std::lock_guard<std::mutex> lk(mu);
-    for (auto& cb : held_cbs) {
-      cb(Status::Internal("test cleanup"));
-    }
-  }
-  WaitCBExecutorIdle();
-
-  FLAGS_vfs_flush_timeout_seconds = 300;  // Restore default
 }
 
 // UT-5: Write 100KB (< block_size). No streaming upload during Write.
@@ -973,7 +887,6 @@ TEST_F(SliceWriterStreamingTest, UT5_SmallFile_NoStreamingUpload) {
       }));
 
   auto sw = MakeStreamingWriter(0);
-  SliceWriterGuard guard(sw);
   WaitWriteBackgroundExecutorIdle();
 
   auto buf = MakeBuf(100 * 1024);  // 100KB
@@ -992,7 +905,7 @@ TEST_F(SliceWriterStreamingTest, UT5_SmallFile_NoStreamingUpload) {
   });
   waiter.Wait();
 
-  EXPECT_TRUE(sw->IsFlushed());
+  EXPECT_TRUE(sw->IsFlushCompleted());
   EXPECT_EQ(sw->GetCommitSlice().id, 42u);
 }
 
@@ -1016,7 +929,6 @@ TEST_F(SliceWriterStreamingTest, UT6_MultipleWrites_StreamingOneByOne) {
       }));
 
   auto sw = MakeStreamingWriter(0);
-  SliceWriterGuard guard(sw);
   WaitWriteBackgroundExecutorIdle();
 
   const int32_t kBSize = 4 * 1024 * 1024;
@@ -1045,7 +957,7 @@ TEST_F(SliceWriterStreamingTest, UT6_MultipleWrites_StreamingOneByOne) {
     waiter.Done();
   });
   waiter.Wait();
-  EXPECT_TRUE(sw->IsFlushed());
+  EXPECT_TRUE(sw->IsFlushCompleted());
 }
 
 // UT-7: PrepareSliceId fails. Write skips streaming. DoFlush retries
@@ -1067,7 +979,6 @@ TEST_F(SliceWriterStreamingTest, UT7_SliceId_PreallocFail_SyncFallback) {
       }));
 
   auto sw = MakeStreamingWriter(0);
-  SliceWriterGuard guard(sw);
   WaitWriteBackgroundExecutorIdle();  // PrepareSliceId fails,
                                       // alloc_failed_=true
 
@@ -1097,7 +1008,7 @@ TEST_F(SliceWriterStreamingTest, UT7_SliceId_PreallocFail_SyncFallback) {
     EXPECT_EQ(uploaded_indices[0], 0u);
     EXPECT_EQ(uploaded_indices[1], 1u);
   }
-  EXPECT_TRUE(sw->IsFlushed());
+  EXPECT_TRUE(sw->IsFlushCompleted());
   EXPECT_EQ(sw->GetCommitSlice().id, 99u);
 }
 
@@ -1119,7 +1030,6 @@ TEST_F(SliceWriterStreamingTest, UT8_SingleWrite_MultiBlockFlushUpTo) {
       }));
 
   auto sw = MakeStreamingWriter(0);
-  SliceWriterGuard guard(sw);
   WaitWriteBackgroundExecutorIdle();
 
   // 10MB = 2 full blocks (4MB each) + 2MB partial
@@ -1164,7 +1074,6 @@ TEST_F(SliceWriterStreamingTest, UT9_ConcurrentCallbacks_ThreadSafe) {
       }));
 
   auto sw = MakeStreamingWriter(0);
-  SliceWriterGuard guard(sw);
   WaitWriteBackgroundExecutorIdle();
 
   // 20MB = 4 full blocks + 4MB partial. FlushUpTo uploads block[0..3].
@@ -1197,7 +1106,7 @@ TEST_F(SliceWriterStreamingTest, UT9_ConcurrentCallbacks_ThreadSafe) {
     waiter.Done();
   });
   waiter.Wait();
-  EXPECT_TRUE(sw->IsFlushed());
+  EXPECT_TRUE(sw->IsFlushCompleted());
 }
 
 // UT-10: Write streams some blocks, DoFlush uploads the rest.
@@ -1227,7 +1136,6 @@ TEST_F(SliceWriterStreamingTest, UT10_MixedStreamAndFlushResidual) {
       }));
 
   auto sw = MakeStreamingWriter(0);
-  SliceWriterGuard guard(sw);
   WaitWriteBackgroundExecutorIdle();
 
   // 6MB = 1 full block (4MB) + 2MB partial
@@ -1256,60 +1164,161 @@ TEST_F(SliceWriterStreamingTest, UT10_MixedStreamAndFlushResidual) {
     EXPECT_EQ(all_indices[0], 0u);
     EXPECT_EQ(all_indices[1], 1u);
   }
-  EXPECT_TRUE(sw->IsFlushed());
+  EXPECT_TRUE(sw->IsFlushCompleted());
 }
 
-// UT-11: Owner releases (DecRef) after flush timeout, then late callback
-//        arrives and DecRef triggers delete. Verifies no use-after-free.
-TEST_F(SliceWriterStreamingTest, UT11_TimeoutThenLateCallback_NoUAF) {
-  FLAGS_vfs_flush_timeout_seconds = 1;
-
+// An error from a final upload must be propagated by the barrier when that
+// upload removes the last inflight entry.
+TEST_F(SliceWriterStreamingTest, UT12_WaitingAllLateErrorPropagates) {
   EXPECT_CALL(*mock_meta_system_, NewSliceId(_, _, _))
       .WillOnce(DoAll(SetArgPointee<2>(42u), Return(Status::OK())));
 
-  // Hold PutAsync callbacks — don't call them
-  std::vector<StatusCallback> held_cbs;
-  std::mutex mu;
+  std::mutex callback_mutex;
+  StatusCallback held_callback;
+  std::promise<void> submitted;
+  auto submitted_future = submitted.get_future();
   EXPECT_CALL(*mock_block_store_, PutAsync(_, _, _))
-      .WillRepeatedly(Invoke([&](ContextSPtr, PutReq, StatusCallback cb) {
-        std::lock_guard<std::mutex> lk(mu);
-        held_cbs.push_back(std::move(cb));
+      .WillOnce(Invoke([&](ContextSPtr, PutReq, StatusCallback cb) {
+        {
+          std::lock_guard<std::mutex> lg(callback_mutex);
+          held_callback = std::move(cb);
+        }
+        submitted.set_value();
       }));
 
-  auto* sw = MakeStreamingWriter(0);
-  // No SliceWriterGuard — manually control DecRef to test exact sequence
+  auto sw = MakeStreamingWriter(0);
   WaitWriteBackgroundExecutorIdle();
 
-  // Write 4MB = 1 full block → IncRef in UploadBlockAsync → refs=2
-  auto buf = MakeBuf(4 * 1024 * 1024);
-  ASSERT_TRUE(sw->Write(ctx_, buf.data(), 4 * 1024 * 1024, 0).ok());
+  auto buf = MakeBuf(100 * 1024);
+  ASSERT_TRUE(sw->Write(ctx_, buf.data(), buf.size(), 0).ok());
 
-  // FlushAsync → DoFlush → WaitInflightWithTimeout(1s) → timeout
-  test::AsyncWaiter waiter;
-  waiter.Expect(1);
+  test::AsyncWaiter flush_waiter;
+  flush_waiter.Expect(1);
+  std::atomic<int> flush_calls{0};
   sw->FlushAsync([&](Status s) {
     EXPECT_FALSE(s.ok());
-    waiter.Done();
+    flush_calls.fetch_add(1);
+    flush_waiter.Done();
   });
-  waiter.Wait(std::chrono::seconds(10));
+  ASSERT_EQ(submitted_future.wait_for(std::chrono::seconds(5)),
+            std::future_status::ready);
 
-  // Owner releases its ref: refs 2→1. SliceWriter still alive (callback holds
-  // ref).
-  sw->DecRef();
-  sw = nullptr;  // don't touch sw anymore
-
-  // Fire the late callback → OnBlockUploaded + DecRef → refs 1→0 → delete this.
-  // Must not crash (no use-after-free).
+  StatusCallback cb;
   {
-    std::lock_guard<std::mutex> lk(mu);
-    for (auto& cb : held_cbs) {
-      cb(Status::Internal("late callback"));
-    }
+    std::lock_guard<std::mutex> lg(callback_mutex);
+    cb = std::move(held_callback);
   }
+  ASSERT_TRUE(static_cast<bool>(cb));
+  cb(Status::IoError("late remaining upload failure"));
+  flush_waiter.Wait(std::chrono::seconds(5));
+  EXPECT_EQ(flush_calls.load(), 1);
+}
+
+// Fast-fail may finish and destroy SliceWriter while another streaming upload
+// is still in flight. The late callback owns only FlushBarrier + BlockData; it
+// must remain safe even after FlushExecutor has stopped during shutdown.
+TEST_F(SliceWriterStreamingTest,
+       UT13_FastFailLateCallbackSurvivesWriterAndFlushExecutorShutdown) {
+  EXPECT_CALL(*mock_meta_system_, NewSliceId(_, _, _))
+      .WillOnce(DoAll(SetArgPointee<2>(42u), Return(Status::OK())));
+
+  std::mutex callbacks_mutex;
+  std::map<uint32_t, StatusCallback> callbacks;
+  EXPECT_CALL(*mock_block_store_, PutAsync(_, _, _))
+      .WillRepeatedly(Invoke([&](ContextSPtr, PutReq req, StatusCallback cb) {
+        std::lock_guard<std::mutex> lock(callbacks_mutex);
+        callbacks.emplace(HandleIndex(req.handle), std::move(cb));
+      }));
+
+  auto take_callback = [&](uint32_t index) {
+    std::lock_guard<std::mutex> lock(callbacks_mutex);
+    auto it = callbacks.find(index);
+    EXPECT_NE(it, callbacks.end());
+    if (it == callbacks.end()) return StatusCallback{};
+    StatusCallback cb = std::move(it->second);
+    callbacks.erase(it);
+    return cb;
+  };
+
+  auto sw = MakeStreamingWriter(0);
+  std::weak_ptr<SliceWriter> weak_writer = sw;
+  WaitWriteBackgroundExecutorIdle();
+
+  auto buf = MakeBuf(8 * 1024 * 1024);
+  ASSERT_TRUE(sw->Write(ctx_, buf.data(), buf.size(), 0).ok());
+
+  StatusCallback failed = take_callback(0);
+  ASSERT_TRUE(static_cast<bool>(failed));
+  failed(Status::IoError("streaming failure"));
   WaitCBExecutorIdle();
 
-  // If we reach here without crash/ASAN, ref counting is correct.
-  FLAGS_vfs_flush_timeout_seconds = 300;
+  test::AsyncWaiter flush_waiter;
+  flush_waiter.Expect(1);
+  sw->FlushAsync([&](Status s) {
+    EXPECT_FALSE(s.ok());
+    flush_waiter.Done();
+  });
+  flush_waiter.Wait();
+
+  test::AsyncWaiter flush_drained;
+  flush_drained.Expect(1);
+  flush_executor_->Execute([&]() { flush_drained.Done(); });
+  flush_drained.Wait();
+
+  sw.reset();
+  EXPECT_TRUE(weak_writer.expired());
+
+  // A callback arriving after an earlier Fail only cleans up its barrier entry;
+  // it has no dependency on SliceWriter or FlushExecutor.
+  EXPECT_TRUE(flush_executor_->Stop());
+  StatusCallback late = take_callback(1);
+  ASSERT_TRUE(static_cast<bool>(late));
+  late(Status::OK());
+  WaitCBExecutorIdle();
+}
+
+// A sealed barrier must not retain SliceWriter while the storage callback is
+// missing. Completion still honors the caller callback after the writer dies.
+TEST_F(SliceWriterStreamingTest,
+       UT14_MissingUploadCallbackDoesNotCreateWriterBarrierCycle) {
+  EXPECT_CALL(*mock_meta_system_, NewSliceId(_, _, _))
+      .WillOnce(DoAll(SetArgPointee<2>(42u), Return(Status::OK())));
+
+  StatusCallback held_callback;
+  std::promise<void> submitted;
+  auto submitted_future = submitted.get_future();
+  EXPECT_CALL(*mock_block_store_, PutAsync(_, _, _))
+      .WillOnce(Invoke([&](ContextSPtr, PutReq, StatusCallback cb) {
+        held_callback = std::move(cb);
+        submitted.set_value();
+      }));
+
+  auto sw = MakeStreamingWriter(0);
+  std::weak_ptr<SliceWriter> weak_writer = sw;
+  WaitWriteBackgroundExecutorIdle();
+  auto buf = MakeBuf(100 * 1024);
+  ASSERT_TRUE(sw->Write(ctx_, buf.data(), buf.size(), 0).ok());
+
+  test::AsyncWaiter callback_waiter;
+  callback_waiter.Expect(1);
+  sw->FlushAsync([&](Status s) {
+    EXPECT_TRUE(s.ok());
+    callback_waiter.Done();
+  });
+  ASSERT_EQ(submitted_future.wait_for(std::chrono::seconds(5)),
+            std::future_status::ready);
+
+  test::AsyncWaiter flush_drained;
+  flush_drained.Expect(1);
+  flush_executor_->Execute([&]() { flush_drained.Done(); });
+  flush_drained.Wait();
+
+  sw.reset();
+  EXPECT_TRUE(weak_writer.expired());
+
+  ASSERT_TRUE(static_cast<bool>(held_callback));
+  held_callback(Status::OK());
+  callback_waiter.Wait(std::chrono::seconds(5));
 }
 
 }  // namespace vfs

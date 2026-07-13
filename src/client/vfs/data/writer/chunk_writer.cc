@@ -52,10 +52,6 @@ ChunkWriter::~ChunkWriter() {
   VLOG(12) << fmt::format("{} Destroy Chunk addr: {}", UUID(),
                           static_cast<const void*>(this));
   Stop();
-  // DecRef any remaining slices (should be empty after Stop/Flush)
-  for (auto& [seq, sw] : slices_) {
-    if (sw) sw->DecRef();
-  }
   slices_.clear();
 }
 
@@ -244,7 +240,7 @@ SliceWriter* ChunkWriter::FindWritableSliceUnLocked(int32_t chunk_pos,
   //   from new to old
   for (auto it = slices_.rbegin(); it != slices_.rend(); ++it) {
     uint64_t seq = it->first;
-    SliceWriter* slice = it->second;
+    SliceWriter* slice = it->second.get();
     CHECK_NOTNULL(slice);
 
     VLOG(6) << fmt::format(
@@ -268,12 +264,11 @@ SliceWriter* ChunkWriter::FindWritableSliceUnLocked(int32_t chunk_pos,
 SliceWriter* ChunkWriter::CreateSliceUnlocked(int32_t chunk_pos) {
   SliceDataContext ctx(chunk_.fs_id, chunk_.ino, chunk_.index,
                        chunk_.chunk_size, chunk_.block_size, page_size_);
-  auto* sw = new SliceWriter(ctx, hub_, chunk_pos);
-  sw->IncRef();  // owner ref
+  auto sw = std::make_shared<SliceWriter>(ctx, hub_, chunk_pos);
   auto [it, inserted] = slices_.try_emplace(ctx.seq, sw);
   CHECK(inserted) << "Slice seq already exists: " << ctx.seq;
   sw->StartPrepareSliceId();
-  return sw;
+  return sw.get();
 }
 
 Status ChunkWriter::CommitSlices(ContextSPtr ctx,
