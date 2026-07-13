@@ -41,11 +41,7 @@ class ChunkFlushTask {
         chunk_flush_id(chunk_flush_id),
         flush_slices_(std::move(flush_slices)) {}
 
-  ~ChunkFlushTask() {
-    for (const auto& [seq, sw] : flush_slices_) {
-      if (sw) sw->DecRef();
-    }
-  }
+  ~ChunkFlushTask() = default;
 
   void RunAsync(StatusCallback cb);
 

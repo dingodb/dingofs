@@ -14,6 +14,7 @@
 
 add_library(vfs_data_slice
     slice_writer.cc
+    flush_barrier.cc
     block_data.cc
     page_data.cc
 )

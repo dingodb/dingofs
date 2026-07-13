@@ -61,6 +61,9 @@ class BlockStore {
   virtual void RangeAsync(ContextSPtr ctx, RangeReq req,
                           StatusCallback callback) = 0;
 
+  // Every accepted request must invoke callback exactly once, including
+  // failure, cancellation, retry exhaustion, and shutdown. VFSHub keeps
+  // CBExecutor alive until BlockStore::Shutdown has drained these callbacks.
   virtual void PutAsync(ContextSPtr ctx, PutReq req,
                         StatusCallback callback) = 0;
 
