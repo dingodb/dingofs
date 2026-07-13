@@ -217,15 +217,15 @@ class Helper {
   }
 
   static std::string RemoveHttpPrefix(const std::string& url) {
-    std::string result = ToLowerCase(url);
+    std::string lower = ToLowerCase(url);
 
-    if (result.find("https://") == 0) {
-      result = result.substr(8);
-    } else if (result.find("http://") == 0) {
-      result = url.substr(7);
+    if (lower.find("https://") == 0) {
+      return url.substr(8);
+    } else if (lower.find("http://") == 0) {
+      return url.substr(7);
     }
 
-    return result;
+    return url;
   }
 
   static void PrintConfigInfo(

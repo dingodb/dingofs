@@ -259,12 +259,17 @@ std::string BuildGcovrCommand(const CoverageConfig& config,
                               const std::string& repo_root,
                               const std::string& build_dir) {
   const std::string out_dir = build_dir + "/coverage/" + config.target_name;
+  std::string excludes;
+  for (const auto& exclude : config.excludes) {
+    excludes += " --exclude '" + repo_root + "/" + exclude + "'";
+  }
   // gcovr resolves a relative --filter against the cwd (not --root), so the
   // source filter must be absolute to work from any directory.
   return "gcovr --root '" + repo_root + "' --filter '" + repo_root + "/" +
          config.source_filter +
          "' --gcov-executable gcov --gcov-ignore-errors=all"
-         " --exclude-unreachable-branches --exclude-throw-branches"
+         " --exclude-unreachable-branches --exclude-throw-branches" +
+         excludes +
          " --html-details '" +
          out_dir +
          "/index.html'"

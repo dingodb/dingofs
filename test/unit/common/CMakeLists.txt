@@ -19,6 +19,19 @@ add_subdirectory(writemempool)
 add_executable(test_common
   main.cc
   test_read_mem_pool.cc
+  test_status.cc
+  test_string_slice.cc
+  test_helper.cc
+  test_flag.cc
+  test_logging.cc
+  test_version.cc
+  test_block.cc
+  test_io_buffer.cc
+  test_config_mapper.cc
+  test_accesser_common.cc
+  test_metrics.cc
+  test_fake_accesser.cc
+  test_const_types.cc
 )
 
 target_link_libraries(test_common

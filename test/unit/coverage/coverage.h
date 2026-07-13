@@ -25,6 +25,7 @@
 
 #include <functional>
 #include <string>
+#include <vector>
 
 namespace dingofs::unit_test {
 
@@ -33,6 +34,10 @@ namespace dingofs::unit_test {
 struct CoverageConfig {
   std::string target_name;
   std::string source_filter;
+  // Paths (relative to the repo root, gcovr --exclude regexes) to omit from
+  // the report -- e.g. benchmark mains or backends that require live cloud
+  // infrastructure and so cannot be meaningfully unit tested.
+  std::vector<std::string> excludes;
 };
 
 // True when the test binary was invoked with --coverage.
