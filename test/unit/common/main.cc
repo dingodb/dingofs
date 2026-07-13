@@ -31,6 +31,14 @@ int main(int argc, char* argv[]) {
   google::InitGoogleLogging(argv[0]);
   google::ParseCommandLineFlags(&argc, &argv, true);
 
+  // block_access_bench* are benchmark executables (no correctness behavior
+  // to unit test), and the AWS S3 / RADOS backends require a live cloud
+  // service or Ceph cluster to exercise meaningfully -- excluded so the
+  // report reflects unit-testable business logic only.
   return dingofs::unit_test::RunTestsWithCoverage(
-      {"test_common", "src/common/"}, [] { return RUN_ALL_TESTS(); });
+      {"test_common",
+       "src/common/",
+       {"src/common/blockaccess/bench/.*", "src/common/blockaccess/s3/aws/.*",
+        "src/common/blockaccess/rados/.*"}},
+      [] { return RUN_ALL_TESTS(); });
 }

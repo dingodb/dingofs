@@ -46,6 +46,18 @@ TEST(CoverageTest, BuildsTargetScopedGcovrCommand) {
   EXPECT_NE(command.find("' '/repo/build'"), std::string::npos);
 }
 
+TEST(CoverageTest, GcovrCommandExcludesConfiguredPaths) {
+  const CoverageConfig config{"test_common", "src/common/",
+                              {"src/common/blockaccess/bench/.*",
+                               "src/common/blockaccess/rados/.*"}};
+  const std::string command = BuildGcovrCommand(config, "/repo", "/repo/build");
+
+  EXPECT_NE(command.find("--exclude '/repo/src/common/blockaccess/bench/.*'"),
+            std::string::npos);
+  EXPECT_NE(command.find("--exclude '/repo/src/common/blockaccess/rados/.*'"),
+            std::string::npos);
+}
+
 TEST(CoverageTest, ReportCompletionReturnsTestResult) {
   EXPECT_EQ(0, FinishCoverageReport("/tmp/index.html", 0));
   EXPECT_EQ(1, FinishCoverageReport("/tmp/index.html", 1));
