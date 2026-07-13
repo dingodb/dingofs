@@ -22,6 +22,7 @@ add_executable(test_common
 )
 
 target_link_libraries(test_common
+  test_coverage
 
   $<TARGET_OBJECTS:test_common_trace>
   dingofs_trace

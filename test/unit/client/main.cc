@@ -21,6 +21,7 @@
 #include "gflags/gflags.h"
 #include "glog/logging.h"
 #include "gtest/gtest.h"
+#include "test/unit/coverage/coverage.h"
 
 DEFINE_string(test_log_dir, "/tmp/dingofs-test-logs",
               "Directory for test log output");
@@ -63,4 +64,7 @@ int main(int argc, char** argv) {
   InitLog(FLAGS_test_log_dir);
 
   return RUN_ALL_TESTS();
+
+  return dingofs::unit_test::RunTestsWithCoverage(
+      {"test_client", "src/client/"}, [] { return RUN_ALL_TESTS(); });
 }

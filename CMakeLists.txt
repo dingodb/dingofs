@@ -24,6 +24,18 @@ option(USE_TCMALLOC "Use tcmalloc" ON)
 option(BRPC_ENABLE_CPU_PROFILER "Enable brpc cpu profiler" OFF)
 option(USE_CICD_BUILD "Enable CI/CD build" OFF)
 
+option(ENABLE_COVERAGE "Enable GCC coverage instrumentation" OFF)
+
+if(ENABLE_COVERAGE)
+  if(NOT CMAKE_C_COMPILER_ID STREQUAL "GNU" OR
+     NOT CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    message(FATAL_ERROR "ENABLE_COVERAGE requires GNU C and C++ compilers")
+  endif()
+
+  add_compile_options(--coverage -O0 -g -fprofile-update=atomic)
+  add_link_options(--coverage)
+endif()
+
 set(CMAKE_CXX_STANDARD 17)
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE "Debug")

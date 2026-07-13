@@ -16,6 +16,8 @@
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 
+#include "test/unit/coverage/coverage.h"
+
 DECLARE_int32(v);
 
 int main(int argc, char* argv[]) {
@@ -29,5 +31,6 @@ int main(int argc, char* argv[]) {
   google::InitGoogleLogging(argv[0]);
   google::ParseCommandLineFlags(&argc, &argv, true);
 
-  return RUN_ALL_TESTS();
+  return dingofs::unit_test::RunTestsWithCoverage(
+      {"test_common", "src/common/"}, [] { return RUN_ALL_TESTS(); });
 }

@@ -34,6 +34,7 @@ set(TEST_DEPS_WITHOUT_MAIN
     dl
 )
 
+add_subdirectory(coverage)
 add_subdirectory(cache)
 add_subdirectory(client)
 add_subdirectory(common)

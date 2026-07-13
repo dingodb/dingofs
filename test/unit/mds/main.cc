@@ -17,6 +17,7 @@
 #include "glog/logging.h"
 #include "gtest/gtest.h"
 #include "mds/common/helper.h"
+#include "test/unit/coverage/coverage.h"
 
 static void InitLog(const std::string& log_dir) {
   if (!dingofs::mds::Helper::IsExistPath(log_dir)) {
@@ -84,5 +85,6 @@ int main(int argc, char** argv) {
     testing::GTEST_FLAG(filter) = default_run_case;
   }
 
-  return RUN_ALL_TESTS();
+  return dingofs::unit_test::RunTestsWithCoverage(
+      {"test_mds", "src/mds/"}, [] { return RUN_ALL_TESTS(); });
 }

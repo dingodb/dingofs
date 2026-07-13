@@ -17,6 +17,7 @@
 #include "glog/logging.h"
 #include "gtest/gtest.h"
 #include "mds/common/helper.h"
+#include "test/unit/coverage/coverage.h"
 
 static void InitLog(const std::string& log_dir) {
   if (!dingofs::mds::Helper::IsExistPath(log_dir)) {
@@ -55,5 +56,6 @@ int main(int argc, char** argv) {
   testing::InitGoogleTest(&argc, argv);
   google::ParseCommandLineFlags(&argc, &argv, true);
 
-  return RUN_ALL_TESTS();
+  return dingofs::unit_test::RunTestsWithCoverage(
+      {"test_utils", "src/utils/"}, [] { return RUN_ALL_TESTS(); });
 }
