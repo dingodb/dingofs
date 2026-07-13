@@ -57,33 +57,38 @@ inline void EncodeLittleEndian32(char* buf, uint32_t value) {
 }
 
 inline uint64_t DecodeBigEndian64(const char* buf) {
-  return (uint64_t(buf[0]) << 56) | (uint64_t(buf[1]) << 48) |
-         (uint64_t(buf[2]) << 40) | (uint64_t(buf[3]) << 32) |
-         (uint64_t(buf[4]) << 24) | (uint64_t(buf[5]) << 16) |
-         (uint64_t(buf[6]) << 8) | uint64_t(buf[7]);
+  const auto* ubuf = reinterpret_cast<const uint8_t*>(buf);
+  return (uint64_t(ubuf[0]) << 56) | (uint64_t(ubuf[1]) << 48) |
+         (uint64_t(ubuf[2]) << 40) | (uint64_t(ubuf[3]) << 32) |
+         (uint64_t(ubuf[4]) << 24) | (uint64_t(ubuf[5]) << 16) |
+         (uint64_t(ubuf[6]) << 8) | uint64_t(ubuf[7]);
 }
 
 inline uint32_t DecodeBigEndian32(const char* buf) {
-  return (uint32_t(buf[0]) << 24) | (uint32_t(buf[1]) << 16) |
-         (uint32_t(buf[2]) << 8) | uint32_t(buf[3]);
+  const auto* ubuf = reinterpret_cast<const uint8_t*>(buf);
+  return (uint32_t(ubuf[0]) << 24) | (uint32_t(ubuf[1]) << 16) |
+         (uint32_t(ubuf[2]) << 8) | uint32_t(ubuf[3]);
 }
 
 inline uint64_t DecodeLittleEndian64(const char* buf) {
-  return uint64_t(buf[0]) | (uint64_t(buf[1]) << 8) | (uint64_t(buf[2]) << 16) |
-         (uint64_t(buf[3]) << 24) | (uint64_t(buf[4]) << 32) |
-         (uint64_t(buf[5]) << 40) | (uint64_t(buf[6]) << 48) |
-         (uint64_t(buf[7]) << 56);
+  const auto* ubuf = reinterpret_cast<const uint8_t*>(buf);
+  return uint64_t(ubuf[0]) | (uint64_t(ubuf[1]) << 8) |
+         (uint64_t(ubuf[2]) << 16) | (uint64_t(ubuf[3]) << 24) |
+         (uint64_t(ubuf[4]) << 32) | (uint64_t(ubuf[5]) << 40) |
+         (uint64_t(ubuf[6]) << 48) | (uint64_t(ubuf[7]) << 56);
 }
 
 inline uint32_t DecodeLittleEndian32(const char* buf) {
-  return uint32_t(buf[0]) | (uint32_t(buf[1]) << 8) | (uint32_t(buf[2]) << 16) |
-         (uint32_t(buf[3]) << 24);
+  const auto* ubuf = reinterpret_cast<const uint8_t*>(buf);
+  return uint32_t(ubuf[0]) | (uint32_t(ubuf[1]) << 8) |
+         (uint32_t(ubuf[2]) << 16) | (uint32_t(ubuf[3]) << 24);
 }
 
 inline bool IsLittleEndian() {
   static const uint16_t num = 0x0102;
   return reinterpret_cast<const uint8_t*>(&num)[0] == 0x02;
 }
+
 
 inline void EncodeNativeEndian64(char* buf, uint64_t value) {
   if (IsLittleEndian()) {
