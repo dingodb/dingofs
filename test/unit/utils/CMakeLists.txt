@@ -12,10 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(executor)
-
 file(GLOB UTILS_TEST_SRCS
     "*.cc"
+    "executor/*.cc"
 )
 
 add_executable(test_utils ${UTILS_TEST_SRCS})
