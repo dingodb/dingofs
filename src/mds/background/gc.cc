@@ -84,6 +84,9 @@ DEFINE_validator(mds_gc_trash_scan_budget, brpc::PassValidate);
 DEFINE_uint32(mds_gc_trash_batch_size, 256, "batch size for BatchTrashUnlinkOperation inside CleanTrashTask.");
 DEFINE_validator(mds_gc_trash_batch_size, brpc::PassValidate);
 
+DEFINE_uint32(mds_gc_kv_storage_life_time_s, 120, "gc kv storage life time");
+DEFINE_validator(mds_gc_kv_storage_life_time_s, brpc::PassValidate);
+
 static const std::string kWorkerSetName = "GC";
 
 static const uint32_t kBatchDeleteObjectSize = 1000;
@@ -481,7 +484,22 @@ Status GcProcessor::LaunchGc() {
     }
   }
 
+  // gc kv storage
+  GcKvStorage();
+
   return Status::OK();
+}
+
+void GcProcessor::GcKvStorage() {
+  auto kv_storage = operation_processor_->GetKVStorage();
+  if (kv_storage == nullptr) {
+    LOG(ERROR) << "[gc] kv storage is nullptr.";
+    return;
+  }
+
+  Status status = kv_storage->Gc(FLAGS_mds_gc_kv_storage_life_time_s);
+  LOG(INFO) << fmt::format("[gc] gc kv storage, life_time({}s) status({}).", FLAGS_mds_gc_kv_storage_life_time_s,
+                           status.error_str());
 }
 
 void GcProcessor::RunTrash() {

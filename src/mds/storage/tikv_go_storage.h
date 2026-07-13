@@ -66,6 +66,8 @@ class TikvGoStorage : public KVStorage {
   Status Delete(const std::string& key) override;
   Status Delete(const std::vector<std::string>& keys) override;
 
+  Status Gc(uint32_t seconds) override;
+
   TxnUPtr NewTxn(Txn::IsolationLevel isolation_level = Txn::kSnapshotIsolation) override;
 
  private:

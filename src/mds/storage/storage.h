@@ -92,6 +92,8 @@ class KVStorage {
   virtual Status Delete(const std::string& key) = 0;
   virtual Status Delete(const std::vector<std::string>& keys) = 0;
 
+  virtual Status Gc(uint32_t seconds) = 0;
+
   virtual TxnUPtr NewTxn(Txn::IsolationLevel isolation_level = Txn::kSnapshotIsolation) = 0;
 };
 using KVStorageSPtr = std::shared_ptr<KVStorage>;
