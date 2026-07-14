@@ -63,8 +63,7 @@ class StatfsWakeupLoop {
   void Start(const std::string& mountpoint, uint32_t interval_ms,
              HandoverOptions::StatfsWakeupFn wakeup_fn) {
     if (!wakeup_fn) {
-      wakeup_fn = [](const std::string& mountpoint,
-                     const std::atomic<bool>&) {
+      wakeup_fn = [](const std::string& mountpoint, const std::atomic<bool>&) {
         struct statfs buf;
         (void)statfs(mountpoint.c_str(), &buf);
       };
@@ -72,15 +71,16 @@ class StatfsWakeupLoop {
 
     stop_ = std::make_shared<std::atomic<bool>>(false);
     auto stop = stop_;
-    thread_ = std::thread([stop, mountpoint, interval_ms,
-                           wakeup_fn = std::move(wakeup_fn)]() {
-      while (!stop->load()) {
-        // Drive a FUSE round-trip to pop a worker blocked in read() back to the
-        // recv_paused check. pause_receive() does not wake a blocked reader.
-        wakeup_fn(mountpoint, *stop);
-        std::this_thread::sleep_for(std::chrono::milliseconds(interval_ms));
-      }
-    });
+    thread_ = std::thread(
+        [stop, mountpoint, interval_ms, wakeup_fn = std::move(wakeup_fn)]() {
+          while (!stop->load()) {
+            // Drive a FUSE round-trip to pop a worker blocked in read() back to
+            // the recv_paused check. pause_receive() does not wake a blocked
+            // reader.
+            wakeup_fn(mountpoint, *stop);
+            std::this_thread::sleep_for(std::chrono::milliseconds(interval_ms));
+          }
+        });
   }
 
   void StopAndDetach() {
@@ -186,7 +186,8 @@ void HandoverController::Run() {
     // it on failure.
     UpgradeStateStore::GetInstance().UpdateFuseState(
         FuseUpgradeState::kFuseUpgradeOld);
-    LOG(INFO) << "hot-upgrade: handover requested, begin controlled drain";
+    LOG(INFO) << "hot-upgrade: handover requested by new process, new_pid: "
+              << peer_->PeerPid() << ", begin controlled drain";
 
     Status s = DrainSessionForHandover();
     if (!s.ok()) {
@@ -222,19 +223,19 @@ Status HandoverController::DrainSessionForHandover() {
   if (rc != 0) {
     // Leave the session paused; the caller's AbortHandover() does the single
     // ResumeReceive() (and state rollback). The statfs wakeup thread may itself
-    // be blocked in a FUSE statfs request queued behind the paused session. Never
-    // join it here: on timeout that can deadlock the controller before it sends
-    // kNack/resumes receive. Stop it and detach; after ResumeReceive() serves the
-    // pending statfs, the thread observes stop_ and exits.
+    // be blocked in a FUSE statfs request queued behind the paused session.
+    // Never join it here: on timeout that can deadlock the controller before it
+    // sends kNack/resumes receive. Stop it and detach; after ResumeReceive()
+    // serves the pending statfs, the thread observes stop_ and exits.
     wakeup.StopAndDetach();
     return Status::Internal(
         fmt::format("wait_drained failed rc={} (0=ok, -1=timeout)", rc));
   }
 
   // Drained: the wakeup thread may be blocked in a statfs the paused session
-  // will no longer serve. Detach it; it holds no FuseServer references and exits
-  // once the new process serves the pending statfs, or with this process on
-  // commit.
+  // will no longer serve. Detach it; it holds no FuseServer references and
+  // exits once the new process serves the pending statfs, or with this process
+  // on commit.
   wakeup.StopAndDetach();
   return Status::OK();
 }
@@ -253,12 +254,13 @@ Status HandoverController::RunCheckpoint() {
 }
 
 void HandoverController::AbortHandover(const Status& status) {
+  const pid_t new_pid = peer_->PeerPid();  // cleared by NotifyHandoverAbort
   peer_->NotifyHandoverAbort();
   session_->ResumeReceive();
   UpgradeStateStore::GetInstance().UpdateFuseState(
       FuseUpgradeState::kFuseNormal);
   LOG(ERROR) << "hot-upgrade: abort handover, old process keeps serving, "
-             << "status: " << status.ToString();
+             << "new_pid: " << new_pid << ", status: " << status.ToString();
 }
 
 void HandoverController::CommitHandover() {
@@ -272,11 +274,15 @@ void HandoverController::CommitHandover() {
   // recover. Do NOT loop-retry NotifyReadyToExit(): it would re-send
   // kReadyToExit, which the new reads only once. A stronger handover needs the
   // checkpoint to dump-without-teardown and wait for a post-load ACK.
+  const pid_t new_pid = peer_->PeerPid();  // cleared by NotifyReadyToExit
   if (!peer_->NotifyReadyToExit()) {
     LOG(ERROR) << "hot-upgrade: failed to notify new after teardown; exiting "
-                  "anyway, mount may be orphaned until remount";
+                  "anyway, mount may be orphaned until remount, new_pid: "
+               << new_pid;
   } else {
-    LOG(INFO) << "hot-upgrade: new notified ready, exit session for handover";
+    LOG(INFO) << "hot-upgrade: new notified ready, exit session for handover, "
+                 "new_pid: "
+              << new_pid;
   }
 
   session_->Exit();

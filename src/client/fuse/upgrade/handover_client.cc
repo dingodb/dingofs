@@ -84,8 +84,8 @@ bool HandoverClient::Handshake(int comm_fd, int old_pid) {
   // (or a stale connection) never triggers a drain. Send before the signal so
   // the message is already buffered when the old process reads it.
   if (!SendHandoverMessage(comm_fd, HandoverMessage::kPrepare)) {
-    LOG(ERROR) << "hot-upgrade: send kPrepare to old failed, error: "
-               << std::strerror(errno);
+    LOG(ERROR) << "hot-upgrade: send kPrepare to old failed, old_pid: "
+               << old_pid << ", error: " << std::strerror(errno);
     return false;
   }
 
@@ -97,23 +97,26 @@ bool HandoverClient::Handshake(int comm_fd, int old_pid) {
 
   HandoverMessage msg;
   if (!RecvHandoverMessage(comm_fd, &msg)) {
-    LOG(ERROR) << "hot-upgrade: wait old handover message failed, error: "
-               << std::strerror(errno);
+    LOG(ERROR) << "hot-upgrade: wait old handover message failed, old_pid: "
+               << old_pid << ", error: " << std::strerror(errno);
     return false;
   }
 
   if (msg == HandoverMessage::kNack) {
-    LOG(ERROR) << "hot-upgrade: old process rejected handover and resumed";
+    LOG(ERROR) << "hot-upgrade: old process rejected handover and resumed, "
+                  "old_pid: "
+               << old_pid;
     return false;
   }
 
   if (msg != HandoverMessage::kReadyToExit) {
     LOG(ERROR) << "hot-upgrade: unexpected old handover message: "
-               << static_cast<uint32_t>(msg);
+               << static_cast<uint32_t>(msg) << ", old_pid: " << old_pid;
     return false;
   }
 
-  LOG(INFO) << "hot-upgrade: old process is ready to exit";
+  LOG(INFO) << "hot-upgrade: old process is ready to exit, old_pid: "
+            << old_pid;
   return true;
 }
 
@@ -124,16 +127,18 @@ int HandoverClient::TakeOver(const std::string& mountpoint,
 
   int pid = FindOldPid(stats_file);
   if (pid <= 0) {
-    LOG(ERROR) << "get pid fail, filepath=" << stats_file;
+    LOG(ERROR) << "hot-upgrade: find old process pid failed, filepath="
+               << stats_file;
     return -1;
   }
 
-  LOG(INFO) << "get pid success, pid=" << pid;
+  LOG(INFO) << "hot-upgrade: found old process, old_pid: " << pid;
   UpgradeStateStore::GetInstance().SetOldFusePid(pid);
 
   const std::string comm_path = GetFdCommFileName(stats_file);
   CHECK(!comm_path.empty());
-  LOG(INFO) << "get socket success, comm_path=" << comm_path;
+  LOG(INFO) << "hot-upgrade: old process handover socket, comm_path="
+            << comm_path;
 
   int comm_fd = -1;
   auto close_comm = MakeScopedCleanup([&]() {
@@ -142,15 +147,17 @@ int HandoverClient::TakeOver(const std::string& mountpoint,
 
   int fuse_fd = ReceiveFuseFd(comm_path, init_msg, &comm_fd);
   if (fuse_fd <= 2) {
-    LOG(ERROR) << "recv mount fd fail, comm_path=" << comm_path;
+    LOG(ERROR) << "hot-upgrade: recv mount fd from old failed, old_pid: " << pid
+               << ", comm_path=" << comm_path;
     return -1;
   }
   // The received /dev/fuse fd holds a reference to the kernel mount; close it
   // on any failure below, and hand it to the caller (cancel) only on success.
   auto close_fuse_fd = MakeScopedCleanup([&]() { close(fuse_fd); });
 
-  LOG(INFO) << "recv data from " << comm_path << ", mount fd = " << fuse_fd
-            << ", data size = " << init_msg->size;
+  LOG(INFO) << "hot-upgrade: received fuse fd from old process, old_pid: "
+            << pid << ", mount fd: " << fuse_fd
+            << ", data size: " << init_msg->size;
 
   if (!Handshake(comm_fd, pid)) return -1;
 

@@ -17,6 +17,8 @@
 #ifndef DINGOFS_SRC_CLIENT_FUSE_UPGRADE_HANDOVER_PEER_H_
 #define DINGOFS_SRC_CLIENT_FUSE_UPGRADE_HANDOVER_PEER_H_
 
+#include <sys/types.h>
+
 namespace dingofs {
 namespace client {
 namespace fuse {
@@ -28,6 +30,9 @@ class HandoverPeer {
   virtual bool WaitHandoverPrepare() = 0;
   virtual bool NotifyReadyToExit() = 0;
   virtual void NotifyHandoverAbort() = 0;
+
+  // Pid of the connected new process, -1 when unknown. Logging only.
+  virtual pid_t PeerPid() { return -1; }
 };
 
 }  // namespace fuse
