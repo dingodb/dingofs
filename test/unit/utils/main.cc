@@ -57,5 +57,5 @@ int main(int argc, char** argv) {
   google::ParseCommandLineFlags(&argc, &argv, true);
 
   return dingofs::unit_test::RunTestsWithCoverage(
-      {"test_utils", "src/utils/"}, [] { return RUN_ALL_TESTS(); });
+      {"test_utils", "src/utils/"}, argc, argv, [] { return RUN_ALL_TESTS(); });
 }

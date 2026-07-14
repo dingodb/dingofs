@@ -1738,7 +1738,7 @@ class TrashDirStatTest : public testing::Test {
     ASSERT_TRUE(operation_processor->Init())
         << "init operation processor fail.";
 
-    auto quota_worker_set = SimpleWorkerSet::New(
+    quota_worker_set = SimpleWorkerSet::New(
         "trash_ds_quota", 1, 1024, false, /*is_inplace_run=*/true);
     ASSERT_TRUE(quota_worker_set->Init()) << "init quota worker set fail.";
 
@@ -1752,18 +1752,39 @@ class TrashDirStatTest : public testing::Test {
     ASSERT_TRUE(fs->CreateRoot().ok());
   }
 
-  static void TearDownTestSuite() {}
+  // NOTE: quota_worker_set and operation_processor own real background
+  // worker threads. Without an explicit Destroy() here, those threads
+  // outlive the test suite and block process exit (and gcov's coverage
+  // flush, which only runs on normal exit) at shutdown -- mirror
+  // TrashFileSystemTest's teardown above.
+  static void TearDownTestSuite() {
+    fs = nullptr;
+
+    if (quota_worker_set != nullptr) {
+      quota_worker_set->Destroy();
+      quota_worker_set = nullptr;
+    }
+
+    if (operation_processor != nullptr) {
+      operation_processor->Destroy();
+      operation_processor = nullptr;
+    }
+
+    kv_storage = nullptr;
+  }
 
  public:
   static FileSystemSPtr fs;
   static KVStorageSPtr kv_storage;
   static OperationProcessorSPtr operation_processor;
+  static WorkerSetSPtr quota_worker_set;
   static FileSystemSPtr Fs() { return fs; }
 };
 
 FileSystemSPtr TrashDirStatTest::fs = nullptr;
 KVStorageSPtr TrashDirStatTest::kv_storage = nullptr;
 OperationProcessorSPtr TrashDirStatTest::operation_processor = nullptr;
+WorkerSetSPtr TrashDirStatTest::quota_worker_set = nullptr;
 
 // Regression: tree-rebuild grafts a child back onto a (trashed) user directory
 // with allow_trash_parent=true. The grafted-into directory is a real user dir

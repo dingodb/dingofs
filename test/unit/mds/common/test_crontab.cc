@@ -179,6 +179,38 @@ TEST_F(CrontabTest, CrontabRunWithMaxTimes) {
   EXPECT_GE(counter.load(), 1);
 }
 
+TEST_F(CrontabTest, DestructorStopsPendingTimerWithoutUseAfterFree) {
+  // Regression test: CrontabManager::~CrontabManager() used to only
+  // destroy the mutex, leaving any still-running crontab's timer armed on
+  // brpc's global TimerThread. Once `manager` below goes out of scope, its
+  // crontabs_ map (and the last shared_ptr<Crontab> it holds) is dropped;
+  // if the destructor doesn't cancel pending timers first, the timer
+  // thread can later invoke Run() on a freed Crontab (use-after-free).
+  // Running this in a loop under the process' normal exit path reliably
+  // caught the bug: destroy() now runs from ~CrontabManager and the timer
+  // is fully cancelled before the Crontab can be freed.
+  std::atomic<int> counter{0};
+  {
+    auto crontab = std::make_shared<Crontab>();
+    crontab->name = "destructor_test_crontab";
+    crontab->interval = 1;  // fire as fast as possible to stress the race
+    crontab->max_times = 0;  // unlimited, keeps rescheduling until stopped
+    crontab->func = [&counter](void*) { counter.fetch_add(1); };
+
+    CrontabManager manager;
+    manager.AddAndRunCrontab(crontab);
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    // No explicit PauseCrontab/DeleteCrontab/Destroy() call here: the
+    // manager's destructor alone must make it safe to free `crontab`.
+  }
+
+  // If the manager's destructor left the crontab's timer armed, this
+  // sleep gives brpc's TimerThread a chance to fire it against freed
+  // memory (which previously crashed the process).
+  std::this_thread::sleep_for(std::chrono::milliseconds(20));
+  SUCCEED();
+}
+
 TEST_F(CrontabTest, CrontabPausePreventsExecution) {
   // Test that a paused crontab doesn't continue to schedule itself
   std::atomic<int> counter{0};

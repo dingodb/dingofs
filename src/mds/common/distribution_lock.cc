@@ -469,7 +469,7 @@ Status StoreDistributionLock::RenewLease() {
         }
       }
 
-    } else if (status.error_code() != pb::error::ENOT_FOUND) {
+    } else if (status.error_code() == pb::error::ENOT_FOUND) {
       // not exist lock owner
       expire_time_ms = now_ms + FLAGS_mds_distribution_lock_lease_ttl_ms;
       need_update_last_lock_time = true;

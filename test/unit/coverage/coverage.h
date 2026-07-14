@@ -56,10 +56,15 @@ std::string CoverageSourceDir();
 //
 // GCC 13 removed the in-process __gcov_dump()/__gcov_flush()/__gcov_reset()
 // API; coverage counters are now only flushed to .gcda on normal process
-// exit. So run_tests() executes in a forked child that exits normally
+// exit. So run_tests() executes in a child process that exits normally
 // (flushing its counters), and the report is generated in the parent once
-// the child's .gcda files are on disk.
-int RunTestsWithCoverage(const CoverageConfig& config,
+// the child's .gcda files are on disk. The child is created by re-executing
+// this same binary (argc/argv unchanged) rather than by a bare fork(),
+// because some test binaries link cgo-based clients whose Go runtime
+// spawns background OS threads; forking such a process and running further
+// code in the child before exec() can deadlock the Go scheduler. Re-exec
+// discards that inherited, now-inconsistent thread state instead.
+int RunTestsWithCoverage(const CoverageConfig& config, int argc, char** argv,
                          const std::function<int()>& run_tests);
 
 // Builds the gcovr invocation used to produce config's coverage report.
