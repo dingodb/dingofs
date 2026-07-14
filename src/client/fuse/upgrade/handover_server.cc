@@ -131,7 +131,7 @@ void HandoverServer::Stop() {
   running_.store(false);
 }
 
-void HandoverServer::SetClientFd(int fd) {
+void HandoverServer::SetClientFd(int fd, pid_t pid) {
   // Stores the handover connection, closing any previous one. AcceptLoop
   // rejects a concurrent connector while a LIVE handover is in flight (see
   // IsHandoverInFlight), so any previous fd reached here is only ever a STALE
@@ -142,6 +142,12 @@ void HandoverServer::SetClientFd(int fd) {
     close(client_fd_);
   }
   client_fd_ = fd;
+  client_pid_ = pid;
+}
+
+pid_t HandoverServer::PeerPid() {
+  std::lock_guard<std::mutex> lock(mutex_);
+  return client_pid_;
 }
 
 bool HandoverServer::IsHandoverInFlight() {
@@ -180,13 +186,16 @@ void HandoverServer::CloseClientFd() {
     close(client_fd_);
     client_fd_ = -1;
   }
+  client_pid_ = -1;
 }
 
 bool HandoverServer::WaitHandoverPrepare() {
   int fd = -1;
+  pid_t new_pid = -1;
   {
     std::lock_guard<std::mutex> lock(mutex_);
     fd = client_fd_;
+    new_pid = client_pid_;
   }
   if (fd < 0) {
     LOG(ERROR) << "hot-upgrade: SIGHUP with no handover connection; ignoring";
@@ -220,14 +229,17 @@ bool HandoverServer::WaitHandoverPrepare() {
 
   if (poll_ret <= 0) {
     LOG(ERROR) << "hot-upgrade: no kPrepare from peer (silent/timeout); "
-                  "ignoring SIGHUP, keep serving";
+                  "ignoring SIGHUP, keep serving, new_pid: "
+               << new_pid;
     CloseClientFd();
     return false;
   }
 
   HandoverMessage msg;
   if (!RecvHandoverMessage(fd, &msg) || msg != HandoverMessage::kPrepare) {
-    LOG(ERROR) << "hot-upgrade: invalid handover prepare; ignoring SIGHUP";
+    LOG(ERROR) << "hot-upgrade: invalid handover prepare; ignoring SIGHUP, "
+                  "new_pid: "
+               << new_pid;
     CloseClientFd();
     return false;
   }
@@ -243,9 +255,11 @@ bool HandoverServer::NotifyReadyToExit() {
   committed_.store(true);
 
   int fd = -1;
+  pid_t new_pid = -1;
   {
     std::lock_guard<std::mutex> lock(mutex_);
     fd = client_fd_;
+    new_pid = client_pid_;
   }
 
   if (fd < 0) {
@@ -257,23 +271,33 @@ bool HandoverServer::NotifyReadyToExit() {
   }
 
   if (!SendHandoverMessage(fd, HandoverMessage::kReadyToExit)) {
-    LOG(ERROR) << "hot-upgrade: send READY_TO_EXIT failed, error: "
-               << std::strerror(errno);
+    LOG(ERROR) << "hot-upgrade: send READY_TO_EXIT failed, new_pid: " << new_pid
+               << ", error: " << std::strerror(errno);
     return false;
   }
 
+  LOG(INFO) << "hot-upgrade: READY_TO_EXIT sent to new process, new_pid: "
+            << new_pid;
   CloseClientFd();
   return true;
 }
 
 void HandoverServer::NotifyHandoverAbort() {
   int fd = -1;
+  pid_t new_pid = -1;
   {
     std::lock_guard<std::mutex> lock(mutex_);
     fd = client_fd_;
+    new_pid = client_pid_;
   }
   if (fd >= 0) {
-    (void)SendHandoverMessage(fd, HandoverMessage::kNack);
+    if (SendHandoverMessage(fd, HandoverMessage::kNack)) {
+      LOG(INFO) << "hot-upgrade: kNack sent to new process, new_pid: "
+                << new_pid;
+    } else {
+      LOG(ERROR) << "hot-upgrade: send kNack to new process failed, new_pid: "
+                 << new_pid << ", error: " << std::strerror(errno);
+    }
     CloseClientFd();
   }
 }
@@ -313,13 +337,27 @@ void HandoverServer::AcceptLoop() {
       continue;
     }
 
+    // Identify the connecting new process for logging; -1 when unavailable.
+    pid_t new_pid = -1;
+    {
+      struct ucred cred;
+      socklen_t cred_len = sizeof(cred);
+      if (getsockopt(client_fd, SOL_SOCKET, SO_PEERCRED, &cred, &cred_len) ==
+          0) {
+        new_pid = cred.pid;
+      }
+    }
+    LOG(INFO) << "hot-upgrade: handover connection from new process, new_pid: "
+              << new_pid;
+
     // Once committed, the /dev/fuse fd has been (or is being) handed off
     // exactly once and this process is exiting; reject any further connector
     // regardless of client_fd_ state, so a late new never receives a duplicate
     // fd.
     if (committed_.load()) {
       LOG(WARNING) << "hot-upgrade: handover already committed; rejecting late "
-                      "connection";
+                      "connection, new_pid: "
+                   << new_pid;
       close(client_fd);
       continue;
     }
@@ -331,7 +369,9 @@ void HandoverServer::AcceptLoop() {
     // Reject BEFORE SendFd so the second new never receives the /dev/fuse fd.
     if (IsHandoverInFlight()) {
       LOG(WARNING) << "hot-upgrade: a handover is already in flight; rejecting "
-                      "concurrent upgrade connection (one upgrade per mount)";
+                      "concurrent upgrade connection (one upgrade per mount), "
+                      "new_pid: "
+                   << new_pid;
       close(client_fd);
       continue;
     }
@@ -341,7 +381,8 @@ void HandoverServer::AcceptLoop() {
     // called after SaveOpInitMsg() fills it, so this is belt-and-suspenders.
     if (init_msg_->size == 0) {
       LOG(WARNING) << "hot-upgrade: INIT message not ready yet; rejecting "
-                      "handover connection";
+                      "handover connection, new_pid: "
+                   << new_pid;
       close(client_fd);
       continue;
     }
@@ -350,15 +391,17 @@ void HandoverServer::AcceptLoop() {
     // it can race a kPrepare + SIGHUP straight back, and the controller's
     // WaitHandoverPrepare() must already see client_fd_; otherwise it reads -1
     // and spuriously rejects the handover. On send failure, clear it.
-    SetClientFd(client_fd);
+    SetClientFd(client_fd, new_pid);
     int fuse_fd = get_dev_fd_();
     int ret = SendFd(client_fd, fuse_fd, init_msg_->mem, init_msg_->size);
     if (ret == -1) {
-      LOG(ERROR) << "send fuse fd failed, client_id: " << client_fd;
+      LOG(ERROR) << "hot-upgrade: send fuse fd to new process failed, new_pid: "
+                 << new_pid << ", client_fd: " << client_fd;
       CloseClientFd();
     } else {
-      LOG(INFO) << "fuse fd send to client: " << client_fd
-                << ", fd: " << fuse_fd << ", data size: " << init_msg_->size;
+      LOG(INFO) << "hot-upgrade: fuse fd sent to new process, new_pid: "
+                << new_pid << ", fuse_fd: " << fuse_fd
+                << ", data size: " << init_msg_->size;
     }
   }
 }

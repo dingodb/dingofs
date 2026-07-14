@@ -62,11 +62,12 @@ class HandoverServer : public HandoverPeer {
   bool WaitHandoverPrepare() override;
   bool NotifyReadyToExit() override;
   void NotifyHandoverAbort() override;
+  pid_t PeerPid() override;
 
  private:
   void AcceptLoop();
   bool IsHandoverInFlight();
-  void SetClientFd(int fd);
+  void SetClientFd(int fd, pid_t pid);
   void CloseClientFd();
 
   std::string socket_path_;
@@ -86,6 +87,7 @@ class HandoverServer : public HandoverPeer {
 
   std::mutex mutex_;
   int client_fd_{-1};
+  pid_t client_pid_{-1};  // pid of the connected new process (SO_PEERCRED)
 };
 
 }  // namespace fuse
