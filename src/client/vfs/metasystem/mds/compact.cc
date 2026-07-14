@@ -64,6 +64,17 @@ Status CompactChunkTask::Compact() {
   status = compactor_.Compact(ctx, ino_, chunk_index, old_slices, new_slices);
   if (!status.ok()) return status;
   if (IsDeleted()) return Status::OK();
+  if (new_slices.empty()) {
+    // All slices were skipped, so there is no valid non-empty replacement for
+    // MDS CompactChunk (the server requires new_slices to be non-empty). Leave
+    // the chunk unchanged instead of sending an invalid request. A chunk made
+    // entirely of skippable slices (for example, repeated equivalent id=0
+    // holes) therefore remains compaction-eligible and may be reconsidered
+    // after the compaction interval. This is intentionally deferred: fixing it
+    // requires either version-scoped NotFit suppression in Chunk or an MDS
+    // metadata-only compaction that preserves sparse holes without SliceWriter.
+    return Status::NotFit("all slices skipped");
+  }
 
   MDSClient::CompactChunkParam param;
   param.version = version;

@@ -22,7 +22,6 @@
 #include "client/vfs/metasystem/mds/executor.h"
 #include "client/vfs/metasystem/mds/inode_cache.h"
 #include "client/vfs/metasystem/mds/mds_client.h"
-#include "client/vfs/vfs_meta.h"
 #include "mds/common/runnable.h"
 
 namespace dingofs {
