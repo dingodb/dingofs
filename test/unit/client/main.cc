@@ -63,8 +63,7 @@ int main(int argc, char** argv) {
 
   InitLog(FLAGS_test_log_dir);
 
-  return RUN_ALL_TESTS();
-
   return dingofs::unit_test::RunTestsWithCoverage(
-      {"test_client", "src/client/"}, [] { return RUN_ALL_TESTS(); });
+      {"test_client", "src/client/"}, argc, argv,
+      [] { return RUN_ALL_TESTS(); });
 }

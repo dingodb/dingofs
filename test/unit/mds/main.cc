@@ -59,32 +59,62 @@ int main(int argc, char** argv) {
   if (testing::FLAGS_gtest_filter == "*") {
     std::string default_run_case;
     // common
-
     default_run_case += "MetaDataCodecTest.*";
     default_run_case += ":HelperTest.*";
+    default_run_case += ":ContextTest.*";
+    default_run_case += ":CrontabTest.*";
+    default_run_case += ":SerialHelperTest.*";
+    default_run_case += ":SuffixSetTest.*";
+    default_run_case += ":TracingTest.*";
+    default_run_case += ":TypeTest.*";
+    default_run_case += ":HashPartitionHelperTest.*";
+    default_run_case += ":CoorDistributionLockTest.*";
+    default_run_case += ":StoreDistributionLockTest.*";
+
+    // filesystem
     default_run_case += ":AutoIncrementIdGeneratorTest.*";
+    default_run_case += ":StoreAutoIncrementIdGeneratorTest.*";
     default_run_case += ":FileSystemSetTest.*";
     default_run_case += ":InodeCacheTest.*";
     default_run_case += ":DentryCacheTest.*";
+    default_run_case += ":DentryTest.*";
     default_run_case += ":FileSystemTest.*";
     default_run_case += ":ParentMemoTest.*";
-
-    default_run_case += ":CacheGroupMemberManagerTest.*";
-    default_run_case += ":CoorDistributionLockTest.*";
-    default_run_case += ":DirQuotaMapTest.*";
-    default_run_case += ":FsStatsTest.*";
-    default_run_case += ":MutationMergerTest.*";
-    default_run_case += ":MutationProcessorTest.*";
-    default_run_case += ":QuotaTest.*";
-    default_run_case += ":HashPartitionHelperTest.*";
-    default_run_case += ":OperationTest.*";
-    default_run_case += ":TikvStorageTest.*";
     default_run_case += ":ChunkCacheTest.*";
     default_run_case += ":TrashFileSystemTest.*";
+    default_run_case += ":TrashBucketNameTest.*";
+    default_run_case += ":TrashEntryNameTest.*";
+    default_run_case += ":TrashInodeTest.*";
+    default_run_case += ":TrashDirStatTest.*";
+    default_run_case += ":PartitionCacheTest.*";
+    default_run_case += ":ShardPartitionBasicTest.*";
+    default_run_case += ":ShardPartitionWithBoundariesTest.*";
+    default_run_case += ":DirShardTest.*";
+    default_run_case += ":DirShardConstructFromDentriesTest.*";
+    default_run_case += ":DirStatOperationTest.*";
+    default_run_case += ":HashRouterTest.*";
+    default_run_case += ":FsUtilsTest.*";
+    default_run_case += ":CopyFileRangeRunTest.*";
+    default_run_case += ":CopyFileRangeCloneSliceTest.*";
+    default_run_case += ":FallocateRunTest.*";
+    default_run_case += ":UpdateAttrRunTest.*";
+
+    // cachegroup / statistics / quota
+    default_run_case += ":CacheGroupMemberManagerTest.*";
+    default_run_case += ":DirQuotaMapTest.*";
+    default_run_case += ":FsStatsTest.*";
+    default_run_case += ":DirStatManagerTest.*";
+    default_run_case += ":QuotaTest.*";
+
+    // storage
+    // NOTE: TikvGoStorageTest/TikvStorageTest require a real TiKV/PD
+    // cluster and are excluded from the default run; run them explicitly
+    // with --gtest_filter when such a cluster is available.
+    default_run_case += ":DummyStorageTest.*";
 
     testing::GTEST_FLAG(filter) = default_run_case;
   }
 
   return dingofs::unit_test::RunTestsWithCoverage(
-      {"test_mds", "src/mds/"}, [] { return RUN_ALL_TESTS(); });
+      {"test_mds", "src/mds/"}, argc, argv, [] { return RUN_ALL_TESTS(); });
 }

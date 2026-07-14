@@ -31,12 +31,21 @@ void Crontab::DescribeByJson(Json::Value& value) const {
   value["max_times"] = max_times;
   value["immediately"] = immediately;
   value["run_count"] = run_count;
-  value["pause"] = pause;
+  value["pause"] = pause.load();
 }
 
 CrontabManager::CrontabManager() { bthread_mutex_init(&mutex_, nullptr); }
 
-CrontabManager::~CrontabManager() { bthread_mutex_destroy(&mutex_); }
+CrontabManager::~CrontabManager() {
+  // Crontab::Run() reschedules itself via bthread_timer_add() using a raw
+  // Crontab* (see below). If crontabs_ (and the Crontabs it keeps alive)
+  // were destroyed without first cancelling those pending timers, the
+  // timer thread could still invoke Run() on a freed Crontab later,
+  // causing a use-after-free. Destroy() cancels every pending timer and
+  // waits for in-flight callbacks to finish before we let crontabs_ go.
+  Destroy();
+  bthread_mutex_destroy(&mutex_);
+}
 
 void CrontabManager::Run(void* arg) {
   Crontab* crontab = static_cast<Crontab*>(arg);
@@ -54,7 +63,12 @@ void CrontabManager::Run(void* arg) {
     crontab->immediately = true;
   }
 
-  if (crontab->max_times == 0 || crontab->run_count < crontab->max_times) {
+  // Re-check pause: Destroy()/PauseCrontab() may have paused this crontab
+  // while func() above was executing. Without this check we could keep
+  // rearming a timer after the owning CrontabManager decided to stop (and
+  // is waiting to release the Crontab), leading to a use-after-free once
+  // the manager is destroyed.
+  if (!crontab->pause && (crontab->max_times == 0 || crontab->run_count < crontab->max_times)) {
     bthread_timer_add(&crontab->timer_id, butil::milliseconds_from_now(crontab->interval), &Run, crontab);
   }
 }
@@ -160,6 +174,15 @@ void CrontabManager::DeleteCrontab(uint32_t crontab_id) {
 
 void CrontabManager::Destroy() {
   BAIDU_SCOPED_LOCK(mutex_);
+
+  // Pause every crontab first so any Run() invocation still in flight sees
+  // pause==true and skips its reschedule (see the check added in Run()).
+  // Only after that is it safe to cancel timers and drop crontabs_'s
+  // shared_ptrs: otherwise a concurrent Run() could rearm a timer that
+  // outlives the Crontab it points to.
+  for (auto& [_, crontab] : crontabs_) {
+    crontab->pause = true;
+  }
 
   for (auto it = crontabs_.begin(); it != crontabs_.end();) {
     while (bthread_timer_del(it->second->timer_id) == 1) {

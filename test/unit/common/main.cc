@@ -40,5 +40,5 @@ int main(int argc, char* argv[]) {
        "src/common/",
        {"src/common/blockaccess/bench/.*", "src/common/blockaccess/s3/aws/.*",
         "src/common/blockaccess/rados/.*"}},
-      [] { return RUN_ALL_TESTS(); });
+      argc, argv, [] { return RUN_ALL_TESTS(); });
 }

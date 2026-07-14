@@ -48,8 +48,11 @@ class Crontab {
   bool immediately{false};
   // Already run count
   uint32_t run_count{0};
-  // Is pause crontab
-  bool pause{false};
+  // Is pause crontab. Read on the timer thread (Run) and written from
+  // whichever thread calls PauseCrontab/DeleteCrontab/Destroy, so it must
+  // be atomic to avoid a torn/reordered read racing with the reschedule
+  // in Run().
+  std::atomic<bool> pause{false};
   // bthread_timer_t handler
   bthread_timer_t timer_id{0};
   // For run target function

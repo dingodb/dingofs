@@ -27,6 +27,7 @@
 #endif
 
 #include <gflags/gflags.h>
+#include <spawn.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -43,6 +44,8 @@
 #include <sstream>
 #include <string>
 #include <vector>
+
+extern char** environ;
 
 DEFINE_bool(coverage, false,
             "Generate the selected test binary's line coverage report.");
@@ -213,13 +216,20 @@ int RunCoverage(const CoverageConfig& config, const std::string& build_dir,
 
 }  // namespace
 
+namespace {
+// Marks the re-exec'd child so it runs tests directly instead of spawning
+// yet another child (which would otherwise recurse forever).
+constexpr char kCoverageChildEnv[] = "DINGOFS_COVERAGE_CHILD";
+}  // namespace
+
 bool CoverageRequested() { return FLAGS_coverage; }
 
 std::string CoverageSourceDir() { return DINGOFS_SOURCE_DIR; }
 
-int RunTestsWithCoverage(const CoverageConfig& config,
+int RunTestsWithCoverage(const CoverageConfig& config, int argc, char** argv,
                          const std::function<int()>& run_tests) {
   if (!CoverageRequested()) return run_tests();
+  if (std::getenv(kCoverageChildEnv) != nullptr) return run_tests();
 
   const std::string build_dir = CoverageBuildDir();
   if (build_dir.empty()) {
@@ -229,16 +239,22 @@ int RunTestsWithCoverage(const CoverageConfig& config,
   ClearStaleGcda(build_dir);
 
   // GCC 13 removed the in-process __gcov_dump()/__gcov_flush() API, so
-  // counters are only flushed to .gcda when a process exits normally. Run
-  // the tests in a child so its exit() flushes them, then build the report
-  // from the parent once the child is done.
-  const pid_t pid = fork();
-  if (pid < 0) {
-    std::cerr << "coverage: fork failed: " << std::strerror(errno) << '\n';
+  // counters are only flushed to .gcda when a process exits normally.
+  // Re-exec this same binary (same argc/argv) in a child instead of a bare
+  // fork(): a plain fork() would be unsafe here since some test binaries
+  // link cgo-based clients whose Go runtime owns background OS threads that
+  // do not survive a fork, deadlocking the child before it can exit.
+  setenv(kCoverageChildEnv, "1", 1);
+  std::vector<char*> child_argv(argv, argv + argc);
+  child_argv.push_back(nullptr);
+  pid_t pid = 0;
+  const int spawn_rc = posix_spawn(&pid, argv[0], nullptr, nullptr,
+                                    child_argv.data(), environ);
+  unsetenv(kCoverageChildEnv);
+  if (spawn_rc != 0) {
+    std::cerr << "coverage: posix_spawn failed: " << std::strerror(spawn_rc)
+               << '\n';
     return run_tests();
-  }
-  if (pid == 0) {
-    std::exit(run_tests());
   }
 
   int status = 0;
