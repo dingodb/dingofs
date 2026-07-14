@@ -21,15 +21,24 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <limits>
+#include <vector>
 
 #include "client/vfs/common/helper.h"
-#include "client/vfs/data/common/data_utils.h"
 #include "client/vfs/vfs_meta.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
 namespace compaction {
+
+namespace {
+
+bool IsEquivalentHole(const Slice& lhs, const Slice& rhs) {
+  return lhs.id == 0 && rhs.id == 0 && lhs.pos == rhs.pos && lhs.len == rhs.len;
+}
+
+}  // namespace
 
 FileRange GetSlicesFileRange(int64_t chunk_start,
                              absl::Span<const Slice> slices) {
@@ -47,63 +56,76 @@ FileRange GetSlicesFileRange(int64_t chunk_start,
 
   CHECK_GT(max_end, min_offset);
 
-  return FileRange{.offset = min_offset,
-                   .len = (max_end - min_offset)};
-}
-
-int64_t SliceReadReqsLength(const std::vector<SliceReadReq>& reqs) {
-  int64_t total_len = 0;
-  for (const auto& req : reqs) {
-    total_len += req.len;
-  }
-  return total_len;
+  return FileRange{.offset = min_offset, .len = (max_end - min_offset)};
 }
 
 int32_t Skip(int64_t chunk_start, const std::vector<Slice>& slices) {
+  const int32_t total = static_cast<int32_t>(slices.size());
+  if (total == 0) return 0;
+
+  // Convert2SliceReadReq() partitions the complete suffix file range into
+  // covered and uncovered requests, so the sum of its result lengths is
+  // always exactly (suffix_max_end - suffix_min_offset). Precompute those
+  // suffix bounds once instead of rebuilding the full read plan for every
+  // candidate slice.
+  std::vector<int64_t> suffix_min_offset(total + 1,
+                                         std::numeric_limits<int64_t>::max());
+  std::vector<int64_t> suffix_max_end(total + 1,
+                                      std::numeric_limits<int64_t>::min());
+  for (int32_t i = total - 1; i >= 0; --i) {
+    const int64_t offset = chunk_start + slices[i].pos;
+    suffix_min_offset[i] = std::min(offset, suffix_min_offset[i + 1]);
+    suffix_max_end[i] = std::max(offset + slices[i].len, suffix_max_end[i + 1]);
+  }
+
   int32_t skipped = 0;
-  int32_t total = slices.size();
-
-  absl::Span<const Slice> span_slices(slices);
-
   while (skipped < total) {
-    absl::Span<const Slice> ss = span_slices.subspan(skipped);
-    const Slice& first = ss[0];
+    const Slice& first = slices[skipped];
+    const int64_t first_offset = chunk_start + first.pos;
+    const int64_t first_end = first_offset + first.len;
+    const int64_t readreqs_len =
+        suffix_max_end[skipped] - suffix_min_offset[skipped];
+    CHECK_GT(readreqs_len, 0) << "invalid slice range length for compact";
 
-    FileRange range = GetSlicesFileRange(chunk_start, ss);
-    auto slice_readreqs = Convert2SliceReadReq(ss, range, chunk_start);
-    CHECK(!slice_readreqs.empty())
-        << "invalid slice readreqs for compact, slices count: " << ss.size();
-
-    int64_t readreqs_len = SliceReadReqsLength(slice_readreqs);
-    CHECK_GT(readreqs_len, 0) << "invalid slice readreqs length for compact";
-
-    if (first.len < (1 << 20) || first.len * 5 < readreqs_len) {
-      VLOG(9) << "Can't skip first slice too small, first_slice: "
-              << Slice2Str(first) << ", readreqs_len: " << readreqs_len
-              << ", skip: " << skipped;
+    if (first.len < (1 << 20) ||
+        static_cast<int64_t>(first.len) * 5 < readreqs_len) {
+      VLOG(12) << "Can't skip first slice too small, first_slice: "
+               << Slice2Str(first) << ", readreqs_len: " << readreqs_len
+               << ", skip: " << skipped;
       break;
     }
 
-    const auto& first_req = slice_readreqs[0];
-    int64_t first_file_offset = chunk_start + first.pos;
-
-    bool is_first =
-        (first_req.file_offset == first_file_offset) &&
-        (first_req.slice->id == first.id) && (first_req.len == first.len);
+    // Convert2SliceReadReq() applies slices from newest to oldest. The first
+    // slice of this suffix survives as the first complete read request iff it
+    // starts at the suffix's minimum offset and no newer slice overlaps it.
+    bool is_first = first_offset == suffix_min_offset[skipped];
+    for (int32_t i = skipped + 1; is_first && i < total; ++i) {
+      const int64_t newer_offset = chunk_start + slices[i].pos;
+      const int64_t newer_end = newer_offset + slices[i].len;
+      const bool overlaps =
+          std::max(first_offset, newer_offset) < std::min(first_end, newer_end);
+      // Zero slices are append-only hole markers and may legitimately be
+      // duplicated by repeated PUNCH_HOLE/ZERO_RANGE operations. An identical
+      // newer hole has the same visible value over the complete candidate
+      // range, so it must not force the sparse range through data compaction.
+      if (overlaps && !IsEquivalentHole(first, slices[i])) {
+        is_first = false;
+      }
+    }
 
     if (!is_first) {
-      VLOG(9) << "Can't skip not same as first, first_slice: "
-              << Slice2Str(first) << ", first_req: " << first_req.ToString()
-              << ", skip: " << skipped;
+      VLOG(12) << "Can't skip overwritten or non-leading first slice: "
+               << Slice2Str(first) << ", skip: " << skipped;
       break;
     }
 
     skipped++;
-    VLOG(9) << "Skip slice for compact, slice: " << Slice2Str(first)
-            << ", first_req: " << first_req.ToString()
-            << ", readreqs_len: " << readreqs_len << ", skip: " << skipped;
+    VLOG(12) << "Skip slice for compact, slice: " << Slice2Str(first)
+             << ", readreqs_len: " << readreqs_len << ", skip: " << skipped;
   }
 
+  VLOG(9) << "Compact skip summary, slices: " << slices.size()
+          << ", skipped: " << skipped;
   return skipped;
 }
 
