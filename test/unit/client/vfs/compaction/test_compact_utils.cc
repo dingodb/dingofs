@@ -51,14 +51,6 @@ TEST_F(CompactUtilsTest, GetCompactFileRange) {
   EXPECT_EQ(range.len, 250);  // 300 - 50 = 250
 }
 
-TEST_F(CompactUtilsTest, SliceReadReqsLength) {
-  std::vector<SliceReadReq> reqs;
-  reqs.push_back({0, 100, std::nullopt});
-  reqs.push_back({100, 200, std::nullopt});
-
-  EXPECT_EQ(SliceReadReqsLength(reqs), 300);
-}
-
 TEST_F(CompactUtilsTest, SkipEmpty) {
   std::vector<Slice> slices;
   EXPECT_EQ(Skip(0, slices), 0);
@@ -149,6 +141,84 @@ TEST_F(CompactUtilsTest, SkipPartiallyOverwritten) {
   slices.push_back(CreateSlice(2, 4 * 1024 * 1024, 2 * 1024 * 1024));
 
   EXPECT_EQ(Skip(0, slices), 0);
+}
+
+TEST_F(CompactUtilsTest, SkipAdjacentSlicesAreNotOverlapping) {
+  constexpr int32_t kMiB = 1024 * 1024;
+  std::vector<Slice> slices = {
+      CreateSlice(1, 0, 2 * kMiB),
+      CreateSlice(2, 2 * kMiB, 2 * kMiB),
+      CreateSlice(3, 4 * kMiB, 2 * kMiB),
+  };
+
+  EXPECT_EQ(Skip(0, slices), 3);
+}
+
+TEST_F(CompactUtilsTest, SkipStopsWhenNewerSliceStartsBeforeCandidate) {
+  constexpr int32_t kMiB = 1024 * 1024;
+  std::vector<Slice> slices = {
+      CreateSlice(1, 2 * kMiB, 2 * kMiB),
+      CreateSlice(2, 0, 2 * kMiB),
+  };
+
+  // The first slice is complete but is not the first request after sorting by
+  // file offset, matching the old Convert2SliceReadReq-based behavior.
+  EXPECT_EQ(Skip(0, slices), 0);
+}
+
+TEST_F(CompactUtilsTest, SkipUsesFullSuffixRangeIncludingHoles) {
+  constexpr int32_t kMiB = 1024 * 1024;
+  std::vector<Slice> slices = {
+      CreateSlice(1, 0, 2 * kMiB),
+      CreateSlice(2, 20 * kMiB, 2 * kMiB),
+  };
+
+  // Convert2SliceReadReq represented the 18 MiB hole as an uncovered request,
+  // so the old total read-request length was the full 22 MiB suffix range.
+  EXPECT_EQ(Skip(0, slices), 0);
+}
+
+TEST_F(CompactUtilsTest, SkipEquivalentDuplicateHoles) {
+  constexpr int32_t kMiB = 1024 * 1024;
+  std::vector<Slice> slices = {
+      CreateSlice(0, 0, 2 * kMiB),
+      CreateSlice(0, 0, 2 * kMiB),
+  };
+
+  // Repeated PUNCH_HOLE/ZERO_RANGE operations may append identical id=0
+  // slices. They are logically equivalent and must remain sparse rather than
+  // being sent through data compaction as a buffer of physical zeroes.
+  EXPECT_EQ(Skip(0, slices), 2);
+}
+
+TEST_F(CompactUtilsTest, SkipStopsForPartiallyOverlappingHoles) {
+  constexpr int32_t kMiB = 1024 * 1024;
+  std::vector<Slice> slices = {
+      CreateSlice(0, 0, 4 * kMiB),
+      CreateSlice(0, 2 * kMiB, 4 * kMiB),
+  };
+
+  EXPECT_EQ(Skip(0, slices), 0);
+}
+
+TEST_F(CompactUtilsTest, SkipStopsWhenDataOverwritesHole) {
+  constexpr int32_t kMiB = 1024 * 1024;
+  std::vector<Slice> slices = {
+      CreateSlice(0, 0, 2 * kMiB),
+      CreateSlice(8, 0, 2 * kMiB),
+  };
+
+  EXPECT_EQ(Skip(0, slices), 0);
+}
+
+TEST_F(CompactUtilsTest, SkipWorksWithNonZeroChunkStart) {
+  constexpr int32_t kMiB = 1024 * 1024;
+  std::vector<Slice> slices = {
+      CreateSlice(1, 0, 2 * kMiB),
+      CreateSlice(2, 2 * kMiB, 2 * kMiB),
+  };
+
+  EXPECT_EQ(Skip(64LL * kMiB, slices), 2);
 }
 
 }  // namespace compaction

@@ -21,6 +21,7 @@
 #include <glog/logging.h>
 
 #include <cstdint>
+#include <vector>
 
 #include "client/vfs/data/common/common.h"
 #include "client/vfs/vfs_meta.h"
@@ -32,8 +33,6 @@ namespace compaction {
 
 FileRange GetSlicesFileRange(int64_t chunk_start,
                              absl::Span<const Slice> slices);
-
-int64_t SliceReadReqsLength(const std::vector<SliceReadReq>& reqs);
 
 int32_t Skip(int64_t chunk_start, const std::vector<Slice>& slices);
 

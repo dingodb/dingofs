@@ -51,12 +51,12 @@ std::vector<SliceReadReq> Convert2SliceReadReq(absl::Span<const Slice> slices,
   // loop from newest slice to oldest slice
   for (auto it = slices.rbegin(); it != slices.rend(); ++it) {
     const auto& slice = *it;
-    VLOG(9) << "Convert2SliceReadReq: slice: " << Slice2Str(slice);
+    VLOG(12) << "Convert2SliceReadReq: slice: " << Slice2Str(slice);
 
     std::vector<FileRange> new_unmatched_ranges;
 
     for (const auto& file_range : unmatched_ranges) {
-      VLOG(9) << "Convert2SliceReadReq: file_range: " << file_range.ToString();
+      VLOG(12) << "Convert2SliceReadReq: file_range: " << file_range.ToString();
 
       // check if the current range overlaps with the slice
       int64_t slice_file_offset = chunk_start + slice.pos;
@@ -64,7 +64,7 @@ std::vector<SliceReadReq> Convert2SliceReadReq(absl::Span<const Slice> slices,
       if (slice_file_end <= file_range.offset ||
           slice_file_offset >= file_range.End()) {
         new_unmatched_ranges.push_back(file_range);
-        VLOG(9)
+        VLOG(12)
             << "Convert2SliceReadReq: file_range_req no overlap with slice_id: "
             << slice.id;
         continue;
@@ -81,8 +81,8 @@ std::vector<SliceReadReq> Convert2SliceReadReq(absl::Span<const Slice> slices,
           .slice = slice,
       };
 
-      VLOG(9) << "Convert2SliceReadReq: slice_read_req: "
-              << slice_read_req.ToString();
+      VLOG(12) << "Convert2SliceReadReq: slice_read_req: "
+               << slice_read_req.ToString();
 
       results.push_back(slice_read_req);
 
@@ -92,8 +92,8 @@ std::vector<SliceReadReq> Convert2SliceReadReq(absl::Span<const Slice> slices,
             .offset = file_range.offset,
             .len = (overlap_start - file_range.offset),
         };
-        VLOG(9) << "Convert2SliceReadReq: left_uncovered_file_range: "
-                << left_uncovered_file_range.ToString();
+        VLOG(12) << "Convert2SliceReadReq: left_uncovered_file_range: "
+                 << left_uncovered_file_range.ToString();
         new_unmatched_ranges.push_back(left_uncovered_file_range);
       }
 
@@ -103,8 +103,8 @@ std::vector<SliceReadReq> Convert2SliceReadReq(absl::Span<const Slice> slices,
             .offset = overlap_end,
             .len = (file_range.End() - overlap_end),
         };
-        VLOG(9) << "Convert2SliceReadReq: right_uncovered_file_range: "
-                << right_uncovered_file_range.ToString();
+        VLOG(12) << "Convert2SliceReadReq: right_uncovered_file_range: "
+                 << right_uncovered_file_range.ToString();
 
         new_unmatched_ranges.push_back(right_uncovered_file_range);
       }
@@ -114,7 +114,7 @@ std::vector<SliceReadReq> Convert2SliceReadReq(absl::Span<const Slice> slices,
     unmatched_ranges = std::move(new_unmatched_ranges);
 
     if (unmatched_ranges.empty()) {
-      VLOG(9) << "Convert2SliceReadReq: unmatched_ranges is empty, break";
+      VLOG(12) << "Convert2SliceReadReq: unmatched_ranges is empty, break";
       break;
     }
   }
@@ -127,8 +127,8 @@ std::vector<SliceReadReq> Convert2SliceReadReq(absl::Span<const Slice> slices,
         range.len,
         std::nullopt,
     };
-    VLOG(9) << "Convert2SliceReadReq: uncovered_slice_read_req: "
-            << uncovered_slice_read_req.ToString();
+    VLOG(12) << "Convert2SliceReadReq: uncovered_slice_read_req: "
+             << uncovered_slice_read_req.ToString();
     results.push_back(uncovered_slice_read_req);
   }
 
