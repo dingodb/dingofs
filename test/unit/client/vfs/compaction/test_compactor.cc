@@ -26,9 +26,13 @@
 #include <vector>
 
 #include "client/vfs/compaction/compactor_impl.h"
+#include "client/vfs/metasystem/mds/compact.h"
+#include "client/vfs/metasystem/mds/mds_client.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/status.h"
 #include "common/trace/trace_manager.h"
+#include "mds/filesystem/fs_info.h"
+#include "test/unit/client/vfs/mock/mock_compactor.h"
 #include "test/unit/client/vfs/test_base.h"
 #include "test/unit/client/vfs/test_common.h"
 
@@ -115,6 +119,59 @@ TEST_F(CompactorTest, Compact_SingleLargeZeroSlice_SkippedBySkipLogic) {
   EXPECT_TRUE(s.ok());
   // All slices skipped: out_slices is empty (nothing to compact).
   EXPECT_TRUE(out.empty());
+}
+
+TEST_F(CompactorTest, Compact_DuplicateLargeHoles_RemainSparse) {
+  constexpr int32_t kHoleSize = 2 * 1024 * 1024;
+  std::vector<Slice> slices = {
+      MakeZeroSlice(0, kHoleSize),
+      MakeZeroSlice(0, kHoleSize),
+  };
+  std::vector<Slice> out;
+
+  EXPECT_CALL(*mock_block_store_, RangeAsync).Times(0);
+  EXPECT_CALL(*mock_block_store_, PutAsync).Times(0);
+
+  Status s = compactor_->Compact(ctx_, 100, 0, slices, out);
+
+  EXPECT_TRUE(s.ok()) << s.ToString();
+  EXPECT_TRUE(out.empty());
+}
+
+TEST(CompactChunkTaskTest, EmptyCompactionResultDoesNotCallMDS) {
+  constexpr Ino kIno = 100;
+  constexpr uint32_t kChunkIndex = 0;
+  constexpr int32_t kHoleSize = 2 * 1024 * 1024;
+
+  mds::ChunkEntry chunk_entry;
+  chunk_entry.set_index(kChunkIndex);
+  chunk_entry.set_version(1);
+  for (int i = 0; i < 99; ++i) {
+    auto* slice = chunk_entry.add_slices();
+    slice->set_id(0);
+    slice->set_pos(0);
+    slice->set_len(kHoleSize);
+  }
+  auto chunk = meta::Chunk::New(kIno, chunk_entry, "test");
+  meta::InodeSPtr inode;
+
+  mds::FsInfoEntry fs_info_entry;
+  mds::FsInfo fs_info(fs_info_entry);
+  meta::RPC rpc{butil::EndPoint()};
+  TraceManager trace_manager;
+  meta::MDSClient mds_client(ClientId(), fs_info, std::move(rpc),
+                             trace_manager);
+
+  test::MockCompactor compactor;
+  EXPECT_CALL(compactor, Compact(_, kIno, kChunkIndex, _, _))
+      .WillOnce([](ContextSPtr, Ino, int64_t, const std::vector<Slice>&,
+                   std::vector<Slice>&) { return Status::OK(); });
+
+  auto task =
+      meta::CompactChunkTask::New(kIno, inode, chunk, mds_client, compactor);
+  task->Run();
+
+  EXPECT_TRUE(task->GetStatus().IsNotFit()) << task->GetStatus().ToString();
 }
 
 // 6. Compact_AfterStop returns a Stop error.
@@ -214,7 +271,69 @@ TEST_F(CompactorTest, Stop_WaitsForInflight) {
   compact_thread.join();
 }
 
-// 10. Repeatedly drive compaction through the shared-owned SliceWriter path.
+// 10. Stop closes admission before waiting for existing work to drain.
+TEST_F(CompactorTest, Stop_RejectsNewWorkWhileDraining) {
+  std::mutex m;
+  std::condition_variable cv;
+  bool compact_started = false;
+  bool release_range = false;
+
+  ON_CALL(*mock_block_store_, RangeAsync)
+      .WillByDefault([&](ContextSPtr, RangeReq req, StatusCallback cb) {
+        {
+          std::unique_lock<std::mutex> lk(m);
+          compact_started = true;
+          cv.notify_all();
+          cv.wait(lk, [&] { return release_range; });
+        }
+        if (req.dst.base != nullptr && req.length > 0) {
+          std::memset(req.dst.data(), 0, req.length);
+        }
+        cb(Status::OK());
+      });
+  EXPECT_CALL(*mock_block_store_, RangeAsync).Times(AnyNumber());
+  EXPECT_CALL(*mock_block_store_, PutAsync).Times(AnyNumber());
+
+  std::vector<Slice> inflight_slices = {
+      dingofs::client::vfs::test::MakeSlice(3, 0, 4 * 1024 * 1024)};
+  std::vector<Slice> inflight_out;
+  std::thread compact_thread([&]() {
+    compactor_->ForceCompact(ctx_, 201, 0, inflight_slices, inflight_out);
+  });
+
+  {
+    std::unique_lock<std::mutex> lk(m);
+    cv.wait(lk, [&] { return compact_started; });
+  }
+
+  std::thread stop_thread([&]() { compactor_->Stop(); });
+
+  // A large zero slice is skipped without I/O when admitted, so retrying is
+  // cheap and avoids relying on scheduling sleeps to observe Stop's state.
+  std::vector<Slice> new_slices = {MakeZeroSlice(0, 2 * 1024 * 1024)};
+  Status new_status;
+  const auto deadline =
+      std::chrono::steady_clock::now() + std::chrono::seconds(2);
+  do {
+    std::vector<Slice> out;
+    new_status = compactor_->Compact(ctx_, 202, 0, new_slices, out);
+    std::this_thread::yield();
+  } while (new_status.ok() && std::chrono::steady_clock::now() < deadline);
+  const bool rejected_while_draining = new_status.IsStop();
+
+  {
+    std::lock_guard<std::mutex> lk(m);
+    release_range = true;
+  }
+  cv.notify_all();
+
+  compact_thread.join();
+  stop_thread.join();
+
+  EXPECT_TRUE(rejected_while_draining) << new_status.ToString();
+}
+
+// 11. Repeatedly drive compaction through the shared-owned SliceWriter path.
 // This guards its async FlushAsync lifetime and end-to-end commit result.
 TEST_F(CompactorTest, RegressionHeapAllocSliceWriter_RepeatedDoCompact_Stable) {
   for (int i = 0; i < 20; ++i) {

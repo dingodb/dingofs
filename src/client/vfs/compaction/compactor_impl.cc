@@ -45,12 +45,15 @@ Status CompactorImpl::Stop() {
     return Status::OK();
   }
 
+  // Close admission before draining. Otherwise queued compaction tasks can
+  // keep incrementing inflight_ while Stop() is waiting and make shutdown
+  // depend on the entire pending queue being exhausted.
+  stopped_ = true;
+
   while (inflight_ > 0) {
     LOG(INFO) << "CompactorImpl::Stop wait inflight_=" << inflight_;
     cv_.wait(lg);
   }
-
-  stopped_ = true;
 
   LOG(INFO) << "CompactorImpl stopped";
   return Status::OK();
