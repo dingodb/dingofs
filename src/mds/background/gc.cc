@@ -84,6 +84,9 @@ DEFINE_validator(mds_gc_trash_scan_budget, brpc::PassValidate);
 DEFINE_uint32(mds_gc_trash_batch_size, 256, "batch size for BatchTrashUnlinkOperation inside CleanTrashTask.");
 DEFINE_validator(mds_gc_trash_batch_size, brpc::PassValidate);
 
+DEFINE_bool(mds_gc_kv_storage_enable, false, "gc kv storage enable");
+DEFINE_validator(mds_gc_kv_storage_enable, brpc::PassValidate);
+
 DEFINE_uint32(mds_gc_kv_storage_life_time_s, 120, "gc kv storage life time");
 DEFINE_validator(mds_gc_kv_storage_life_time_s, brpc::PassValidate);
 
@@ -485,7 +488,9 @@ Status GcProcessor::LaunchGc() {
   }
 
   // gc kv storage
-  GcKvStorage();
+  if (FLAGS_mds_gc_kv_storage_enable) {
+    GcKvStorage();
+  }
 
   return Status::OK();
 }

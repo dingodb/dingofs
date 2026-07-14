@@ -164,13 +164,17 @@ EndPoint RPC::RandomlyPickupEndPoint() {
   }
 
   LOG(INFO) << fmt::format(
-      "[meta.rpc] random pickup endpoint, addr({}) source({}).",
-      EndPointToStr(endpoint), source);
+      "[meta.rpc] random pickup endpoint, addr({}) source({}) this({}) "
+      "fallback_endpoints({}).",
+      EndPointToStr(endpoint), source, (void*)this, fallback_endpoints_.size());
 
   return endpoint;
 }
 
 void RPC::AddFallbackEndpoint(const EndPoint& endpoint) {
+  LOG_DEBUG << fmt::format(
+      "[meta.rpc] add fallback endpoint, addr({}) this({}).",
+      EndPointToStr(endpoint), (void*)this);
   utils::WriteLockGuard lk(lock_);
   fallback_endpoints_.insert(endpoint);
 }

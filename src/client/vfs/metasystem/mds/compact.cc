@@ -30,7 +30,14 @@ DEFINE_uint32(vfs_compact_worker_max_pending_num, 8096,
 DEFINE_bool(vfs_compact_worker_use_pthread, true, "compact worker use pthread");
 
 void CompactChunkTask::Run() {
-  if (IsDeleted()) return;
+  if (compact_processor_.IsStopped() || IsDeleted()) {
+    LOG(INFO) << fmt::format(
+        "[meta.compact.{}.{}.{}] compact chunk task is stopped or deleted.",
+        ino_, chunk_->GetIndex(), Id());
+
+    Signal();
+    return;
+  }
 
   auto status = Compact();
   if (!status.ok() && !status.IsNotFit() && !status.IsStop()) {
@@ -124,12 +131,17 @@ CompactProcessor::CompactProcessor()
 
 bool CompactProcessor::Init() { return executor_.Init(); }
 
-void CompactProcessor::Stop() { executor_.Stop(); }
+void CompactProcessor::Stop() {
+  is_stopped_.store(true);
+
+  executor_.Stop();
+}
 
 Status CompactProcessor::LaunchCompact(Ino ino, InodeSPtr inode,
                                        ChunkSPtr& chunk, MDSClient& mds_client,
                                        Compactor& compactor, bool is_async) {
-  auto task = CompactChunkTask::New(ino, inode, chunk, mds_client, compactor);
+  auto task =
+      CompactChunkTask::New(ino, inode, chunk, mds_client, compactor, *this);
 
   int64_t hash_id = ino + chunk->GetIndex();
   if (!executor_.ExecuteByHash(hash_id, task, false)) {

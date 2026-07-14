@@ -15,6 +15,7 @@
 #ifndef DINGOFS_SRC_CLIENT_VFS_META_MDS_COMPACT_H_
 #define DINGOFS_SRC_CLIENT_VFS_META_MDS_COMPACT_H_
 
+#include <atomic>
 #include <string>
 
 #include "client/vfs/compaction/compactor.h"
@@ -36,21 +37,26 @@ using TaskRunnablePtr = mds::TaskRunnablePtr;
 class CompactChunkTask;
 using CompactChunkTaskPtr = std::shared_ptr<CompactChunkTask>;
 
+class CompactProcessor;
+
 class CompactChunkTask : public TaskRunnable {
  public:
   CompactChunkTask(Ino ino, InodeSPtr& inode, ChunkSPtr& chunk,
-                   MDSClient& mds_client, Compactor& compactor)
+                   MDSClient& mds_client, Compactor& compactor,
+                   CompactProcessor& compact_processor)
       : ino_(ino),
         inode_(inode),
         chunk_(chunk),
         mds_client_(mds_client),
-        compactor_(compactor) {}
+        compactor_(compactor),
+        compact_processor_(compact_processor) {}
   ~CompactChunkTask() override = default;
 
   static CompactChunkTaskPtr New(Ino ino, InodeSPtr& inode, ChunkSPtr& chunk,
-                                 MDSClient& mds_client, Compactor& compactor) {
+                                 MDSClient& mds_client, Compactor& compactor,
+                                 CompactProcessor& compact_processor) {
     return std::make_shared<CompactChunkTask>(ino, inode, chunk, mds_client,
-                                              compactor);
+                                              compactor, compact_processor);
   }
 
   std::string Type() override { return "COMPACT_CHUNK"; }
@@ -74,6 +80,8 @@ class CompactChunkTask : public TaskRunnable {
   MDSClient& mds_client_;
   Compactor& compactor_;
 
+  CompactProcessor& compact_processor_;
+
   Status status_;
   mds::BthreadCond cond_{1};
 };
@@ -96,7 +104,11 @@ class CompactProcessor {
                        MDSClient& mds_client, Compactor& compactor,
                        bool is_async = true);
 
+  bool IsStopped() { return is_stopped_.load(); }
+
  private:
+  std::atomic<bool> is_stopped_{false};
+
   Executor executor_;
 };
 
