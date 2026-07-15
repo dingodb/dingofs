@@ -57,7 +57,7 @@ FixedBuffers::FixedBuffers()
 Status FixedBuffers::Alloc(size_t size, bool for_read, IOBuffer* buffer,
                            int* buf_index) {
   SlabBufferPool* pool = for_read ? read_pool_ : write_pool_;
-  auto* slab_buffer = pool->Alloc();
+  auto* slab_buffer = pool->Alloc(size);
   if (slab_buffer == nullptr) {
     return Status::OutOfMemory("out of memory");
   }

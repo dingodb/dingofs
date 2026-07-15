@@ -74,9 +74,8 @@ class ServerSession : public EventHandler {
                     google::protobuf::Message* response = nullptr,
                     const Attachment& attachment = {});
 
-  RDMABuffer* AllocReadBuffer(size_t /*size*/) {
-    // TODO: real slab buffer pool
-    return GetGlobalReadSlabPool()->Alloc();
+  RDMABuffer* AllocReadBuffer(size_t size) {
+    return GetGlobalReadSlabPool()->Alloc(size);
   }
 
   void FreeReadBuffer(RDMABuffer* buffer) {

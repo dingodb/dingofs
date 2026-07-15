@@ -379,7 +379,7 @@ Status CacheNode::WaitTask(DownloadTaskSPtr task) {
 
 void CacheNode::AllocSlabBuffer(IOBuffer* buffer, size_t length) {
   auto* pool = GetGlobalReadSlabPool();
-  auto* slab = pool->Alloc();
+  auto* slab = pool->Alloc(length);
   CHECK(slab != nullptr) << "rdma read slab pool exhausted";
   CHECK_LE(length, static_cast<size_t>(slab->capacity));
   buffer->AppendUserDataWithMeta(
