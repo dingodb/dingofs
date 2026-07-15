@@ -56,6 +56,8 @@ MDSClient::MDSClient(const ClientId& client_id, mds::FsInfo& fs_info, RPC&& rpc,
   } else {
     LOG(FATAL) << "not support partition policy type.";
   }
+
+  LOG(INFO) << fmt::format("[meta.client] rpc this({}).", (void*)&rpc_);
 }
 
 bool MDSClient::Init() {

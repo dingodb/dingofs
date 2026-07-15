@@ -30,45 +30,81 @@ namespace meta {
 
 const int32_t kConnectTimeoutMs = 200;  // milliseconds
 
-RPC::RPC(const std::string& addr) {
-  EndPoint endpoint;
-  butil::str2endpoint(addr.c_str(), &endpoint);
-  init_endpoint_ = endpoint;
+static std::vector<std::string> SplitMdsAddrs(const std::string& mds_addrs) {
+  std::vector<std::string> addrs;
+
+  if (mds_addrs.find(',') != std::string::npos) {
+    mds::Helper::SplitString(mds_addrs, ',', addrs);
+    return addrs;
+
+  } else if (mds_addrs.find(';') != std::string::npos) {
+    mds::Helper::SplitString(mds_addrs, ';', addrs);
+    return addrs;
+  }
+
+  addrs.push_back(mds_addrs);
+  return addrs;
 }
 
-RPC::RPC(const std::string& ip, int port) {
+RPC::RPC(const std::string& addrs, const std::string& name) : name_(name) {
+  std::vector<std::string> addr_vec = SplitMdsAddrs(addrs);
+
+  for (const auto& addr : addr_vec) {
+    EndPoint endpoint;
+    butil::str2endpoint(addr.c_str(), &endpoint);
+    AddFallbackEndpoint(endpoint);
+  }
+}
+
+RPC::RPC(const std::string& ip, int port, const std::string& name)
+    : name_(name) {
   EndPoint endpoint;
   butil::str2endpoint(ip.c_str(), port, &endpoint);
-  init_endpoint_ = endpoint;
+  AddFallbackEndpoint(endpoint);
 }
 
-RPC::RPC(const EndPoint& endpoint) : init_endpoint_(endpoint) {}
+RPC::RPC(const EndPoint& endpoint, const std::string& name) : name_(name) {
+  AddFallbackEndpoint(endpoint);
+}
 
-bool RPC::Init() {
+Status RPC::Init() {
   utils::WriteLockGuard lk(lock_);
+
+  LOG(INFO) << fmt::format("[meta.rpc.{}] init rpc, fallback_endpoints({}).",
+                           name_, fallback_endpoints_.size());
+
+  // check alive mds from init endpoint
+  for (const auto& endpoint : fallback_endpoints_) {
+    if (CheckMdsAlive(endpoint)) {
+      init_endpoint_ = endpoint;
+      break;
+    }
+  }
+
+  if (init_endpoint_.port == 0) {
+    return Status::Internal("rpc init fail, no alive mds addr");
+  }
 
   ChannelSPtr channel = NewChannel(init_endpoint_);
   if (channel == nullptr) {
-    return false;
+    return Status::Internal("rpc init fail, new channel fail");
   }
+
   channels_.insert(std::make_pair(init_endpoint_, channel));
 
-  return true;
+  return Status::OK();
 }
 
 void RPC::Stop() {
   while (DoingReqCount() > 0) {
     LOG(INFO) << fmt::format(
-        "[meta.rpc] waiting doing request({}) finish before stop.",
+        "[meta.rpc.{}] waiting doing request({}) finish before stop.", name_,
         DoingReqCount());
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   }
 }
 
-bool RPC::CheckMdsAlive(const std::string& addr) {
-  EndPoint endpoint;
-  butil::str2endpoint(addr.c_str(), &endpoint);
-
+bool RPC::CheckMdsAlive(const EndPoint& endpoint) {
   brpc::ChannelOptions options;
   options.connect_timeout_ms = kConnectTimeoutMs;
   options.timeout_ms = FLAGS_vfs_meta_rpc_timeout_ms;
@@ -77,8 +113,8 @@ bool RPC::CheckMdsAlive(const std::string& addr) {
   brpc::Channel channel;
   if (channel.Init(butil::ip2str(endpoint.ip).c_str(), endpoint.port,
                    &options) != 0) {
-    LOG(ERROR) << fmt::format("[meta.rpc] init channel fail, addr({}).",
-                              EndPointToStr(endpoint));
+    LOG(ERROR) << fmt::format("[meta.rpc.{}] init channel fail, addr({}).",
+                              name_, EndPointToStr(endpoint));
 
     return false;
   }
@@ -94,8 +130,8 @@ bool RPC::CheckMdsAlive(const std::string& addr) {
   brpc::Controller cntl;
   channel.CallMethod(method, &cntl, &request, &response, nullptr);
   if (cntl.Failed()) {
-    LOG(ERROR) << fmt::format("[meta.rpc] check mds addr fail, addr({}).",
-                              addr);
+    LOG(ERROR) << fmt::format("[meta.rpc.{}] check mds addr fail, addr({}).",
+                              name_, EndPointToStr(endpoint));
     return false;
   }
 
@@ -164,17 +200,16 @@ EndPoint RPC::RandomlyPickupEndPoint() {
   }
 
   LOG(INFO) << fmt::format(
-      "[meta.rpc] random pickup endpoint, addr({}) source({}) this({}) "
+      "[meta.rpc.{}] random pickup endpoint, addr({}) source({}) "
       "fallback_endpoints({}).",
-      EndPointToStr(endpoint), source, (void*)this, fallback_endpoints_.size());
+      name_, EndPointToStr(endpoint), source, fallback_endpoints_.size());
 
   return endpoint;
 }
 
 void RPC::AddFallbackEndpoint(const EndPoint& endpoint) {
-  LOG_DEBUG << fmt::format(
-      "[meta.rpc] add fallback endpoint, addr({}) this({}).",
-      EndPointToStr(endpoint), (void*)this);
+  LOG_DEBUG << fmt::format("[meta.rpc.{}] add fallback endpoint, addr({}).",
+                           name_, EndPointToStr(endpoint));
   utils::WriteLockGuard lk(lock_);
   fallback_endpoints_.insert(endpoint);
 }
@@ -189,8 +224,8 @@ RPC::ChannelSPtr RPC::NewChannel(const EndPoint& endpoint) {  // NOLINT
   options.max_retry = FLAGS_vfs_meta_rpc_retry_times;
   if (channel->Init(butil::ip2str(endpoint.ip).c_str(), endpoint.port,
                     &options) != 0) {
-    LOG(ERROR) << fmt::format("[meta.rpc] init channel fail, addr({}).",
-                              EndPointToStr(endpoint));
+    LOG(ERROR) << fmt::format("[meta.rpc.{}] init channel fail, addr({}).",
+                              name_, EndPointToStr(endpoint));
 
     return nullptr;
   }

@@ -60,7 +60,7 @@ DEFINE_uint32(cache_mds_request_retry_times, 3,
 DEFINE_validator(cache_mds_request_retry_times, brpc::PassValidate);
 
 MDSClientImpl::MDSClientImpl()
-    : running_(false), rpc_(FLAGS_mds_addrs), mds_discovery_(rpc_) {}
+    : running_(false), rpc_(FLAGS_mds_addrs, "cache"), mds_discovery_(rpc_) {}
 
 Status MDSClientImpl::Start() {
   if (running_.exchange(true)) {
@@ -69,6 +69,12 @@ Status MDSClientImpl::Start() {
   }
 
   LOG(INFO) << "MDSClientImpl is starting...";
+
+  auto status = rpc_.Init();
+  if (!status.ok()) {
+    LOG(ERROR) << "Fail to init RPC";
+    return status;
+  }
 
   if (!mds_discovery_.Init()) {
     LOG(ERROR) << "Fail to init MDSDiscovery";

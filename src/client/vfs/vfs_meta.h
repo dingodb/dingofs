@@ -23,6 +23,7 @@
 
 #include "common/meta.h"
 #include "common/status.h"
+#include "fmt/format.h"
 
 namespace dingofs {
 namespace client {
@@ -84,6 +85,9 @@ struct Slice {
   int32_t pos{0};   // start byte position within the owning chunk
 
   int32_t End() const { return pos + len; }
+  std::string ToString() const {
+    return fmt::format("slice({} [{},{}))", id, pos, pos + len);
+  }
 };
 
 enum StoreType : uint8_t {
