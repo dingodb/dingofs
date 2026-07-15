@@ -99,12 +99,21 @@ struct SendRequestOption {
 
 class RPC {
  public:
-  RPC(const std::string& addr);
-  RPC(const std::string& ip, int port);
-  RPC(const EndPoint& endpoint);
+  RPC(const std::string& addrs, const std::string& name = "unknown");
+  RPC(const std::string& ip, int port, const std::string& name = "unknown");
+  RPC(const EndPoint& endpoint, const std::string& name = "unknown");
   ~RPC() = default;
 
+  RPC(const RPC& other) noexcept {
+    name_ = other.name_;
+    init_endpoint_ = other.init_endpoint_;
+    channels_ = other.channels_;
+    fallback_endpoints_ = other.fallback_endpoints_;
+
+    doing_req_count_.store(other.doing_req_count_.load());
+  }
   RPC(RPC&& other) noexcept {
+    name_ = other.name_;
     init_endpoint_ = other.init_endpoint_;
     channels_ = std::move(other.channels_);
     fallback_endpoints_ = std::move(other.fallback_endpoints_);
@@ -113,6 +122,7 @@ class RPC {
   }
   RPC& operator=(RPC&& other) noexcept {
     if (this != &other) {
+      name_ = other.name_;
       init_endpoint_ = other.init_endpoint_;
       channels_ = std::move(other.channels_);
       fallback_endpoints_ = std::move(other.fallback_endpoints_);
@@ -123,10 +133,10 @@ class RPC {
     return *this;
   }
 
-  bool Init();
+  Status Init();
   void Stop();
 
-  static bool CheckMdsAlive(const std::string& addr);
+  bool CheckMdsAlive(const EndPoint& endpoint);
 
   bool AddEndpoint(const std::string& ip, int port);
   void DeleteEndpoint(const std::string& ip, int port);
@@ -177,6 +187,7 @@ class RPC {
   }
 
   utils::RWLock lock_;
+  std::string name_;
   EndPoint init_endpoint_;
   absl::flat_hash_map<EndPoint, ChannelSPtr, EndPointHash> channels_;
   absl::flat_hash_set<EndPoint, EndPointHash> fallback_endpoints_;
@@ -284,7 +295,7 @@ Status RPC::SendRequest(const EndPoint& endpoint,
   CHECK(method != nullptr) << "[meta.rpc] unknown api name: " << api_name;
 
   if (IsInvalidEndpoint(endpoint)) {
-    LOG(ERROR) << fmt::format("[meta.rpc][{}] endpoint is invalid.",
+    LOG(ERROR) << fmt::format("[meta.rpc.{}][{}] endpoint is invalid.", name_,
                               EndPointToStr(endpoint));
     return Status::Internal("endpoint is invalid");
   }
@@ -307,10 +318,10 @@ Status RPC::SendRequest(const EndPoint& endpoint,
     uint64_t elapsed_us = utils::TimestampUs() - start_us;
     if (cntl.Failed()) {
       LOG(ERROR) << fmt::format(
-          "[meta.rpc][{}][{}][{}us] fail, {} retry({}) {} request({}) "
+          "[meta.rpc.{}][{}][{}][{}us] fail, {} retry({}) {} request({}) "
           "doing({}).",
-          EndPointToStr(endpoint), api_name, elapsed_us, cntl.log_id(), retry,
-          cntl.ErrorText(), request.ShortDebugString(), DoingReqCount());
+          name_, EndPointToStr(endpoint), api_name, elapsed_us, cntl.log_id(),
+          retry, cntl.ErrorText(), request.ShortDebugString(), DoingReqCount());
 
       response.mutable_error()->set_errcode(pb::error::EINTERNAL);
       response.mutable_error()->set_errmsg(
@@ -338,34 +349,34 @@ Status RPC::SendRequest(const EndPoint& endpoint,
     if (response.error().errcode() == pb::error::OK) {
       if constexpr (std::is_same_v<Response, pb::mds::ReadSliceResponse>) {
         LOG_DEBUG << fmt::format(
-            "[meta.rpc][{}][{}][{}us] success, retry({}) request({}) "
+            "[meta.rpc.{}][{}][{}][{}us] success, retry({}) request({}) "
             "response({}) doing({}).",
-            EndPointToStr(endpoint), api_name, elapsed_us, retry,
+            name_, EndPointToStr(endpoint), api_name, elapsed_us, retry,
             request.ShortDebugString(), DescribeReadSliceResponse(response),
             DoingReqCount());
 
       } else if constexpr (std::is_same_v<Response, pb::mds::OpenResponse>) {
         LOG_DEBUG << fmt::format(
-            "[meta.rpc][{}][{}][{}us] success, retry({}) request({}) "
+            "[meta.rpc.{}][{}][{}][{}us] success, retry({}) request({}) "
             "response({}) doing({}).",
-            EndPointToStr(endpoint), api_name, elapsed_us, retry,
+            name_, EndPointToStr(endpoint), api_name, elapsed_us, retry,
             request.ShortDebugString(), DescribeOpenResponse(response),
             DoingReqCount());
 
       } else if constexpr (std::is_same_v<Response,
                                           pb::mds::FlushFileResponse>) {
         LOG_DEBUG << fmt::format(
-            "[meta.rpc][{}][{}][{}us] success, retry({}) request({}) "
+            "[meta.rpc.{}][{}][{}][{}us] success, retry({}) request({}) "
             "response({}) doing({}).",
-            EndPointToStr(endpoint), api_name, elapsed_us, retry,
+            name_, EndPointToStr(endpoint), api_name, elapsed_us, retry,
             DescribeFlushFileRequest(request), response.ShortDebugString(),
             DoingReqCount());
 
       } else {
         LOG_DEBUG << fmt::format(
-            "[meta.rpc][{}][{}][{}us] success, retry({}) request({}) "
+            "[meta.rpc.{}][{}][{}][{}us] success, retry({}) request({}) "
             "response({}) doing({}).",
-            EndPointToStr(endpoint), api_name, elapsed_us, retry,
+            name_, EndPointToStr(endpoint), api_name, elapsed_us, retry,
             request.ShortDebugString(), response.ShortDebugString(),
             DoingReqCount());
       }
@@ -378,9 +389,10 @@ Status RPC::SendRequest(const EndPoint& endpoint,
       // rmdir on a non-empty directory is a normal posix outcome(ENOTEMPTY),
       // e.g. git/rsync probe rmdir and ignore the failure, so log as INFO
       LOG_DEBUG << fmt::format(
-          "[meta.rpc][{}][{}][{}us] fail, retry({}) request({}) response({}) "
+          "[meta.rpc.{}][{}][{}][{}us] fail, retry({}) request({}) "
+          "response({}) "
           "doing({}) error({} {}).",
-          EndPointToStr(endpoint), api_name, elapsed_us, retry,
+          name_, EndPointToStr(endpoint), api_name, elapsed_us, retry,
           request.ShortDebugString(), response.ShortDebugString(),
           DoingReqCount(), pb::error::Errno_Name(response.error().errcode()),
           response.error().errmsg());
@@ -388,9 +400,10 @@ Status RPC::SendRequest(const EndPoint& endpoint,
     } else if (response.error().errcode() != pb::error::ENOT_FOUND ||
                api_name != "Lookup") {
       LOG(ERROR) << fmt::format(
-          "[meta.rpc][{}][{}][{}us] fail, retry({}) request({}) response({}) "
+          "[meta.rpc.{}][{}][{}][{}us] fail, retry({}) request({}) "
+          "response({}) "
           "doing({}) error({} {}).",
-          EndPointToStr(endpoint), api_name, elapsed_us, retry,
+          name_, EndPointToStr(endpoint), api_name, elapsed_us, retry,
           request.ShortDebugString(), response.ShortDebugString(),
           DoingReqCount(), pb::error::Errno_Name(response.error().errcode()),
           response.error().errmsg());

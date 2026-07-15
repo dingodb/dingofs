@@ -151,13 +151,9 @@ class MdsDirectClient {
                const std::string& mount_point) {
     fs_name_ = fs_name;
 
-    const std::string alive_addr = GetAliveMdsAddr(mds_addrs);
-    if (alive_addr.empty()) {
-      return Status::Internal("no alive mds addr in: " + mds_addrs);
-    }
-
-    RPC rpc(alive_addr);
-    if (!rpc.Init()) {
+    RPC rpc(mds_addrs);
+    auto status = rpc.Init();
+    if (!status.ok()) {
       return Status::Internal("rpc init fail");
     }
 
@@ -316,13 +312,6 @@ class MdsDirectClient {
       start = pos + 1;
     }
     return out;
-  }
-
-  static std::string GetAliveMdsAddr(const std::string& addrs) {
-    for (const auto& addr : SplitMdsAddrs(addrs)) {
-      if (!addr.empty() && RPC::CheckMdsAlive(addr)) return addr;
-    }
-    return "";
   }
 
   std::string fs_name_;

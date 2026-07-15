@@ -61,6 +61,12 @@ void RemoteCacheCluster::Start() {
 
   LOG(INFO) << "RemoteCacheCluster is starting...";
 
+  Status status = mds_client_->Start();
+  if (!status.ok()) {
+    LOG(FATAL) << "Fail to start MDS client, status=" << status.ToString();
+    return;
+  }
+
   if (!SyncMembers()) {
     LOG(FATAL)
         << "Fail to sync members from mds, is there any member in cache group="

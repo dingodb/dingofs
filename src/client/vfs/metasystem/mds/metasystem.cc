@@ -72,33 +72,6 @@ DEFINE_uint32(vfs_meta_worker_max_pending_num, 1048576,
 DEFINE_uint32(vfs_meta_copy_file_range_max_chunks_per_rpc, 256,
               "Max dst chunks affected by one CopyFileRange RPC window.");
 
-static std::vector<std::string> SplitMdsAddrs(const std::string& mds_addrs) {
-  std::vector<std::string> addrs;
-
-  if (mds_addrs.find(',') != std::string::npos) {
-    mds::Helper::SplitString(mds_addrs, ',', addrs);
-    return addrs;
-
-  } else if (mds_addrs.find(';') != std::string::npos) {
-    mds::Helper::SplitString(mds_addrs, ';', addrs);
-    return addrs;
-  }
-
-  addrs.push_back(mds_addrs);
-  return addrs;
-}
-
-static std::string GetAliveMdsAddr(const std::string& mds_addrs) {
-  auto mds_addr_vec = SplitMdsAddrs(mds_addrs);
-  for (const auto& mds_addr : mds_addr_vec) {
-    if (RPC::CheckMdsAlive(mds_addr)) {
-      return mds_addr;
-    }
-  }
-
-  return "";
-}
-
 MDSMetaSystemUPtr MDSMetaSystem::Build(const std::string& fs_name,
                                        const std::string& mds_addrs,
                                        const ClientId& client_id,
@@ -110,22 +83,16 @@ MDSMetaSystemUPtr MDSMetaSystem::Build(const std::string& fs_name,
   CHECK(!fs_name.empty()) << "fs_name is empty.";
   CHECK(!mds_addrs.empty()) << "mds_addrs is empty.";
 
-  // check mds addr
-  std::string alive_mds_addr = GetAliveMdsAddr(mds_addrs);
-  if (alive_mds_addr.empty()) {
-    LOG(ERROR) << fmt::format(
-        "[meta.fs.{}] mds addr check fail, mds_addrs({}).", fs_name, mds_addrs);
-    return nullptr;
-  }
-
-  RPC rpc(alive_mds_addr);
-  if (!rpc.Init()) {
-    LOG(ERROR) << fmt::format("[meta.fs.{}] RPC init fail.", fs_name);
+  RPC rpc(mds_addrs, "mds");
+  auto status = rpc.Init();
+  if (!status.ok()) {
+    LOG(ERROR) << fmt::format("[meta.fs.{}] RPC init fail, status({}).",
+                              fs_name, status.ToString());
     return nullptr;
   }
 
   mds::FsInfoEntry fs_info;
-  auto status = MDSClient::GetFsInfo(rpc, fs_name, fs_info);
+  status = MDSClient::GetFsInfo(rpc, fs_name, fs_info);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format("[meta.fs.{}] get fs info fail, status({}).",
                               fs_name, status.ToString());
@@ -1128,8 +1095,10 @@ Status MDSMetaSystem::WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
                                  const std::vector<Slice>& slices) {
   AssertStop();
 
-  LOG_DEBUG << fmt::format("[meta.fs.{}.{}.{}] writeslice, slices({}).", ino,
-                           fh, index, Helper::ToString(slices));
+  for (const auto& slice : slices) {
+    LOG_DEBUG << fmt::format("[meta.fs.{}.{}.{}] writeslice, {}.", ino, fh,
+                             index, slice.ToString());
+  }
 
   auto file_session = file_session_map_.GetSession(ino);
   CHECK(file_session != nullptr)
