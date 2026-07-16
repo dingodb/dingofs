@@ -106,12 +106,11 @@ bool AwsCrtS3Client::BucketExist(const std::string& bucket) {
 }
 
 int AwsCrtS3Client::PutObject(const std::string& bucket, const std::string& key,
-                              const char* buffer, size_t buffer_size) {
+                              const PutPayload& payload) {
   Model::PutObjectRequest request;
   request.SetBucket(bucket);
   request.SetKey(key);
-  request.SetBody(Aws::MakeShared<PreallocatedIOStream>(AWS_ALLOCATE_TAG,
-                                                        buffer, buffer_size));
+  SetPutObjectPayload(&request, payload);
 
   auto response = client_->PutObject(request);
   if (!response.IsSuccess()) {
@@ -136,8 +135,7 @@ void AwsCrtS3Client::AsyncPutObject(const std::string& bucket,
   auto& request = std::any_cast<Model::PutObjectRequest&>(aws_ctx->request);
   request.SetBucket(bucket);
   request.SetKey(key);
-  request.SetBody(Aws::MakeShared<PreallocatedIOStream>(
-      AWS_ALLOCATE_TAG, user_ctx->buffer, user_ctx->buffer_size));
+  SetPutObjectPayload(&request, user_ctx->payload);
 
   PutObjectResponseReceivedHandler handler =
       [this, bucket, key](

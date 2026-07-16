@@ -207,8 +207,7 @@ Status TierBlockCache::Put(BlockHandle handle, IOBuffer block,
         });
   }
 
-  IOBuffer contiguous = CopyBlock(block);
-  status = storage_client_->Put(handle, contiguous);
+  status = storage_client_->Put(handle, block);
   if (!status.ok()) {
     LOG(ERROR) << "Fail to put block to storage, key=" << handle.Filename()
                << ", status=" << status.ToString();
@@ -428,15 +427,6 @@ CacheTier TierBlockCache::ResolveTier(const BlockHandle& handle,
     return CacheTier::kLocal;
   }
   return hint;
-}
-
-IOBuffer TierBlockCache::CopyBlock(const IOBuffer& block) {
-  IOBuffer buffer;
-  size_t size = block.Size();
-  char* data = new char[size];
-  block.CopyTo(data);
-  buffer.AppendUserData(data, size, iutil::DeleteBuffer);
-  return buffer;
 }
 
 }  // namespace cache

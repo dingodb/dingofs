@@ -161,9 +161,7 @@ std::string FileAccesser::KeyPath(const std::string& key) {
   }
 }
 
-Status FileAccesser::Put(const std::string& key, const char* buffer,
-                         size_t length) {
-  CHECK_GT(length, 0);
+Status FileAccesser::Put(const std::string& key, const PutPayload& payload) {
   std::string fpath = KeyPath(key);
   std::string tmp = fpath + ".tmp";
 
@@ -180,16 +178,20 @@ Status FileAccesser::Put(const std::string& key, const char* buffer,
     SCOPED_CLEANUP({ Close(tmp, fd); });
     // TOOO: remove tmp file on error
 
-    while (length > 0) {
-      ssize_t res = ::write(fd, buffer, length);
-      if (res < 0) {
-        if (errno == EINTR) {
-          continue;
+    for (const auto& segment : payload.Segments()) {
+      const char* buffer = segment.data;
+      size_t length = segment.size;
+      while (length > 0) {
+        ssize_t res = ::write(fd, buffer, length);
+        if (res < 0) {
+          if (errno == EINTR) {
+            continue;
+          }
+          return PosixError(fpath, errno);
         }
-        return PosixError(fpath, errno);
+        buffer += res;
+        length -= res;
       }
-      buffer += res;
-      length -= res;
     }
   }
 
@@ -199,13 +201,13 @@ Status FileAccesser::Put(const std::string& key, const char* buffer,
 
 void FileAccesser::DoAsyncPut(const std::string& key,
                               PutObjectAsyncContextSPtr context) {
-  context->status = Put(key, context->buffer, context->buffer_size);
+  context->status = Put(key, context->payload);
   context->cb(context);
 }
 
 void FileAccesser::AsyncPut(const std::string& key,
                             PutObjectAsyncContextSPtr context) {
-  std::thread([&, key, context]() { DoAsyncPut(key, context); }).detach();
+  std::thread([this, key, context]() { DoAsyncPut(key, context); }).detach();
 }
 
 Status FileAccesser::Get(const std::string& key, std::string* data) {
@@ -303,7 +305,7 @@ void FileAccesser::DoAsyncGet(const std::string& key,
 
 void FileAccesser::AsyncGet(const std::string& key,
                             GetObjectAsyncContextSPtr context) {
-  std::thread([&, key, context]() { DoAsyncGet(key, context); }).detach();
+  std::thread([this, key, context]() { DoAsyncGet(key, context); }).detach();
 }
 
 bool FileAccesser::BlockExist(const std::string& key) {

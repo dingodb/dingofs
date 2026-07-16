@@ -111,9 +111,8 @@ Aws::String S3Accesser::S3Key(const std::string& key) {
 
 bool S3Accesser::ContainerExist() { return client_->BucketExist(bucket_); }
 
-Status S3Accesser::Put(const std::string& key, const char* buffer,
-                       size_t length) {
-  int rc = client_->PutObject(bucket_, S3Key(key), buffer, length);
+Status S3Accesser::Put(const std::string& key, const PutPayload& payload) {
+  int rc = client_->PutObject(bucket_, S3Key(key), payload);
   if (rc < 0) {
     LOG(ERROR) << fmt::format("[s3_accesser] put object({}) fail, retcode:{}.",
                               key, rc);

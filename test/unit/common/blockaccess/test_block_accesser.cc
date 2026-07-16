@@ -24,11 +24,14 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <vector>
 
 #include "common/blockaccess/accesser_common.h"
 #include "common/blockaccess/block_accesser.h"
 #include "common/blockaccess/rados/rados_accesser.h"
+#include "common/blockaccess/s3/aws/aws_s3_common.h"
 #include "common/blockaccess/s3/s3_accesser.h"
+#include "common/io_buffer.h"
 #include "common/status.h"
 
 namespace dingofs {
@@ -64,6 +67,86 @@ class BlockAccesserImplTest : public ::testing::Test {
   std::string root_;
   std::unique_ptr<BlockAccesserImpl> accesser_;
 };
+
+TEST(PutPayloadTest, SharesImmutableSegmentMetadata) {
+  const std::string first = "hello";
+  const std::string second = " world";
+  auto payload = PutPayload::Build(
+      {{first.data(), first.size()}, {second.data(), second.size()}});
+  auto copy = payload;
+
+  EXPECT_EQ(payload.Size(), first.size() + second.size());
+  EXPECT_EQ(payload.SegmentCount(), 2);
+  EXPECT_EQ(copy.Segments().data(), payload.Segments().data());
+}
+
+TEST(PutPayloadDeathTest, RejectsEmptyPayloadAndSegment) {
+  EXPECT_DEATH((void)PutPayload::Build({}), "empty block payload");
+  const char data = 'x';
+  EXPECT_DEATH((void)PutPayload::Build({PayloadSegment{&data, 0}}),
+               "empty segment");
+}
+
+TEST(SegmentedStreamBufTest, ReadsAndSeeksAcrossSegments) {
+  const std::string first = "abc";
+  const std::string second = "defgh";
+  aws::SegmentedIOStream stream(PutPayload::Build(
+      {{first.data(), first.size()}, {second.data(), second.size()}}));
+
+  char output[6] = {};
+  stream.read(output, 5);
+  EXPECT_EQ(std::string(output, 5), "abcde");
+
+  stream.clear();
+  stream.seekg(2, std::ios_base::beg);
+  stream.read(output, 6);
+  EXPECT_EQ(std::string(output, 6), "cdefgh");
+
+  stream.clear();
+  stream.seekg(-3, std::ios_base::end);
+  stream.read(output, 3);
+  EXPECT_EQ(std::string(output, 3), "fgh");
+}
+
+TEST_F(BlockAccesserImplTest, SyncPutAcceptsSegmentedPayload) {
+  const std::string first = "segmented ";
+  const std::string second = "payload";
+  auto payload = PutPayload::Build(
+      {{first.data(), first.size()}, {second.data(), second.size()}});
+
+  ASSERT_TRUE(accesser_->Put("multi_segment", payload).ok());
+  std::string data;
+  ASSERT_TRUE(accesser_->Get("multi_segment", &data).ok());
+  EXPECT_EQ(data, first + second);
+}
+
+TEST_F(BlockAccesserImplTest, AsyncPutAcceptsSegmentedPayload) {
+  const std::string first = "async ";
+  const std::string second = "segments";
+  auto ctx = std::make_shared<PutObjectAsyncContext>(
+      "async_multi", PutPayload::Build({{first.data(), first.size()},
+                                        {second.data(), second.size()}}));
+
+  std::mutex mutex;
+  std::condition_variable cv;
+  bool complete = false;
+  ctx->cb = [&](const PutObjectAsyncContextSPtr& result) {
+    std::lock_guard<std::mutex> lock(mutex);
+    EXPECT_TRUE(result->status.ok()) << result->status.ToString();
+    complete = true;
+    cv.notify_one();
+  };
+  accesser_->AsyncPut(ctx->origin_key, ctx);
+  {
+    std::unique_lock<std::mutex> lock(mutex);
+    ASSERT_TRUE(
+        cv.wait_for(lock, std::chrono::seconds(10), [&] { return complete; }));
+  }
+
+  std::string data;
+  ASSERT_TRUE(accesser_->Get("async_multi", &data).ok());
+  EXPECT_EQ(data, first + second);
+}
 
 // The wrapper installs its own callback (log + bvar), but must restore the
 // caller's original callback before invoking it, so the caller can reuse the

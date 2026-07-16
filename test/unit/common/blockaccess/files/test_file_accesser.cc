@@ -37,6 +37,16 @@ namespace dingofs {
 namespace blockaccess {
 namespace unit_test {
 
+struct AsyncTestState {
+  std::mutex mutex;
+  std::condition_variable cv;
+  bool called{false};
+  int completed{0};
+  Status status;
+  std::vector<Status> statuses;
+  std::vector<char> buffer;
+};
+
 class FileAccesserTest : public ::testing::Test {
  protected:
   void SetUp() override {
@@ -65,6 +75,11 @@ class FileAccesserTest : public ::testing::Test {
     return data;
   }
 
+  Status Put(const std::string& key, const std::string& data) {
+    return accesser_->Put(
+        key, PutPayload::Build({PayloadSegment{data.data(), data.size()}}));
+  }
+
   std::string root_;
   std::unique_ptr<FileAccesser> accesser_;
 };
@@ -75,7 +90,7 @@ TEST_F(FileAccesserTest, PutAndGet) {
   const std::string data = "Hello, DingoFS!";
 
   // Put data
-  Status s = accesser_->Put(key, data.data(), data.size());
+  Status s = Put(key, data);
   ASSERT_TRUE(s.ok()) << "Put failed: " << s.ToString();
 
   // Get data back
@@ -90,7 +105,7 @@ TEST_F(FileAccesserTest, PutLargeData) {
   const size_t data_size = 4 * 1024 * 1024;
   std::string data = GenerateRandomData(data_size);
 
-  Status s = accesser_->Put(key, data.data(), data.size());
+  Status s = Put(key, data);
   ASSERT_TRUE(s.ok()) << "Put large data failed: " << s.ToString();
 
   std::string retrieved_data;
@@ -116,7 +131,7 @@ TEST_F(FileAccesserTest, Range) {
   const std::string data = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
   // Put data first
-  Status s = accesser_->Put(key, data.data(), data.size());
+  Status s = Put(key, data);
   ASSERT_TRUE(s.ok()) << "Put failed: " << s.ToString();
 
   // Test range read
@@ -142,7 +157,7 @@ TEST_F(FileAccesserTest, RangeInvalidOffset) {
   const std::string key = "range_key_invalid";
   const std::string data = "Short data";
 
-  Status s = accesser_->Put(key, data.data(), data.size());
+  Status s = Put(key, data);
   ASSERT_TRUE(s.ok()) << "Put failed: " << s.ToString();
 
   char buffer[100];
@@ -157,7 +172,7 @@ TEST_F(FileAccesserTest, BlockExistAndDelete) {
   const std::string data = "To be deleted";
 
   // Put and verify
-  Status s = accesser_->Put(key, data.data(), data.size());
+  Status s = Put(key, data);
   ASSERT_TRUE(s.ok()) << "Put failed: " << s.ToString();
   ASSERT_TRUE(accesser_->BlockExist(key)) << "Key should exist";
 
@@ -189,7 +204,7 @@ TEST_F(FileAccesserTest, BatchDelete) {
 
   // Put all keys
   for (const auto& key : keys) {
-    Status s = accesser_->Put(key, data.data(), data.size());
+    Status s = Put(key, data);
     ASSERT_TRUE(s.ok()) << "Put failed for key: " << key;
   }
 
@@ -212,21 +227,17 @@ TEST_F(FileAccesserTest, BatchDelete) {
 // Test AsyncPut
 TEST_F(FileAccesserTest, AsyncPut) {
   const std::string key = "async_put_key";
-  const std::string data = "Async put data";
+  auto data = std::make_shared<std::string>("Async put data");
+  auto state = std::make_shared<AsyncTestState>();
 
-  std::mutex mtx;
-  std::condition_variable cv;
-  bool callback_called = false;
-  Status async_status;
-
-  auto context = std::make_shared<PutObjectAsyncContext>(key);
-  context->buffer = data.data();
-  context->buffer_size = data.size();
-  context->cb = [&](const PutObjectAsyncContextSPtr& ctx) {
-    std::lock_guard<std::mutex> lock(mtx);
-    async_status = ctx->status;
-    callback_called = true;
-    cv.notify_one();
+  auto context = std::make_shared<PutObjectAsyncContext>(
+      key, PutPayload::Build({PayloadSegment{data->data(), data->size()}}));
+  context->cb = [state, data](const PutObjectAsyncContextSPtr& ctx) {
+    (void)data;
+    std::lock_guard<std::mutex> lock(state->mutex);
+    state->status = ctx->status;
+    state->called = true;
+    state->cv.notify_one();
   };
 
   // Execute async put
@@ -234,20 +245,20 @@ TEST_F(FileAccesserTest, AsyncPut) {
 
   // Wait for callback
   {
-    std::unique_lock<std::mutex> lock(mtx);
-    ASSERT_TRUE(cv.wait_for(lock, std::chrono::seconds(10), [&] {
-      return callback_called;
+    std::unique_lock<std::mutex> lock(state->mutex);
+    ASSERT_TRUE(state->cv.wait_for(lock, std::chrono::seconds(10), [&] {
+      return state->called;
     })) << "AsyncPut callback timeout";
   }
 
-  ASSERT_TRUE(async_status.ok())
-      << "AsyncPut failed: " << async_status.ToString();
+  ASSERT_TRUE(state->status.ok())
+      << "AsyncPut failed: " << state->status.ToString();
 
   // Verify data was written
   std::string retrieved_data;
   Status s = accesser_->Get(key, &retrieved_data);
   ASSERT_TRUE(s.ok()) << "Get after AsyncPut failed";
-  ASSERT_EQ(data, retrieved_data) << "AsyncPut data mismatch";
+  ASSERT_EQ(*data, retrieved_data) << "AsyncPut data mismatch";
 }
 
 // Test AsyncGet
@@ -256,24 +267,21 @@ TEST_F(FileAccesserTest, AsyncGet) {
   const std::string data = "Async get data";
 
   // Put data first
-  Status s = accesser_->Put(key, data.data(), data.size());
+  Status s = Put(key, data);
   ASSERT_TRUE(s.ok()) << "Put failed: " << s.ToString();
 
-  std::mutex mtx;
-  std::condition_variable cv;
-  bool callback_called = false;
-  Status async_status;
-  std::vector<char> buffer(data.size());
+  auto state = std::make_shared<AsyncTestState>();
+  state->buffer.resize(data.size());
 
   auto context = std::make_shared<GetObjectAsyncContext>(key);
-  context->buf = buffer.data();
+  context->buf = state->buffer.data();
   context->offset = 0;
   context->len = data.size();
-  context->cb = [&](const GetObjectAsyncContextSPtr& ctx) {
-    std::lock_guard<std::mutex> lock(mtx);
-    async_status = ctx->status;
-    callback_called = true;
-    cv.notify_one();
+  context->cb = [state](const GetObjectAsyncContextSPtr& ctx) {
+    std::lock_guard<std::mutex> lock(state->mutex);
+    state->status = ctx->status;
+    state->called = true;
+    state->cv.notify_one();
   };
 
   // Execute async get
@@ -281,39 +289,38 @@ TEST_F(FileAccesserTest, AsyncGet) {
 
   // Wait for callback
   {
-    std::unique_lock<std::mutex> lock(mtx);
-    ASSERT_TRUE(cv.wait_for(lock, std::chrono::seconds(5), [&] {
-      return callback_called;
+    std::unique_lock<std::mutex> lock(state->mutex);
+    ASSERT_TRUE(state->cv.wait_for(lock, std::chrono::seconds(5), [&] {
+      return state->called;
     })) << "AsyncGet callback timeout";
   }
 
-  ASSERT_TRUE(async_status.ok())
-      << "AsyncGet failed: " << async_status.ToString();
+  ASSERT_TRUE(state->status.ok())
+      << "AsyncGet failed: " << state->status.ToString();
   ASSERT_EQ(context->actual_len, data.size()) << "AsyncGet size mismatch";
-  ASSERT_EQ(std::string(buffer.data(), context->actual_len), data)
+  ASSERT_EQ(std::string(state->buffer.data(), context->actual_len), data)
       << "AsyncGet data mismatch";
 }
 
 // Test AsyncPut with multiple concurrent requests
 TEST_F(FileAccesserTest, AsyncPutConcurrent) {
   const int num_requests = 10;
-  std::mutex mtx;
-  std::condition_variable cv;
-  int completed_count = 0;
-  std::vector<Status> statuses(num_requests);
+  auto state = std::make_shared<AsyncTestState>();
+  state->statuses.resize(num_requests);
 
   for (int i = 0; i < num_requests; ++i) {
     std::string key = "concurrent_key_" + std::to_string(i);
-    std::string data = "Concurrent data " + std::to_string(i);
+    auto data =
+        std::make_shared<std::string>("Concurrent data " + std::to_string(i));
 
-    auto context = std::make_shared<PutObjectAsyncContext>(key);
-    context->buffer = data.data();
-    context->buffer_size = data.size();
-    context->cb = [&, i, key, data](const PutObjectAsyncContextSPtr& ctx) {
-      std::lock_guard<std::mutex> lock(mtx);
-      statuses[i] = ctx->status;
-      ++completed_count;
-      cv.notify_one();
+    auto context = std::make_shared<PutObjectAsyncContext>(
+        key, PutPayload::Build({PayloadSegment{data->data(), data->size()}}));
+    context->cb = [state, i, data](const PutObjectAsyncContextSPtr& ctx) {
+      (void)data;  // Keep the non-owning payload bytes alive through callback.
+      std::lock_guard<std::mutex> lock(state->mutex);
+      state->statuses[i] = ctx->status;
+      ++state->completed;
+      state->cv.notify_one();
     };
 
     accesser_->AsyncPut(key, context);
@@ -321,17 +328,18 @@ TEST_F(FileAccesserTest, AsyncPutConcurrent) {
 
   // Wait for all callbacks
   {
-    std::unique_lock<std::mutex> lock(mtx);
-    ASSERT_TRUE(cv.wait_for(lock, std::chrono::seconds(10),
-                            [&] { return completed_count == num_requests; }))
+    std::unique_lock<std::mutex> lock(state->mutex);
+    ASSERT_TRUE(
+        state->cv.wait_for(lock, std::chrono::seconds(10),
+                           [&] { return state->completed == num_requests; }))
         << "Timeout waiting for concurrent AsyncPut, completed: "
-        << completed_count;
+        << state->completed;
   }
 
   // Verify all succeeded
   for (int i = 0; i < num_requests; ++i) {
-    ASSERT_TRUE(statuses[i].ok())
-        << "AsyncPut " << i << " failed: " << statuses[i].ToString();
+    ASSERT_TRUE(state->statuses[i].ok())
+        << "AsyncPut " << i << " failed: " << state->statuses[i].ToString();
   }
 }
 
@@ -348,7 +356,7 @@ TEST_F(FileAccesserTest, MultiplePutGetCycles) {
   for (int i = 0; i < num_cycles; ++i) {
     std::string data = "Cycle " + std::to_string(i) + " data";
 
-    Status s = accesser_->Put(key, data.data(), data.size());
+    Status s = Put(key, data);
     ASSERT_TRUE(s.ok()) << "Put failed at cycle " << i;
 
     std::string retrieved_data;
@@ -362,32 +370,29 @@ TEST_F(FileAccesserTest, MultiplePutGetCycles) {
 TEST_F(FileAccesserTest, AsyncDelete) {
   const std::string key = "async_delete_key";
   const std::string data = "to be deleted";
-  ASSERT_TRUE(accesser_->Put(key, data.data(), data.size()).ok());
+  ASSERT_TRUE(Put(key, data).ok());
   ASSERT_TRUE(accesser_->BlockExist(key));
 
-  std::mutex mtx;
-  std::condition_variable cv;
-  bool called = false;
-  Status async_status;
+  auto state = std::make_shared<AsyncTestState>();
 
   auto context = std::make_shared<DeleteObjectAsyncContext>(key);
-  context->cb = [&](const DeleteObjectAsyncContextSPtr& ctx) {
-    std::lock_guard<std::mutex> lock(mtx);
-    async_status = ctx->status;
-    called = true;
-    cv.notify_one();
+  context->cb = [state](const DeleteObjectAsyncContextSPtr& ctx) {
+    std::lock_guard<std::mutex> lock(state->mutex);
+    state->status = ctx->status;
+    state->called = true;
+    state->cv.notify_one();
   };
 
   accesser_->AsyncDelete(key, context);
 
   {
-    std::unique_lock<std::mutex> lock(mtx);
-    ASSERT_TRUE(cv.wait_for(lock, std::chrono::seconds(10), [&] {
-      return called;
+    std::unique_lock<std::mutex> lock(state->mutex);
+    ASSERT_TRUE(state->cv.wait_for(lock, std::chrono::seconds(10), [&] {
+      return state->called;
     })) << "AsyncDelete callback timeout";
   }
 
-  ASSERT_TRUE(async_status.ok()) << async_status.ToString();
+  ASSERT_TRUE(state->status.ok()) << state->status.ToString();
   ASSERT_FALSE(accesser_->BlockExist(key)) << "object not removed";
 }
 
@@ -395,27 +400,24 @@ TEST_F(FileAccesserTest, AsyncDelete) {
 TEST_F(FileAccesserTest, AsyncDeleteNonExistent) {
   const std::string key = "async_delete_missing_key";
 
-  std::mutex mtx;
-  std::condition_variable cv;
-  bool called = false;
-  Status async_status;
+  auto state = std::make_shared<AsyncTestState>();
 
   auto context = std::make_shared<DeleteObjectAsyncContext>(key);
-  context->cb = [&](const DeleteObjectAsyncContextSPtr& ctx) {
-    std::lock_guard<std::mutex> lock(mtx);
-    async_status = ctx->status;
-    called = true;
-    cv.notify_one();
+  context->cb = [state](const DeleteObjectAsyncContextSPtr& ctx) {
+    std::lock_guard<std::mutex> lock(state->mutex);
+    state->status = ctx->status;
+    state->called = true;
+    state->cv.notify_one();
   };
 
   accesser_->AsyncDelete(key, context);
 
   {
-    std::unique_lock<std::mutex> lock(mtx);
-    ASSERT_TRUE(
-        cv.wait_for(lock, std::chrono::seconds(10), [&] { return called; }));
+    std::unique_lock<std::mutex> lock(state->mutex);
+    ASSERT_TRUE(state->cv.wait_for(lock, std::chrono::seconds(10),
+                                   [&] { return state->called; }));
   }
-  ASSERT_TRUE(async_status.ok()) << async_status.ToString();
+  ASSERT_TRUE(state->status.ok()) << state->status.ToString();
 }
 
 // Test AsyncBatchDelete fires the callback and removes all objects.
@@ -423,33 +425,30 @@ TEST_F(FileAccesserTest, AsyncBatchDelete) {
   std::list<std::string> keys = {"abd_k1", "abd_k2", "abd_k3"};
   const std::string data = "x";
   for (const auto& k : keys) {
-    ASSERT_TRUE(accesser_->Put(k, data.data(), data.size()).ok());
+    ASSERT_TRUE(Put(k, data).ok());
     ASSERT_TRUE(accesser_->BlockExist(k));
   }
 
-  std::mutex mtx;
-  std::condition_variable cv;
-  bool called = false;
-  Status async_status;
+  auto state = std::make_shared<AsyncTestState>();
 
   auto context = std::make_shared<BatchDeleteObjectAsyncContext>(keys);
-  context->cb = [&](const BatchDeleteObjectAsyncContextSPtr& ctx) {
-    std::lock_guard<std::mutex> lock(mtx);
-    async_status = ctx->status;
-    called = true;
-    cv.notify_one();
+  context->cb = [state](const BatchDeleteObjectAsyncContextSPtr& ctx) {
+    std::lock_guard<std::mutex> lock(state->mutex);
+    state->status = ctx->status;
+    state->called = true;
+    state->cv.notify_one();
   };
 
   accesser_->AsyncBatchDelete(keys, context);
 
   {
-    std::unique_lock<std::mutex> lock(mtx);
-    ASSERT_TRUE(cv.wait_for(lock, std::chrono::seconds(10), [&] {
-      return called;
+    std::unique_lock<std::mutex> lock(state->mutex);
+    ASSERT_TRUE(state->cv.wait_for(lock, std::chrono::seconds(10), [&] {
+      return state->called;
     })) << "AsyncBatchDelete callback timeout";
   }
 
-  ASSERT_TRUE(async_status.ok()) << async_status.ToString();
+  ASSERT_TRUE(state->status.ok()) << state->status.ToString();
   for (const auto& k : keys) {
     ASSERT_FALSE(accesser_->BlockExist(k)) << "object not removed: " << k;
   }

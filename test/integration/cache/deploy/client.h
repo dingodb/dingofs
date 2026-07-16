@@ -243,7 +243,8 @@ class CacheClient {
   // Write a block straight into the backend, bypassing the cache, so tests can
   // exercise the storage-reflow / prefetch paths.
   Status SeedStorage(const BlockHandle& h, const std::string& data) {
-    return accesser_->Put(h.StoreKey(), data);
+    return accesser_->Put(h.StoreKey(), blockaccess::PutPayload::Build(
+                                            {{data.data(), data.size()}}));
   }
 
  private:

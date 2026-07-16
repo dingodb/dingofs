@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-#include "common/blockaccess/fake/fake_accesser.h"
-
 #include <gtest/gtest.h>
 
 #include <future>
+
+#include "common/blockaccess/fake/fake_accesser.h"
 
 namespace dingofs {
 namespace blockaccess {
@@ -45,7 +45,10 @@ TEST_F(FakeAccesserTest, ContainerAlwaysExists) {
 
 TEST_F(FakeAccesserTest, PutAlwaysSucceeds) {
   const char data[] = "payload";
-  EXPECT_TRUE(accesser_.Put("key", data, sizeof(data)).ok());
+  EXPECT_TRUE(
+      accesser_
+          .Put("key", PutPayload::Build({PayloadSegment{data, sizeof(data)}}))
+          .ok());
 }
 
 TEST_F(FakeAccesserTest, GetFillsFixedSizeBuffer) {
@@ -56,9 +59,8 @@ TEST_F(FakeAccesserTest, GetFillsFixedSizeBuffer) {
 
 TEST_F(FakeAccesserTest, RangeReadSucceedsWithoutTouchingKeyOrOffset) {
   std::vector<char> buffer(128, 'x');
-  EXPECT_TRUE(accesser_.Range("key", /*offset=*/64, buffer.size(),
-                              buffer.data())
-                  .ok());
+  EXPECT_TRUE(
+      accesser_.Range("key", /*offset=*/64, buffer.size(), buffer.data()).ok());
 }
 
 TEST_F(FakeAccesserTest, BlockExistAlwaysTrue) {
@@ -75,9 +77,8 @@ TEST_F(FakeAccesserTest, BatchDeleteAlwaysSucceeds) {
 
 TEST_F(FakeAccesserTest, AsyncPutInvokesCallbackWithOkStatus) {
   const char data[] = "payload";
-  auto context = std::make_shared<PutObjectAsyncContext>("key");
-  context->buffer = data;
-  context->buffer_size = sizeof(data);
+  auto context = std::make_shared<PutObjectAsyncContext>(
+      "key", PutPayload::Build({PayloadSegment{data, sizeof(data)}}));
 
   std::promise<Status> promise;
   auto future = promise.get_future();
@@ -119,9 +120,8 @@ TEST_F(FakeAccesserTest, AsyncDeleteInvokesCallbackWithOkStatus) {
 }
 
 TEST_F(FakeAccesserTest, AsyncBatchDeleteInvokesCallbackWithOkStatus) {
-  auto context =
-      std::make_shared<BatchDeleteObjectAsyncContext>(std::list<std::string>{
-          "a", "b"});
+  auto context = std::make_shared<BatchDeleteObjectAsyncContext>(
+      std::list<std::string>{"a", "b"});
 
   std::promise<Status> promise;
   auto future = promise.get_future();

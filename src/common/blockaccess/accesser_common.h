@@ -24,6 +24,7 @@
 #include <string>
 
 #include "common/blockaccess/files/file_common.h"
+#include "common/blockaccess/put_payload.h"
 #include "common/blockaccess/rados/rados_common.h"
 #include "common/blockaccess/s3/s3_common.h"
 #include "common/options/blockaccess.h"
@@ -108,13 +109,13 @@ struct PutObjectAsyncContext {
   // accumulate on every retry. The `key` parameter on AsyncPut/AsyncGet is
   // what backends MUST use; this field exists for caller-side correlation
   // and logging only.
-  explicit PutObjectAsyncContext(std::string k) : origin_key(std::move(k)) {}
+  PutObjectAsyncContext(std::string k, PutPayload p)
+      : origin_key(std::move(k)), payload(std::move(p)) {}
 
   uint64_t start_time{0};
 
   const std::string origin_key;
-  const char* buffer{nullptr};
-  size_t buffer_size{0};
+  const PutPayload payload;
 
   Status status;
 
