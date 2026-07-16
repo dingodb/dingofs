@@ -28,7 +28,6 @@
 #include <memory>
 #include <thread>
 
-#include "cache/common/macro.h"
 #include "cache/local/aio.h"
 #include "cache/local/io_uring.h"
 #include "common/status.h"
@@ -91,17 +90,26 @@ Status AioQueue::Shutdown() {
 }
 
 void AioQueue::Submit(Aio* aio) {
-  DCHECK_RUNNING("AioQueue");
-  CHECK_EQ(0, bthread::execution_queue_execute(prep_io_queue_id_, aio));
+  // The queue can be stopped by a concurrent runtime shutdown (e.g. disk
+  // cache watcher detects the cache directory was removed), so a failed
+  // submission must complete the aio with error instead of aborting.
+  int rc = bthread::execution_queue_execute(prep_io_queue_id_, aio);
+  if (rc != 0) {
+    OnError(aio, Status::CacheDown("aio queue is down"));
+  }
 }
 
 int AioQueue::PrepareIO(void* meta, bthread::TaskIterator<Aio*>& iter) {
+  AioQueue* self = static_cast<AioQueue*>(meta);
   if (iter.is_queue_stopped()) {
+    // Fail the remaining aios so their waiters can be woken up.
+    for (; iter; iter++) {
+      self->OnError(*iter, Status::CacheDown("aio queue is down"));
+    }
     return 0;
   }
 
   int n = 0;
-  AioQueue* self = static_cast<AioQueue*>(meta);
   auto* prepared_aios = self->prepared_aios_;
   auto* io_uring = self->io_uring_.get();
   for (; iter; iter++) {
@@ -112,6 +120,7 @@ int AioQueue::PrepareIO(void* meta, bthread::TaskIterator<Aio*>& iter) {
       continue;
     }
 
+    self->num_inflights_.fetch_add(1, std::memory_order_relaxed);
     prepared_aios[n++] = aio;
     if (n == kSubmitBatchSize) {
       self->BatchSubmitIO(prepared_aios, n);
@@ -129,6 +138,7 @@ void AioQueue::BatchSubmitIO(Aio* aios[], int n) {
   Status status = io_uring_->SubmitIO();
   if (!status.ok()) {
     for (int i = 0; i < n; i++) {
+      num_inflights_.fetch_sub(1, std::memory_order_relaxed);
       OnError(aios[i], status);
     }
     return;
@@ -138,7 +148,10 @@ void AioQueue::BatchSubmitIO(Aio* aios[], int n) {
 void AioQueue::BackgroundWait() {
   Aio* completed_aios[FLAGS_iodepth * 2];
 
-  while (running_.load(std::memory_order_relaxed)) {
+  // Keep reaping until all inflight aios are completed, otherwise their
+  // waiters will be blocked forever on shutdown.
+  while (running_.load(std::memory_order_relaxed) ||
+         num_inflights_.load(std::memory_order_relaxed) > 0) {
     int n = io_uring_->WaitIO(1000, completed_aios);
     if (n == 0) {
       continue;
@@ -159,6 +172,7 @@ void AioQueue::OnError(Aio* aio, Status status) {
 }
 
 void AioQueue::OnComplete(Aio* aio) {
+  num_inflights_.fetch_sub(1, std::memory_order_relaxed);
   if (!aio->Result().status.ok()) {
     LOG(ERROR) << "Fail to run " << *aio;
   }

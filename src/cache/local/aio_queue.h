@@ -57,7 +57,8 @@ class AioQueue {
   IOUringUPtr io_uring_;
   bthread::ExecutionQueueId<Aio*> prep_io_queue_id_;  // for prepare io
   Aio* prepared_aios_[kSubmitBatchSize];
-  std::thread bg_wait_thread_;  // for wait io
+  std::atomic<int64_t> num_inflights_{0};  // aios submitted to io_uring
+  std::thread bg_wait_thread_;             // for wait io
 };
 
 using AioQueueUPtr = std::unique_ptr<AioQueue>;
