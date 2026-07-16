@@ -151,7 +151,7 @@ class MdsDirectClient {
                const std::string& mount_point) {
     fs_name_ = fs_name;
 
-    RPC rpc(mds_addrs);
+    RPC rpc(mds_addrs, "bench");
     auto status = rpc.Init();
     if (!status.ok()) {
       return Status::Internal("rpc init fail");

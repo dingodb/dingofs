@@ -64,7 +64,7 @@ class Logger {
   static bool GetStoppingWhenDiskFull();
   static void SetStoppingWhenDiskFull(bool is_stop);
 
-  static void ChangeGlogLevel(const std::string& level);
+  // static void ChangeGlogLevel(const std::string& level);
   static void ChangeGlogLevel(enum LogLevel level, uint32_t verbose);
 
   static void FlushLogs();
