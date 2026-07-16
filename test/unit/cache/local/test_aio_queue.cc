@@ -31,6 +31,7 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "cache/local/aio.h"
@@ -162,6 +163,58 @@ TEST_F(AioQueueTest, SubmitFailsOnBadFd) {
 
   free(buf);
   EXPECT_TRUE(queue.Shutdown().ok());
+}
+
+// Regression: submitting to a stopped queue used to CHECK-crash the process
+// when requests raced with a runtime shutdown (e.g. cache directory removed
+// while running, disk cache watcher shuts the store down).
+TEST_F(AioQueueTest, SubmitAfterShutdownCompletesWithError) {
+  AioQueue queue({});
+  ASSERT_TRUE(queue.Start().ok());
+  ASSERT_TRUE(queue.Shutdown().ok());
+
+  char* buf = AlignedBuffer(4096, 'X');
+  Aio aio(0, 0, 4096, buf, -1, true);
+  queue.Submit(&aio);
+  aio.Wait();
+  EXPECT_TRUE(aio.Result().status.IsCacheDown());
+  free(buf);
+}
+
+TEST_F(AioQueueTest, ConcurrentSubmitDuringShutdown) {
+  AioQueue queue({});
+  ASSERT_TRUE(queue.Start().ok());
+
+  std::string path = CreateFile("race.dat", 4096);
+  int fd = OpenDirect(path, O_RDWR);
+  ASSERT_GE(fd, 0);
+
+  // Each submitter keeps writing until the shutdown fails its aio; every
+  // Wait() must return (no crash, no hang) with either ok or CacheDown.
+  std::vector<std::thread> threads;
+  threads.reserve(4);
+  for (int t = 0; t < 4; ++t) {
+    threads.emplace_back([&queue, fd]() {
+      char* buf = AlignedBuffer(4096, 'A');
+      while (true) {
+        Aio aio(fd, 0, 4096, buf, -1, false);
+        queue.Submit(&aio);
+        aio.Wait();
+        if (!aio.Result().status.ok()) {
+          EXPECT_TRUE(aio.Result().status.IsCacheDown());
+          break;
+        }
+      }
+      free(buf);
+    });
+  }
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(20));
+  EXPECT_TRUE(queue.Shutdown().ok());
+  for (auto& t : threads) {
+    t.join();
+  }
+  close(fd);
 }
 
 // Performance: time writing and reading a 4MB file through the AioQueue in

@@ -138,6 +138,33 @@ TEST(InflightTrackerTest, ConcurrentAddRemove) {
   EXPECT_EQ(success_count.load(), 200);
 }
 
+TEST(InflightTrackerTest, WaitAllDone) {
+  InflightTracker tracker(10);
+
+  // Returns immediately when nothing is inflight
+  tracker.WaitAllDone();
+
+  EXPECT_TRUE(tracker.Add("task1").ok());
+  EXPECT_TRUE(tracker.Add("task2").ok());
+
+  std::atomic<bool> done{false};
+  std::thread waiter([&tracker, &done]() {
+    tracker.WaitAllDone();
+    done = true;
+  });
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(50));
+  EXPECT_FALSE(done.load());
+
+  tracker.Remove("task1");
+  std::this_thread::sleep_for(std::chrono::milliseconds(50));
+  EXPECT_FALSE(done.load());  // still one inflight
+
+  tracker.Remove("task2");
+  waiter.join();
+  EXPECT_TRUE(done.load());
+}
+
 TEST(InflightTrackerTest, ZeroInflightsNeverAdd) {
   // With 0 max inflights, Add should always block
   // We can't really test this without timeout, skip for now

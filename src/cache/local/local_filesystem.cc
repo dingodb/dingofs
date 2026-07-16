@@ -34,7 +34,6 @@
 #include <memory>
 #include <string>
 
-#include "cache/common/macro.h"
 #include "cache/common/slab_buffer.h"
 #include "cache/iutil/file_util.h"
 #include "cache/iutil/inflight_tracker.h"
@@ -152,12 +151,17 @@ Status LocalFileSystem::Start() {
 }
 
 Status LocalFileSystem::Shutdown() {
-  if (!running_.load(std::memory_order_relaxed)) {
+  // Reject new requests first, then drain the inflight aios before stopping
+  // the aio queue, otherwise inflight requests will submit to a stopped
+  // queue.
+  if (running_.exchange(false, std::memory_order_relaxed) == false) {
     LOG(WARNING) << "LocalFileSystem already shutdown";
     return Status::OK();
   }
 
   LOG(INFO) << "LocalFileSystem is shutting down...";
+
+  inflight_.WaitAllDone();
 
   health_checker_->Shutdown();
 
@@ -167,14 +171,17 @@ Status LocalFileSystem::Shutdown() {
     return status;
   }
 
-  running_.store(false, std::memory_order_relaxed);
   LOG(INFO) << "LocalFilesystem is down";
   return Status::OK();
 }
 
 Status LocalFileSystem::WriteFile(const std::string& path,
                                   const IOBuffer* buffer) {
-  DCHECK_RUNNING("LocalFilesystem");
+  // Runtime shutdown is a legal event (e.g. triggered by disk cache
+  // watcher), so requests arrived after it should be rejected with error.
+  if (!running_.load(std::memory_order_relaxed)) {
+    return Status::CacheDown("local filesystem is down");
+  }
 
   if (!health_checker_->IsHealthy()) {
     return Status::CacheUnhealthy("disk is unhealthy");
@@ -253,7 +260,9 @@ Status LocalFileSystem::WriteFile(const std::string& path,
 
 Status LocalFileSystem::ReadFile(const std::string& path, off_t offset,
                                  size_t length, IOBuffer* buffer) {
-  CHECK_RUNNING("LocalFilesystem");
+  if (!running_.load(std::memory_order_relaxed)) {
+    return Status::CacheDown("local filesystem is down");
+  }
 
   if (!health_checker_->IsHealthy()) {
     return Status::CacheUnhealthy("disk is unhealthy");

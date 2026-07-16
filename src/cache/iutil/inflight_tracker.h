@@ -62,6 +62,13 @@ class InflightTracker {
     cond_.notify_all();
   }
 
+  void WaitAllDone() {
+    std::unique_lock<bthread::Mutex> lock(mutex_);
+    while (inflights_ > 0) {
+      cond_.wait(lock);
+    }
+  }
+
  private:
   uint64_t inflights_{0};
   uint64_t max_inflights_;
