@@ -62,10 +62,7 @@ DEFINE_validator(mds_txn_max_retry_times, brpc::PassValidate);
 DEFINE_uint32(mds_txn_timeout_ms, 8000, "txn timeout ms.");
 DEFINE_validator(mds_txn_timeout_ms, brpc::PassValidate);
 
-DEFINE_bool(mds_store_operation_wait_multi_time, true, "wait multi time before retry.");
-DEFINE_validator(mds_store_operation_wait_multi_time, brpc::PassValidate);
-
-DEFINE_uint32(mds_store_operation_merge_delay_us, 10, "merge operation delay us.");
+DEFINE_uint32(mds_store_operation_merge_delay_us, 40, "merge operation delay us.");
 DEFINE_validator(mds_store_operation_merge_delay_us, brpc::PassValidate);
 
 DEFINE_bool(mds_tiny_file_data_enable, false, "enable tiny file data feature.");
@@ -4183,19 +4180,23 @@ void OperationProcessor::ProcessOperation(Dispatcher& dispatcher) {
     bool waited = false;
     uint32_t try_count = 0;
     do {
+      operations.Dequeue(operation);
       if (operation) {
         stage_operations.push_back(operation);
         operation = nullptr;
 
       } else {
-        if ((!waited || FLAGS_mds_store_operation_wait_multi_time) && FLAGS_mds_store_operation_merge_delay_us > 0) {
+        if (stage_operations.size() == 1) break;
+
+        if (!waited && FLAGS_mds_store_operation_merge_delay_us > 0) {
           waited = true;
           std::this_thread::sleep_for(std::chrono::microseconds(FLAGS_mds_store_operation_merge_delay_us));
         }
+
+        ++try_count;
       }
 
-    } while (stage_operations.size() < FLAGS_mds_store_operation_batch_size &&
-             (operations.Dequeue(operation) || ++try_count < kTryMaxCount));
+    } while (stage_operations.size() < FLAGS_mds_store_operation_batch_size && try_count < kTryMaxCount);
 
     // grouping operations
     Grouping(stage_operations, batch_operation_map);

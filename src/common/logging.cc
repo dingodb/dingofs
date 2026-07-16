@@ -23,21 +23,6 @@
 
 namespace dingofs {
 
-DEFINE_string(log_level, "INFO", "log level");
-DEFINE_validator(log_level, [](const char* /*name*/, const std::string& value) {
-  Logger::ChangeGlogLevel(value);
-  return true;
-});
-
-DEFINE_int32(log_v, 0, "log level");
-DEFINE_validator(log_v, [](const char* /*name*/, int32_t value) {
-  FLAGS_v = value;
-  return true;
-});
-
-static uint32_t kLogBufSecs = 10;
-static uint32_t kMaxLogSize = 256;  // in MB
-
 static bool IsEqualIgnoreCase(const std::string& str1,
                               const std::string& str2) {
   if (str1.size() != str2.size()) {
@@ -65,6 +50,24 @@ static LogLevel ToLogLevel(const std::string& log_level) {
   }
 }
 
+// when log_level is ERROR|WARNING, log_v is not work
+// when log_level is INFO or DEBUG, log_v is work
+
+DEFINE_string(log_level, "INFO", "log level");
+DEFINE_validator(log_level, [](const char* /*name*/, const std::string& value) {
+  Logger::ChangeGlogLevel(ToLogLevel(value), FLAGS_log_v);
+  return true;
+});
+
+DEFINE_int32(log_v, 0, "log level");
+DEFINE_validator(log_v, [](const char* /*name*/, int32_t value) {
+  FLAGS_v = value;
+  return true;
+});
+
+static uint32_t kLogBufSecs = 10;
+static uint32_t kMaxLogSize = 256;  // in MB
+
 void Logger::Init(const std::string& role) {
   ::FLAGS_log_dir = dingofs::Helper::ExpandPath(
       ::FLAGS_log_dir.empty() ? GetDefaultDir(kLogDir) : ::FLAGS_log_dir);
@@ -82,7 +85,7 @@ void Logger::Init(const std::string& role) {
   FLAGS_logtostdout = false;
   FLAGS_logtostderr = false;
 
-  ChangeGlogLevel(FLAGS_log_level);
+  ChangeGlogLevel(ToLogLevel(FLAGS_log_level), FLAGS_log_v);
 
   const std::string program_name = fmt::format("./{}", role);
   google::InitGoogleLogging(program_name.c_str());
@@ -128,18 +131,12 @@ void Logger::SetStoppingWhenDiskFull(bool is_stop) {
   FLAGS_stop_logging_if_full_disk = is_stop;
 }
 
-void Logger::ChangeGlogLevel(const std::string& level) {
-  const enum LogLevel& log_level = ToLogLevel(level);
-  if (log_level == LogLevel::kDEBUG) {
-    Logger::SetMinLogLevel(0);
-  } else {
-    Logger::SetMinLogLevel(static_cast<int>(log_level) - 1);
-  }
-}
-
 void Logger::ChangeGlogLevel(enum LogLevel level, uint32_t verbose) {
   if (level == LogLevel::kDEBUG) {
     Logger::SetMinLogLevel(0);
+    verbose = std::max(static_cast<uint32_t>(DINGO_DEBUG), verbose);
+    if (FLAGS_log_v != verbose) FLAGS_log_v = verbose;
+
   } else {
     Logger::SetMinLogLevel(static_cast<int>(level) - 1);
   }

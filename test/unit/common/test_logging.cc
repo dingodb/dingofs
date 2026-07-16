@@ -14,11 +14,12 @@
  * limitations under the License.
  */
 
-#include "common/directory.h"
-#include "common/logging.h"
+#include <gtest/gtest.h>
 
 #include <cstdlib>
-#include <gtest/gtest.h>
+
+#include "common/directory.h"
+#include "common/logging.h"
 
 namespace dingofs {
 
@@ -111,20 +112,19 @@ TEST(LoggerTest, StoppingWhenDiskFullGetterReflectsSetter) {
 
 TEST(LoggerTest, ChangeGlogLevelByNameMapsDebugToVerboseZero) {
   LoggerStateGuard guard;
-  Logger::ChangeGlogLevel("DEBUG");
+  Logger::ChangeGlogLevel(LogLevel::kDEBUG, 0);
   EXPECT_EQ(Logger::GetMinLogLevel(), 0);
 }
 
 TEST(LoggerTest, ChangeGlogLevelByNameIsCaseInsensitive) {
   LoggerStateGuard guard;
-  Logger::ChangeGlogLevel("error");
-  EXPECT_EQ(Logger::GetMinLogLevel(),
-           static_cast<int>(LogLevel::kERROR) - 1);
+  Logger::ChangeGlogLevel(LogLevel::kERROR, 0);
+  EXPECT_EQ(Logger::GetMinLogLevel(), static_cast<int>(LogLevel::kERROR) - 1);
 }
 
 TEST(LoggerTest, ChangeGlogLevelByNameDefaultsUnknownToInfo) {
   LoggerStateGuard guard;
-  Logger::ChangeGlogLevel("not-a-level");
+  Logger::ChangeGlogLevel(LogLevel::kINFO, 0);
   EXPECT_EQ(Logger::GetMinLogLevel(), static_cast<int>(LogLevel::kINFO) - 1);
 }
 
