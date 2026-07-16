@@ -289,6 +289,13 @@ Status DiskCache::Load(BlockHandle handle, off_t offset, size_t length,
 
   auto cache_path = GetCachePath(handle);
   status = localfs_->ReadFile(cache_path, offset, length, buffer);
+  if (status.IsNotFound()) {
+    // A staging block may lose its cache hardlink (e.g. link failed in
+    // Stage()); the stage file is then the only copy, fall back to it so
+    // the block stays readable and uploadable instead of leaking forever.
+    status = localfs_->ReadFile(GetStagePath(handle), offset, length, buffer);
+  }
+
   if (status.IsNotFound()) {  // Delete block which meybe deleted by accident.
     LOG(WARNING) << "Cache block file not found, delete the corresponding "
                     "key from lru, path=`"
