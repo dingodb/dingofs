@@ -44,10 +44,7 @@ class BlockAccesser {
 
   virtual bool ContainerExist() = 0;
 
-  virtual Status Put(const std::string& key, const std::string& data) = 0;
-
-  virtual Status Put(const std::string& key, const char* buffer,
-                     size_t length) = 0;
+  virtual Status Put(const std::string& key, const PutPayload& payload) = 0;
 
   // `key` is the storage key for this Put. It is passed as a separate
   // parameter (not via `context->origin_key`) so that wrappers (e.g.
@@ -109,10 +106,7 @@ class BlockAccesserImpl : public BlockAccesser {
 
   bool ContainerExist() override;
 
-  Status Put(const std::string& key, const std::string& data) override;
-
-  Status Put(const std::string& key, const char* buffer,
-             size_t length) override;
+  Status Put(const std::string& key, const PutPayload& payload) override;
 
   void AsyncPut(const std::string& key,
                 std::shared_ptr<PutObjectAsyncContext> context) override;

@@ -55,23 +55,21 @@ bool FakeAccesser::Destroy() {
 
 bool FakeAccesser::ContainerExist() { return true; }
 
-Status FakeAccesser::Put(const std::string& key, const char* buffer,
-                         size_t length) {
+Status FakeAccesser::Put(const std::string& key, const PutPayload& payload) {
   (void)key;
-  (void)buffer;
-  (void)length;
+  (void)payload;
   return Status::OK();
 }
 
 void FakeAccesser::DoAsyncPut(const std::string& key,
                               PutObjectAsyncContextSPtr context) {
-  context->status = Put(key, context->buffer, context->buffer_size);
+  context->status = Put(key, context->payload);
   context->cb(context);
 }
 
 void FakeAccesser::AsyncPut(const std::string& key,
                             PutObjectAsyncContextSPtr context) {
-  std::thread([&, key, context]() { DoAsyncPut(key, context); }).detach();
+  std::thread([this, key, context]() { DoAsyncPut(key, context); }).detach();
 }
 
 Status FakeAccesser::Get(const std::string& key, std::string* data) {
@@ -109,7 +107,7 @@ void FakeAccesser::DoAsyncGet(const std::string& key,
 
 void FakeAccesser::AsyncGet(const std::string& key,
                             GetObjectAsyncContextSPtr context) {
-  std::thread([&, key, context]() { DoAsyncGet(key, context); }).detach();
+  std::thread([this, key, context]() { DoAsyncGet(key, context); }).detach();
 }
 
 bool FakeAccesser::BlockExist(const std::string& key) {

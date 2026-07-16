@@ -57,6 +57,18 @@ static int64_t GetQueueSize(void* meta) {
   return queue->Size();
 }
 
+static blockaccess::PutPayload ToPutPayload(const IOBuffer& buffer) {
+  // butil::IOBuf does not expose zero-length backing blocks, so every fetched
+  // iovec satisfies PutPayload's non-empty segment invariant.
+  auto iovs = buffer.Fetch();
+  std::vector<blockaccess::PayloadSegment> segments;
+  segments.reserve(iovs.size());
+  for (const auto& iov : iovs) {
+    segments.push_back({static_cast<const char*>(iov.iov_base), iov.iov_len});
+  }
+  return blockaccess::PutPayload::Build(std::move(segments));
+}
+
 PutBlockTask::PutBlockTask(BlockHandle handle, const IOBuffer& block,
                            blockaccess::BlockAccesser* block_accesser,
                            iutil::TaskExecutionQueueSPtr retry_queue)
@@ -74,11 +86,9 @@ void PutBlockTask::Run() {
 }
 
 blockaccess::PutObjectAsyncContextSPtr PutBlockTask::OnPrepare() {
-  auto ctx =
-      std::make_shared<blockaccess::PutObjectAsyncContext>(handle_.StoreKey());
+  auto ctx = std::make_shared<blockaccess::PutObjectAsyncContext>(
+      handle_.StoreKey(), ToPutPayload(block_));
   ctx->start_time = butil::gettimeofday_us();
-  ctx->buffer = block_.Fetch1();
-  ctx->buffer_size = block_.Size();
   ctx->retry = 0;
   ctx->cb = [this](const blockaccess::PutObjectAsyncContextSPtr& ctx) {
     OnCallback(ctx);

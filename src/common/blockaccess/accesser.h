@@ -43,8 +43,7 @@ class Accesser {
 
   virtual bool ContainerExist() = 0;
 
-  virtual Status Put(const std::string& key, const char* buffer,
-                     size_t length) = 0;
+  virtual Status Put(const std::string& key, const PutPayload& payload) = 0;
 
   virtual void AsyncPut(const std::string& key,
                         std::shared_ptr<PutObjectAsyncContext> context) = 0;

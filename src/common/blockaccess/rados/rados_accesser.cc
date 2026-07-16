@@ -68,6 +68,14 @@ void DestroyIoctx(rados_ioctx_t ioctx) {
     rados_ioctx_destroy(ioctx);
   }
 }
+
+void AppendPayload(rados_write_op_t op, const PutPayload& payload) {
+  uint64_t offset = 0;
+  for (const auto& segment : payload.Segments()) {
+    rados_write_op_write(op, segment.data, segment.size, offset);
+    offset += segment.size;
+  }
+}
 }  // namespace
 
 bool RadosAccesser::Init() {
@@ -239,13 +247,20 @@ bool RadosAccesser::ContainerExist() {
   }
 }
 
-Status RadosAccesser::Put(const std::string& key, const char* buffer,
-                          size_t length) {
+Status RadosAccesser::Put(const std::string& key, const PutPayload& payload) {
   return ExecuteSyncOp(key, [&](rados_ioctx_t ioctx) {
-    int err = rados_write(ioctx, key.c_str(), buffer, length, 0);
+    rados_write_op_t op = rados_create_write_op();
+    if (op == nullptr) {
+      LOG(ERROR) << "Failed to allocate rados write operation, key: " << key;
+      return Status::OutOfMemory("failed to allocate rados write operation");
+    }
+    auto release = MakeScopedCleanup([&]() { rados_release_write_op(op); });
+    AppendPayload(op, payload);
+    int err = rados_write_op_operate(op, ioctx, key.c_str(), nullptr, 0);
     if (err < 0) {
       LOG(ERROR) << "Failed to write object, key: " << key
-                 << ", length: " << length << ", err: " << strerror(-err);
+                 << ", length: " << payload.Size()
+                 << ", err: " << strerror(-err);
       return Status::IoError("Failed to write object");
     }
     return Status::OK();
@@ -496,8 +511,12 @@ static void AsyncPutCallback(RadosAsyncIOUnit* io_unit, int ret_code) {
 
   auto put_context =
       std::get<std::shared_ptr<PutObjectAsyncContext>>(io_unit->async_context);
-  put_context->status =
-      (ret_code < 0) ? Status::IoError(strerror(-ret_code)) : Status::OK();
+  if (ret_code == -ENOMEM) {
+    put_context->status = Status::OutOfMemory("rados put ran out of memory");
+  } else {
+    put_context->status =
+        (ret_code < 0) ? Status::IoError(strerror(-ret_code)) : Status::OK();
+  }
   put_context->cb(put_context);
 }
 
@@ -508,11 +527,18 @@ void RadosAccesser::AsyncPut(const std::string& key,
 
   // transfer ownership of io_unit to the callback
   ExecuteAsyncOperation(io_unit, [this, key, context](RadosAsyncIOUnit* unit) {
-    int err = rados_aio_write(unit->ioctx, key.c_str(), unit->completion,
-                              context->buffer, context->buffer_size, 0);
+    rados_write_op_t op = rados_create_write_op();
+    if (op == nullptr) {
+      LOG(ERROR) << "Failed to allocate rados write operation, key: " << key;
+      return -ENOMEM;
+    }
+    auto release = MakeScopedCleanup([&]() { rados_release_write_op(op); });
+    AppendPayload(op, context->payload);
+    int err = rados_aio_write_op_operate(op, unit->ioctx, unit->completion,
+                                         key.c_str(), nullptr, 0);
     if (err < 0) {
       LOG(ERROR) << "Fail AsyncPut key: " << key
-                 << ", length: " << context->buffer_size
+                 << ", length: " << context->payload.Size()
                  << ", err: " << strerror(-err);
     }
     return err;

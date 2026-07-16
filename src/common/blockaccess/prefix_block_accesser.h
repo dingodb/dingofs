@@ -57,13 +57,8 @@ class PrefixBlockAccesser : public BlockAccesser {
 
   bool ContainerExist() override { return inner_->ContainerExist(); }
 
-  Status Put(const std::string& key, const std::string& data) override {
-    return inner_->Put(PrefixKey(key), data);
-  }
-
-  Status Put(const std::string& key, const char* buffer,
-             size_t length) override {
-    return inner_->Put(PrefixKey(key), buffer, length);
+  Status Put(const std::string& key, const PutPayload& payload) override {
+    return inner_->Put(PrefixKey(key), payload);
   }
 
   void AsyncPut(const std::string& key,

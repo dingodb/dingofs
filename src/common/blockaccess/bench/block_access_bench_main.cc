@@ -110,6 +110,9 @@ DEFINE_string(rados_key, "", "Rados key");
 DEFINE_uint32(threads, 1, "Number of threads");
 DEFINE_uint32(num_ops, 10000, "Number of operations per thread");
 DEFINE_uint32(block_size, 4194304, "Block size in bytes (default: 4MB)");
+DEFINE_validator(block_size, [](const char* /*name*/, uint32_t value) {
+  return value > 0;
+});
 
 // Performance flags
 DEFINE_bool(bind_to_cpu, false,

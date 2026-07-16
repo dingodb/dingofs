@@ -204,7 +204,13 @@ class S3Output : public Output {
   }
 
   void Flush() override {
-    auto status = block_accessor_->Put(s3_info_.object_name, data_);
+    if (data_.empty()) {
+      std::cerr << "refuse to upload an empty backup object.\n";
+      return;
+    }
+    auto payload =
+        blockaccess::PutPayload::Build({{data_.data(), data_.size()}});
+    auto status = block_accessor_->Put(s3_info_.object_name, payload);
     if (!status.ok()) {
       std::cerr << fmt::format("upload S3 fail, error({}).", status.ToString());
     }

@@ -45,7 +45,7 @@ class AwsCrtS3Client : public AwsS3Client {
   bool BucketExist(const std::string& bucket) override;
 
   int PutObject(const std::string& bucket, const std::string& key,
-                const char* buffer, size_t buffer_size) override;
+                const PutPayload& payload) override;
 
   void AsyncPutObject(const std::string& bucket, const std::string& key,
                       PutObjectAsyncContextSPtr user_ctx) override;

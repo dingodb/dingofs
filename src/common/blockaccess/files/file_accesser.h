@@ -35,8 +35,7 @@ class FileAccesser : public Accesser {
 
   bool ContainerExist() override;
 
-  Status Put(const std::string& key, const char* buffer,
-             size_t length) override;
+  Status Put(const std::string& key, const PutPayload& payload) override;
   void AsyncPut(const std::string& key,
                 PutObjectAsyncContextSPtr context) override;
 

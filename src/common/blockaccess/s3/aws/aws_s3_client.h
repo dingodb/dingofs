@@ -38,7 +38,7 @@ class AwsS3Client {
   virtual bool BucketExist(const std::string& bucket) = 0;
 
   virtual int PutObject(const std::string& bucket, const std::string& key,
-                        const char* buffer, size_t buffer_size) = 0;
+                        const PutPayload& payload) = 0;
 
   virtual void AsyncPutObject(const std::string& bucket, const std::string& key,
                               PutObjectAsyncContextSPtr user_ctx) = 0;

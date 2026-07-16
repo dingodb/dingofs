@@ -120,12 +120,9 @@ bool BlockAccesserImpl::ContainerExist() {
   return ok;
 }
 
-Status BlockAccesserImpl::Put(const std::string& key, const std::string& data) {
-  return Put(key, data.data(), data.size());
-}
-
-Status BlockAccesserImpl::Put(const std::string& key, const char* buffer,
-                              size_t length) {
+Status BlockAccesserImpl::Put(const std::string& key,
+                              const PutPayload& payload) {
+  const size_t length = payload.Size();
   Status s;
   BlockAccessLogGuard log(butil::cpuwide_time_us(), [&]() {
     return fmt::format("put_block ({}, {}) : {}", key, length,
@@ -143,7 +140,7 @@ Status BlockAccesserImpl::Put(const std::string& key, const char* buffer,
     throttle_->Add(false, length);
   }
 
-  s = data_accesser_->Put(key, buffer, length);
+  s = data_accesser_->Put(key, payload);
   return s;
 }
 
@@ -159,31 +156,33 @@ void BlockAccesserImpl::AsyncPut(
   // ctx->origin_key value the caller may have set.
   context->cb = [this, start_us, key, origin = std::move(origin_cb)](
                     const std::shared_ptr<PutObjectAsyncContext>& ctx) {
-    // The inner formatter lambda must capture by VALUE (not [&]) — the
-    // outer closure (which owns `key`) is destroyed by `ctx->cb = origin`
-    // below, but the BlockAccessLogGuard's destructor runs AFTER that,
-    // invoking this formatter. With [&], `key` would dangle.
-    BlockAccessLogGuard log(start_us, [start_us, key, ctx]() {
-      (void)start_us;
-      return fmt::format("async_put_block ({}, {}) : {}", key, ctx->buffer_size,
-                         ctx->status.ToString());
-    });
-    MetricGuard<Status> guard(&ctx->status, &g_block_metric.write_block,
-                              ctx->buffer_size, start_us);
+    // Snapshot this attempt before invoking the caller. The caller may enqueue
+    // a retry immediately, and that retry reuses and rewrites the same context.
+    Status attempt_status = ctx->status;
+    const size_t payload_size = ctx->payload.Size();
+    {
+      BlockAccessLogGuard log(start_us, [key, payload_size, attempt_status]() {
+        return fmt::format("async_put_block ({}, {}) : {}", key, payload_size,
+                           attempt_status.ToString());
+      });
+      MetricGuard<Status> guard(&attempt_status, &g_block_metric.write_block,
+                                payload_size, start_us);
 
-    block_put_async_num << -1;
-    inflight_bytes_throttle_->OnComplete(ctx->buffer_size);
+      block_put_async_num << -1;
+      inflight_bytes_throttle_->OnComplete(payload_size);
+    }
 
     // NOTE: this is necessary because caller reuse context when retry
-    ctx->cb = origin;
-    ctx->cb(ctx);
+    auto callback = origin;
+    ctx->cb = callback;
+    callback(ctx);
   };
 
   if (throttle_) {
-    throttle_->Add(false, context->buffer_size);
+    throttle_->Add(false, context->payload.Size());
   }
 
-  inflight_bytes_throttle_->OnStart(context->buffer_size);
+  inflight_bytes_throttle_->OnStart(context->payload.Size());
 
   data_accesser_->AsyncPut(key, context);
 }
@@ -217,20 +216,26 @@ void BlockAccesserImpl::AsyncGet(
 
   context->cb = [this, start_us, key, origin = std::move(origin_cb)](
                     const std::shared_ptr<GetObjectAsyncContext>& ctx) {
-    // Inner formatter must capture by VALUE — see AsyncPut comment above.
-    BlockAccessLogGuard log(start_us, [key, ctx]() {
-      return fmt::format("async_get_block ({}, {}, {}) : {}", key, ctx->offset,
-                         ctx->len, ctx->status.ToString());
-    });
-    MetricGuard<Status> guard(&ctx->status, &g_block_metric.read_block,
-                              ctx->len, start_us);
+    Status attempt_status = ctx->status;
+    const off_t offset = ctx->offset;
+    const size_t length = ctx->len;
+    {
+      BlockAccessLogGuard log(
+          start_us, [key, offset, length, attempt_status]() {
+            return fmt::format("async_get_block ({}, {}, {}) : {}", key, offset,
+                               length, attempt_status.ToString());
+          });
+      MetricGuard<Status> guard(&attempt_status, &g_block_metric.read_block,
+                                length, start_us);
 
-    block_get_async_num << -1;
-    inflight_bytes_throttle_->OnComplete(ctx->len);
+      block_get_async_num << -1;
+      inflight_bytes_throttle_->OnComplete(length);
+    }
 
     // NOTE: this is necessary because caller reuse context when retry
-    ctx->cb = origin;
-    ctx->cb(ctx);
+    auto callback = origin;
+    ctx->cb = callback;
+    callback(ctx);
   };
 
   if (throttle_) {
@@ -295,16 +300,20 @@ void BlockAccesserImpl::AsyncDelete(
   auto origin_cb = std::move(context->cb);
   context->cb = [start_us, key, origin = std::move(origin_cb)](
                     const std::shared_ptr<DeleteObjectAsyncContext>& ctx) {
-    BlockAccessLogGuard log(start_us, [key, ctx]() {
-      return fmt::format("async_delete_block ({}) : {}", key,
-                         ctx->status.ToString());
-    });
+    Status attempt_status = ctx->status;
+    {
+      BlockAccessLogGuard log(start_us, [key, attempt_status]() {
+        return fmt::format("async_delete_block ({}) : {}", key,
+                           attempt_status.ToString());
+      });
 
-    block_delete_async_num << -1;
+      block_delete_async_num << -1;
+    }
 
     // NOTE: restore origin cb because caller may reuse context on retry.
-    ctx->cb = origin;
-    ctx->cb(ctx);
+    auto callback = origin;
+    ctx->cb = callback;
+    callback(ctx);
   };
 
   data_accesser_->AsyncDelete(key, context);
@@ -331,16 +340,20 @@ void BlockAccesserImpl::AsyncBatchDelete(
   auto origin_cb = std::move(context->cb);
   context->cb = [start_us, count, origin = std::move(origin_cb)](
                     const std::shared_ptr<BatchDeleteObjectAsyncContext>& ctx) {
-    BlockAccessLogGuard log(start_us, [count, ctx]() {
-      return fmt::format("async_delete_objects ({}) : {}", count,
-                         ctx->status.ToString());
-    });
+    Status attempt_status = ctx->status;
+    {
+      BlockAccessLogGuard log(start_us, [count, attempt_status]() {
+        return fmt::format("async_delete_objects ({}) : {}", count,
+                           attempt_status.ToString());
+      });
 
-    block_batch_delete_async_num << -1;
+      block_batch_delete_async_num << -1;
+    }
 
     // NOTE: restore origin cb because caller may reuse context on retry.
-    ctx->cb = origin;
-    ctx->cb(ctx);
+    auto callback = origin;
+    ctx->cb = callback;
+    callback(ctx);
   };
 
   data_accesser_->AsyncBatchDelete(keys, context);

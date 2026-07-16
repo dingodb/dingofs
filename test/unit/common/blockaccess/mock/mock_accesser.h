@@ -51,11 +51,7 @@ class MockBlockAccesser : public BlockAccesser {
 
   MOCK_METHOD(bool, ContainerExist, (), (override));
 
-  MOCK_METHOD(Status, Put, (const std::string& key, const std::string& data),
-              (override));
-
-  MOCK_METHOD(Status, Put,
-              (const std::string& key, const char* buffer, size_t length),
+  MOCK_METHOD(Status, Put, (const std::string& key, const PutPayload& payload),
               (override));
 
   MOCK_METHOD(void, AsyncPut,

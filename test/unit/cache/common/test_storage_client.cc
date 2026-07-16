@@ -82,6 +82,36 @@ TEST_F(StorageClientTest, PutSuccess) {
   ASSERT_TRUE(client.Shutdown().ok());
 }
 
+TEST_F(StorageClientTest, PutPreservesSegmentedIOBuffer) {
+  StorageClient client(&accesser_);
+  ASSERT_TRUE(client.Start().ok());
+
+  std::string first = "hello ";
+  std::string second = "segments";
+  IOBuffer buffer;
+  buffer.AppendUserData(first.data(), first.size(), [](void*) {});
+  buffer.AppendUserData(second.data(), second.size(), [](void*) {});
+  ASSERT_EQ(buffer.BackingBlockNum(), 2);
+
+  EXPECT_CALL(accesser_, AsyncPut(_, _))
+      .WillOnce(Invoke(
+          [&](const std::string&, std::shared_ptr<PutObjectAsyncContext> ctx) {
+            EXPECT_EQ(ctx->payload.SegmentCount(), 2);
+            EXPECT_EQ(ctx->payload.Size(), first.size() + second.size());
+            EXPECT_EQ(std::string(ctx->payload.Segments()[0].data,
+                                  ctx->payload.Segments()[0].size),
+                      first);
+            EXPECT_EQ(std::string(ctx->payload.Segments()[1].data,
+                                  ctx->payload.Segments()[1].size),
+                      second);
+            ctx->status = Status::OK();
+            ctx->cb(ctx);
+          }));
+
+  EXPECT_TRUE(client.Put(Handle(103), buffer).ok());
+  ASSERT_TRUE(client.Shutdown().ok());
+}
+
 TEST_F(StorageClientTest, PutRetriesThenSucceeds) {
   StorageClient client(&accesser_);
   ASSERT_TRUE(client.Start().ok());
@@ -98,6 +128,27 @@ TEST_F(StorageClientTest, PutRetriesThenSucceeds) {
           }));
 
   EXPECT_TRUE(client.Put(Handle(101), Buf("data")).ok());
+  EXPECT_EQ(calls, 2);
+  ASSERT_TRUE(client.Shutdown().ok());
+}
+
+TEST_F(StorageClientTest, PutRetriesOutOfMemoryThenSucceeds) {
+  StorageClient client(&accesser_);
+  ASSERT_TRUE(client.Start().ok());
+
+  int calls = 0;
+  EXPECT_CALL(accesser_, AsyncPut(_, _))
+      .Times(2)
+      .WillRepeatedly(Invoke([&calls](
+                                 const std::string&,
+                                 std::shared_ptr<PutObjectAsyncContext> ctx) {
+        ctx->status = (++calls == 1)
+                          ? Status::OutOfMemory("transient allocation failure")
+                          : Status::OK();
+        ctx->cb(ctx);
+      }));
+
+  EXPECT_TRUE(client.Put(Handle(104), Buf("data")).ok());
   EXPECT_EQ(calls, 2);
   ASSERT_TRUE(client.Shutdown().ok());
 }
@@ -135,12 +186,12 @@ TEST_F(StorageClientTest, PutRetryAfterShutdownReturnsIoError) {
   std::condition_variable cv;
   std::shared_ptr<PutObjectAsyncContext> inflight;
   EXPECT_CALL(accesser_, AsyncPut(_, _))
-      .WillOnce(Invoke([&](const std::string&,
-                           std::shared_ptr<PutObjectAsyncContext> ctx) {
-        std::lock_guard<std::mutex> lk(mu);
-        inflight = ctx;
-        cv.notify_one();
-      }));
+      .WillOnce(Invoke(
+          [&](const std::string&, std::shared_ptr<PutObjectAsyncContext> ctx) {
+            std::lock_guard<std::mutex> lk(mu);
+            inflight = ctx;
+            cv.notify_one();
+          }));
 
   // Put blocks until the task completes, so drive it from a separate thread.
   Status put_status;
@@ -235,12 +286,12 @@ TEST_F(StorageClientTest, RangeRetryAfterShutdownReturnsIoError) {
   std::condition_variable cv;
   std::shared_ptr<GetObjectAsyncContext> inflight;
   EXPECT_CALL(accesser_, AsyncGet(_, _))
-      .WillOnce(Invoke([&](const std::string&,
-                           std::shared_ptr<GetObjectAsyncContext> ctx) {
-        std::lock_guard<std::mutex> lk(mu);
-        inflight = ctx;
-        cv.notify_one();
-      }));
+      .WillOnce(Invoke(
+          [&](const std::string&, std::shared_ptr<GetObjectAsyncContext> ctx) {
+            std::lock_guard<std::mutex> lk(mu);
+            inflight = ctx;
+            cv.notify_one();
+          }));
 
   const size_t length = 5;
   std::string storage(length, '\0');

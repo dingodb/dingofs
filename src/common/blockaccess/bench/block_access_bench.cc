@@ -308,10 +308,11 @@ Status BlockAccessBench::PrefillDataForGet() {
   threads.reserve(num_threads);
   for (uint32_t t = 0; t < num_threads; ++t) {
     threads.emplace_back([this, t, num_ops_per_thread, &completed]() {
+      const auto& buffer = test_data_pool_[t % options_.threads];
+      auto payload = PutPayload::Build({{buffer.data(), options_.block_size}});
       for (uint32_t i = 0; i < num_ops_per_thread; ++i) {
         auto key = keys_[(t * num_ops_per_thread) + i];
-        const auto& buffer = test_data_pool_[t % options_.threads];
-        auto s = accesser_->Put(key, buffer.data(), options_.block_size);
+        auto s = accesser_->Put(key, payload);
         if (!s.ok()) {
           LOG(ERROR) << "Failed to prefill key " << key << ": " << s.ToString();
           return;
@@ -367,28 +368,30 @@ void BlockAccessBench::RunPutBench() {
 
   threads.reserve(num_threads);
   for (uint32_t t = 0; t < num_threads; ++t) {
-    threads.emplace_back([this, t, num_ops_per_thread, &thread_histograms,
-                          &progress]() {
-      // Set CPU affinity if enabled
-      if (options_.bind_to_cpu) {
-        SetThreadAffinity(t);
-      }
-      auto& histogram = thread_histograms[t];
-      // Use thread-local buffer to avoid false sharing
-      const auto& thread_buffer = test_data_pool_[t];
-      for (uint32_t i = 0; i < num_ops_per_thread; ++i) {
-        auto key = keys_[(t * num_ops_per_thread) + i];
-        auto op_start = Timer::now();
-        auto s = accesser_->Put(key, thread_buffer.data(), options_.block_size);
-        auto op_end = Timer::now();
-        double latency_us =
-            std::chrono::duration_cast<std::chrono::microseconds>(op_end -
-                                                                  op_start)
-                .count();
-        histogram.addLatency(static_cast<uint64_t>(latency_us));
-        progress.Increment();
-      }
-    });
+    threads.emplace_back(
+        [this, t, num_ops_per_thread, &thread_histograms, &progress]() {
+          // Set CPU affinity if enabled
+          if (options_.bind_to_cpu) {
+            SetThreadAffinity(t);
+          }
+          auto& histogram = thread_histograms[t];
+          // Use thread-local buffer to avoid false sharing
+          const auto& thread_buffer = test_data_pool_[t];
+          auto payload =
+              PutPayload::Build({{thread_buffer.data(), options_.block_size}});
+          for (uint32_t i = 0; i < num_ops_per_thread; ++i) {
+            auto key = keys_[(t * num_ops_per_thread) + i];
+            auto op_start = Timer::now();
+            auto s = accesser_->Put(key, payload);
+            auto op_end = Timer::now();
+            double latency_us =
+                std::chrono::duration_cast<std::chrono::microseconds>(op_end -
+                                                                      op_start)
+                    .count();
+            histogram.addLatency(static_cast<uint64_t>(latency_us));
+            progress.Increment();
+          }
+        });
   }
 
   for (auto& t : threads) {
@@ -426,10 +429,9 @@ void BlockAccessBench::RunPutBench() {
 }
 
 void BlockAccessBench::RunAsyncPutBench() {
-  std::vector<LatencyHistogram> thread_histograms(options_.threads);
   uint32_t num_threads = options_.threads;
-  uint32_t num_ops_per_thread = options_.num_ops_per_thread;
   uint32_t total_ops = options_.num_ops;
+  std::vector<uint64_t> latencies(total_ops);
 
   FastSemaphore semaphore(num_threads);
   pending_ops_ = total_ops;
@@ -441,32 +443,32 @@ void BlockAccessBench::RunAsyncPutBench() {
   for (uint32_t i = 0; i < total_ops; ++i) {
     semaphore.acquire();
 
-    uint32_t thread_id = i / num_ops_per_thread;
+    uint32_t thread_id = i % num_threads;
     auto key = keys_[i];
 
     // Use thread-local buffer to avoid false sharing
     const auto& thread_buffer = test_data_pool_[thread_id];
 
-    auto context = std::make_shared<PutObjectAsyncContext>(key);
-    context->buffer = thread_buffer.data();
-    context->buffer_size = options_.block_size;
+    auto context = std::make_shared<PutObjectAsyncContext>(
+        key, PutPayload::Build(
+                 {PayloadSegment{thread_buffer.data(), options_.block_size}}));
     context->start_time = std::chrono::duration_cast<std::chrono::microseconds>(
                               Timer::now().time_since_epoch())
                               .count();
 
-    context->cb = [this, thread_id, &thread_histograms, &semaphore, &progress](
+    context->cb = [this, i, &latencies, &semaphore, &progress](
                       const std::shared_ptr<PutObjectAsyncContext>& ctx) {
       auto end = std::chrono::duration_cast<std::chrono::microseconds>(
                      Timer::now().time_since_epoch())
                      .count();
-      thread_histograms[thread_id].addLatency(
-          static_cast<uint64_t>(end - ctx->start_time));
-      pending_ops_--;
+      latencies[i] = static_cast<uint64_t>(end - ctx->start_time);
       semaphore.release();
       progress.Increment();
-      if (pending_ops_ == 0) {
-        cv_.notify_one();
+      {
+        std::lock_guard<std::mutex> lock(mtx_);
+        pending_ops_--;
       }
+      cv_.notify_one();
     };
 
     accesser_->AsyncPut(key, context);
@@ -481,8 +483,8 @@ void BlockAccessBench::RunAsyncPutBench() {
           .count();
 
   LatencyHistogram combined_histogram;
-  for (auto& histo : thread_histograms) {
-    combined_histogram += histo;
+  for (uint64_t latency : latencies) {
+    combined_histogram.addLatency(latency);
   }
 
   double avg_latency = combined_histogram.getAverageMicroSec() / 1000.0;
@@ -585,10 +587,9 @@ void BlockAccessBench::RunGetBench() {
 }
 
 void BlockAccessBench::RunAsyncGetBench() {
-  std::vector<LatencyHistogram> thread_histograms(options_.threads);
   uint32_t num_threads = options_.threads;
-  uint32_t num_ops_per_thread = options_.num_ops_per_thread;
   uint32_t total_ops = options_.num_ops;
+  std::vector<uint64_t> latencies(total_ops);
 
   FastSemaphore semaphore(num_threads);
   pending_ops_ = total_ops;
@@ -597,6 +598,12 @@ void BlockAccessBench::RunAsyncGetBench() {
   for (auto& buf : read_buffers) {
     buf = new char[options_.block_size];
   }
+  std::vector<uint32_t> available_slots;
+  available_slots.reserve(num_threads);
+  for (uint32_t i = 0; i < num_threads; ++i) {
+    available_slots.push_back(i);
+  }
+  std::mutex slot_mutex;
 
   ProgressTracker progress(total_ops, "ASYNC_GET", options_.block_size);
 
@@ -605,31 +612,42 @@ void BlockAccessBench::RunAsyncGetBench() {
   for (uint32_t i = 0; i < total_ops; ++i) {
     semaphore.acquire();
 
-    uint32_t thread_id = i / num_ops_per_thread;
+    uint32_t slot;
+    {
+      std::lock_guard<std::mutex> lock(slot_mutex);
+      CHECK(!available_slots.empty());
+      slot = available_slots.back();
+      available_slots.pop_back();
+    }
     auto key = keys_[i];
 
     auto context = std::make_shared<GetObjectAsyncContext>(key);
     context->offset = 0;
     context->len = options_.block_size;
-    context->buf = read_buffers[thread_id];
+    context->buf = read_buffers[slot];
     context->start_time = std::chrono::duration_cast<std::chrono::microseconds>(
                               Timer::now().time_since_epoch())
                               .count();
 
-    context->cb = [this, thread_id, &thread_histograms, &semaphore, &progress](
-                      const std::shared_ptr<GetObjectAsyncContext>& ctx) {
-      auto end = std::chrono::duration_cast<std::chrono::microseconds>(
-                     Timer::now().time_since_epoch())
-                     .count();
-      thread_histograms[thread_id].addLatency(
-          static_cast<uint64_t>(end - ctx->start_time));
-      pending_ops_--;
-      semaphore.release();
-      progress.Increment();
-      if (pending_ops_ == 0) {
-        cv_.notify_one();
-      }
-    };
+    context->cb =
+        [this, i, slot, &latencies, &available_slots, &slot_mutex, &semaphore,
+         &progress](const std::shared_ptr<GetObjectAsyncContext>& ctx) {
+          auto end = std::chrono::duration_cast<std::chrono::microseconds>(
+                         Timer::now().time_since_epoch())
+                         .count();
+          latencies[i] = static_cast<uint64_t>(end - ctx->start_time);
+          progress.Increment();
+          {
+            std::lock_guard<std::mutex> lock(slot_mutex);
+            available_slots.push_back(slot);
+          }
+          semaphore.release();
+          {
+            std::lock_guard<std::mutex> lock(mtx_);
+            pending_ops_--;
+          }
+          cv_.notify_one();
+        };
 
     accesser_->AsyncGet(key, context);
   }
@@ -647,8 +665,8 @@ void BlockAccessBench::RunAsyncGetBench() {
           .count();
 
   LatencyHistogram combined_histogram;
-  for (auto& histo : thread_histograms) {
-    combined_histogram += histo;
+  for (uint64_t latency : latencies) {
+    combined_histogram.addLatency(latency);
   }
 
   double avg_latency = combined_histogram.getAverageMicroSec() / 1000.0;

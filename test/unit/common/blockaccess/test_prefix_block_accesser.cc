@@ -59,9 +59,8 @@ TEST(PrefixBlockAccesserTest, AsyncPutRetryDoesNotAccumulatePrefix) {
   const std::string logical_key = "blocks/100/100/100_0_4096";
 
   static const char kData[] = "data";
-  auto ctx = std::make_shared<PutObjectAsyncContext>(logical_key);
-  ctx->buffer = kData;
-  ctx->buffer_size = sizeof(kData);
+  auto ctx = std::make_shared<PutObjectAsyncContext>(
+      logical_key, PutPayload::Build({PayloadSegment{kData, sizeof(kData)}}));
   ctx->cb = [](const PutObjectAsyncContextSPtr&) {};
 
   // Simulate first call + 4 retries — caller passes the SAME ctx and
@@ -130,15 +129,18 @@ TEST(PrefixBlockAccesserTest, SyncPutPrefixesKeyOnce) {
   auto mock_inner = std::make_unique<MockBlockAccesser>();
   std::string seen_key;
 
-  EXPECT_CALL(*mock_inner, Put(_, ::testing::A<const char*>(), _))
-      .WillRepeatedly(Invoke([&](const std::string& key, const char*, size_t) {
-        seen_key = key;
-        return Status::OK();
-      }));
+  EXPECT_CALL(*mock_inner, Put(_, ::testing::A<const PutPayload&>()))
+      .WillRepeatedly(
+          Invoke([&](const std::string& key, const PutPayload& payload) {
+            seen_key = key;
+            EXPECT_EQ(payload.Size(), sizeof("hello"));
+            return Status::OK();
+          }));
 
   PrefixBlockAccesser wrapper("fs", std::move(mock_inner));
   static const char kData[] = "hello";
-  ASSERT_TRUE(wrapper.Put("a/b/c", kData, sizeof(kData)).ok());
+  ASSERT_TRUE(
+      wrapper.Put("a/b/c", PutPayload::Build({{kData, sizeof(kData)}})).ok());
   EXPECT_EQ(seen_key, "fs/a/b/c");
 }
 
