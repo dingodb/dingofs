@@ -20,6 +20,9 @@
  * Author: AI
  */
 
+#include <fstream>
+
+#include "cache/local/disk_cache_layout.h"
 #include "common/block/tensor_key.h"
 #include "test/integration/cache/local/fixture.h"
 
@@ -110,6 +113,40 @@ TEST_F(LocalCacheRawTest, EvictionStillServesViaReflow) {
         << "id=" << id;
     EXPECT_EQ(ReadAll(buf), PatternFor(id, 0, kSize)) << "id=" << id;
   }
+}
+
+// An orphan stage file -- one whose cache hardlink is lost (Link() failed in
+// Stage(), or the hardlink was removed after a promote-then-evict) -- must
+// still be uploaded after a reload. The re-upload used to read only the cache
+// path, get NotFound and abort as terminal, leaking the stage file and its
+// cache_blocks/cache_bytes accounting forever; Load now falls back to the
+// stage file.
+TEST_F(LocalCacheRawTest, OrphanStageBlockDrainsOnReload) {
+  constexpr uint32_t kSize = 64 * 1024;
+  auto h = MakeHandle(kFsId, 1, 0, kSize);
+  auto content = PatternFor(1, 0, kSize);
+
+  // Craft the orphan directly under the on-disk layout the loader walks: a
+  // stage file with no cache hardlink.
+  DiskCacheLayout layout(0, RealCacheDir(FLAGS_cache_dir,
+                                         FLAGS_cache_dir_uuid));
+  auto stage_path = layout.GetStagePath(h);
+  std::filesystem::create_directories(
+      std::filesystem::path(stage_path).parent_path());
+  {
+    std::ofstream ofs(stage_path, std::ios::binary);
+    ofs.write(content.data(), content.size());
+  }
+
+  ASSERT_TRUE(client_.Open(storage_dir_).ok());
+
+  // The loader re-registers the orphan and re-enqueues its upload, which must
+  // succeed from the stage file and then remove it.
+  EXPECT_TRUE(WaitUntil([&] { return client_.StorageHas(h); }))
+      << "orphan stage block never uploaded";
+  EXPECT_TRUE(WaitUntil([&] { return !std::filesystem::exists(stage_path); }))
+      << "stage file not removed after upload";
+  EXPECT_EQ(client_.ReadStorageFile(h), content);
 }
 
 // TensorKey-handle blocks also survive a disk-cache reload (distinct StoreKey
