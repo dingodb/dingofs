@@ -68,10 +68,10 @@ DEFINE_validator(mds_store_operation_merge_delay_us, brpc::PassValidate);
 DEFINE_bool(mds_tiny_file_data_enable, false, "enable tiny file data feature.");
 DEFINE_validator(mds_tiny_file_data_enable, brpc::PassValidate);
 
-DEFINE_bool(mds_check_before_create_enable, true, "enable check before create file/dir.");
+DEFINE_bool(mds_check_before_create_enable, false, "enable check before create file/dir.");
 DEFINE_validator(mds_check_before_create_enable, brpc::PassValidate);
 
-DEFINE_uint32(mds_store_operation_dispatcher_num, 4, "number of store operation dispatchers.");
+DEFINE_uint32(mds_store_operation_dispatcher_num, 8, "number of store operation dispatchers.");
 DEFINE_validator(mds_store_operation_dispatcher_num, brpc::PassValidate);
 
 DECLARE_uint32(mds_filesession_live_time_s);
