@@ -450,7 +450,8 @@ uint64_t VFSWrapper::GetMaxNameLength() {
   return max_name_length;
 }
 
-Status VFSWrapper::Lookup(Ino parent, const std::string& name, Attr* attr) {
+Status VFSWrapper::Lookup(const Context& ctx, Ino parent,
+                          const std::string& name, Attr* attr) {
   VLOG(2) << "VFSLookup parent: " << parent << " name: " << name;
 
   auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::Lookup");
@@ -459,10 +460,12 @@ Status VFSWrapper::Lookup(Ino parent, const std::string& name, Attr* attr) {
   AccessLogGuard log(
       [&]() {
         if (s.ok()) {
-          return absl::StrFormat("lookup (%d/%s): %s %s", parent, name,
+          return absl::StrFormat("[%s] lookup (%llu/%s): %s %s",
+                                 ctx.ToShortString(), parent, name,
                                  s.ToString(), StrAttr(attr));
         } else {
-          return absl::StrFormat("lookup (%d/%s): %s", parent, name,
+          return absl::StrFormat("[%s] lookup (%llu/%s): %s",
+                                 ctx.ToShortString(), parent, name,
                                  s.ToString());
         }
       },
@@ -477,24 +480,23 @@ Status VFSWrapper::Lookup(Ino parent, const std::string& name, Attr* attr) {
     return s;
   }
 
-  s = vfs_->Lookup(dingofs::SpanScope::GetContext(span), parent, name, attr);
-  VLOG(2) << "VFSLookup end parent: " << parent << " name: " << name
-          << " status: " << s.ToString();
+  auto span_ctx = dingofs::SpanScope::GetContext(span);
+  s = vfs_->Lookup(span_ctx, parent, name, attr);
   if (!s.ok()) op_metric.FailOp();
 
   return s;
 }
 
-Status VFSWrapper::GetAttr(Ino ino, Attr* attr) {
+Status VFSWrapper::GetAttr(const Context& ctx, Ino ino, Attr* attr) {
   VLOG(2) << "VFSGetAttr ino: " << ino;
 
   auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::GetAttr");
-  auto ctx = dingofs::SpanScope::GetContext(span);
 
   Status s;
   AccessLogGuard log(
       [&]() {
-        return absl::StrFormat("getattr (%d): %s %s", ino, s.ToString(),
+        return absl::StrFormat("[%s] getattr (%llu): %s %s",
+                               ctx.ToShortString(), ino, s.ToString(),
                                StrAttr(attr));
       },
       !dingofs::IsInternalIno(ino));
@@ -503,8 +505,8 @@ Status VFSWrapper::GetAttr(Ino ino, Attr* attr) {
       {&client_op_metric_->opGetAttr, &client_op_metric_->opAll},
       !dingofs::IsInternalIno(ino));
 
-  s = vfs_->GetAttr(ctx, ino, attr);
-  VLOG(2) << "VFSGetAttr end ino: " << ino << " status: " << s.ToString();
+  auto span_ctx = dingofs::SpanScope::GetContext(span);
+  s = vfs_->GetAttr(span_ctx, ino, attr);
   if (!s.ok()) op_metric.FailOp();
 
   if (ino == dingofs::kRootIno) {
@@ -515,55 +517,57 @@ Status VFSWrapper::GetAttr(Ino ino, Attr* attr) {
   return s;
 }
 
-Status VFSWrapper::SetAttr(Ino ino, int set, const Attr& in_attr,
-                           Attr* out_attr) {
+Status VFSWrapper::SetAttr(const Context& ctx, Ino ino, int set,
+                           const Attr& in_attr, Attr* out_attr) {
   VLOG(2) << "VFSSetAttr ino: " << ino << " set: " << set;
 
   auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::SetAttr");
 
   Status s;
   AccessLogGuard log([&]() {
-    return absl::StrFormat("setattr (%d,0x%X): %s %s", ino, set, s.ToString(),
+    return absl::StrFormat("[%s] setattr (%llu,0x%X): %s %s",
+                           ctx.ToShortString(), ino, set, s.ToString(),
                            StrAttr(out_attr));
   });
 
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opSetAttr, &client_op_metric_->opAll});
 
-  s = vfs_->SetAttr(dingofs::SpanScope::GetContext(span), ino, set, in_attr,
-                    out_attr);
-  VLOG(2) << "VFSSetAttr end, status: " << s.ToString();
+  auto span_ctx = dingofs::SpanScope::GetContext(span);
+  s = vfs_->SetAttr(span_ctx, ino, set, in_attr, out_attr);
   if (!s.ok()) op_metric.FailOp();
 
   return s;
 }
 
-Status VFSWrapper::Fallocate(Ino ino, int mode, uint64_t offset,
-                             uint64_t length) {
-  VLOG(2) << fmt::format("VFSFallocate ino: {} mode: {} offset: {} length: {}",
-                         ino, mode, offset, length);
+Status VFSWrapper::Fallocate(const Context& ctx, Ino ino, int mode,
+                             uint64_t offset, uint64_t length) {
+  VLOG(2) << fmt::format(
+      "VFSFallocate ino: {} mode: 0x{:X} offset: {} length: {}", ino, mode,
+      offset, length);
 
   auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::Fallocate");
 
   Status s;
   AccessLogGuard log([&]() {
-    return absl::StrFormat("fallocate (%d, mode=0x%X, off=%lu, len=%lu): %s",
-                           ino, mode, offset, length, s.ToString());
+    return absl::StrFormat(
+        "[%s] fallocate (%llu, mode=0x%X, off=%lu, len=%lu): %s",
+        ctx.ToShortString(), ino, mode, offset, length, s.ToString());
   });
 
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opFallocate, &client_op_metric_->opAll});
 
-  s = vfs_->Fallocate(dingofs::SpanScope::GetContext(span), ino, mode, offset,
-                      length);
-  VLOG(2) << "VFSFallocate end, status: " << s.ToString();
+  auto span_ctx = dingofs::SpanScope::GetContext(span);
+  s = vfs_->Fallocate(span_ctx, ino, mode, offset, length);
   if (!s.ok()) op_metric.FailOp();
 
   return s;
 }
 
-Status VFSWrapper::CopyFileRange(Ino src_ino, uint64_t src_off, uint64_t src_fh,
-                                 Ino dst_ino, uint64_t dst_off, uint64_t dst_fh,
+Status VFSWrapper::CopyFileRange(const Context& ctx, Ino src_ino,
+                                 uint64_t src_off, uint64_t src_fh, Ino dst_ino,
+                                 uint64_t dst_off, uint64_t dst_fh,
                                  uint64_t len, uint32_t flags,
                                  uint64_t* bytes_copied) {
   VLOG(2) << fmt::format(
@@ -571,65 +575,65 @@ Status VFSWrapper::CopyFileRange(Ino src_ino, uint64_t src_off, uint64_t src_fh,
       "dst_off: {} dst_fh: {} len: {} flags: 0x{:x}",
       src_ino, src_off, src_fh, dst_ino, dst_off, dst_fh, len, flags);
 
-  auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::CopyFileRange");
-
   CHECK(bytes_copied != nullptr) << "bytes_copied is nullptr";
+
+  auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::CopyFileRange");
 
   Status s;
   AccessLogGuard log([&]() {
     return absl::StrFormat(
-        "copyfilerange (%lu %lu fh:%lu, %lu %lu fh:%lu, %lu 0x%X): %s %lu",
-        src_ino, src_off, src_fh, dst_ino, dst_off, dst_fh, len, flags,
-        s.ToString(), *bytes_copied);
+        "[%s] copyfilerange (%llu %lu fh:%lu, %llu %lu fh:%lu, %lu 0x%X): %s "
+        "%lu",
+        ctx.ToShortString(), src_ino, src_off, src_fh, dst_ino, dst_off, dst_fh,
+        len, flags, s.ToString(), *bytes_copied);
   });
 
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opCopyFileRange, &client_op_metric_->opAll});
 
-  s = vfs_->CopyFileRange(dingofs::SpanScope::GetContext(span), src_ino,
-                          src_off, src_fh, dst_ino, dst_off, dst_fh, len, flags,
-                          bytes_copied);
-
-  VLOG(2) << "VFSCopyFileRange end, copied: " << *bytes_copied
-          << ", status: " << s.ToString();
+  auto span_ctx = dingofs::SpanScope::GetContext(span);
+  s = vfs_->CopyFileRange(span_ctx, src_ino, src_off, src_fh, dst_ino, dst_off,
+                          dst_fh, len, flags, bytes_copied);
   if (!s.ok()) op_metric.FailOp();
 
   return s;
 }
 
-Status VFSWrapper::ReadLink(Ino ino, std::string* link) {
+Status VFSWrapper::ReadLink(const Context& ctx, Ino ino, std::string* link) {
   VLOG(2) << "VFSReadLink ino: " << ino;
 
   auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::ReadLink");
 
   Status s;
   AccessLogGuard log([&]() {
-    return absl::StrFormat("readlink (%d): %s %s", ino, s.ToString(), *link);
+    return absl::StrFormat("[%s] readlink (%llu): %s %s", ctx.ToShortString(),
+                           ino, s.ToString(), *link);
   });
 
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opReadLink, &client_op_metric_->opAll});
 
-  s = vfs_->ReadLink(dingofs::SpanScope::GetContext(span), ino, link);
-  VLOG(2) << "VFSReadLink end, status: " << s.ToString() << " link: " << *link;
+  auto span_ctx = dingofs::SpanScope::GetContext(span);
+  s = vfs_->ReadLink(span_ctx, ino, link);
   if (!s.ok()) op_metric.FailOp();
 
   return s;
 }
 
-Status VFSWrapper::MkNod(Ino parent, const std::string& name, uint32_t uid,
-                         uint32_t gid, uint32_t mode, uint64_t dev,
+Status VFSWrapper::MkNod(const Context& ctx, Ino parent,
+                         const std::string& name, uint32_t mode, uint64_t dev,
                          Attr* attr) {
   VLOG(2) << "VFSMknod parent: " << parent << " name: " << name
-          << " uid: " << uid << " gid: " << gid << " mode: " << mode
+          << " uid: " << ctx.uid << " gid: " << ctx.gid << " mode: " << mode
           << " dev: " << dev;
 
   auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::MkNod");
 
   Status s;
   AccessLogGuard log([&]() {
-    return absl::StrFormat("mknod (%d,%s,%s:0%04o): %s %s", parent, name,
-                           StrMode(mode), mode, s.ToString(), StrAttr(attr));
+    return absl::StrFormat("[%s] mknod (%llu,%s,%s:0%04o): %s %s",
+                           ctx.ToShortString(), parent, name, StrMode(mode),
+                           mode, s.ToString(), StrAttr(attr));
   });
 
   ClientOpMetricGuard op_metric(
@@ -640,22 +644,24 @@ Status VFSWrapper::MkNod(Ino parent, const std::string& name, uint32_t uid,
     return s;
   }
 
-  s = vfs_->MkNod(dingofs::SpanScope::GetContext(span), parent, name, uid, gid,
-                  mode, dev, attr);
+  auto span_ctx = dingofs::SpanScope::GetContext(span);
+  s = vfs_->MkNod(span_ctx, parent, name, ctx.uid, ctx.gid, mode, dev, attr);
   VLOG(2) << "VFSMknod end, status: " << s.ToString();
   if (!s.ok()) op_metric.FailOp();
 
   return s;
 }
 
-Status VFSWrapper::Unlink(Ino parent, const std::string& name, uint32_t uid) {
+Status VFSWrapper::Unlink(const Context& ctx, Ino parent,
+                          const std::string& name) {
   VLOG(2) << "VFSUnlink parent: " << parent << " name: " << name;
 
   auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::Unlink");
 
   Status s;
   AccessLogGuard log([&]() {
-    return absl::StrFormat("unlink (%d,%s): %s", parent, name, s.ToString());
+    return absl::StrFormat("[%s] unlink (%llu,%s): %s", ctx.ToShortString(),
+                           parent, name, s.ToString());
   });
 
   ClientOpMetricGuard op_metric(
@@ -666,25 +672,27 @@ Status VFSWrapper::Unlink(Ino parent, const std::string& name, uint32_t uid) {
     return s;
   }
 
-  auto ctx = dingofs::SpanScope::GetContext(span);
-  if (ctx) ctx->uid = uid;
-  s = vfs_->Unlink(ctx, parent, name);
-  VLOG(2) << "VFSUnlink end, status: " << s.ToString();
+  auto span_ctx = dingofs::SpanScope::GetContext(span);
+  if (span_ctx) span_ctx->uid = ctx.uid;
+
+  s = vfs_->Unlink(span_ctx, parent, name);
   if (!s.ok()) op_metric.FailOp();
 
   return s;
 }
 
-Status VFSWrapper::Symlink(Ino parent, const std::string& name, uint32_t uid,
-                           uint32_t gid, const std::string& link, Attr* attr) {
+Status VFSWrapper::Symlink(const Context& ctx, Ino parent,
+                           const std::string& name, const std::string& link,
+                           Attr* attr) {
   VLOG(2) << "VFSSymlink parent: " << parent << " name: " << name
-          << " uid: " << uid << " gid: " << gid << " link: " << link;
+          << " uid: " << ctx.uid << " gid: " << ctx.gid << " link: " << link;
 
   auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::Symlink");
 
   Status s;
   AccessLogGuard log([&]() {
-    return absl::StrFormat("symlink (%d,%s,%s): %s %s", parent, name, link,
+    return absl::StrFormat("[%s] symlink (%llu,%s,%s): %s %s",
+                           ctx.ToShortString(), parent, name, link,
                            s.ToString(), Attr2Str(*attr));
   });
 
@@ -696,17 +704,16 @@ Status VFSWrapper::Symlink(Ino parent, const std::string& name, uint32_t uid,
     return s;
   }
 
-  s = vfs_->Symlink(dingofs::SpanScope::GetContext(span), parent, name, uid,
-                    gid, link, attr);
-  VLOG(2) << "VFSSymlink end, status: " << s.ToString();
+  auto span_ctx = dingofs::SpanScope::GetContext(span);
+  s = vfs_->Symlink(span_ctx, parent, name, ctx.uid, ctx.gid, link, attr);
   if (!s.ok()) op_metric.FailOp();
 
   return s;
 }
 
-Status VFSWrapper::Rename(Ino old_parent, const std::string& old_name,
-                          Ino new_parent, const std::string& new_name,
-                          uint32_t uid) {
+Status VFSWrapper::Rename(const Context& ctx, Ino old_parent,
+                          const std::string& old_name, Ino new_parent,
+                          const std::string& new_name) {
   VLOG(2) << "VFSRename old_parent: " << old_parent << " old_name: " << old_name
           << " new_parent: " << new_parent << " new_name: " << new_name;
 
@@ -714,7 +721,8 @@ Status VFSWrapper::Rename(Ino old_parent, const std::string& old_name,
 
   Status s;
   AccessLogGuard log([&]() {
-    return absl::StrFormat("rename (%d,%s,%d,%s): %s", old_parent, old_name,
+    return absl::StrFormat("[%s] rename (%llu,%s,%llu,%s): %s",
+                           ctx.ToShortString(), old_parent, old_name,
                            new_parent, new_name, s.ToString());
   });
 
@@ -728,17 +736,17 @@ Status VFSWrapper::Rename(Ino old_parent, const std::string& old_name,
     return s;
   }
 
-  auto ctx = dingofs::SpanScope::GetContext(span);
-  if (ctx) ctx->uid = uid;
-  s = vfs_->Rename(ctx, old_parent, old_name, new_parent, new_name);
-  VLOG(2) << "VFSRename end, status: " << s.ToString();
+  auto span_ctx = dingofs::SpanScope::GetContext(span);
+  if (span_ctx) span_ctx->uid = ctx.uid;
+
+  s = vfs_->Rename(span_ctx, old_parent, old_name, new_parent, new_name);
   if (!s.ok()) op_metric.FailOp();
 
   return s;
 }
 
-Status VFSWrapper::Link(Ino ino, Ino new_parent, const std::string& new_name,
-                        Attr* attr) {
+Status VFSWrapper::Link(const Context& ctx, Ino ino, Ino new_parent,
+                        const std::string& new_name, Attr* attr) {
   VLOG(2) << "VFSLink ino: " << ino << " new_parent: " << new_parent
           << " new_name: " << new_name;
 
@@ -746,7 +754,8 @@ Status VFSWrapper::Link(Ino ino, Ino new_parent, const std::string& new_name,
 
   Status s;
   AccessLogGuard log([&]() {
-    return absl::StrFormat("link (%d,%d,%s): %s %s", ino, new_parent, new_name,
+    return absl::StrFormat("[%s] link (%llu,%llu,%s): %s %s",
+                           ctx.ToShortString(), ino, new_parent, new_name,
                            s.ToString(), StrAttr(attr));
   });
 
@@ -762,14 +771,14 @@ Status VFSWrapper::Link(Ino ino, Ino new_parent, const std::string& new_name,
     return s;
   }
 
-  s = vfs_->Link(dingofs::SpanScope::GetContext(span), ino, new_parent,
-                 new_name, attr);
+  auto span_ctx = dingofs::SpanScope::GetContext(span);
+  s = vfs_->Link(span_ctx, ino, new_parent, new_name, attr);
   if (!s.ok()) op_metric.FailOp();
 
   return s;
 }
 
-Status VFSWrapper::Open(Ino ino, int flags, uint64_t* fh) {
+Status VFSWrapper::Open(const Context& ctx, Ino ino, int flags, uint64_t* fh) {
   VLOG(2) << "VFSOpen ino: " << ino << " octal flags: " << std::oct << flags;
 
   auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::Open");
@@ -777,7 +786,8 @@ Status VFSWrapper::Open(Ino ino, int flags, uint64_t* fh) {
   Status s;
   AccessLogGuard log(
       [&]() {
-        return absl::StrFormat("open (%d): %d %s %s [fh:%d]", ino, flags,
+        return absl::StrFormat("[%s] open (%llu): %d %s %s [fh:%d]",
+                               ctx.ToShortString(), ino, flags,
                                Helper::DescOpenFlags(flags), s.ToString(), *fh);
       },
       !dingofs::IsInternalIno(ino));
@@ -786,26 +796,27 @@ Status VFSWrapper::Open(Ino ino, int flags, uint64_t* fh) {
       {&client_op_metric_->opOpen, &client_op_metric_->opAll},
       !dingofs::IsInternalIno(ino));
 
-  s = vfs_->Open(dingofs::SpanScope::GetContext(span), ino, flags, fh);
-  VLOG(2) << "VFSOpen end, status: " << s.ToString() << " fh: " << *fh;
+  auto span_ctx = dingofs::SpanScope::GetContext(span);
+  s = vfs_->Open(span_ctx, ino, flags, fh);
   if (!s.ok()) op_metric.FailOp();
 
   return s;
 }
 
-Status VFSWrapper::Create(Ino parent, const std::string& name, uint32_t uid,
-                          uint32_t gid, uint32_t mode, int flags, uint64_t* fh,
-                          Attr* attr) {
+Status VFSWrapper::Create(const Context& ctx, Ino parent,
+                          const std::string& name, uint32_t mode, int flags,
+                          uint64_t* fh, Attr* attr) {
   VLOG(2) << "VFSCreate parent: " << parent << " name: " << name
-          << " uid: " << uid << " gid: " << gid << " mode: " << mode
+          << " uid: " << ctx.uid << " gid: " << ctx.gid << " mode: " << mode
           << " octal flags: " << std::oct << flags;
 
   auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::Create");
 
   Status s;
   AccessLogGuard log([&]() {
-    return absl::StrFormat("create (%d,%s): %s %s [fh:%d]", parent, name,
-                           s.ToString(), StrAttr(attr), *fh);
+    return absl::StrFormat("[%s] create (%llu,%s): %s %s [fh:%d]",
+                           ctx.ToShortString(), parent, name, s.ToString(),
+                           StrAttr(attr), *fh);
   });
 
   ClientOpMetricGuard op_metric(
@@ -816,17 +827,17 @@ Status VFSWrapper::Create(Ino parent, const std::string& name, uint32_t uid,
     return s;
   }
 
-  s = vfs_->Create(dingofs::SpanScope::GetContext(span), parent, name, uid, gid,
-                   mode, flags, fh, attr);
-  VLOG(2) << "VFSCreate end, status: " << s.ToString()
-          << " attr: " << Attr2Str(*attr);
+  auto span_ctx = dingofs::SpanScope::GetContext(span);
+  s = vfs_->Create(span_ctx, parent, name, ctx.uid, ctx.gid, mode, flags, fh,
+                   attr);
   if (!s.ok()) op_metric.FailOp();
 
   return s;
 }
 
-Status VFSWrapper::Read(Ino ino, DataBuffer* data_buffer, uint64_t size,
-                        uint64_t offset, uint64_t fh, uint64_t* out_rsize) {
+Status VFSWrapper::Read(const Context& ctx, Ino ino, DataBuffer* data_buffer,
+                        uint64_t size, uint64_t offset, uint64_t fh,
+                        uint64_t* out_rsize) {
   auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::Read");
   std::string session_id = dingofs::SpanScope::GetSessionID(span);
 
@@ -836,8 +847,10 @@ Status VFSWrapper::Read(Ino ino, DataBuffer* data_buffer, uint64_t size,
   Status s;
   AccessLogGuard log(
       [&]() {
-        return absl::StrFormat("read (%d,%d,%d): %s (%d) [fh:%d]", ino, size,
-                               offset, s.ToString(), *out_rsize, fh);
+        return absl::StrFormat(
+            "[%s] read (%llu,%llu,%llu): %s (%llu) [fh:%llu]",
+            ctx.ToShortString(), ino, size, offset, s.ToString(), *out_rsize,
+            fh);
       },
       !dingofs::IsInternalIno(ino));
 
@@ -847,14 +860,8 @@ Status VFSWrapper::Read(Ino ino, DataBuffer* data_buffer, uint64_t size,
   VFSRWMetricGuard guard(&s, &g_rw_metric.read, out_rsize,
                          !dingofs::IsInternalIno(ino));
 
-  s = vfs_->Read(dingofs::SpanScope::GetContext(span), ino, data_buffer, size,
-                 offset, fh, out_rsize);
-
-  VLOG(2) << fmt::format(
-      "[{}] VFSRead end ino: {}, size: {}, offset: {}, fh: {}, "
-      "read_size: {}, status: {}",
-      session_id, ino, size, offset, fh, *out_rsize, s.ToString());
-
+  auto span_ctx = dingofs::SpanScope::GetContext(span);
+  s = vfs_->Read(span_ctx, ino, data_buffer, size, offset, fh, out_rsize);
   if (!s.ok()) op_metric.FailOp();
 
   dingofs::SpanScope::SetStatus(span, s);
@@ -862,8 +869,9 @@ Status VFSWrapper::Read(Ino ino, DataBuffer* data_buffer, uint64_t size,
   return s;
 }
 
-Status VFSWrapper::Write(Ino ino, const char* buf, uint64_t size,
-                         uint64_t offset, uint64_t fh, uint64_t* out_wsize) {
+Status VFSWrapper::Write(const Context& ctx, Ino ino, const char* buf,
+                         uint64_t size, uint64_t offset, uint64_t fh,
+                         uint64_t* out_wsize) {
   VLOG(2) << "VFSWrite ino: " << ino
           << ", buf: " << dingofs::Helper::Char2Addr(buf) << ", size: " << size
           << " offset: " << offset << " fh: " << fh;
@@ -872,8 +880,9 @@ Status VFSWrapper::Write(Ino ino, const char* buf, uint64_t size,
 
   Status s;
   AccessLogGuard log([&]() {
-    return absl::StrFormat("write (%d,%d,%d): %s (%d) [fh:%d]", ino, size,
-                           offset, s.ToString(), *out_wsize, fh);
+    return absl::StrFormat("[%s] write (%llu,%llu,%llu): %s (%llu) [fh:%llu]",
+                           ctx.ToShortString(), ino, size, offset, s.ToString(),
+                           *out_wsize, fh);
   });
 
   ClientOpMetricGuard op_metric(
@@ -881,17 +890,14 @@ Status VFSWrapper::Write(Ino ino, const char* buf, uint64_t size,
 
   VFSRWMetricGuard guard(&s, &g_rw_metric.write, out_wsize);
 
-  s = vfs_->Write(dingofs::SpanScope::GetContext(span), ino, buf, size, offset,
-                  fh, out_wsize);
-  VLOG(2) << "VFSWrite end ino: " << ino << ", size: " << size
-          << " offset: " << offset << " fh: " << fh
-          << ", write_size: " << *out_wsize << ", status: " << s.ToString();
+  auto span_ctx = dingofs::SpanScope::GetContext(span);
+  s = vfs_->Write(span_ctx, ino, buf, size, offset, fh, out_wsize);
   if (!s.ok()) op_metric.FailOp();
 
   return s;
 }
 
-Status VFSWrapper::Flush(Ino ino, uint64_t fh) {
+Status VFSWrapper::Flush(const Context& ctx, Ino ino, uint64_t fh) {
   VLOG(2) << "VFSFlush ino: " << ino << " fh: " << fh;
 
   auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::Flush");
@@ -899,7 +905,8 @@ Status VFSWrapper::Flush(Ino ino, uint64_t fh) {
   Status s;
   AccessLogGuard log(
       [&]() {
-        return absl::StrFormat("flush (%d): %s [fh:%d]", ino, s.ToString(), fh);
+        return absl::StrFormat("[%s] flush (%llu): %s [fh:%llu]",
+                               ctx.ToShortString(), ino, s.ToString(), fh);
       },
       !dingofs::IsInternalIno(ino));
 
@@ -907,14 +914,14 @@ Status VFSWrapper::Flush(Ino ino, uint64_t fh) {
       {&client_op_metric_->opFlush, &client_op_metric_->opAll},
       !dingofs::IsInternalIno(ino));
 
-  s = vfs_->Flush(dingofs::SpanScope::GetContext(span), ino, fh);
-  VLOG(2) << "VFSFlush end, status: " << s.ToString();
+  auto span_ctx = dingofs::SpanScope::GetContext(span);
+  s = vfs_->Flush(span_ctx, ino, fh);
   if (!s.ok()) op_metric.FailOp();
 
   return s;
 }
 
-Status VFSWrapper::Release(Ino ino, uint64_t fh) {
+Status VFSWrapper::Release(const Context& ctx, Ino ino, uint64_t fh) {
   VLOG(2) << "VFSRelease ino: " << ino << " fh: " << fh;
 
   auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::Release");
@@ -922,8 +929,8 @@ Status VFSWrapper::Release(Ino ino, uint64_t fh) {
   Status s;
   AccessLogGuard log(
       [&]() {
-        return absl::StrFormat("release (%d): %s [fh:%d]", ino, s.ToString(),
-                               fh);
+        return absl::StrFormat("[%s] release (%llu): %s [fh:%llu]",
+                               ctx.ToShortString(), ino, s.ToString(), fh);
       },
       !dingofs::IsInternalIno(ino));
 
@@ -931,14 +938,15 @@ Status VFSWrapper::Release(Ino ino, uint64_t fh) {
       {&client_op_metric_->opRelease, &client_op_metric_->opAll},
       !dingofs::IsInternalIno(ino));
 
-  s = vfs_->Release(dingofs::SpanScope::GetContext(span), ino, fh);
-  VLOG(2) << "VFSRelease end, status: " << s.ToString();
+  auto span_ctx = dingofs::SpanScope::GetContext(span);
+  s = vfs_->Release(span_ctx, ino, fh);
   if (!s.ok()) op_metric.FailOp();
 
   return s;
 }
 
-Status VFSWrapper::Fsync(Ino ino, int datasync, uint64_t fh) {
+Status VFSWrapper::Fsync(const Context& ctx, Ino ino, int datasync,
+                         uint64_t fh) {
   VLOG(2) << "VFSFsync ino: " << ino << " datasync: " << datasync
           << " fh: " << fh;
 
@@ -946,22 +954,24 @@ Status VFSWrapper::Fsync(Ino ino, int datasync, uint64_t fh) {
 
   Status s;
   AccessLogGuard log([&]() {
-    return absl::StrFormat("fsync (%d,%d): %s [fh:%d]", ino, datasync,
-                           s.ToString(), fh);
+    return absl::StrFormat("[%s] fsync (%llu,%d): %s [fh:%llu]",
+                           ctx.ToShortString(), ino, datasync, s.ToString(),
+                           fh);
   });
 
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opFsync, &client_op_metric_->opAll});
 
-  s = vfs_->Fsync(dingofs::SpanScope::GetContext(span), ino, datasync, fh);
-  VLOG(2) << "VFSFsync end, status: " << s.ToString();
+  auto span_ctx = dingofs::SpanScope::GetContext(span);
+  s = vfs_->Fsync(span_ctx, ino, datasync, fh);
   if (!s.ok()) op_metric.FailOp();
 
   return s;
 }
 
-Status VFSWrapper::SetXattr(Ino ino, const std::string& name,
-                            const std::string& value, int flags) {
+Status VFSWrapper::SetXattr(const Context& ctx, Ino ino,
+                            const std::string& name, const std::string& value,
+                            int flags) {
   VLOG(2) << "VFSSetXattr ino: " << ino << " name: " << name
           << " value: " << value << " octal flags: " << std::oct << flags;
 
@@ -969,7 +979,8 @@ Status VFSWrapper::SetXattr(Ino ino, const std::string& name,
 
   Status s;
   AccessLogGuard log([&]() {
-    return absl::StrFormat("setxattr (%d,%s): %s", ino, name, s.ToString());
+    return absl::StrFormat("[%s] setxattr (%llu,%s): %s", ctx.ToShortString(),
+                           ino, name, s.ToString());
   });
 
   ClientOpMetricGuard op_metric(
@@ -981,25 +992,25 @@ Status VFSWrapper::SetXattr(Ino ino, const std::string& name,
     return s;
   }
 
-  s = vfs_->SetXattr(dingofs::SpanScope::GetContext(span), ino, name, value,
-                     flags);
-  VLOG(2) << "VFSSetXattr end, status: " << s.ToString();
+  auto span_ctx = dingofs::SpanScope::GetContext(span);
+  s = vfs_->SetXattr(span_ctx, ino, name, value, flags);
+  if (!s.ok()) op_metric.FailOp();
 
   return s;
 }
 
-Status VFSWrapper::GetXattr(Ino ino, const std::string& name,
-                            std::string* value) {
+Status VFSWrapper::GetXattr(const Context& ctx, Ino ino,
+                            const std::string& name, std::string* value) {
   VLOG(2) << "VFSGetXattr ino: " << ino << " name: " << name;
 
   auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::GetXattr");
-  auto ctx = dingofs::SpanScope::GetContext(span);
 
   Status s;
   AccessLogGuard log(
       [&]() {
-        return absl::StrFormat("getxattr (%d,%s): %s %s", ino, name,
-                               s.ToString(), *value);
+        return absl::StrFormat("[%s] getxattr (%llu,%s): %s %s",
+                               ctx.ToShortString(), ino, name, s.ToString(),
+                               *value);
       },
       !dingofs::IsInternalIno(ino));
 
@@ -1012,26 +1023,25 @@ Status VFSWrapper::GetXattr(Ino ino, const std::string& name,
     return s;
   }
 
-  s = vfs_->GetXattr(ctx, ino, name, value);
-  VLOG(2) << "VFSGetXattr end, value: " << *value
-          << ", status: " << s.ToString();
+  auto span_ctx = dingofs::SpanScope::GetContext(span);
+  s = vfs_->GetXattr(span_ctx, ino, name, value);
   if (!s.ok()) op_metric.FailOp();
 
-  if (value->empty()) {
-    s = Status::NoData("no data");
-  }
+  if (value->empty()) s = Status::NoData("no data");
 
   return s;
 }
 
-Status VFSWrapper::RemoveXattr(Ino ino, const std::string& name) {
+Status VFSWrapper::RemoveXattr(const Context& ctx, Ino ino,
+                               const std::string& name) {
   VLOG(2) << "VFSRemoveXattr ino: " << ino << " name: " << name;
 
   auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::RemoveXattr");
 
   Status s;
   AccessLogGuard log([&]() {
-    return absl::StrFormat("removexattr (%d,%s): %s", ino, name, s.ToString());
+    return absl::StrFormat("[%s] removexattr (%llu,%s): %s",
+                           ctx.ToShortString(), ino, name, s.ToString());
   });
 
   ClientOpMetricGuard op_metric(
@@ -1043,46 +1053,47 @@ Status VFSWrapper::RemoveXattr(Ino ino, const std::string& name) {
     return s;
   }
 
-  s = vfs_->RemoveXattr(dingofs::SpanScope::GetContext(span), ino, name);
-  VLOG(2) << "VFSRemoveXattr end, status: " << s.ToString();
+  auto span_ctx = dingofs::SpanScope::GetContext(span);
+  s = vfs_->RemoveXattr(span_ctx, ino, name);
+  if (!s.ok()) op_metric.FailOp();
 
   return s;
 }
 
-Status VFSWrapper::ListXattr(Ino ino, std::vector<std::string>* xattrs) {
+Status VFSWrapper::ListXattr(const Context& ctx, Ino ino,
+                             std::vector<std::string>* xattrs) {
   VLOG(2) << "VFSListXattr ino: " << ino;
 
   auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::ListXattr");
 
   Status s;
   AccessLogGuard log([&]() {
-    return absl::StrFormat("listxattr (%d): %s %d", ino, s.ToString(),
-                           xattrs->size());
+    return absl::StrFormat("[%s] listxattr (%llu): %s %d", ctx.ToShortString(),
+                           ino, s.ToString(), xattrs->size());
   });
 
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opListXattr, &client_op_metric_->opAll});
 
-  s = vfs_->ListXattr(dingofs::SpanScope::GetContext(span), ino, xattrs);
-  VLOG(2) << "VFSListXattr end, status: " << s.ToString()
-          << " xattrs: " << xattrs->size();
+  auto span_ctx = dingofs::SpanScope::GetContext(span);
+  s = vfs_->ListXattr(span_ctx, ino, xattrs);
   if (!s.ok()) op_metric.FailOp();
 
   return s;
 }
 
-Status VFSWrapper::MkDir(Ino parent, const std::string& name, uint32_t uid,
-                         uint32_t gid, uint32_t mode, Attr* attr) {
+Status VFSWrapper::MkDir(const Context& ctx, Ino parent,
+                         const std::string& name, uint32_t mode, Attr* attr) {
   VLOG(2) << "VFSMkDir parent ino: " << parent << " name: " << name
-          << " uid: " << uid << " gid: " << gid << " mode: " << mode;
+          << " uid: " << ctx.uid << " gid: " << ctx.gid << " mode: " << mode;
 
   auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::MkDir");
 
   Status s;
   AccessLogGuard log([&]() {
-    return absl::StrFormat("mkdir (%d,%s,%s:0%04o,%d,%d): %s %s", parent, name,
-                           StrMode(mode), mode, uid, gid, s.ToString(),
-                           StrAttr(attr));
+    return absl::StrFormat("[%s] mkdir (%llu,%s,%s:0%04o,%d,%d): %s %s",
+                           ctx.ToShortString(), parent, name, StrMode(mode),
+                           mode, ctx.uid, ctx.gid, s.ToString(), StrAttr(attr));
   });
 
   ClientOpMetricGuard op_metric(
@@ -1093,39 +1104,40 @@ Status VFSWrapper::MkDir(Ino parent, const std::string& name, uint32_t uid,
     return s;
   }
 
-  s = vfs_->MkDir(dingofs::SpanScope::GetContext(span), parent, name, uid, gid,
-                  S_IFDIR | mode, attr);
-  VLOG(2) << "VFSMkdir end, status: " << s.ToString()
-          << " attr: " << Attr2Str(*attr);
+  auto span_ctx = dingofs::SpanScope::GetContext(span);
+  s = vfs_->MkDir(span_ctx, parent, name, ctx.uid, ctx.gid, S_IFDIR | mode,
+                  attr);
   if (!s.ok()) op_metric.FailOp();
 
   return s;
 }
 
-Status VFSWrapper::OpenDir(Ino ino, uint64_t* fh, bool& need_cache) {
+Status VFSWrapper::OpenDir(const Context& ctx, Ino ino, uint64_t* fh,
+                           bool& need_cache) {
   VLOG(2) << "VFSOpendir ino: " << ino;
 
   auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::OpenDir");
 
   Status s;
   AccessLogGuard log([&]() {
-    return absl::StrFormat("opendir (%d): %s [fh:%d] %s", ino, s.ToString(),
-                           *fh, need_cache ? "cache" : "nocache");
+    return absl::StrFormat("[%s] opendir (%llu): %s [fh:%llu] %s",
+                           ctx.ToShortString(), ino, s.ToString(), *fh,
+                           need_cache ? "cache" : "nocache");
   });
 
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opOpenDir, &client_op_metric_->opAll});
 
-  auto ctx = dingofs::SpanScope::GetContext(span);
-  s = vfs_->OpenDir(ctx, ino, fh, need_cache);
-  VLOG(2) << "VFSOpendir end, ino: " << ino << " fh: " << *fh;
+  auto span_ctx = dingofs::SpanScope::GetContext(span);
+  s = vfs_->OpenDir(span_ctx, ino, fh, need_cache);
   if (!s.ok()) op_metric.FailOp();
 
   return s;
 }
 
-Status VFSWrapper::ReadDir(Ino ino, uint64_t fh, uint64_t offset,
-                           bool with_attr, ReadDirHandler handler) {
+Status VFSWrapper::ReadDir(const Context& ctx, Ino ino, uint64_t fh,
+                           uint64_t offset, bool with_attr,
+                           ReadDirHandler handler) {
   VLOG(2) << "VFSReaddir ino: " << ino << " fh: " << fh << " offset: " << offset
           << " with_attr: " << (with_attr ? "true" : "false");
 
@@ -1134,51 +1146,52 @@ Status VFSWrapper::ReadDir(Ino ino, uint64_t fh, uint64_t offset,
   Status s;
   uint32_t count = 0;
   AccessLogGuard log([&]() {
-    return absl::StrFormat("readdir (%d): %s (%d %u) [fh:%d] %s", ino,
-                           s.ToString(), offset, count, fh,
-                           with_attr ? "true" : "false");
+    return absl::StrFormat("[%s] readdir (%llu): %s (%llu %u) [fh:%llu] %s",
+                           ctx.ToShortString(), ino, s.ToString(), offset,
+                           count, fh, with_attr ? "true" : "false");
   });
 
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opReadDir, &client_op_metric_->opAll});
 
-  s = vfs_->ReadDir(dingofs::SpanScope::GetContext(span), ino, fh, offset,
-                    with_attr, handler, count);
-  VLOG(2) << "VFSReaddir end, status: " << s.ToString();
+  auto span_ctx = dingofs::SpanScope::GetContext(span);
+  s = vfs_->ReadDir(span_ctx, ino, fh, offset, with_attr, handler, count);
   if (!s.ok()) op_metric.FailOp();
 
   return s;
 }
 
-Status VFSWrapper::ReleaseDir(Ino ino, uint64_t fh) {
+Status VFSWrapper::ReleaseDir(const Context& ctx, Ino ino, uint64_t fh) {
   VLOG(2) << "VFSReleaseDir ino: " << ino << " fh: " << fh;
 
   auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::ReleaseDir");
 
   Status s;
   AccessLogGuard log([&]() {
-    return absl::StrFormat("releasedir (%d): %s [fh:%d]", ino, s.ToString(),
-                           fh);
+    return absl::StrFormat("[%s] releasedir (%llu): %s [fh:%llu]",
+                           ctx.ToShortString(), ino, s.ToString(), fh);
   });
 
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opReleaseDir, &client_op_metric_->opAll});
 
-  s = vfs_->ReleaseDir(dingofs::SpanScope::GetContext(span), ino, fh);
-  VLOG(2) << "VFSReleaseDir end, status: " << s.ToString();
+  auto span_ctx = dingofs::SpanScope::GetContext(span);
+  s = vfs_->ReleaseDir(span_ctx, ino, fh);
   if (!s.ok()) op_metric.FailOp();
 
   return s;
 }
 
-Status VFSWrapper::RmDir(Ino parent, const std::string& name, uint32_t uid) {
+Status VFSWrapper::RmDir(const Context& ctx, Ino parent,
+                         const std::string& name) {
   VLOG(2) << "VFSRmdir parent: " << parent << " name: " << name;
 
   auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::RmDir");
 
   Status s;
   AccessLogGuard log([&]() {
-    return absl::StrFormat("rmdir (%d,%s): %s", parent, name, s.ToString());
+    return absl::StrFormat("[%s] rmdir (%llu,%s): %s", ctx.ToShortString(),
+                           parent, name, s.ToString());
   });
 
   ClientOpMetricGuard op_metric(
@@ -1189,35 +1202,37 @@ Status VFSWrapper::RmDir(Ino parent, const std::string& name, uint32_t uid) {
     return s;
   }
 
-  auto ctx = dingofs::SpanScope::GetContext(span);
-  if (ctx) ctx->uid = uid;
-  s = vfs_->RmDir(ctx, parent, name);
-  VLOG(2) << "VFSRmdir end, status: " << s.ToString();
+  auto span_ctx = dingofs::SpanScope::GetContext(span);
+  if (span_ctx) span_ctx->uid = ctx.uid;
+
+  s = vfs_->RmDir(span_ctx, parent, name);
   if (!s.ok()) op_metric.FailOp();
 
   return s;
 }
 
-Status VFSWrapper::StatFs(Ino ino, FsStat* fs_stat) {
+Status VFSWrapper::StatFs(const Context& ctx, Ino ino, FsStat* fs_stat) {
   VLOG(2) << "VFSStatFs ino: " << ino;
 
   auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::StatFs");
 
   Status s;
-  AccessLogGuard log(
-      [&]() { return absl::StrFormat("statfs (%d): %s", ino, s.ToString()); });
+  AccessLogGuard log([&]() {
+    return absl::StrFormat("[%s] statfs (%llu): %s", ctx.ToShortString(), ino,
+                           s.ToString());
+  });
 
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opStatfs, &client_op_metric_->opAll});
 
-  s = vfs_->StatFs(dingofs::SpanScope::GetContext(span), ino, fs_stat);
-  VLOG(2) << "VFSStatFs end, status: " << s.ToString()
-          << " fs_stat: " << vfs::FsStat2Str(*fs_stat);
+  auto span_ctx = dingofs::SpanScope::GetContext(span);
+  s = vfs_->StatFs(span_ctx, ino, fs_stat);
+  if (!s.ok()) op_metric.FailOp();
 
   return s;
 }
 
-Status VFSWrapper::Ioctl(Ino ino, uint32_t uid, unsigned int cmd,
+Status VFSWrapper::Ioctl(const Context& ctx, Ino ino, unsigned int cmd,
                          unsigned flags, const void* in_buf, size_t in_bufsz,
                          char* out_buf, size_t out_bufsz) {
   VLOG(2) << "VFSIoctl ino: " << ino << " cmd: " << cmd << " flags: " << flags
@@ -1227,13 +1242,14 @@ Status VFSWrapper::Ioctl(Ino ino, uint32_t uid, unsigned int cmd,
 
   Status s;
   AccessLogGuard log([&]() {
-    return absl::StrFormat("ioctl (%d,%u,%u,%zu,%zu): %s", ino, cmd, flags,
-                           in_bufsz, out_bufsz, s.ToString());
+    return absl::StrFormat("[%s] ioctl (%llu,%u,%u,%zu,%zu): %s",
+                           ctx.ToShortString(), ino, cmd, flags, in_bufsz,
+                           out_bufsz, s.ToString());
   });
 
-  s = vfs_->Ioctl(dingofs::SpanScope::GetContext(span), ino, uid, cmd, flags,
-                  in_buf, in_bufsz, out_buf, out_bufsz);
-  VLOG(2) << "VFSIoctl end, status: " << s.ToString();
+  auto span_ctx = dingofs::SpanScope::GetContext(span);
+  s = vfs_->Ioctl(span_ctx, ino, ctx.uid, cmd, flags, in_buf, in_bufsz, out_buf,
+                  out_bufsz);
 
   return s;
 }

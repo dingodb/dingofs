@@ -117,8 +117,13 @@ using dingofs::Attr;
 using dingofs::DirEntry;
 using dingofs::Ino;
 using dingofs::Status;
+using dingofs::client::Context;
 using dingofs::client::DingofsConfig;
 using dingofs::client::VFSWrapper;
+
+const Context kBenchContext{static_cast<uint32_t>(getuid()),
+                            static_cast<uint32_t>(getgid()),
+                            static_cast<int32_t>(getpid()), 0};
 
 static double NowSec() {
   struct timespec ts{};
@@ -196,7 +201,7 @@ static int ResolvePath(VFSWrapper* vfs, const std::string& path, Ino* ino) {
   Ino parent = dingofs::kRootIno;
   for (const auto& name : parts) {
     Attr attr;
-    Status s = vfs->Lookup(parent, name, &attr);
+    Status s = vfs->Lookup(kBenchContext, parent, name, &attr);
     if (!s.ok()) {
       LOG(ERROR) << fmt::format("resolve path fail, path({}) error({}).", path,
                                 s.ToString());
@@ -389,7 +394,7 @@ static int CreateDir(VFSWrapper* vfs, const std::string& path) {
   int rc = ResolveParent(vfs, path, &parent, &name);
   if (rc != 0) return rc;
   Attr attr;
-  Status s = vfs->MkDir(parent, name, getuid(), getgid(), 0755, &attr);
+  Status s = vfs->MkDir(kBenchContext, parent, name, 0755, &attr);
   if (!s.ok()) {
     LOG(ERROR) << fmt::format("create dir fail, parent({}) name({}) error({}).",
                               parent, name, s.ToString());
@@ -403,7 +408,7 @@ static int CreateDir(VFSWrapper* vfs, Ino parent, const std::string& name,
   CHECK(parent != 0) << "Invalid parent inode 0 for " << name;
 
   Attr attr;
-  Status s = vfs->MkDir(parent, name, getuid(), getgid(), 0755, &attr);
+  Status s = vfs->MkDir(kBenchContext, parent, name, 0755, &attr);
   if (!s.ok()) {
     LOG(ERROR) << fmt::format("create dir fail, parent({}) name({}) error({}).",
                               parent, name, s.ToString());
@@ -419,7 +424,7 @@ static int UnlinkPath(VFSWrapper* vfs, const std::string& path) {
   std::string name;
   int rc = ResolveParent(vfs, path, &parent, &name);
   if (rc != 0) return rc;
-  Status s = vfs->Unlink(parent, name);
+  Status s = vfs->Unlink(kBenchContext, parent, name);
   if (!s.ok()) {
     LOG(ERROR) << fmt::format("unlink fail, parent({}) name({}) error({}).",
                               parent, name, s.ToString());
@@ -432,7 +437,7 @@ static int RemoveDir(VFSWrapper* vfs, const std::string& path) {
   std::string name;
   int rc = ResolveParent(vfs, path, &parent, &name);
   if (rc != 0) return rc;
-  Status s = vfs->RmDir(parent, name);
+  Status s = vfs->RmDir(kBenchContext, parent, name);
   if (!s.ok()) {
     LOG(ERROR) << fmt::format("rmdir fail, parent({}) name({}) error({}).",
                               parent, name, s.ToString());
@@ -447,7 +452,7 @@ static int CreateEmptyFile(VFSWrapper* vfs, Ino parent,
 
   uint64_t fh = 0;
   Attr attr;
-  Status s = vfs->Create(parent, name, getuid(), getgid(), 33188,
+  Status s = vfs->Create(kBenchContext, parent, name, 33188,
                          O_CREAT | O_WRONLY | O_EXCL, &fh, &attr);
   if (!s.ok()) {
     LOG(ERROR) << fmt::format(
@@ -456,7 +461,7 @@ static int CreateEmptyFile(VFSWrapper* vfs, Ino parent,
     return StatusToErrno(s);
   }
 
-  s = vfs->Release(attr.ino, fh);
+  s = vfs->Release(kBenchContext, attr.ino, fh);
 
   return StatusToErrno(s);
 }
@@ -702,7 +707,7 @@ static int RemoveTreeRecursive(VFSWrapper* vfs, const std::string& path) {
 
   uint64_t fh = 0;
   bool need_cache = false;
-  Status s = vfs->OpenDir(dir_ino, &fh, need_cache);
+  Status s = vfs->OpenDir(kBenchContext, dir_ino, &fh, need_cache);
   if (!s.ok()) return StatusToErrno(s);
 
   std::vector<DirEntry> entries;
@@ -714,12 +719,12 @@ static int RemoveTreeRecursive(VFSWrapper* vfs, const std::string& path) {
     return true;
   };
 
-  s = vfs->ReadDir(dir_ino, fh, 0, true, handler);
+  s = vfs->ReadDir(kBenchContext, dir_ino, fh, 0, true, handler);
   if (!s.ok()) {
-    vfs->ReleaseDir(dir_ino, fh);
+    vfs->ReleaseDir(kBenchContext, dir_ino, fh);
     return StatusToErrno(s);
   }
-  vfs->ReleaseDir(dir_ino, fh);
+  vfs->ReleaseDir(kBenchContext, dir_ino, fh);
 
   int first_err = 0;
   for (const auto& entry : entries) {

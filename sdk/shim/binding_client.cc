@@ -16,9 +16,11 @@
 
 #include "binding_client.h"
 
-#include <cstdio>
 #include <gflags/gflags.h>
 #include <glog/logging.h>
+#include <unistd.h>
+
+#include <cstdio>
 #include <iostream>
 #include <memory>
 
@@ -32,11 +34,22 @@ DECLARE_int32(log_v);
 namespace dingofs {
 namespace client {
 
+Context BindingClient::MakeContext() {
+  return MakeContext(static_cast<uint32_t>(getuid()),
+                     static_cast<uint32_t>(getgid()));
+}
+
+Context BindingClient::MakeContext(uint32_t uid, uint32_t gid) {
+  return {uid, gid, pid_, 0};
+}
+
 BindingClient::BindingClient() : vfs_(std::make_unique<VFSWrapper>()) {}
 
 BindingClient::~BindingClient() = default;
 
 Status BindingClient::Start(const BindingConfig& config) {
+  pid_ = static_cast<int32_t>(getpid());
+
   // 1. Load conf file to populate gflags (overrides compiled-in defaults).
   if (!config.conf_file.empty()) {
     gflags::ReadFromFlagsFile(config.conf_file, "dingofs-binding", true);
@@ -87,134 +100,134 @@ Status BindingClient::Stop() {
 }
 
 Status BindingClient::StatFs(Ino ino, FsStat* fs_stat) {
-  return vfs_->StatFs(ino, fs_stat);
+  return vfs_->StatFs(MakeContext(), ino, fs_stat);
 }
 
 Status BindingClient::Lookup(Ino parent, const std::string& name, Attr* attr) {
-  return vfs_->Lookup(parent, name, attr);
+  return vfs_->Lookup(MakeContext(), parent, name, attr);
 }
 
 Status BindingClient::GetAttr(Ino ino, Attr* attr) {
-  return vfs_->GetAttr(ino, attr);
+  return vfs_->GetAttr(MakeContext(), ino, attr);
 }
 
 Status BindingClient::SetAttr(Ino ino, int set, const Attr& in_attr,
                               Attr* out_attr) {
-  return vfs_->SetAttr(ino, set, in_attr, out_attr);
+  return vfs_->SetAttr(MakeContext(), ino, set, in_attr, out_attr);
 }
 
 Status BindingClient::MkDir(Ino parent, const std::string& name, uint32_t uid,
                             uint32_t gid, uint32_t mode, Attr* attr) {
-  return vfs_->MkDir(parent, name, uid, gid, mode, attr);
+  return vfs_->MkDir(MakeContext(uid, gid), parent, name, mode, attr);
 }
 
 Status BindingClient::RmDir(Ino parent, const std::string& name) {
-  return vfs_->RmDir(parent, name);
+  return vfs_->RmDir(MakeContext(), parent, name);
 }
 
 Status BindingClient::OpenDir(Ino ino, uint64_t* fh, bool& need_cache) {
-  return vfs_->OpenDir(ino, fh, need_cache);
+  return vfs_->OpenDir(MakeContext(), ino, fh, need_cache);
 }
 
 Status BindingClient::ReadDir(Ino ino, uint64_t fh, uint64_t offset,
                               bool with_attr, ReadDirHandler handler) {
-  return vfs_->ReadDir(ino, fh, offset, with_attr, handler);
+  return vfs_->ReadDir(MakeContext(), ino, fh, offset, with_attr, handler);
 }
 
 Status BindingClient::ReleaseDir(Ino ino, uint64_t fh) {
-  return vfs_->ReleaseDir(ino, fh);
+  return vfs_->ReleaseDir(MakeContext(), ino, fh);
 }
 
 Status BindingClient::Create(Ino parent, const std::string& name, uint32_t uid,
                              uint32_t gid, uint32_t mode, int flags,
                              uint64_t* fh, Attr* attr) {
-  return vfs_->Create(parent, name, uid, gid, mode, flags, fh, attr);
+  return vfs_->Create(MakeContext(uid, gid), parent, name, mode, flags, fh,
+                      attr);
 }
 
 Status BindingClient::MkNod(Ino parent, const std::string& name, uint32_t uid,
                             uint32_t gid, uint32_t mode, uint64_t dev,
                             Attr* attr) {
-  return vfs_->MkNod(parent, name, uid, gid, mode, dev, attr);
+  return vfs_->MkNod(MakeContext(uid, gid), parent, name, mode, dev, attr);
 }
 
 Status BindingClient::Open(Ino ino, int flags, uint64_t* fh) {
-  return vfs_->Open(ino, flags, fh);
+  return vfs_->Open(MakeContext(), ino, flags, fh);
 }
 
 Status BindingClient::Read(Ino ino, DataBuffer* data_buffer, uint64_t size,
                            uint64_t offset, uint64_t fh, uint64_t* out_rsize) {
-  return vfs_->Read(ino, data_buffer, size, offset, fh, out_rsize);
+  return vfs_->Read(MakeContext(), ino, data_buffer, size, offset, fh,
+                    out_rsize);
 }
 
 Status BindingClient::Write(Ino ino, const char* buf, uint64_t size,
-                            uint64_t offset, uint64_t fh,
-                            uint64_t* out_wsize) {
-  return vfs_->Write(ino, buf, size, offset, fh, out_wsize);
+                            uint64_t offset, uint64_t fh, uint64_t* out_wsize) {
+  return vfs_->Write(MakeContext(), ino, buf, size, offset, fh, out_wsize);
 }
 
 Status BindingClient::Flush(Ino ino, uint64_t fh) {
-  return vfs_->Flush(ino, fh);
+  return vfs_->Flush(MakeContext(), ino, fh);
 }
 
 Status BindingClient::Fsync(Ino ino, int datasync, uint64_t fh) {
-  return vfs_->Fsync(ino, datasync, fh);
+  return vfs_->Fsync(MakeContext(), ino, datasync, fh);
 }
 
 Status BindingClient::Release(Ino ino, uint64_t fh) {
-  return vfs_->Release(ino, fh);
+  return vfs_->Release(MakeContext(), ino, fh);
 }
 
 Status BindingClient::Unlink(Ino parent, const std::string& name) {
-  return vfs_->Unlink(parent, name);
+  return vfs_->Unlink(MakeContext(), parent, name);
 }
 
 Status BindingClient::Link(Ino ino, Ino new_parent, const std::string& new_name,
                            Attr* attr) {
-  return vfs_->Link(ino, new_parent, new_name, attr);
+  return vfs_->Link(MakeContext(), ino, new_parent, new_name, attr);
 }
 
 Status BindingClient::Symlink(Ino parent, const std::string& name, uint32_t uid,
                               uint32_t gid, const std::string& link,
                               Attr* attr) {
-  return vfs_->Symlink(parent, name, uid, gid, link, attr);
+  return vfs_->Symlink(MakeContext(uid, gid), parent, name, link, attr);
 }
 
 Status BindingClient::ReadLink(Ino ino, std::string* link) {
-  return vfs_->ReadLink(ino, link);
+  return vfs_->ReadLink(MakeContext(), ino, link);
 }
 
 Status BindingClient::Rename(Ino old_parent, const std::string& old_name,
                              Ino new_parent, const std::string& new_name) {
-  return vfs_->Rename(old_parent, old_name, new_parent, new_name);
+  return vfs_->Rename(MakeContext(), old_parent, old_name, new_parent,
+                      new_name);
 }
 
 Status BindingClient::SetXattr(Ino ino, const std::string& name,
                                const std::string& value, int flags) {
-  return vfs_->SetXattr(ino, name, value, flags);
+  return vfs_->SetXattr(MakeContext(), ino, name, value, flags);
 }
 
 Status BindingClient::GetXattr(Ino ino, const std::string& name,
                                std::string* value) {
-  return vfs_->GetXattr(ino, name, value);
+  return vfs_->GetXattr(MakeContext(), ino, name, value);
 }
 
 Status BindingClient::ListXattr(Ino ino, std::vector<std::string>* xattrs) {
-  return vfs_->ListXattr(ino, xattrs);
+  return vfs_->ListXattr(MakeContext(), ino, xattrs);
 }
 
 Status BindingClient::RemoveXattr(Ino ino, const std::string& name) {
-  return vfs_->RemoveXattr(ino, name);
+  return vfs_->RemoveXattr(MakeContext(), ino, name);
 }
 
-uint64_t BindingClient::GetMaxNameLength() {
-  return vfs_->GetMaxNameLength();
-}
+uint64_t BindingClient::GetMaxNameLength() { return vfs_->GetMaxNameLength(); }
 
 Status BindingClient::Ioctl(Ino ino, uint32_t uid, unsigned int cmd,
                             unsigned flags, const void* in_buf, size_t in_bufsz,
                             char* out_buf, size_t out_bufsz) {
-  return vfs_->Ioctl(ino, uid, cmd, flags, in_buf, in_bufsz, out_buf,
-                     out_bufsz);
+  return vfs_->Ioctl(MakeContext(uid, static_cast<uint32_t>(getgid())), ino,
+                     cmd, flags, in_buf, in_bufsz, out_buf, out_bufsz);
 }
 
 // static
