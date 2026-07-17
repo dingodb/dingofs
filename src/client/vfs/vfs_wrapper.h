@@ -43,6 +43,21 @@ struct DingofsConfig {
   std::string subdir = "/";
 };
 
+struct Context {
+  uint32_t uid;
+  uint32_t gid;
+  int32_t pid;
+  uint32_t umask;
+
+  std::string ToString() const {
+    return fmt::format("pid({}) uid({}) gid({}) umask({})", pid, uid, gid,
+                       umask);
+  }
+  std::string ToShortString() const {
+    return fmt::format("{}:{}:{}", pid, uid, gid);
+  }
+};
+
 class VFSWrapper {
  public:
   VFSWrapper() = default;
@@ -70,74 +85,81 @@ class VFSWrapper {
 
   uint64_t GetMaxNameLength();
 
-  Status Lookup(Ino parent, const std::string& name, Attr* attr);
+  Status Lookup(const Context& ctx, Ino parent, const std::string& name,
+                Attr* attr);
 
-  Status GetAttr(Ino ino, Attr* attr);
+  Status GetAttr(const Context& ctx, Ino ino, Attr* attr);
 
-  Status SetAttr(Ino ino, int set, const Attr& in_attr, Attr* out_attr);
+  Status SetAttr(const Context& ctx, Ino ino, int set, const Attr& in_attr,
+                 Attr* out_attr);
 
-  Status Fallocate(Ino ino, int mode, uint64_t offset, uint64_t length);
+  Status Fallocate(const Context& ctx, Ino ino, int mode, uint64_t offset,
+                   uint64_t length);
 
-  Status CopyFileRange(Ino src_ino, uint64_t src_off, uint64_t src_fh,
-                       Ino dst_ino, uint64_t dst_off, uint64_t dst_fh,
-                       uint64_t len, uint32_t flags, uint64_t* bytes_copied);
+  Status CopyFileRange(const Context& ctx, Ino src_ino, uint64_t src_off,
+                       uint64_t src_fh, Ino dst_ino, uint64_t dst_off,
+                       uint64_t dst_fh, uint64_t len, uint32_t flags,
+                       uint64_t* bytes_copied);
 
-  Status ReadLink(Ino ino, std::string* link);
+  Status ReadLink(const Context& ctx, Ino ino, std::string* link);
 
-  Status MkNod(Ino parent, const std::string& name, uint32_t uid, uint32_t gid,
+  Status MkNod(const Context& ctx, Ino parent, const std::string& name,
                uint32_t mode, uint64_t dev, Attr* attr);
 
-  Status Unlink(Ino parent, const std::string& name, uint32_t uid = 0);
+  Status Unlink(const Context& ctx, Ino parent, const std::string& name);
 
-  Status Symlink(Ino parent, const std::string& name, uint32_t uid,
-                 uint32_t gid, const std::string& link, Attr* attr);
+  Status Symlink(const Context& ctx, Ino parent, const std::string& name,
+                 const std::string& link, Attr* attr);
 
-  Status Rename(Ino old_parent, const std::string& old_name, Ino new_parent,
-                const std::string& new_name, uint32_t uid = 0);
+  Status Rename(const Context& ctx, Ino old_parent, const std::string& old_name,
+                Ino new_parent, const std::string& new_name);
 
-  Status Link(Ino ino, Ino new_parent, const std::string& new_name, Attr* attr);
+  Status Link(const Context& ctx, Ino ino, Ino new_parent,
+              const std::string& new_name, Attr* attr);
 
-  Status Open(Ino ino, int flags, uint64_t* fh);
+  Status Open(const Context& ctx, Ino ino, int flags, uint64_t* fh);
 
-  Status Create(Ino parent, const std::string& name, uint32_t uid, uint32_t gid,
+  Status Create(const Context& ctx, Ino parent, const std::string& name,
                 uint32_t mode, int flags, uint64_t* fh, Attr* attr);
 
-  Status Read(Ino ino, DataBuffer* data_buffer, uint64_t size, uint64_t offset,
-              uint64_t fh, uint64_t* out_rsize);
+  Status Read(const Context& ctx, Ino ino, DataBuffer* data_buffer,
+              uint64_t size, uint64_t offset, uint64_t fh, uint64_t* out_rsize);
 
-  Status Write(Ino ino, const char* buf, uint64_t size, uint64_t offset,
-               uint64_t fh, uint64_t* out_wsize);
+  Status Write(const Context& ctx, Ino ino, const char* buf, uint64_t size,
+               uint64_t offset, uint64_t fh, uint64_t* out_wsize);
 
-  Status Flush(Ino ino, uint64_t fh);
+  Status Flush(const Context& ctx, Ino ino, uint64_t fh);
 
-  Status Release(Ino ino, uint64_t fh);
+  Status Release(const Context& ctx, Ino ino, uint64_t fh);
 
-  Status Fsync(Ino ino, int datasync, uint64_t fh);
+  Status Fsync(const Context& ctx, Ino ino, int datasync, uint64_t fh);
 
-  Status SetXattr(Ino ino, const std::string& name, const std::string& value,
-                  int flags);
+  Status SetXattr(const Context& ctx, Ino ino, const std::string& name,
+                  const std::string& value, int flags);
 
-  Status GetXattr(Ino ino, const std::string& name, std::string* value);
+  Status GetXattr(const Context& ctx, Ino ino, const std::string& name,
+                  std::string* value);
 
-  Status RemoveXattr(Ino ino, const std::string& name);
+  Status RemoveXattr(const Context& ctx, Ino ino, const std::string& name);
 
-  Status ListXattr(Ino ino, std::vector<std::string>* xattrs);
+  Status ListXattr(const Context& ctx, Ino ino,
+                   std::vector<std::string>* xattrs);
 
-  Status MkDir(Ino parent, const std::string& name, uint32_t uid, uint32_t gid,
+  Status MkDir(const Context& ctx, Ino parent, const std::string& name,
                uint32_t mode, Attr* attr);
 
-  Status OpenDir(Ino ino, uint64_t* fh, bool& need_cache);
+  Status OpenDir(const Context& ctx, Ino ino, uint64_t* fh, bool& need_cache);
 
-  Status ReadDir(Ino ino, uint64_t fh, uint64_t offset, bool with_attr,
-                 ReadDirHandler handler);
+  Status ReadDir(const Context& ctx, Ino ino, uint64_t fh, uint64_t offset,
+                 bool with_attr, ReadDirHandler handler);
 
-  Status ReleaseDir(Ino ino, uint64_t fh);
+  Status ReleaseDir(const Context& ctx, Ino ino, uint64_t fh);
 
-  Status RmDir(Ino parent, const std::string& name, uint32_t uid = 0);
+  Status RmDir(const Context& ctx, Ino parent, const std::string& name);
 
-  Status StatFs(Ino ino, FsStat* fs_stat);
+  Status StatFs(const Context& ctx, Ino ino, FsStat* fs_stat);
 
-  Status Ioctl(Ino ino, uint32_t uid, unsigned int cmd, unsigned flags,
+  Status Ioctl(const Context& ctx, Ino ino, unsigned int cmd, unsigned flags,
                const void* in_buf, size_t in_bufsz, char* out_buf,
                size_t out_bufsz);
 

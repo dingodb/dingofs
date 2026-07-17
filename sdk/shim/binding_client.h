@@ -157,8 +157,12 @@ class BindingClient {
   static void PrintOptions();
 
  private:
+  Context MakeContext();
+  Context MakeContext(uint32_t uid, uint32_t gid);
+
   std::unique_ptr<VFSWrapper> vfs_;
   bool self_inited_glog_ = false;
+  int32_t pid_;
 };
 
 }  // namespace client
