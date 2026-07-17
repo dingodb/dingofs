@@ -55,11 +55,11 @@ static const int64_t kInoStartId = 2e10;  // 20 billion
 DEFINE_uint32(mds_slice_id_generator_batch_size, 100000, "slice id generator batch size.");
 DEFINE_validator(mds_slice_id_generator_batch_size, brpc::PassValidate);
 
-DEFINE_uint32(mds_ino_generator_batch_size, 100000, "ino generator batch size.");
+DEFINE_uint32(mds_ino_generator_batch_size, 100000000, "ino generator batch size.");
 DEFINE_validator(mds_ino_generator_batch_size, brpc::PassValidate);
 
 // all mds share the same inode generator
-DEFINE_bool(mds_ino_generator_share_enable, true, "Inode generator share enable.");
+DEFINE_bool(mds_ino_generator_share_enable, false, "Inode generator share enable.");
 DEFINE_bool(mds_slice_id_generator_share_enable, true, "Slice ID generator share enable.");
 
 static uint32_t CalWaitTimeUs(int retry) {

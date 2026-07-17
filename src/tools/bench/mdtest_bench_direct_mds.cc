@@ -111,6 +111,8 @@ DEFINE_string(bench_mode, "unique",
               "Concurrency mode: unique (per-thread subtree) | "
               "shared (global tree, shared task queue)");
 
+DEFINE_int32(bench_dir_threads, 1, "Number of create dir worker threads");
+
 DEFINE_bool(bench_cleanup, false, "Remove bench tree after completion");
 DEFINE_bool(bench_force, true,
             "Remove residual tree from a previous run before starting");
@@ -830,8 +832,18 @@ static void SharedWorker(MdsDirectClient* client, TreeSpec* spec,
     if (result->error_code == 0) {
       uint64_t count = spec->DirsAtLevel(d);
       for (;;) {
-        uint64_t idx =
-            work->dir_cursors[d].fetch_add(1, std::memory_order_relaxed);
+        uint64_t idx = 0;
+        // decrease create dir thread num
+        if (result->thread_id < FLAGS_bench_dir_threads) {
+          idx = work->dir_cursors[d].fetch_add(1, std::memory_order_relaxed);
+        } else {
+          idx = work->dir_cursors[d].load(std::memory_order_relaxed);
+          if (idx >= count) break;
+          // sleep 10ms
+          std::this_thread::sleep_for(std::chrono::milliseconds(10));
+          continue;
+        }
+
         if (idx >= count) break;
         std::string path = spec->DirPath(d, idx);
         Ino parent = spec->ResolveParent(client, path);
