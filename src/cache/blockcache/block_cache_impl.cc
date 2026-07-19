@@ -272,6 +272,15 @@ void BlockCacheImpl::AsyncPrefetch(ContextSPtr ctx, const BlockKey& key,
                                    PrefetchOption option) {
   DCHECK_RUNNING("BlockCacheImpl");
 
+  // Fast path: already-cached block needs no bthread, Prefetch() rechecks
+  // for requests that raced past here before the block was cached.
+  if (IsCached(key)) {
+    if (cb) {
+      cb(Status::OK());
+    }
+    return;
+  }
+
   auto tracker = prefetch_tracker_;
   auto status = tracker->Add(key.Filename());
   if (status.IsExist()) {

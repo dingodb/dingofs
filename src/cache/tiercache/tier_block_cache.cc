@@ -260,6 +260,11 @@ Status TierBlockCache::Prefetch(ContextSPtr ctx, const BlockKey& key,
                                 size_t length, PrefetchOption option) {
   DCHECK_RUNNING("TierBlockCache");
 
+  // Prefetch fills exactly ONE tier: the local cache when present, else the
+  // cache group. With both tiers enabled the group is intentionally not
+  // warmed: PrefetchOption carries no warmup-vs-read-prefetch provenance,
+  // and read-triggered prefetch firing a group RPC per read window would
+  // regress the read path.
   Status status;
   if (EnableLocalCache()) {
     status = local_block_cache_->Prefetch(ctx, key, length, option);
