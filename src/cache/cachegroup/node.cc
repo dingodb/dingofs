@@ -33,7 +33,6 @@
 
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/block_cache_impl.h"
-#include "cache/cachegroup/node.h"
 #include "cache/cachegroup/task_tracker.h"
 #include "cache/common/context.h"
 #include "cache/common/macro.h"
@@ -259,8 +258,11 @@ Status CacheNode::RetrieveStorage(ContextSPtr ctx, const BlockKey& key,
   // Retrieve the whole block
   IOBuffer block;
   status = RetrieveWholeBlock(ctx, key, block_length, &block);
-  if (status.ok()) {
-    block.AppendTo(buffer, length, offset);
+  if (status.ok() && block.AppendTo(buffer, length, offset) != length) {
+    LOG(ERROR) << "Retrieved block is shorter than requested range: key="
+               << key.Filename() << ", block size=" << block.Size()
+               << ", offset=" << offset << ", length=" << length;
+    return Status::Internal("retrieved block too short");
   }
   return status;
 }
@@ -332,7 +334,11 @@ Status CacheNode::RunTask(StorageClient* storage_client,
   auto& result = task->Result();
   auto status =
       storage_client->Range(attr.ctx, attr.key, 0, attr.length, &result.buffer);
+  // result must be filled before Run() wakes waiters: they read
+  // Result().status as the download outcome, which defaults to OK.
+  result.status = status;
   if (!status.ok()) {
+    result.buffer = IOBuffer();  // storage prefills it with garbage bytes
     task->Run();
     task_tracker_->RemoveTask(attr.key);
     return status;

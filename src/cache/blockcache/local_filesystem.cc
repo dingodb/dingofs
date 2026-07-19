@@ -199,16 +199,21 @@ Status LocalFileSystem::ReadFile(ContextSPtr ctx, const std::string& path,
 
   off_t aligned_offset = AlignOffset(offset);
   size_t aligned_length = AlignLength(length + offset - aligned_offset);
-  int buf_index = AllocateAlignedMemory(buffer, aligned_length, true);
-  status = AioRead(ctx, fd, aligned_offset, aligned_length, buffer->Fetch1(),
+
+  // Read into a scratch buffer first: a failed aio must not leave the
+  // fragment in the caller's buffer, upper tiers append fallback data to it.
+  IOBuffer tbuffer;
+  int buf_index = AllocateAlignedMemory(&tbuffer, aligned_length, true);
+  status = AioRead(ctx, fd, aligned_offset, aligned_length, tbuffer.Fetch1(),
                    buf_index);
   if (status.ok()) {
     if (aligned_offset != offset) {
-      buffer->PopFront(offset - aligned_offset);
+      tbuffer.PopFront(offset - aligned_offset);
     }
     if (aligned_length != length) {
-      buffer->PopBack(aligned_offset + aligned_length - (offset + length));
+      tbuffer.PopBack(aligned_offset + aligned_length - (offset + length));
     }
+    buffer->Append(&tbuffer);
   } else {
     LOG(ERROR) << "Fail to read file=`" << path << "'";
   }
