@@ -163,6 +163,14 @@ DECLARE_uint64(upload_stage_throttle_iops);
 // Sets the maximum inflight requests for uploading stage blocks to storage.
 DECLARE_uint32(upload_stage_max_inflights);
 
+// Sets the maximum tries per round for uploading one stage block to storage,
+// a failed round is re-enqueued on a slow cycle.
+DECLARE_uint32(upload_stage_max_tries);
+
+// Sets the delay in seconds before re-enqueueing the stage block whose
+// upload failed.
+DECLARE_uint32(upload_stage_retry_delay_s);
+
 // Sets the maximum inflight requests for prefetching blocks.
 DECLARE_uint32(prefetch_max_inflights);
 
@@ -207,11 +215,21 @@ DECLARE_uint32(disk_state_unstable2down_s);
 // Sets the duration in milliseconds to check the disk state.
 DECLARE_uint32(disk_state_check_duration_ms);
 
-// Sets the maximum retry timeout in seconds for uploading block from storage.
-DECLARE_int64(storage_upload_retry_timeout_s);
+// Sets the maximum tries (including the first attempt) for uploading one
+// block to storage.
+DECLARE_uint32(storage_upload_max_tries);
 
-// Sets the maximum retry timeout in seconds for downloading block from storage.
-DECLARE_int64(storage_download_retry_timeout_s);
+// Sets the maximum tries (including the first attempt) for downloading one
+// block from storage.
+DECLARE_uint32(storage_download_max_tries);
+
+// Sets the base backoff in milliseconds between upload retries, the real
+// backoff is base * tried * tried, capped at 60 seconds.
+DECLARE_uint32(storage_upload_retry_backoff_base_ms);
+
+// Sets the base backoff in milliseconds between download retries, the real
+// backoff is base * tried, capped at 10 seconds.
+DECLARE_uint32(storage_download_retry_backoff_base_ms);
 
 // Sets the MDS addresses for cache group member manager service RPC.
 DECLARE_string(mds_addrs);

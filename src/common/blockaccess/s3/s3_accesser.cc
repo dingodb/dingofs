@@ -136,19 +136,8 @@ Status S3Accesser::Range(const std::string& key, off_t offset, size_t length,
 void S3Accesser::AsyncGet(GetObjectAsyncContextSPtr context) {
   CHECK(context->cb) << "AsyncGet context callback is null";
 
-  auto origin_cb = context->cb;
-  context->cb = [this,
-                 origin_cb](const std::shared_ptr<GetObjectAsyncContext>& ctx) {
-    if (!ctx->status.ok()) {
-      if (!client_->ObjectExist(bucket_, S3Key(ctx->key))) {
-        LOG(WARNING) << fmt::format(
-            "[s3_accesser] object({}) not found in async get", ctx->key);
-        ctx->status = Status::NotFound("object not found");
-      }
-    }
-    origin_cb(ctx);
-  };
-
+  // NotFound is classified from the aws error type by the client itself, no
+  // extra HeadObject probe on the failure path.
   client_->AsyncGetObject(bucket_, context);
 }
 

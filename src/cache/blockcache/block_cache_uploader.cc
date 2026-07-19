@@ -26,6 +26,7 @@
 #include <bthread/bthread.h>
 #include <bthread/mutex.h>
 
+#include <algorithm>
 #include <atomic>
 #include <memory>
 
@@ -41,6 +42,16 @@ namespace cache {
 DEFINE_uint32(
     upload_stage_max_inflights, 32,
     "maximum inflight requests for uploading stage blocks to storage");
+
+DEFINE_uint32(upload_stage_max_tries, 3,
+              "maximum tries per round for uploading one stage block to "
+              "storage, a failed round is re-enqueued on a slow cycle");
+DEFINE_validator(upload_stage_max_tries, brpc::PassValidate);
+
+DEFINE_uint32(upload_stage_retry_delay_s, 60,
+              "delay in seconds before re-enqueueing the stage block whose "
+              "upload failed");
+DEFINE_validator(upload_stage_retry_delay_s, brpc::PassValidate);
 
 // Allow you push one element and pop a bunch of elements at once.
 template <typename T>
@@ -176,9 +187,12 @@ void BlockCacheUploader::Shutdown() {
 
   LOG(INFO) << "BlockCacheUploader is shutting down...";
 
+  // Flip running_ before joining: bthreads sleeping in the slow retry cycle
+  // exit on the next slice only after they observe the shutdown.
+  running_.store(false, std::memory_order_relaxed);
+
   joiner_->Shutdown();
 
-  running_.store(false, std::memory_order_relaxed);
   thread_.join();
   LOG(INFO) << "BlockCacheUploader is down";
 }
@@ -212,8 +226,10 @@ void BlockCacheUploader::AsyncUpload(const StageBlock& sblock) {
   auto* self = GetSelfPtr();
   auto tid = iutil::RunInBthread([self, sblock]() {
     auto status = self->DoUpload(sblock);
-    self->OnComplete(sblock, status);
+    // Release the inflight slot before OnComplete: a failed upload waits for
+    // the slow retry cycle there and must not pin the slot while waiting.
     self->tracker_->Remove(sblock.key.Filename());
+    self->OnComplete(sblock, status);
   });
 
   if (tid != 0) {
@@ -232,13 +248,22 @@ void BlockCacheUploader::OnComplete(const StageBlock& sblock, Status status) {
     return;
   }
 
-  // error
-  static const int sleep_ms = 100;
-  LOG(ERROR) << "Fail to upload " << sblock << ", it will retry after "
-             << sleep_ms << " ms";
+  // error: re-enqueue on a slow cycle, the stage block is durable on local
+  // disk so it retries indefinitely until success. The fast bounded retries
+  // already happened inside StorageClient::Put.
+  LOG(ERROR) << "Fail to upload " << sblock << ", status = "
+             << status.ToString() << ", it will retry after "
+             << FLAGS_upload_stage_retry_delay_s << " s";
+
+  uint64_t delay_ms = FLAGS_upload_stage_retry_delay_s * 1000ULL;
+  constexpr uint64_t kSliceMs = 100;
+  while (delay_ms > 0 && IsRunning()) {
+    auto sleep_ms = std::min(delay_ms, kSliceMs);
+    bthread_usleep(sleep_ms * 1000);
+    delay_ms -= sleep_ms;
+  }
 
   if (IsRunning()) {
-    bthread_usleep(sleep_ms * 1000);
     EnterUploadQueue(sblock);  // retry
   }
 }
@@ -264,7 +289,8 @@ Status BlockCacheUploader::DoUpload(const StageBlock& sblock) {
   }
 
   Block block(std::move(buffer));
-  status = storage_client->Put(sblock.ctx, sblock.key, &block);
+  status = storage_client->Put(sblock.ctx, sblock.key, &block,
+                               {.max_tries = FLAGS_upload_stage_max_tries});
   if (!status.ok()) {
     LOG(ERROR) << "Fail to put " << sblock << " to storage";
     return status;

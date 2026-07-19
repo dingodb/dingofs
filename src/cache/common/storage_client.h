@@ -26,20 +26,17 @@
 #include <bthread/condition_variable.h>
 #include <bthread/execution_queue.h>
 #include <bthread/mutex.h>
-#include <bvar/passive_status.h>
 #include <bvar/reducer.h>
 
 #include <cstdint>
+#include <functional>
 #include <memory>
-#include <ostream>
 
 #include "cache/blockcache/cache_store.h"
 #include "cache/common/closure.h"
 #include "cache/common/context.h"
-#include "cache/iutil/task_execution_queue.h"
 #include "common/blockaccess/block_accesser.h"
 #include "utils/concurrent/task_thread_pool.h"
-#include "utils/throttle.h"
 
 namespace dingofs {
 namespace cache {
@@ -65,92 +62,78 @@ class TaskClosure : public Closure {
   bthread::ConditionVariable cond_;
 };
 
-class PutBlockTask final : public TaskClosure {
- public:
-  PutBlockTask(ContextSPtr ctx, const BlockKey& key, const Block* block,
-               blockaccess::BlockAccesser* block_accesser,
-               iutil::TaskExecutionQueueSPtr retry_queue);
+// Backoff before the tried-th retry (tried starts from 1):
+//   upload:   min(base * tried * tried, 60s)
+//   download: min(base * tried, 10s)
+uint64_t UploadRetryBackoffMs(uint32_t tried);
+uint64_t DownloadRetryBackoffMs(uint32_t tried);
 
-  void Run() override;
-
- private:
-  friend std::ostream& operator<<(std::ostream&, const PutBlockTask&);
-
-  blockaccess::PutObjectAsyncContextSPtr OnPrepare();
-  void OnCallback(const blockaccess::PutObjectAsyncContextSPtr& ctx);
-  void OnRetry(const blockaccess::PutObjectAsyncContextSPtr& ctx);
-  void OnComplete(Status s);
-
-  ContextSPtr ctx_;
-  BlockKey key_;
-  const Block* block_;
-  blockaccess::BlockAccesser* block_accesser_;
-  iutil::TaskExecutionQueueSPtr retry_queue_;
+struct RetryOption {
+  uint32_t max_tries{0};  // 0 means use the corresponding FLAGS default
 };
 
-class RangeBlockTask final : public TaskClosure {
- public:
-  RangeBlockTask(ContextSPtr ctx, const BlockKey& key, off_t offset,
-                 size_t length, IOBuffer* buffer,
-                 blockaccess::BlockAccesser* block_accesser,
-                 iutil::TaskExecutionQueueSPtr retry_queue);
-
-  void Run() override;
-
- private:
-  friend std::ostream& operator<<(std::ostream&, const RangeBlockTask&);
-
-  blockaccess::GetObjectAsyncContextSPtr OnPrepare();
-  void OnCallback(const blockaccess::GetObjectAsyncContextSPtr& ctx);
-  void OnRetry(const blockaccess::GetObjectAsyncContextSPtr& ctx);
-  void OnComplete(Status s);
-
-  ContextSPtr ctx_;
-  BlockKey key_;
-  off_t offset_;
-  size_t length_;
-  IOBuffer* buffer_;
-  blockaccess::BlockAccesser* block_accesser_;
-  iutil::TaskExecutionQueueSPtr retry_queue_;
-};
-
-// Why use bthread::ExecutionQueue?
-//  bthread -> Put(...) -> BlockAccesser::AsyncGet(...)
-//  maybe there is pthread synchronization semantics in function
-//  BlockAccesser::AsyncGet.
+// The ONLY layer that retries storage requests: sdk-internal retry is
+// disabled (see AwsSdkConfig::sdk_max_retries) and callers are expected not
+// to add hot retry loops of their own. Put/Range run a bounded retry loop in
+// the calling bthread with backoff between attempts, so failures slow down
+// instead of hammering the storage backend.
 class StorageClient {
  public:
   explicit StorageClient(blockaccess::BlockAccesser* block_accesser);
   Status Start();
   Status Shutdown();
 
-  Status Put(ContextSPtr ctx, const BlockKey& key, const Block* block);
+  Status Put(ContextSPtr ctx, const BlockKey& key, const Block* block,
+             RetryOption option = {});
   Status Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
                size_t length, IOBuffer* buffer);
 
  private:
-  static int HandleClosure(void* meta,
-                           bthread::TaskIterator<TaskClosure*>& iter);
+  // Why use bthread::ExecutionQueue?
+  //  bthread -> Put(...) -> BlockAccesser::AsyncGet(...)
+  //  maybe there is pthread synchronization semantics in function
+  //  BlockAccesser::AsyncGet.
+  class DispatchTask {
+   public:
+    DispatchTask(std::function<void()> dispatch, std::function<void()> abort)
+        : dispatch_(std::move(dispatch)), abort_(std::move(abort)) {}
+
+    void Dispatch() { dispatch_(); }
+    void Abort() { abort_(); }
+
+   private:
+    std::function<void()> dispatch_;
+    std::function<void()> abort_;
+  };
+
+  static int HandleTask(void* meta, bthread::TaskIterator<DispatchTask*>& iter);
+
+  Status DoPut(const BlockKey& key, const Block* block, RetryOption option);
+  Status PutAttempt(const BlockKey& key, const char* data, size_t size);
+  Status RangeAttempt(const BlockKey& key, off_t offset, size_t length,
+                      char* data, size_t* actual_len);
+  // Returns false if the client is shut down before the backoff elapses.
+  bool BackoffSleep(uint64_t backoff_ms);
+  static bool IsRetriable(const Status& status) {
+    return !status.IsNotFound() && !status.IsNotSupport();
+  }
 
   std::atomic<bool> running_;
   blockaccess::BlockAccesser* block_accesser_;
-  bthread::ExecutionQueueId<TaskClosure*> queue_id_;
-  iutil::TaskExecutionQueueSPtr upload_retry_queue_;
-  iutil::TaskExecutionQueueSPtr download_retry_queue_;
-  bvar::PassiveStatus<int64_t> num_upload_retry_task_;
-  bvar::PassiveStatus<int64_t> num_download_retry_task_;
+  bthread::ExecutionQueueId<DispatchTask*> queue_id_;
+  std::atomic<int64_t> inflight_puts_{0};
   std::unique_ptr<
       utils::TaskThreadPool<bthread::Mutex, bthread::ConditionVariable>>
       thread_pool_;
+  bvar::Adder<int64_t> num_upload_retry_{"dingofs_storage_upload_total_retry"};
+  bvar::Adder<int64_t> num_download_retry_{
+      "dingofs_storage_download_total_retry"};
   bvar::Adder<int64_t> num_async_put_{"dingofs_storage_num_async_put"};
   bvar::Adder<int64_t> pending_async_put_{"dingofs_storage_pending_async_put"};
 };
 
 using StorageClientUPtr = std::unique_ptr<StorageClient>;
 using StorageClientSPtr = std::shared_ptr<StorageClient>;
-
-std::ostream& operator<<(std::ostream& os, const PutBlockTask& task);
-std::ostream& operator<<(std::ostream& os, const RangeBlockTask& task);
 
 }  // namespace cache
 }  // namespace dingofs

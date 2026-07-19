@@ -65,6 +65,20 @@ void AwsCrtS3Client::Init(const S3Options& options) {
     config->useVirtualAddressing =
         options.aws_sdk_config.use_virtual_addressing;
 
+    // NO_RETRY disables crt-internal retry: the upper storage client owns
+    // retry with backoff, stacking another retry layer here amplifies load.
+    using CrtRetryStrategyType =
+        S3CrtClientConfiguration::CrtRetryStrategyConfig::CrtRetryStrategyType;
+    if (options.aws_sdk_config.sdk_max_retries <= 0) {
+      config->crtRetryStrategyConfig.crtRetryStrategyType =
+          CrtRetryStrategyType::NO_RETRY;
+    } else {
+      config->crtRetryStrategyConfig.crtRetryStrategyType =
+          CrtRetryStrategyType::EXPONENTIAL_BACKOFF;
+      config->crtRetryStrategyConfig.config.maxRetries =
+          options.aws_sdk_config.sdk_max_retries;
+    }
+
     if (options.aws_sdk_config.enable_telemetry) {
       LOG(INFO) << "[s3_crt] enable telemetry.";
       using namespace ::opentelemetry::exporter::otlp;
@@ -155,10 +169,9 @@ void AwsCrtS3Client::AsyncPutObject(const std::string& bucket,
             user_ctx->key, response.GetError().GetExceptionName(),
             response.GetError().GetMessage());
 
-        user_ctx->status =
-            response.IsSuccess()
-                ? Status::OK()
-                : Status::IoError(response.GetError().GetMessage());
+        user_ctx->status = response.IsSuccess()
+                               ? Status::OK()
+                               : S3ErrorToStatus(response.GetError());
         user_ctx->cb(user_ctx);
       };
 
@@ -244,10 +257,9 @@ void AwsCrtS3Client::AsyncGetObject(const std::string& bucket,
             response.GetError().GetMessage());
 
         user_ctx->actual_len = response.GetResult().GetContentLength();
-        user_ctx->status =
-            response.IsSuccess()
-                ? Status::OK()
-                : Status::IoError(response.GetError().GetMessage());
+        user_ctx->status = response.IsSuccess()
+                               ? Status::OK()
+                               : S3ErrorToStatus(response.GetError());
         user_ctx->cb(user_ctx);
       };
 

@@ -22,186 +22,66 @@
 
 #include "cache/common/storage_client.h"
 
+#include <brpc/reloadable_flags.h>
+#include <bthread/bthread.h>
 #include <bthread/condition_variable.h>
 #include <bthread/mutex.h>
-#include <butil/iobuf.h>
+#include <butil/time.h>
 #include <glog/logging.h>
 #include <sys/types.h>
 
+#include <algorithm>
 #include <memory>
 
 #include "cache/blockcache/cache_store.h"
 #include "cache/iutil/string_util.h"
-#include "cache/iutil/task_execution_queue.h"
 #include "common/blockaccess/block_accesser.h"
 
 namespace dingofs {
 namespace cache {
 
-DEFINE_int64(storage_upload_retry_timeout_s, 1800,
-             "timeout in seconds for upload retry");
-DEFINE_validator(storage_upload_retry_timeout_s, brpc::PassValidate);
+DEFINE_uint32(storage_upload_max_tries, 10,
+              "maximum tries (including the first attempt) for uploading one "
+              "block to storage");
+DEFINE_validator(storage_upload_max_tries, brpc::PassValidate);
 
-DEFINE_int64(storage_download_retry_timeout_s, 1800,
-             "timeout in seconds for download retry");
-DEFINE_validator(storage_download_retry_timeout_s, brpc::PassValidate);
+DEFINE_uint32(storage_download_max_tries, 10,
+              "maximum tries (including the first attempt) for downloading "
+              "one block from storage");
+DEFINE_validator(storage_download_max_tries, brpc::PassValidate);
+
+DEFINE_uint32(storage_upload_retry_backoff_base_ms, 1000,
+              "base backoff in milliseconds between upload retries, the real "
+              "backoff is base * tried * tried, capped at 60 seconds");
+DEFINE_validator(storage_upload_retry_backoff_base_ms, brpc::PassValidate);
+
+DEFINE_uint32(storage_download_retry_backoff_base_ms, 300,
+              "base backoff in milliseconds between download retries, the "
+              "real backoff is base * tried, capped at 10 seconds");
+DEFINE_validator(storage_download_retry_backoff_base_ms, brpc::PassValidate);
 
 DEFINE_uint64(storage_upload_thread_pool_size, 4,
               "thread pool size for upload tasks");
 
-static int64_t GetQueueSize(void* meta) {
-  iutil::TaskExecutionQueue* queue =
-      static_cast<iutil::TaskExecutionQueue*>(meta);
-  return queue->Size();
+static constexpr uint64_t kUploadBackoffCapMs = 60 * 1000;
+static constexpr uint64_t kDownloadBackoffCapMs = 10 * 1000;
+
+uint64_t UploadRetryBackoffMs(uint32_t tried) {
+  uint64_t base = FLAGS_storage_upload_retry_backoff_base_ms;
+  return std::min(base * tried * tried, kUploadBackoffCapMs);
 }
 
-PutBlockTask::PutBlockTask(ContextSPtr ctx, const BlockKey& key,
-                           const Block* block,
-                           blockaccess::BlockAccesser* block_accesser,
-                           iutil::TaskExecutionQueueSPtr retry_queue)
-    : ctx_(ctx),
-      key_(key),
-      block_(block),
-      block_accesser_(block_accesser),
-      retry_queue_(retry_queue) {}
-
-void PutBlockTask::Run() {
-  auto ctx = OnPrepare();
-  block_accesser_->AsyncPut(ctx);
-}
-
-blockaccess::PutObjectAsyncContextSPtr PutBlockTask::OnPrepare() {
-  auto ctx = std::make_shared<blockaccess::PutObjectAsyncContext>();
-  ctx->start_time = butil::gettimeofday_us();
-  ctx->key = key_.StoreKey();
-  ctx->buffer = block_->buffer.Fetch1();
-  ctx->buffer_size = block_->buffer.Size();
-  ctx->retry = 0;
-  ctx->cb = [this](const blockaccess::PutObjectAsyncContextSPtr& ctx) {
-    OnCallback(ctx);
-  };
-  return ctx;
-}
-
-void PutBlockTask::OnCallback(
-    const blockaccess::PutObjectAsyncContextSPtr& ctx) {
-  auto status = ctx->status;
-  if (status.ok()) {
-    OnComplete(status);
-  } else if (ctx->start_time + FLAGS_storage_upload_retry_timeout_s * 1e6 >
-             butil::gettimeofday_us()) {
-    OnRetry(ctx);
-  } else {
-    LOG(ERROR) << "Upload block exceed max retry timeout: key = " << ctx->key
-               << ", retry(" << ctx->retry << "), elapsed("
-               << (butil::gettimeofday_us() - ctx->start_time) / 1e6 << "s)"
-               << ",  status = " << ctx->status.ToString();
-    OnComplete(status);
-  }
-}
-
-void PutBlockTask::OnRetry(const blockaccess::PutObjectAsyncContextSPtr& ctx) {
-  ctx->retry++;
-  LOG(WARNING) << "Retry upload block: key = " << ctx->key << ", retry("
-               << ctx->retry << "), elapsed("
-               << (butil::gettimeofday_us() - ctx->start_time) / 1e6 << "s)"
-               << ",  status = " << ctx->status.ToString();
-
-  retry_queue_->Submit([this, ctx]() { block_accesser_->AsyncPut(ctx); });
-}
-
-void PutBlockTask::OnComplete(Status s) {
-  TaskClosure::status() = s;
-  TaskClosure::Run();
-}
-
-RangeBlockTask::RangeBlockTask(ContextSPtr ctx, const BlockKey& key,
-                               off_t offset, size_t length, IOBuffer* buffer,
-                               blockaccess::BlockAccesser* block_accesser,
-                               iutil::TaskExecutionQueueSPtr retry_queue)
-    : ctx_(ctx),
-      key_(key),
-      offset_(offset),
-      length_(length),
-      buffer_(buffer),
-      block_accesser_(block_accesser),
-      retry_queue_(retry_queue) {}
-
-void RangeBlockTask::Run() {
-  auto ctx = OnPrepare();
-  block_accesser_->AsyncGet(ctx);
-}
-
-blockaccess::GetObjectAsyncContextSPtr RangeBlockTask::OnPrepare() {
-  char* data = new char[length_];
-  buffer_->AppendUserData(data, length_, iutil::DeleteBuffer);
-
-  auto ctx = std::make_shared<blockaccess::GetObjectAsyncContext>();
-  ctx->start_time = butil::gettimeofday_us();
-  ctx->key = key_.StoreKey();
-  ctx->buf = buffer_->Fetch1();
-  ctx->offset = offset_;
-  ctx->len = length_;
-  ctx->retry = 0;
-  ctx->actual_len = 0;
-  ctx->cb = [this](const blockaccess::GetObjectAsyncContextSPtr& ctx) {
-    OnCallback(ctx);
-  };
-
-  return ctx;
-}
-
-void RangeBlockTask::OnCallback(
-    const blockaccess::GetObjectAsyncContextSPtr& ctx) {
-  auto status = ctx->status;
-  if (status.ok()) {
-    CHECK_EQ(ctx->actual_len, length_)
-        << "actual_len: " << ctx->actual_len << ", expected_len: " << length_;
-    OnComplete(status);
-  } else if (status.IsNotFound()) {
-    LOG(WARNING) << "Download block failed, object not found : key = "
-                 << ctx->key << ",  status = " << ctx->status.ToString();
-    OnComplete(status);
-  } else if (ctx->start_time + FLAGS_storage_download_retry_timeout_s * 1e6 >
-             butil::gettimeofday_us()) {
-    OnRetry(ctx);
-  } else {
-    LOG(ERROR) << "Download block exceed max retry timeout: key = " << ctx->key
-               << ", retry(" << ctx->retry << "), elapsed("
-               << (butil::gettimeofday_us() - ctx->start_time) / 1e6 << "s)"
-               << ",  status = " << ctx->status.ToString();
-    OnComplete(status);
-  }
-}
-
-void RangeBlockTask::OnRetry(
-    const blockaccess::GetObjectAsyncContextSPtr& ctx) {
-  ctx->retry++;
-  LOG(WARNING) << "Retry download block: key = " << ctx->key << ", retry("
-               << ctx->retry << "), elapsed("
-               << (butil::gettimeofday_us() - ctx->start_time) / 1e6 << "s)"
-               << ",  status = " << ctx->status.ToString();
-
-  retry_queue_->Submit([this, ctx]() { block_accesser_->AsyncGet(ctx); });
-}
-
-void RangeBlockTask::OnComplete(Status s) {
-  TaskClosure::status() = s;
-  TaskClosure::Run();
+uint64_t DownloadRetryBackoffMs(uint32_t tried) {
+  uint64_t base = FLAGS_storage_download_retry_backoff_base_ms;
+  return std::min(base * tried, kDownloadBackoffCapMs);
 }
 
 StorageClient::StorageClient(blockaccess::BlockAccesser* block_accesser)
     : running_(false),
       block_accesser_(block_accesser),
       queue_id_({0}),
-      upload_retry_queue_(std::make_shared<iutil::TaskExecutionQueue>()),
-      download_retry_queue_(std::make_shared<iutil::TaskExecutionQueue>()),
       thread_pool_(std::make_unique<utils::TaskThreadPool<
-                       bthread::Mutex, bthread::ConditionVariable>>()),
-      num_upload_retry_task_("dingofs_storage_upload_retry_count", GetQueueSize,
-                             upload_retry_queue_.get()),
-      num_download_retry_task_("dingofs_storage_download_retry_count",
-                               GetQueueSize, download_retry_queue_.get()) {}
+                       bthread::Mutex, bthread::ConditionVariable>>()) {}
 
 Status StorageClient::Start() {
   if (running_.exchange(true)) {
@@ -216,14 +96,11 @@ Status StorageClient::Start() {
   bthread::ExecutionQueueOptions queue_options;
   queue_options.use_pthread = true;
   int rc = bthread::execution_queue_start(&queue_id_, &queue_options,
-                                          HandleClosure, this);
+                                          HandleTask, this);
   if (rc != 0) {
     LOG(ERROR) << "Fail to start ExecutionQueue";
     return Status::Internal("start execution queue fail");
   }
-
-  upload_retry_queue_->Start();
-  download_retry_queue_->Start();
 
   LOG(INFO) << "StorageClient is up";
 
@@ -238,6 +115,14 @@ Status StorageClient::Shutdown() {
 
   LOG(INFO) << "StorageClient is shutting down...";
 
+  // Wait for inflight Put calls to drain before stopping the thread pool:
+  // Stop() drops queued tasks and a dropped dispatch would strand its waiter.
+  // Put calls drain promptly since backoff sleeps abort once running_ is
+  // false and new calls are rejected at entry.
+  while (inflight_puts_.load(std::memory_order_acquire) > 0) {
+    bthread_usleep(10 * 1000);
+  }
+
   if (bthread::execution_queue_stop(queue_id_) != 0) {
     LOG(ERROR) << "Fail to stop ExecutionQueue";
     return Status::Internal("stop execution queue failed");
@@ -248,73 +133,207 @@ Status StorageClient::Shutdown() {
 
   thread_pool_->Stop();
 
-  upload_retry_queue_->Shutdown();
-  download_retry_queue_->Shutdown();
-
   LOG(INFO) << "StorageClient is down";
   return Status::OK();
 }
 
 Status StorageClient::Put(ContextSPtr ctx, const BlockKey& key,
-                          const Block* block) {
-  auto task =
-      PutBlockTask(ctx, key, block, block_accesser_, upload_retry_queue_);
-  // CHECK_EQ(0, bthread::execution_queue_execute(queue_id_, &task));
+                          const Block* block, RetryOption option) {
+  (void)ctx;
+
+  // Counted so Shutdown() can wait for inflight Put calls to drain before
+  // stopping the thread pool.
+  inflight_puts_.fetch_add(1, std::memory_order_acq_rel);
+  auto status = DoPut(key, block, option);
+  inflight_puts_.fetch_sub(1, std::memory_order_acq_rel);
+  return status;
+}
+
+Status StorageClient::DoPut(const BlockKey& key, const Block* block,
+                            RetryOption option) {
+  if (!running_.load(std::memory_order_acquire)) {
+    return Status::Abort("storage client is not running");
+  }
+
+  uint32_t max_tries =
+      option.max_tries > 0 ? option.max_tries : FLAGS_storage_upload_max_tries;
+  max_tries = std::max(max_tries, 1U);
+
+  const char* data = block->buffer.Fetch1();
+  size_t size = block->buffer.Size();
+
+  Status status;
+  for (uint32_t tried = 1;; tried++) {
+    status = PutAttempt(key, data, size);
+    if (status.ok()) {
+      return status;
+    } else if (!IsRetriable(status)) {
+      LOG(ERROR) << "Give up uploading block for unretriable error: key = "
+                 << key.Filename() << ", size = " << size
+                 << ", status = " << status.ToString();
+      return status;
+    } else if (tried >= max_tries) {
+      LOG(ERROR) << "Upload block exceed max tries: key = " << key.Filename()
+                 << ", size = " << size << ", tried(" << tried << "/"
+                 << max_tries << "), status = " << status.ToString();
+      return status;
+    }
+
+    auto backoff_ms = UploadRetryBackoffMs(tried);
+    num_upload_retry_ << 1;
+    LOG(WARNING) << "Retry upload block: key = " << key.Filename()
+                 << ", size = " << size << ", tried(" << tried << "/"
+                 << max_tries << "), backoff(" << backoff_ms
+                 << "ms), status = " << status.ToString();
+
+    if (!BackoffSleep(backoff_ms)) {
+      return Status::Abort("storage client is shutting down");
+    }
+  }
+}
+
+Status StorageClient::PutAttempt(const BlockKey& key, const char* data,
+                                 size_t size) {
+  auto aws_ctx = std::make_shared<blockaccess::PutObjectAsyncContext>();
+  aws_ctx->start_time = butil::gettimeofday_us();
+  aws_ctx->key = key.StoreKey();
+  aws_ctx->buffer = data;
+  aws_ctx->buffer_size = size;
+  aws_ctx->retry = 0;
+
+  TaskClosure done;
+  aws_ctx->cb = [&done](const blockaccess::PutObjectAsyncContextSPtr&) {
+    done.Run();
+  };
+
   pending_async_put_ << 1;
-  thread_pool_->Enqueue([&task, this]() mutable {
+  thread_pool_->Enqueue([this, aws_ctx]() {
     pending_async_put_ << -1;
 
     num_async_put_ << 1;
-    task.Run();
+    block_accesser_->AsyncPut(aws_ctx);
     num_async_put_ << -1;
   });
 
-  task.Wait();
-  auto status = task.status();
-  if (!status.ok()) {
-    LOG(ERROR) << "Fail to put block to storage, task=" << task;
-  }
-  return status;
+  done.Wait();
+  return aws_ctx->status;
 }
 
 Status StorageClient::Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
                             size_t length, IOBuffer* buffer) {
-  auto task = RangeBlockTask(ctx, key, offset, length, buffer, block_accesser_,
-                             download_retry_queue_);
-  CHECK_EQ(0, bthread::execution_queue_execute(queue_id_, &task));
+  (void)ctx;
 
-  task.Wait();
-  auto status = task.status();
-  if (!status.ok()) {
-    LOG(ERROR) << "Fail to range block from storage, task=" << task;
+  if (!running_.load(std::memory_order_acquire)) {
+    return Status::Abort("storage client is not running");
   }
-  return status;
+
+  uint32_t max_tries = std::max(FLAGS_storage_download_max_tries, 1U);
+
+  // Only one attempt is in flight at a time, so the same buffer is safely
+  // reused across attempts.
+  char* data = new char[length];
+  buffer->AppendUserData(data, length, iutil::DeleteBuffer);
+
+  Status status;
+  for (uint32_t tried = 1;; tried++) {
+    size_t actual_len = 0;
+    status = RangeAttempt(key, offset, length, data, &actual_len);
+    if (status.ok()) {
+      CHECK_EQ(actual_len, length)
+          << "actual_len: " << actual_len << ", expected_len: " << length;
+      return status;
+    } else if (status.IsNotFound()) {
+      LOG(WARNING) << "Download block failed, object not found: key = "
+                   << key.Filename() << ", status = " << status.ToString();
+      return status;
+    } else if (!IsRetriable(status)) {
+      LOG(ERROR) << "Give up downloading block for unretriable error: key = "
+                 << key.Filename() << ", offset = " << offset
+                 << ", length = " << length
+                 << ", status = " << status.ToString();
+      return status;
+    } else if (tried >= max_tries) {
+      LOG(ERROR) << "Download block exceed max tries: key = " << key.Filename()
+                 << ", offset = " << offset << ", length = " << length
+                 << ", tried(" << tried << "/" << max_tries
+                 << "), status = " << status.ToString();
+      return status;
+    }
+
+    auto backoff_ms = DownloadRetryBackoffMs(tried);
+    num_download_retry_ << 1;
+    LOG(WARNING) << "Retry download block: key = " << key.Filename()
+                 << ", offset = " << offset << ", length = " << length
+                 << ", tried(" << tried << "/" << max_tries << "), backoff("
+                 << backoff_ms << "ms), status = " << status.ToString();
+
+    if (!BackoffSleep(backoff_ms)) {
+      return Status::Abort("storage client is shutting down");
+    }
+  }
 }
 
-int StorageClient::HandleClosure(void* meta,
-                                 bthread::TaskIterator<TaskClosure*>& iter) {
+Status StorageClient::RangeAttempt(const BlockKey& key, off_t offset,
+                                   size_t length, char* data,
+                                   size_t* actual_len) {
+  auto aws_ctx = std::make_shared<blockaccess::GetObjectAsyncContext>();
+  aws_ctx->start_time = butil::gettimeofday_us();
+  aws_ctx->key = key.StoreKey();
+  aws_ctx->buf = data;
+  aws_ctx->offset = offset;
+  aws_ctx->len = length;
+  aws_ctx->retry = 0;
+  aws_ctx->actual_len = 0;
+
+  TaskClosure done;
+  aws_ctx->cb = [&done](const blockaccess::GetObjectAsyncContextSPtr&) {
+    done.Run();
+  };
+
+  DispatchTask task([this, aws_ctx]() { block_accesser_->AsyncGet(aws_ctx); },
+                    [aws_ctx, &done]() {
+                      aws_ctx->status =
+                          Status::Abort("storage client is shutting down");
+                      done.Run();
+                    });
+  if (bthread::execution_queue_execute(queue_id_, &task) != 0) {
+    return Status::Abort("storage client is shutting down");
+  }
+
+  done.Wait();
+  *actual_len = aws_ctx->actual_len;
+  return aws_ctx->status;
+}
+
+bool StorageClient::BackoffSleep(uint64_t backoff_ms) {
+  constexpr uint64_t kSliceMs = 100;
+  while (backoff_ms > 0) {
+    if (!running_.load(std::memory_order_acquire)) {
+      return false;
+    }
+    auto sleep_ms = std::min(backoff_ms, kSliceMs);
+    bthread_usleep(sleep_ms * 1000);
+    backoff_ms -= sleep_ms;
+  }
+  return running_.load(std::memory_order_acquire);
+}
+
+int StorageClient::HandleTask(void* meta,
+                              bthread::TaskIterator<DispatchTask*>& iter) {
+  (void)meta;
   if (iter.is_queue_stopped()) {
+    // Complete the stranded tasks so their waiters wake up instead of
+    // hanging forever.
+    for (; iter; iter++) {
+      (*iter)->Abort();
+    }
     return 0;
   }
 
-  StorageClient* self = static_cast<StorageClient*>(meta);
   for (; iter; iter++) {
-    auto* task = *iter;
-    task->Run();
+    (*iter)->Dispatch();
   }
   return 0;
-}
-
-std::ostream& operator<<(std::ostream& os, const PutBlockTask& task) {
-  os << "PutBlockTask{key=" << task.key_.Filename()
-     << " size=" << task.block_->buffer.Size() << "}";
-  return os;
-}
-
-std::ostream& operator<<(std::ostream& os, const RangeBlockTask& task) {
-  os << "RangeBlockTask{key=" << task.key_.Filename()
-     << " offset=" << task.offset_ << " length=" << task.length_ << "}";
-  return os;
 }
 
 }  // namespace cache

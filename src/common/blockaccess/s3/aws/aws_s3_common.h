@@ -21,10 +21,13 @@
 #include <memory>
 #include <string>
 
+#include "aws/core/client/AWSError.h"
 #include "aws/core/client/AsyncCallerContext.h"
+#include "aws/core/http/HttpTypes.h"
 #include "aws/core/utils/memory/stl/AWSStreamFwd.h"
 #include "aws/core/utils/stream/PreallocatedStreamBuf.h"
 #include "common/blockaccess/accesser_common.h"
+#include "common/status.h"
 #include "utils/macros.h"
 
 #define AWS_ALLOCATE_TAG __FILE__ ":" STRINGIFY(__LINE__)
@@ -60,6 +63,19 @@ class PreallocatedIOStream : public Aws::IOStream {
     delete rdbuf();
   }
 };
+
+// Maps an aws error to Status so upper layers can classify without an extra
+// HeadObject probe. E is Aws::S3::S3Errors or Aws::S3Crt::S3CrtErrors: both
+// enums share the member names used here.
+template <typename E>
+inline Status S3ErrorToStatus(const Aws::Client::AWSError<E>& error) {
+  if (error.GetErrorType() == E::NO_SUCH_KEY ||
+      error.GetErrorType() == E::RESOURCE_NOT_FOUND ||
+      error.GetResponseCode() == Aws::Http::HttpResponseCode::NOT_FOUND) {
+    return Status::NotFound(error.GetMessage());
+  }
+  return Status::IoError(error.GetMessage());
+}
 
 // https://developer.mozilla.org/zh-CN/docs/Web/HTTP/Range_requests
 inline Aws::String GetObjectRequestRange(uint64_t offset, uint64_t len) {

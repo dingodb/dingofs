@@ -16,12 +16,14 @@
 
 #include "common/blockaccess/s3/aws/aws_legacy_s3_client.h"
 
+#include <algorithm>
 #include <memory>
 #include <string>
 #include <utility>
 
 #include "aws/core/auth/AWSCredentials.h"
 #include "aws/core/client/ClientConfiguration.h"
+#include "aws/core/client/DefaultRetryStrategy.h"
 #include "aws/core/utils/memory/AWSMemory.h"
 #include "aws/core/utils/memory/stl/AWSString.h"
 #include "aws/s3/S3Client.h"
@@ -67,6 +69,12 @@ void AwsLegacyS3Client::Init(const S3Options& options) {
     config->maxConnections = s3_options_.aws_sdk_config.max_connections;
     config->connectTimeoutMs = s3_options_.aws_sdk_config.connect_timeout;
     config->requestTimeoutMs = s3_options_.aws_sdk_config.request_timeout;
+    // maxRetries=0 disables sdk-internal retry: the upper storage client owns
+    // retry with backoff, stacking another retry layer here amplifies load.
+    config->retryStrategy =
+        Aws::MakeShared<Aws::Client::DefaultRetryStrategy>(
+            "AwsLegacyS3Client",
+            std::max(s3_options_.aws_sdk_config.sdk_max_retries, 0));
 
     if (s3_options_.aws_sdk_config.use_thread_pool) {
       LOG(INFO) << fmt::format(
@@ -171,10 +179,9 @@ void AwsLegacyS3Client::AsyncPutObject(const std::string& bucket,
             user_ctx->key, response.GetError().GetExceptionName(),
             response.GetError().GetMessage());
 
-        user_ctx->status =
-            (response.IsSuccess()
-                 ? Status::OK()
-                 : Status::IoError(response.GetError().GetMessage()));
+        user_ctx->status = response.IsSuccess()
+                               ? Status::OK()
+                               : S3ErrorToStatus(response.GetError());
         user_ctx->cb(user_ctx);
       };
 
@@ -261,10 +268,9 @@ void AwsLegacyS3Client::AsyncGetObject(const std::string& bucket,
             response.GetError().GetMessage());
 
         user_ctx->actual_len = response.GetResult().GetContentLength();
-        user_ctx->status =
-            response.IsSuccess()
-                ? Status::OK()
-                : Status::IoError(response.GetError().GetMessage());
+        user_ctx->status = response.IsSuccess()
+                               ? Status::OK()
+                               : S3ErrorToStatus(response.GetError());
         user_ctx->cb(user_ctx);
       };
 
