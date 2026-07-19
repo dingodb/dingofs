@@ -89,3 +89,7 @@ dist/
 
 CLAUDE.local.md
 .claude
+
+.Yi/
+.docs/
+.issue/
