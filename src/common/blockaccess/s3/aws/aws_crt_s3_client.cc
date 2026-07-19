@@ -18,6 +18,7 @@
 
 #include <aws/core/utils/logging/LogLevel.h>
 
+#include <algorithm>
 #include <any>
 #include <memory>
 
@@ -64,6 +65,31 @@ void AwsCrtS3Client::Init(const S3Options& options) {
     config->requestTimeoutMs = options.aws_sdk_config.request_timeout;
     config->useVirtualAddressing =
         options.aws_sdk_config.use_virtual_addressing;
+
+    // The upper storage client owns retry with backoff, keep crt-internal
+    // retry minimal to avoid stacking another retry layer. Never use
+    // CrtRetryStrategyType::NO_RETRY: its acquire_token unconditionally
+    // raises AWS_IO_RETRY_PERMISSION_DENIED and aws-c-s3 acquires a retry
+    // token before the FIRST attempt of every request, so every request
+    // fails without sending anything. EXPONENTIAL_BACKOFF keeps retry state
+    // per request; maxRetries must stay in [1, 63]: 0 falls back to
+    // aws-c-io's default of 5, and > 63 makes the strategy factory return
+    // NULL which silently reverts to aws-c-s3's default standard strategy
+    // (shared cross-request token bucket).
+    using CrtRetryStrategyType =
+        S3CrtClientConfiguration::CrtRetryStrategyConfig::CrtRetryStrategyType;
+    config->crtRetryStrategyConfig.crtRetryStrategyType =
+        CrtRetryStrategyType::EXPONENTIAL_BACKOFF;
+    int sdk_max_retries =
+        std::clamp(options.aws_sdk_config.sdk_max_retries, 1, 63);
+    // 0 -> 1 is the documented default behavior, only warn on real misconfig
+    if (options.aws_sdk_config.sdk_max_retries > 63 ||
+        options.aws_sdk_config.sdk_max_retries < 0) {
+      LOG(WARNING) << fmt::format(
+          "[s3_crt] sdk_max_retries {} out of crt range, clamped to {}.",
+          options.aws_sdk_config.sdk_max_retries, sdk_max_retries);
+    }
+    config->crtRetryStrategyConfig.config.maxRetries = sdk_max_retries;
 
     if (options.aws_sdk_config.enable_telemetry) {
       LOG(INFO) << "[s3_crt] enable telemetry.";
@@ -155,10 +181,9 @@ void AwsCrtS3Client::AsyncPutObject(const std::string& bucket,
             user_ctx->key, response.GetError().GetExceptionName(),
             response.GetError().GetMessage());
 
-        user_ctx->status =
-            response.IsSuccess()
-                ? Status::OK()
-                : Status::IoError(response.GetError().GetMessage());
+        user_ctx->status = response.IsSuccess()
+                               ? Status::OK()
+                               : S3ErrorToStatus(response.GetError());
         user_ctx->cb(user_ctx);
       };
 
@@ -244,10 +269,9 @@ void AwsCrtS3Client::AsyncGetObject(const std::string& bucket,
             response.GetError().GetMessage());
 
         user_ctx->actual_len = response.GetResult().GetContentLength();
-        user_ctx->status =
-            response.IsSuccess()
-                ? Status::OK()
-                : Status::IoError(response.GetError().GetMessage());
+        user_ctx->status = response.IsSuccess()
+                               ? Status::OK()
+                               : S3ErrorToStatus(response.GetError());
         user_ctx->cb(user_ctx);
       };
 

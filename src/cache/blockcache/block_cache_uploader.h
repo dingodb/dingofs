@@ -23,6 +23,7 @@
 #ifndef DINGOFS_SRC_CACHE_BLOCKCACHE_BLOCK_CACHE_UPLOADER_H_
 #define DINGOFS_SRC_CACHE_BLOCKCACHE_BLOCK_CACHE_UPLOADER_H_
 
+#include <bthread/condition_variable.h>
 #include <bthread/mutex.h>
 
 #include <memory>
@@ -88,7 +89,10 @@ class BlockCacheUploader {
   void OnComplete(const StageBlock& sblock, Status status);
 
   std::atomic<bool> running_;
-  bthread::Mutex mutex_;
+  // Failed uploads park on this condvar until their slow-cycle retry is due;
+  // Shutdown() broadcasts it so all parked bthreads exit at once.
+  bthread::Mutex park_mutex_;
+  bthread::ConditionVariable park_cond_;
   CacheStoreSPtr store_;
   StorageClientPoolSPtr storage_client_pool_;
   PendingQueueUPtr pending_queue_;
