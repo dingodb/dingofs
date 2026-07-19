@@ -293,6 +293,8 @@ Status CacheRetriever::Range(const BlockKey& key, off_t offset, size_t length,
                              size_t block_length, IOBuffer* buffer) {
   CHECK_GT(block_length, 0);
 
+  const size_t size_before = buffer->Size();
+
   std::vector<SegmentHandler> handlers;
   std::vector<BlockFetcher::Task*> to_fetch;
   const auto& block = block_map_->GetBlock(key);
@@ -339,6 +341,15 @@ Status CacheRetriever::Range(const BlockKey& key, off_t offset, size_t length,
     if (!status.ok()) {
       return status;
     }
+  }
+
+  // A short cached segment or a request straddling the block end would
+  // otherwise yield a short body with OK status, crashing the reader CHECK.
+  if (buffer->Size() - size_before != length) {
+    LOG(ERROR) << "Fetched block range size mismatch: key=" << key.Filename()
+               << ", offset=" << offset << ", length=" << length
+               << ", got=" << (buffer->Size() - size_before);
+    return Status::Internal("fetched range size mismatch");
   }
   return Status::OK();
 }

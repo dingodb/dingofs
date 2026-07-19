@@ -123,6 +123,14 @@ Status Upstream::SendRangeRequest(ContextSPtr ctx, const BlockKey& key,
   auto response =
       SendRequest<pb::cache::RangeRequest, pb::cache::RangeResponse>(request);
   status = response.status;
+  if (status.ok() && response.body.Size() != length) {
+    // A mismatched body would crash the read path (which CHECKs the length);
+    // fail here so the tier cache falls back to storage.
+    LOG(ERROR) << "Range response body size mismatch, expected=" << length
+               << ", but got=" << response.body.Size()
+               << ", request=" << request;
+    status = Status::Internal("range response body size mismatch");
+  }
   if (status.ok()) {
     *buffer = std::move(response.body);
     ctx->SetCacheHit(response.raw.cache_hit());

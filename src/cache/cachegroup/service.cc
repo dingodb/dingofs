@@ -28,7 +28,6 @@
 
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
-#include "cache/cachegroup/service.h"
 #include "cache/common/context.h"
 #include "cache/common/error.h"
 #include "common/io_buffer.h"
@@ -100,8 +99,19 @@ void BlockCacheServiceImpl::Range(google::protobuf::RpcController* controller,
   brpc::ClosureGuard done_guard(srv_done);
 
   IOBuffer buffer;
-  status = node_->Range(ctx, BlockKey(request->block_key()), request->offset(),
-                        request->length(), &buffer, request->block_size());
+  status = CheckRangeRequest(request->offset(), request->length(),
+                             request->block_size());
+  if (status.ok()) {
+    status =
+        node_->Range(ctx, BlockKey(request->block_key()), request->offset(),
+                     request->length(), &buffer, request->block_size());
+  }
+  if (status.ok() && buffer.Size() != request->length()) {
+    LOG(ERROR) << "Range response body size mismatch, expected="
+               << request->length() << ", but got=" << buffer.Size()
+               << ", request=" << request->ShortDebugString();
+    status = Status::Internal("response body size mismatch");
+  }
   if (status.ok()) {
     cntl->response_attachment() = buffer.IOBuf().movable();
   }

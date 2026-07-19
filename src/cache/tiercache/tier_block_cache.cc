@@ -206,6 +206,8 @@ Status TierBlockCache::Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
 
   // Secondly, try remote cache
   if (EnableRemoteCache()) {
+    // Drop partial data a failed local read may have left in the buffer.
+    *buffer = IOBuffer();
     status =
         remote_block_cache_->Range(ctx, key, offset, length, buffer, option);
     if (status.ok()) {
@@ -223,6 +225,8 @@ Status TierBlockCache::Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
 
   // Finally, retrieve from storage if allowed
   if (option.retrieve_storage) {
+    // Drop partial data a failed cache read may have left in the buffer.
+    *buffer = IOBuffer();
     status = storage_client_->Range(ctx, key, offset, length, buffer);
     if (!status.ok()) {
       LOG(ERROR) << "Fail to range block from storage, key=" << key.Filename()

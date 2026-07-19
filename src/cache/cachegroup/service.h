@@ -70,6 +70,19 @@ class BlockCacheServiceImpl final : public pb::cache::BlockCacheService {
     return Status::OK();
   }
 
+  Status CheckRangeRequest(uint64_t offset, uint64_t length,
+                           uint64_t block_size) {
+    // block_size is 0 when the client does not know the whole block length
+    if (length == 0 ||
+        (block_size > 0 &&
+         (length > block_size || offset > block_size - length))) {
+      LOG(ERROR) << "Invalid range request, offset=" << offset
+                 << ", length=" << length << ", block_size=" << block_size;
+      return Status::InvalidParam("invalid range request");
+    }
+    return Status::OK();
+  }
+
   CacheNodeSPtr node_;
 };
 
