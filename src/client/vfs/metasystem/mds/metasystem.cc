@@ -547,12 +547,16 @@ Status MDSMetaSystem::Lookup(ContextSPtr ctx, Ino parent,
     return status;
   }
 
-  *attr = Helper::ToAttr(attr_entry);
+  InodeSPtr inode = PutInodeToCache(attr_entry);
+  if (inode != nullptr && attr_entry.version() < inode->Version()) {
+    *attr = inode->ToAttr();
+
+  } else {
+    *attr = Helper::ToAttr(attr_entry);
+  }
 
   bool is_amend = false;
   CorrectAttr(ctx, ctx->start_time_ns, *attr, is_amend, "lookup");
-
-  PutInodeToCache(attr_entry);
 
   return Status::OK();
 }
@@ -1188,11 +1192,14 @@ Status MDSMetaSystem::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh,
       return status;
     }
 
+    InodeSPtr inode = PutInodeToCache(Helper::ToAttr(entry.attr));
+    if (inode != nullptr && entry.attr.version < inode->Version()) {
+      entry.attr = inode->ToAttr();
+    }
+
     bool is_amend = false;
     CorrectAttr(ctx, dir_iterator->LastFetchTimeNs(), entry.attr, is_amend,
                 "readdir");
-
-    PutInodeToCache(Helper::ToAttr(entry.attr));
 
     if (!handler(entry, offset)) {
       break;
@@ -1309,7 +1316,7 @@ Status MDSMetaSystem::GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) {
 
   AttrEntry attr_entry;
 
-  auto inode = GetInodeFromCache(ino);
+  InodeSPtr inode = GetInodeFromCache(ino);
   if (inode != nullptr) {
     attr_entry = inode->ToAttrEntry();
     // ctx->hit_cache = true;
@@ -1317,6 +1324,11 @@ Status MDSMetaSystem::GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) {
   } else {
     auto status = mds_client_.GetAttr(ctx, ino, attr_entry);
     if (!status.ok()) return status;
+
+    InodeSPtr inode = PutInodeToCache(attr_entry);
+    if (inode != nullptr && attr_entry.version() < inode->Version()) {
+      attr_entry = inode->ToAttrEntry();
+    }
   }
 
   *attr = Helper::ToAttr(attr_entry);
