@@ -1,4 +1,4 @@
-# Copyright (c) 2024 dingodb.com, Inc. All Rights Reserved
+# Copyright (c) 2026 dingodb.com, Inc. All Rights Reserved
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,8 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_compile_options(-Wall -Wno-reorder -Wno-overloaded-virtual)
+add_executable(dingo-replay
+  replay.cc
+  replay_parser.cc
+)
 
-add_subdirectory(bench)
-add_subdirectory(mds-cli)
-add_subdirectory(replay)
+target_link_libraries(dingo-replay
+  PROTO_OBJS
+
+  vfs_lib
+  dingofs_common
+
+  brpc::brpc
+  fmt::fmt
+  gflags::gflags
+  glog::glog
+  OpenSSL::SSL
+)
