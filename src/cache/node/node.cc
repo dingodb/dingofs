@@ -276,8 +276,11 @@ Status CacheNode::RetrieveStorage(const BlockHandle& handle, off_t offset,
   // Retrieve the whole block
   IOBuffer block;
   status = RetrieveWholeBlock(handle, block_length, &block);
-  if (status.ok()) {
-    block.AppendTo(buffer, length, offset);
+  if (status.ok() && block.AppendTo(buffer, length, offset) != length) {
+    LOG(ERROR) << "Retrieved block is shorter than requested range: key="
+               << handle.Filename() << ", block size=" << block.Size()
+               << ", offset=" << offset << ", length=" << length;
+    return Status::Internal("retrieved block too short");
   }
   return status;
 }
@@ -355,7 +358,11 @@ Status CacheNode::RunTask(StorageClient* storage_client,
   AllocSlabBuffer(&result.buffer, attr.length);
   auto status =
       storage_client->Range(attr.handle, 0, attr.length, &result.buffer);
+  // result must be filled before Run() wakes waiters: they read
+  // Result().status as the download outcome, which defaults to OK.
+  result.status = status;
   if (!status.ok()) {
+    result.buffer = IOBuffer();  // drop the garbage bytes, free the slab
     task->Run();
     task_tracker_->RemoveTask(attr.handle);
     return status;

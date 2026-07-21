@@ -113,6 +113,37 @@ TEST_F(BlockCacheServiceImplTest, RangeReturnsCacheDownWhenNodeIsDown) {
   EXPECT_EQ(done.count, 1);
 }
 
+TEST_F(BlockCacheServiceImplTest, RangeRejectsInvalidRequest) {
+  CacheNode node;
+  BlockCacheServiceImpl service(ServiceType::kBRPC, &node);
+
+  auto range = [&](uint64_t offset, uint64_t length, uint64_t block_size) {
+    brpc::Controller controller;
+    pb::cache::RangeRequest request;
+    FillHandle(request.mutable_handle());
+    request.set_offset(offset);
+    request.set_length(length);
+    request.set_block_size(block_size);
+    pb::cache::RangeResponse response;
+    CountClosure done;
+    service.Range(&controller, &request, &response, &done);
+    EXPECT_EQ(done.count, 1);
+    return response.status();
+  };
+
+  {  // zero length
+    EXPECT_EQ(range(0, 0, 4096), pb::cache::BlockCacheErrInvalidParam);
+  }
+
+  {  // length beyond block size
+    EXPECT_EQ(range(0, 8192, 4096), pb::cache::BlockCacheErrInvalidParam);
+  }
+
+  {  // range straddling the block end
+    EXPECT_EQ(range(4000, 200, 4096), pb::cache::BlockCacheErrInvalidParam);
+  }
+}
+
 TEST_F(BlockCacheServiceImplTest, CacheRejectsMismatchedBodySize) {
   CacheNode node;
   BlockCacheServiceImpl service(ServiceType::kBRPC, &node);

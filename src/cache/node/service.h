@@ -70,6 +70,8 @@ class BlockCacheServiceImpl final : public pb::cache::BlockCacheService {
 
  private:
   Status CheckBodySize(size_t expected, size_t real);
+  Status CheckRangeRequest(uint64_t offset, uint64_t length,
+                           uint64_t block_size);
   IOBuffer GetRequestAttachment(google::protobuf::RpcController* controller);
   void SetResponseAttachment(google::protobuf::RpcController* controller,
                              IOBuffer* buffer);
