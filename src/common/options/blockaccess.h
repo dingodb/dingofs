@@ -41,6 +41,7 @@ DECLARE_int32(s3_async_thread_num);
 DECLARE_bool(s3_use_thread_pool);
 DECLARE_bool(s3_use_virtual_address);
 DECLARE_bool(s3_enable_telemetry);
+DECLARE_int32(s3_sdk_max_retries);
 
 DECLARE_bool(use_fake_block_access);
 

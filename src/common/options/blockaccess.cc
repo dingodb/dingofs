@@ -44,6 +44,9 @@ DEFINE_bool(s3_use_thread_pool, true, "whether to use thread pool");
 DEFINE_int32(s3_async_thread_num, 256, "async thread num in thread pool");
 DEFINE_bool(s3_use_virtual_address, false, "whether to use virtual address");
 DEFINE_bool(s3_enable_telemetry, false, "whether to enable telemetry");
+DEFINE_int32(s3_sdk_max_retries, 0,
+             "aws sdk internal max retries, 0 means disable sdk internal "
+             "retry (retry is handled by the upper storage client)");
 
 DEFINE_bool(use_fake_block_access, false, "use fake block access");
 
