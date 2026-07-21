@@ -11,7 +11,7 @@ echo "DingoFS project dir: $g_dingo_dir"
 g_build_dir="$g_dingo_dir/build/bin" # /path/to/project/build/bin
 g_deploy_script_dir="$g_dingo_dir/scripts/deploy" # /path/to/project/scripts/deploy
 g_build_release=0
-tools_dingo_file="https://github.com/dingodb/dingocli/releases/download/main/dingo"
+tools_dingo_file="https://github.com/dingodb/dingocli/releases/download/v5.1/dingo"
 
 g_color_yellow=`printf '\033[33m'`
 g_color_red=`printf '\033[31m'`
