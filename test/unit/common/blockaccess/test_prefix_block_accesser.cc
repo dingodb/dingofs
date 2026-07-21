@@ -64,7 +64,7 @@ TEST(PrefixBlockAccesserTest, AsyncPutRetryDoesNotAccumulatePrefix) {
   ctx->cb = [](const PutObjectAsyncContextSPtr&) {};
 
   // Simulate first call + 4 retries — caller passes the SAME ctx and
-  // SAME logical key each time (mirroring storage_client.cc PutBlockTask).
+  // SAME logical key each time (mirroring storage_client.cc PutAttempt).
   for (int i = 0; i < 5; ++i) {
     wrapper.AsyncPut(logical_key, ctx);
   }

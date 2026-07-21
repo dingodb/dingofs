@@ -261,6 +261,11 @@ Status RadosAccesser::Put(const std::string& key, const PutPayload& payload) {
       LOG(ERROR) << "Failed to write object, key: " << key
                  << ", length: " << payload.Size()
                  << ", err: " << strerror(-err);
+      if (err == -EOPNOTSUPP) {
+        // e.g. overwrite on an EC pool without allow_ec_overwrites: resending
+        // the identical request can never succeed, must not be retried.
+        return Status::NotSupport(strerror(-err));
+      }
       return Status::IoError("Failed to write object");
     }
     return Status::OK();
@@ -513,9 +518,14 @@ static void AsyncPutCallback(RadosAsyncIOUnit* io_unit, int ret_code) {
       std::get<std::shared_ptr<PutObjectAsyncContext>>(io_unit->async_context);
   if (ret_code == -ENOMEM) {
     put_context->status = Status::OutOfMemory("rados put ran out of memory");
+  } else if (ret_code == -EOPNOTSUPP) {
+    // e.g. overwrite on an EC pool without allow_ec_overwrites: resending the
+    // identical request can never succeed, must not be retried.
+    put_context->status = Status::NotSupport(strerror(-ret_code));
+  } else if (ret_code < 0) {
+    put_context->status = Status::IoError(strerror(-ret_code));
   } else {
-    put_context->status =
-        (ret_code < 0) ? Status::IoError(strerror(-ret_code)) : Status::OK();
+    put_context->status = Status::OK();
   }
   put_context->cb(put_context);
 }

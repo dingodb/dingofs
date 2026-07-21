@@ -60,6 +60,13 @@ struct AwsSdkConfig {
 
   bool use_virtual_addressing{false};
   bool enable_telemetry{false};
+
+  // 0 minimizes sdk-internal retry: retry is owned by the upper storage
+  // client so failures back off instead of stacking sdk-internal resends.
+  // The legacy client then performs exactly one attempt per request; the
+  // crt client cannot go below one internal retry (two attempts) per
+  // internal part request, see aws_crt_s3_client.cc.
+  int sdk_max_retries{0};
 };
 
 struct S3Options {
@@ -107,6 +114,10 @@ inline void FillAwsSdkConfigFromGFlags(AwsSdkConfig* aws_sdk_config) {
   aws_sdk_config->enable_telemetry = FLAGS_s3_enable_telemetry;
   LOG(INFO) << fmt::format("s3 enable telemetry: {}.",
                            aws_sdk_config->enable_telemetry);
+
+  aws_sdk_config->sdk_max_retries = FLAGS_s3_sdk_max_retries;
+  LOG(INFO) << fmt::format("s3 sdk max retries: {}.",
+                           aws_sdk_config->sdk_max_retries);
 }
 
 }  // namespace blockaccess

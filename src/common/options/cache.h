@@ -54,6 +54,13 @@ DECLARE_uint32(small_block_size_kb);
 // Maximum number of concurrent uploads for staged blocks.
 DECLARE_uint32(upload_stage_max_inflights);
 
+// Maximum tries per round for uploading one stage block to storage, a failed
+// round is re-enqueued on a slow cycle.
+DECLARE_uint32(upload_stage_max_tries);
+
+// Delay in seconds before re-enqueueing the stage block whose upload failed.
+DECLARE_uint32(upload_stage_retry_delay_s);
+
 // Local disk cache ------------------------------------------------------------
 
 // Directory list for stage and cached blocks. Use comma-separated
@@ -185,11 +192,21 @@ DECLARE_uint32(cache_node_state_check_duration_ms);
 
 // Storage and MDS -------------------------------------------------------------
 
-// Maximum retry window for uploading a block to storage, in seconds.
-DECLARE_int64(storage_upload_retry_timeout_s);
+// Maximum tries (including the first attempt) for uploading one block to
+// storage.
+DECLARE_uint32(storage_upload_max_tries);
 
-// Maximum retry window for downloading a block from storage, in seconds.
-DECLARE_int64(storage_download_retry_timeout_s);
+// Maximum tries (including the first attempt) for downloading one block from
+// storage.
+DECLARE_uint32(storage_download_max_tries);
+
+// Base backoff in milliseconds between upload retries, the real backoff is
+// base * tried * tried, capped at 60 seconds.
+DECLARE_uint32(storage_upload_retry_backoff_base_ms);
+
+// Base backoff in milliseconds between download retries, the real backoff is
+// base * tried, capped at 10 seconds.
+DECLARE_uint32(storage_download_retry_backoff_base_ms);
 
 // Number of worker threads for async storage upload tasks.
 DECLARE_uint64(storage_upload_thread_pool_size);
