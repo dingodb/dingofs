@@ -1314,24 +1314,22 @@ Status MDSMetaSystem::GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) {
 
   CHECK(ctx != nullptr) << "context is null";
 
-  AttrEntry attr_entry;
-
   InodeSPtr inode = GetInodeFromCache(ino);
-  if (inode != nullptr) {
-    attr_entry = inode->ToAttrEntry();
-    // ctx->hit_cache = true;
+  if (inode != nullptr && !inode->IsAttrFresh()) {
+    // attr ttl expired, treat as cache miss to refetch from mds for
+    // multi-client consistency
+    inode = nullptr;
+  }
 
-  } else {
+  if (inode == nullptr) {
+    AttrEntry attr_entry;
     auto status = mds_client_.GetAttr(ctx, ino, attr_entry);
     if (!status.ok()) return status;
 
-    InodeSPtr inode = PutInodeToCache(attr_entry);
-    if (inode != nullptr && attr_entry.version() < inode->Version()) {
-      attr_entry = inode->ToAttrEntry();
-    }
+    inode = PutInodeToCache(attr_entry);
   }
 
-  *attr = Helper::ToAttr(attr_entry);
+  *attr = inode->ToAttr();
 
   bool is_amend = false;
   auto status =
@@ -1340,6 +1338,7 @@ Status MDSMetaSystem::GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) {
 
   LOG_DEBUG << fmt::format("[meta.fs.{}] get attr length({}) is_amend({}).",
                            ino, attr->length, is_amend);
+
   return Status::OK();
 }
 
