@@ -23,7 +23,7 @@ DEFINE_bool(daemonize, false, "run in background");
 DEFINE_string(conf, "", "config file");
 
 // log clean
-DEFINE_bool(log_clean_enable, true, "enable log file clean");
+DEFINE_bool(log_clean_enable, false, "enable log file clean");
 DEFINE_validator(log_clean_enable, brpc::PassValidate);
 DEFINE_int32(log_retention_seconds, 604800,
              "log file retention time in seconds");
