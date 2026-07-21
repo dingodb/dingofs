@@ -21,6 +21,7 @@
 
 #include "client/vfs/metasystem/mds/helper.h"
 #include "common/logging.h"
+#include "common/options/client.h"
 #include "fmt/format.h"
 #include "utils/concurrent/concurrent.h"
 #include "utils/time.h"
@@ -38,6 +39,8 @@ bool Inode::PutIf(const AttrEntry& attr) {
       (void*)this, version_, attr.version());
 
   UpdateLastAccessTime();
+  // attr comes from mds, reset freshness even if version is unchanged
+  UpdateLastRefreshTime();
 
   if (attr.version() <= version_) {
     return false;
@@ -133,6 +136,19 @@ void Inode::UpdateLastAccessTime() {
 
 uint64_t Inode::GetlastActiveTime() {
   return last_active_time_s_.load(std::memory_order_relaxed);
+}
+
+void Inode::UpdateLastRefreshTime() {
+  last_refresh_time_s_.store(utils::Timestamp(), std::memory_order_relaxed);
+}
+
+uint64_t Inode::GetLastRefreshTime() const {
+  return last_refresh_time_s_.load(std::memory_order_relaxed);
+}
+
+bool Inode::IsAttrFresh() const {
+  return GetLastRefreshTime() + FLAGS_vfs_meta_inode_attr_ttl_s >
+         utils::Timestamp();
 }
 
 InodeSPtr InodeCache::Put(Ino ino, const AttrEntry& attr) {

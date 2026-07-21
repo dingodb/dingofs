@@ -72,7 +72,8 @@ class Inode {
         maybe_tiny_file_(attr.maybe_tiny_file()),
         version_(attr.version()),
         parents_(attr.parents().begin(), attr.parents().end()),
-        last_active_time_s_(utils::Timestamp()) {
+        last_active_time_s_(utils::Timestamp()),
+        last_refresh_time_s_(utils::Timestamp()) {
     for (const auto& xattr : attr.xattrs()) {
       xattrs_.emplace(xattr.first, xattr.second);
     }
@@ -192,7 +193,13 @@ class Inode {
   void UpdateLastAccessTime();
   uint64_t GetlastActiveTime();
 
+  // check whether attr is still fresh within ttl_s seconds since the last
+  // refresh from mds, ttl_s=0 means never fresh
+  bool IsAttrFresh() const;
+
  private:
+  void UpdateLastRefreshTime();
+  uint64_t GetLastRefreshTime() const;
   mutable utils::RWLock lock_;
 
   const uint32_t fs_id_{0};
@@ -220,6 +227,8 @@ class Inode {
   uint64_t version_{0};
 
   std::atomic<uint64_t> last_active_time_s_{0};
+  // last time attr was refreshed from mds data
+  std::atomic<uint64_t> last_refresh_time_s_{0};
 };
 
 class InodeCache {
