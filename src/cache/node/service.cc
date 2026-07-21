@@ -77,6 +77,20 @@ Status BlockCacheServiceImpl::CheckBodySize(size_t expected, size_t real) {
   return Status::OK();
 }
 
+Status BlockCacheServiceImpl::CheckRangeRequest(uint64_t offset,
+                                                uint64_t length,
+                                                uint64_t block_size) {
+  // block_size is 0 when the client does not know the whole block length
+  if (length == 0 ||
+      (block_size > 0 &&
+       (length > block_size || offset > block_size - length))) {
+    LOG(ERROR) << "Invalid range request, offset=" << offset
+               << ", length=" << length << ", block_size=" << block_size;
+    return Status::InvalidParam("invalid range request");
+  }
+  return Status::OK();
+}
+
 IOBuffer BlockCacheServiceImpl::GetRequestAttachment(
     google::protobuf::RpcController* controller) {
   if (service_type_ == ServiceType::kBRPC) {
@@ -129,8 +143,18 @@ void BlockCacheServiceImpl::Range(google::protobuf::RpcController* controller,
   IOBuffer buffer;
   bool cache_hit = false;
   BlockHandle handle = FromHandlePB(request->handle());
-  status = node_->Range(handle, request->offset(), request->length(), &buffer,
-                        request->block_size(), &cache_hit);
+  status = CheckRangeRequest(request->offset(), request->length(),
+                             request->block_size());
+  if (status.ok()) {
+    status = node_->Range(handle, request->offset(), request->length(),
+                          &buffer, request->block_size(), &cache_hit);
+  }
+  if (status.ok() && buffer.Size() != request->length()) {
+    LOG(ERROR) << "Range response body size mismatch, expected="
+               << request->length() << ", but got=" << buffer.Size()
+               << ", request=" << request->ShortDebugString();
+    status = Status::Internal("response body size mismatch");
+  }
 
   response->set_status(ToPBErr(status));
   response->set_cache_hit(cache_hit);

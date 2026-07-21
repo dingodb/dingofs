@@ -135,10 +135,17 @@ void TCPConnection::Send(const std::string& method,
 
   if (response_attachment != nullptr) {
     auto& attachment = cntl.response_attachment();
-    if (attachment.length() > 0) {  // FIXME:
-      attachment.copy_to(
-          response_attachment->Fetch1(),
-          std::min(attachment.length(), response_attachment->Size()));
+    if (attachment.length() == response_attachment->Size()) {
+      attachment.copy_to(response_attachment->Fetch1(), attachment.length());
+    } else if (attachment.length() > 0) {
+      // A short or oversized body would silently corrupt the pre-allocated
+      // read buffer; fail here so the tier cache falls back to storage. An
+      // empty attachment is legal: error responses carry no body, the pb
+      // status decides.
+      LOG(ERROR) << "Response attachment size mismatch: method=" << method
+                 << ", expected=" << response_attachment->Size()
+                 << ", but got=" << attachment.length();
+      result->SetFailed(EIO, "response attachment size mismatch");
     }
   }
 }
