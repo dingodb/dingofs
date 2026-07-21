@@ -91,7 +91,9 @@ TEST_F(RemoteBlockCacheTest, EnableFlagsFollowCacheGroup) {
   EXPECT_TRUE(cache.IsEnabled());
   EXPECT_TRUE(cache.EnableStage());
   EXPECT_TRUE(cache.EnableCache());
-  EXPECT_TRUE(cache.IsCached(Handle()));
+  // Remote cache state is unknown without an RPC; answering true would make
+  // callers skip prefetch/warmup to the cache group entirely.
+  EXPECT_FALSE(cache.IsCached(Handle()));
 }
 
 TEST_F(RemoteBlockCacheTest, ShutdownBeforeStartIsOk) {

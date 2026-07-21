@@ -288,6 +288,15 @@ void LocalBlockCache::AsyncPrefetch(BlockHandle handle, size_t length,
                                     AsyncCallback cb, PrefetchOption option) {
   DCHECK_RUNNING("LocalBlockCache");
 
+  // Fast path: already-cached block needs no bthread, Prefetch() rechecks
+  // for requests that raced past here before the block was cached.
+  if (IsCached(handle)) {
+    if (cb) {
+      cb(Status::OK());
+    }
+    return;
+  }
+
   auto tracker = prefetch_tracker_;
   auto status = tracker->Add(handle.Filename());
   if (status.IsExist()) {
