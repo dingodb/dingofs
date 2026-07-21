@@ -152,6 +152,20 @@ bool FileSession::Load(const Json::Value& value) {
     }
   }
 
+  // load chunk_set_
+  const auto& chunk_set_value = value["chunk_set"];
+  if (!chunk_set_value.isNull()) {
+    if (!chunk_set_value.isObject()) {
+      LOG(ERROR) << "[meta.filesession] file_session.chunk_set is not object.";
+      return false;
+    }
+
+    if (!chunk_set_->Load(chunk_set_value)) {
+      LOG(ERROR) << "[meta.filesession] load chunk_set fail.";
+      return false;
+    }
+  }
+
   return true;
 }
 
@@ -173,7 +187,7 @@ FileSessionSPtr FileSessionMap::Put(Ino ino, uint64_t fh,
           file_session = it->second;
           file_session->AddSession(fh, session_id, flags);
         } else {
-          file_session = FileSession::New(ino, chunk_cache_.GetOrCreate(ino));
+          file_session = FileSession::New(ino, chunk_size_);
           file_session->AddSession(fh, session_id, flags);
           map[ino] = file_session;
           total_count_ << 1;
@@ -195,10 +209,7 @@ void FileSessionMap::Delete(Ino ino, uint64_t fh) {
         if (it != map.end()) {
           auto& file_session = it->second;
           ref_count = file_session->DeleteSession(fh);
-          if (ref_count == 0) {
-            file_session->GetChunkSet()->ResetLastWriteLength();
-            map.erase(it);
-          }
+          if (ref_count == 0) map.erase(it);
         }
       },
       ino);
@@ -344,7 +355,7 @@ bool FileSessionMap::Load(const Json::Value& value) {
     for (const auto& item : file_sessions) {
       Ino ino = item["ino"].asUInt64();
 
-      auto file_session = FileSession::New(ino, chunk_cache_.GetOrCreate(ino));
+      auto file_session = FileSession::New(ino, chunk_size_);
       file_session->SetInode(inode_cache_.Get(ino));
       CHECK(file_session->Load(item))
           << fmt::format("load file session fail, ino({}).", ino);
