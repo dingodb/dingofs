@@ -141,7 +141,7 @@ MDSMetaSystem::MDSMetaSystem(mds::FsInfoEntry fs_info_entry,
       mds_client_(client_id, fs_info_, std::move(rpc), trace_manager),
       inode_cache_(fs_info_.GetFsId()),
       id_cache_(kSliceIdCacheName, mds_client_),
-      file_session_map_(inode_cache_, chunk_cache_),
+      file_session_map_(inode_cache_, fs_info_.GetChunkSize()),
       batch_processor_(mds_client_),
       compactor_(compactor) {}
 
@@ -213,10 +213,6 @@ bool MDSMetaSystem::GetSummary(Json::Value& value) {
   Json::Value modify_time_memo_value = Json::objectValue;
   modify_time_memo_.Summary(modify_time_memo_value);
   value.append(modify_time_memo_value);
-
-  Json::Value chunk_cache_value = Json::objectValue;
-  chunk_cache_.Summary(chunk_cache_value);
-  value.append(chunk_cache_value);
 
   Json::Value chunk_memo_value = Json::objectValue;
   chunk_memo_.Summary(chunk_memo_value);
@@ -309,23 +305,23 @@ bool MDSMetaSystem::Dump(const DumpOption& options, Json::Value& value) {
     return false;
   }
 
-  if (options.chunk_cache && !chunk_cache_.Dump(value, options.is_summary)) {
-    return false;
-  }
-
   if (options.chunk_set) {
     LOG(INFO) << fmt::format("[meta.fs] dump chunk set, ino({}).", options.ino);
-    auto chunk_set = chunk_cache_.GetOrCreate(options.ino);
-    if (chunk_set != nullptr && !chunk_set->Dump(value)) return false;
+
+    FileSessionSPtr file_session = file_session_map_.GetSession(options.ino);
+    if (file_session != nullptr) {
+      auto chunk_set = file_session->GetChunkSet();
+      if (!chunk_set->Dump(value)) return false;
+    }
   }
 
   if (options.chunk) {
     LOG(INFO) << fmt::format("[meta.fs] dump chunk, ino({}) index({}).",
                              options.ino, options.chunk_index);
-    auto chunk_set = chunk_cache_.GetOrCreate(options.ino);
-    if (chunk_set == nullptr) return true;
+    FileSessionSPtr file_session = file_session_map_.GetSession(options.ino);
+    if (file_session == nullptr) return true;
 
-    auto chunk = chunk_set->Get(options.chunk_index);
+    auto chunk = file_session->GetChunkSet()->Get(options.chunk_index);
     if (chunk == nullptr) return true;
 
     if (!chunk->Dump(value)) return false;
@@ -464,12 +460,6 @@ void MDSMetaSystem::CleanExpiredChunkMemo() {
   chunk_memo_.CleanExpired(expired_time_s);
 }
 
-void MDSMetaSystem::CleanExpiredChunkCache() {
-  uint64_t expired_time_s =
-      utils::Timestamp() - FLAGS_vfs_meta_chunk_cache_expired_s;
-  chunk_cache_.CleanExpired(expired_time_s);
-}
-
 void MDSMetaSystem::CleanExpiredInodeCache() {
   uint64_t expired_time_s =
       utils::Timestamp() - FLAGS_vfs_meta_inode_cache_expired_s;
@@ -501,7 +491,6 @@ bool MDSMetaSystem::InitCrontab() {
       [this](void*) {
         this->CleanExpiredModifyTimeMemo();
         this->CleanExpiredChunkMemo();
-        this->CleanExpiredChunkCache();
         this->CleanExpiredInodeCache();
         this->CleanExpiredTinyFileDataCache();
       },
@@ -639,16 +628,6 @@ Status MDSMetaSystem::MkNod(ContextSPtr ctx, Ino parent,
   return Status::OK();
 }
 
-bool MDSMetaSystem::IsPrefetchChunk(Ino ino) {
-  auto chunk_set = chunk_cache_.Get(ino);
-  if (chunk_set == nullptr) return true;
-
-  // todo: check whether all chunks are completed
-  // size_t chunk_size = chunk_set->GetChunkSize();
-
-  return false;
-}
-
 bool MDSMetaSystem::IsPrefetchTinyFileData(Ino ino) {
   if (!FLAGS_vfs_tiny_file_data_enable) return false;
 
@@ -672,7 +651,7 @@ Status MDSMetaSystem::DoOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
 
   // check whether prefetch chunk
   // prepare chunk descriptors for expect chunk version
-  bool is_prefetch_chunk = IsPrefetchChunk(ino);
+  bool is_prefetch_chunk = true;
   std::vector<mds::ChunkDescriptor> chunk_descriptors;
   if (is_prefetch_chunk) {
     auto versions = chunk_memo_.GetVersion(ino);
@@ -706,6 +685,12 @@ Status MDSMetaSystem::DoOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
   // update inode cache
   InodeSPtr inode = PutInodeToCache(attr_entry);
   file_session->SetInode(inode);
+
+  if (inode->IsDeleted()) {
+    LOG(WARNING) << fmt::format(
+        "[meta.fs.{}.{}] open file skipped, file is deleted.", ino, fh);
+    return Status::NotExist("file is deleted");
+  }
 
   // update chunk cache
   auto& chunk_set = file_session->GetChunkSet();
@@ -819,6 +804,12 @@ Status MDSMetaSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) {
 
   auto inode = GetInodeFromCache(ino);
   if (inode != nullptr) {
+    if (inode->IsDeleted()) {
+      LOG(WARNING) << fmt::format(
+          "[meta.fs.{}.{}] open file skipped, file is deleted.", ino, fh);
+      return Status::NotExist("file is deleted");
+    }
+
     file_session->SetInode(inode);
 
     if (!(flags & O_TRUNC)) {
@@ -941,13 +932,49 @@ Status MDSMetaSystem::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
                                 uint64_t& version) {
   AssertStop();
 
-  auto chunk_set = chunk_cache_.GetOrCreate(ino);
+  auto file_session = file_session_map_.GetSession(ino);
+  if (file_session == nullptr) {
+    // set chunk version
+    mds::ChunkDescriptor chunk_descriptor;
+    chunk_descriptor.set_index(static_cast<uint32_t>(index));
+    chunk_descriptor.set_version(
+        chunk_memo_.GetVersion(ino, static_cast<uint32_t>(index)));
+
+    std::vector<mds::ChunkEntry> chunks;
+    auto status = mds_client_.ReadSlice(ctx, ino, {chunk_descriptor}, chunks);
+    if (!status.ok()) {
+      LOG(ERROR) << fmt::format(
+          "[meta.fs.{}.{}.{}] reeadslice fail, error({}).", ino, fh, index,
+          status.ToString());
+      return status;
+    }
+
+    if (!chunks.empty()) {
+      auto& chunk = chunks.front();
+      for (const auto& slice : chunk.slices()) {
+        slices->push_back(Helper::ToSlice(slice));
+      }
+      version = chunk.version();
+
+      LOG_DEBUG << fmt::format(
+          "[meta.fs.{}.{}.{}] readslice, version({}) slices({}).", ino, fh,
+          index, version, Helper::ToString(*slices));
+
+    } else {
+      LOG(WARNING) << fmt::format(
+          "[meta.fs.{}.{}.{}] readslice not found, return empty slice.", ino,
+          fh, index);
+    }
+
+    return Status::OK();
+  }
+
+  auto chunk_set = file_session->GetChunkSet();
 
   do {
     auto chunk = chunk_set->Get(index);
     if (chunk != nullptr && chunk->IsCompleted()) {
       *slices = chunk->GetAllSlice(version);
-      // ctx->hit_cache = true;
 
       LOG_DEBUG << fmt::format(
           "[meta.fs.{}.{}.{}] readslice, version({}) slices({}).", ino, fh,
@@ -1011,10 +1038,16 @@ Status MDSMetaSystem::WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
                                  const std::vector<Slice>& slices) {
   AssertStop();
 
-  LOG_DEBUG << fmt::format("[meta.fs.{}.{}.{}] writeslice, slices({}).", ino,
-                           fh, index, Helper::ToString(slices));
+  for (const auto& slice : slices) {
+    LOG_DEBUG << fmt::format("[meta.fs.{}.{}.{}] writeslice, {}.", ino, fh,
+                             index, slice.ToString());
+  }
 
-  auto chunk_set = chunk_cache_.GetOrCreate(ino);
+  auto file_session = file_session_map_.GetSession(ino);
+  CHECK(file_session != nullptr)
+      << fmt::format("file session is nullptr, ino({}) fh({}).", ino, fh);
+
+  auto chunk_set = file_session->GetChunkSet();
   chunk_set->Append(index, slices);
 
   AsyncFlushSlice(ctx, chunk_set, false, false);
@@ -1679,7 +1712,14 @@ void MDSMetaSystem::FlushAllFile() {
       }
     }
 
-    if (!chunk_cache_.HasUncommitedSlice()) break;
+    bool has_uncommited = false;
+    for (auto& file_session : file_sessions) {
+      if (file_session->GetChunkSet()->HasUncommitedSlice()) {
+        has_uncommited = true;
+        break;
+      }
+    }
+    if (!has_uncommited) break;
 
     LOG(INFO) << "[meta.fs] flush all slice loop, still has uncommited slice.";
 

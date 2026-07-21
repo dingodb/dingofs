@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "common/status.h"
+#include "fmt/format.h"
 
 namespace dingofs {
 namespace client {
@@ -115,6 +116,9 @@ struct Slice {
   uint64_t size;        // now same as length, maybe use for future or remove
 
   uint64_t End() const { return offset + length; }
+  std::string ToString() const {
+    return fmt::format("slice({} [{},{}))", id, offset, offset + length);
+  }
 };
 
 enum StoreType : uint8_t {
