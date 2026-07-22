@@ -1387,7 +1387,9 @@ Status MDSMetaSystem::SetAttr(ContextSPtr ctx, Ino ino, int set,
     return status;
   }
 
-  *out_attr = Helper::ToAttr(attr_entry);
+  InodeSPtr inode = PutInodeToCache(attr_entry);
+
+  *out_attr = inode->ToAttr();
 
   bool is_amend = false;
   status = CorrectAttr(ctx, ctx->start_time_ns, *out_attr, is_amend, "setattr");
@@ -1395,8 +1397,6 @@ Status MDSMetaSystem::SetAttr(ContextSPtr ctx, Ino ino, int set,
 
   modify_time_memo_.Remember(ino);
   if (shrink_file) chunk_memo_.Forget(ino);
-
-  PutInodeToCache(attr_entry);
 
   return Status::OK();
 }
