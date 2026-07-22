@@ -497,11 +497,11 @@ Status VFSWrapper::GetAttr(Ino ino, Attr* attr) {
         return absl::StrFormat("getattr (%d): %s %s", ino, s.ToString(),
                                StrAttr(attr));
       },
-      !dingofs::IsInternalNode(ino));
+      !dingofs::IsInternalIno(ino));
 
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opGetAttr, &client_op_metric_->opAll},
-      !dingofs::IsInternalNode(ino));
+      !dingofs::IsInternalIno(ino));
 
   s = vfs_->GetAttr(ctx, ino, attr);
   VLOG(2) << "VFSGetAttr end ino: " << ino << " status: " << s.ToString();
@@ -780,11 +780,11 @@ Status VFSWrapper::Open(Ino ino, int flags, uint64_t* fh) {
         return absl::StrFormat("open (%d): %d %s %s [fh:%d]", ino, flags,
                                Helper::DescOpenFlags(flags), s.ToString(), *fh);
       },
-      !dingofs::IsInternalNode(ino));
+      !dingofs::IsInternalIno(ino));
 
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opOpen, &client_op_metric_->opAll},
-      !dingofs::IsInternalNode(ino));
+      !dingofs::IsInternalIno(ino));
 
   s = vfs_->Open(dingofs::SpanScope::GetContext(span), ino, flags, fh);
   VLOG(2) << "VFSOpen end, status: " << s.ToString() << " fh: " << *fh;
@@ -839,13 +839,13 @@ Status VFSWrapper::Read(Ino ino, DataBuffer* data_buffer, uint64_t size,
         return absl::StrFormat("read (%d,%d,%d): %s (%d) [fh:%d]", ino, size,
                                offset, s.ToString(), *out_rsize, fh);
       },
-      !dingofs::IsInternalNode(ino));
+      !dingofs::IsInternalIno(ino));
 
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opRead, &client_op_metric_->opAll},
-      !dingofs::IsInternalNode(ino));
+      !dingofs::IsInternalIno(ino));
   VFSRWMetricGuard guard(&s, &g_rw_metric.read, out_rsize,
-                         !dingofs::IsInternalNode(ino));
+                         !dingofs::IsInternalIno(ino));
 
   s = vfs_->Read(dingofs::SpanScope::GetContext(span), ino, data_buffer, size,
                  offset, fh, out_rsize);
@@ -901,11 +901,11 @@ Status VFSWrapper::Flush(Ino ino, uint64_t fh) {
       [&]() {
         return absl::StrFormat("flush (%d): %s [fh:%d]", ino, s.ToString(), fh);
       },
-      !dingofs::IsInternalNode(ino));
+      !dingofs::IsInternalIno(ino));
 
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opFlush, &client_op_metric_->opAll},
-      !dingofs::IsInternalNode(ino));
+      !dingofs::IsInternalIno(ino));
 
   s = vfs_->Flush(dingofs::SpanScope::GetContext(span), ino, fh);
   VLOG(2) << "VFSFlush end, status: " << s.ToString();
@@ -925,11 +925,11 @@ Status VFSWrapper::Release(Ino ino, uint64_t fh) {
         return absl::StrFormat("release (%d): %s [fh:%d]", ino, s.ToString(),
                                fh);
       },
-      !dingofs::IsInternalNode(ino));
+      !dingofs::IsInternalIno(ino));
 
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opRelease, &client_op_metric_->opAll},
-      !dingofs::IsInternalNode(ino));
+      !dingofs::IsInternalIno(ino));
 
   s = vfs_->Release(dingofs::SpanScope::GetContext(span), ino, fh);
   VLOG(2) << "VFSRelease end, status: " << s.ToString();
@@ -974,7 +974,7 @@ Status VFSWrapper::SetXattr(Ino ino, const std::string& name,
 
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opSetAttr, &client_op_metric_->opAll},
-      !dingofs::IsInternalNode(ino));
+      !dingofs::IsInternalIno(ino));
 
   if (name.length() > vfs_->GetMaxNameLength()) {
     s = Status::NameTooLong(fmt::format("name({}) too long", name.length()));
@@ -1001,11 +1001,11 @@ Status VFSWrapper::GetXattr(Ino ino, const std::string& name,
         return absl::StrFormat("getxattr (%d,%s): %s %s", ino, name,
                                s.ToString(), *value);
       },
-      !dingofs::IsInternalNode(ino));
+      !dingofs::IsInternalIno(ino));
 
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opGetXattr, &client_op_metric_->opAll},
-      !dingofs::IsInternalNode(ino));
+      !dingofs::IsInternalIno(ino));
 
   if (name.length() > vfs_->GetMaxNameLength()) {
     s = Status::NameTooLong(fmt::format("name({}) too long", name.length()));
@@ -1036,7 +1036,7 @@ Status VFSWrapper::RemoveXattr(Ino ino, const std::string& name) {
 
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opRemoveXattr, &client_op_metric_->opAll},
-      !dingofs::IsInternalNode(ino));
+      !dingofs::IsInternalIno(ino));
 
   if (name.length() > vfs_->GetMaxNameLength()) {
     s = Status::NameTooLong(fmt::format("name({}) too long", name.length()));
@@ -1109,7 +1109,8 @@ Status VFSWrapper::OpenDir(Ino ino, uint64_t* fh, bool& need_cache) {
 
   Status s;
   AccessLogGuard log([&]() {
-    return absl::StrFormat("opendir (%d): %s [fh:%d]", ino, s.ToString(), *fh);
+    return absl::StrFormat("opendir (%d): %s [fh:%d] %s", ino, s.ToString(),
+                           *fh, need_cache ? "cache" : "nocache");
   });
 
   ClientOpMetricGuard op_metric(

@@ -454,41 +454,6 @@ class ChunkSet {
   uint64_t last_active_s_{0};
 };
 
-// all file chunk cache
-class ChunkCache {
- public:
-  ChunkCache(uint32_t chunk_size) : chunk_size_(chunk_size) {}
-  ~ChunkCache() = default;
-
-  ChunkSetSPtr Get(Ino ino);
-  ChunkSetSPtr GetOrCreate(Ino ino);
-  void Delete(Ino ino);
-
-  bool HasUncommitedSlice();
-
-  size_t Size();
-  size_t Bytes();
-
-  void Clear();
-
-  void CleanExpired(uint64_t expire_s);
-
-  void Summary(Json::Value& value);
-  bool Dump(Json::Value& value, bool is_summary = false);
-
- private:
-  using Map = absl::flat_hash_map<Ino, ChunkSetSPtr>;
-
-  const uint32_t chunk_size_;
-
-  constexpr static size_t kShardNum = 128;
-  utils::Shards<Map, kShardNum> shard_map_;
-
-  // metric
-  bvar::Adder<uint64_t> total_count_{"meta_chunk_cache_total_count"};
-  bvar::Adder<uint64_t> clean_count_{"meta_chunk_cache_clean_count"};
-};
-
 }  // namespace meta
 }  // namespace vfs
 }  // namespace client

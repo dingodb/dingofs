@@ -345,10 +345,9 @@ Status MDSClient::Lookup(ContextSPtr& ctx, Ino parent, const std::string& name,
   const auto& inode = response.inode();
 
   if (fs_info_.IsHashPartition() && mds::IsDir(inode.ino())) {
-    uint64_t last_version;
-    if (parent_memo_.GetVersion(inode.ino(), last_version) &&
-        inode.version() < last_version) {
-      // fetch last inode
+    uint64_t local_last_version = GetInodeVersion(inode.ino());
+    if (inode.version() < local_last_version) {
+      // fetch last version inode
       status = GetAttr(span_ctx, inode.ino(), attr_entry);
       if (status.ok()) {
         parent_memo_.Upsert(inode.ino(), parent, 0, use_base_version);

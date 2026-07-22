@@ -209,10 +209,7 @@ void FileSessionMap::Delete(Ino ino, uint64_t fh) {
         if (it != map.end()) {
           auto& file_session = it->second;
           ref_count = file_session->DeleteSession(fh);
-          if (ref_count == 0) {
-            file_session->GetChunkSet()->ResetLastWriteLength();
-            map.erase(it);
-          }
+          if (ref_count == 0) map.erase(it);
         }
       },
       ino);

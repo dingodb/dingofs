@@ -67,9 +67,8 @@ DEFINE_validator(vfs_meta_chunk_cache_expired_s, brpc::PassValidate);
 DEFINE_uint64(vfs_meta_inode_cache_expired_s, 3600, "inode cache expired time");
 DEFINE_validator(vfs_meta_inode_cache_expired_s, brpc::PassValidate);
 
-DEFINE_uint32(vfs_meta_inode_attr_ttl_s, 5,
-              "inode attr freshness ttl, refetch from mds after expired, "
-              "0 means always refetch");
+DEFINE_uint32(vfs_meta_inode_attr_ttl_s, 1,
+              "inode attr freshness ttl, refetch from mds after expired");
 DEFINE_validator(vfs_meta_inode_attr_ttl_s, brpc::PassValidate);
 
 DEFINE_uint64(vfs_meta_tiny_file_data_cache_expired_s, 3600,

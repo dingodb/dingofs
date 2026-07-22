@@ -206,16 +206,24 @@ class MDSMetaSystem : public vfs::MetaSystem {
   bool InitCrontab();
 
   // inode cache
+  Status FetchInode(ContextSPtr& ctx, Ino ino, const std::string& reason,
+                    InodeSPtr& inode);
   InodeSPtr PutInodeToCache(const AttrEntry& attr_entry) {
     return inode_cache_.Put(attr_entry.ino(), attr_entry);
   }
   void DeleteInodeFromCache(Ino ino) { inode_cache_.Delete(ino); }
   InodeSPtr GetInodeFromCache(Ino ino) { return inode_cache_.Get(ino); }
   InodeSPtr GetInode(FileSessionSPtr& file_session) {
-    auto inode = file_session->GetInode();
+    InodeSPtr inode = file_session->GetInode();
     if (inode != nullptr) return inode;
 
-    return inode_cache_.Get(file_session->GetIno());
+    inode = inode_cache_.Get(file_session->GetIno());
+    if (inode != nullptr) return inode;
+
+    ContextSPtr ctx = std::make_shared<Context>("");
+    FetchInode(ctx, file_session->GetIno(), "GetInode", inode);
+
+    return inode;
   }
 
   // chunk cache
