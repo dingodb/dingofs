@@ -1275,16 +1275,16 @@ Status MDSMetaSystem::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh,
     }
 
     if (with_attr) {
-      bool is_amend = false;
-      CorrectAttr(ctx, dir_iterator->LastFetchTimeNs(), entry.attr, is_amend,
-                  "readdir");
-
       // entry.attr carries raw hashed uid/gid from the upstream RPC. Route it
       // through PutInodeToCache so the Inode is created/updated, then
       // overwrite entry.attr from inode->ToAttr(). ToAttr() now emits hashed
       // ids as-is; the VFS layer performs the local-host translation.
       auto inode = PutInodeToCache(Helper::ToAttr(entry.attr));
       entry.attr = inode->ToAttr();
+
+      bool is_amend = false;
+      CorrectAttr(ctx, dir_iterator->LastFetchTimeNs(), entry.attr, is_amend,
+                  "readdir");
     }
 
     if (!handler(entry, offset)) {
@@ -1429,16 +1429,8 @@ Status MDSMetaSystem::GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) {
     // populated/refreshed before inode->ToAttr() emits the hashed-id attr.
     // The VFS layer above (not ToAttr) performs the local-host uid/gid
     // translation.
-    AttrEntry attr_entry;
-    auto status = mds_client_.GetAttr(ctx, ino, attr_entry);
-    if (!status.ok()) {
-      if (status.IsNotExist()) {
-        // inode was deleted elsewhere, drop the stale cache entry
-        DeleteInodeFromCache(ino);
-      }
-      return status;
-    }
-    inode = PutInodeToCache(attr_entry);
+    Status status = FetchInode(ctx, ino, "GetAttr", inode);
+    if (!status.ok()) return status;
   }
 
   *attr = inode->ToAttr();
@@ -1659,6 +1651,22 @@ Status MDSMetaSystem::ListXattr(ContextSPtr ctx, Ino ino,
   return Status::OK();
 }
 
+Status MDSMetaSystem::FetchInode(ContextSPtr& ctx, Ino ino,
+                                 const std::string& reason, InodeSPtr& inode) {
+  AttrEntry attr_entry;
+  auto status = mds_client_.GetAttr(ctx, ino, attr_entry);
+  if (!status.ok()) {
+    LOG(ERROR) << fmt::format(
+        "[meta.fs.{}] fetch inode fail, reason({}) error({}).", ino, reason,
+        status.ToString());
+    return status;
+  }
+
+  inode = PutInodeToCache(attr_entry);
+
+  return Status::OK();
+}
+
 Status MDSMetaSystem::Rename(ContextSPtr ctx, Ino old_parent,
                              const std::string& old_name, Ino new_parent,
                              const std::string& new_name) {
@@ -1684,8 +1692,14 @@ Status MDSMetaSystem::Rename(ContextSPtr ctx, Ino old_parent,
 
 Status MDSMetaSystem::DoFlushFile(ContextSPtr ctx, InodeSPtr inode,
                                   ChunkSetSPtr& chunk_set, bool is_final) {
-  CHECK(inode != nullptr) << "inode is null.";
   CHECK(chunk_set != nullptr) << "chunk_set is null.";
+
+  if (inode == nullptr) {
+    LOG(ERROR) << fmt::format(
+        "[meta.fs] flush file fail cause inode is null, ino({}).",
+        chunk_set->GetIno());
+    return Status::Internal("inode is null");
+  }
 
   Ino ino = inode->Ino();
   uint64_t last_write_length = is_final ? chunk_set->GetLastWriteLength()
@@ -1912,16 +1926,10 @@ Status MDSMetaSystem::CorrectAttr(ContextSPtr ctx, uint64_t time_ns, Attr& attr,
     LOG_DEBUG << fmt::format("[meta.fs.{}] correct attr, caller({}).", attr.ino,
                              caller);
     // correct attr, fetch latest attr from mds
-    AttrEntry attr_entry;
+    InodeSPtr inode;
+    Status status = FetchInode(ctx, attr.ino, "CorrectAttr", inode);
+    if (!status.ok()) return status;
 
-    auto status = mds_client_.GetAttr(ctx, attr.ino, attr_entry);
-    if (!status.ok()) {
-      LOG(ERROR) << fmt::format(
-          "[meta.fs.{}] get attr fail for correct, caller({}) error({}).",
-          attr.ino, caller, status.ToString());
-      return status;
-    }
-    auto inode = PutInodeToCache(attr_entry);
     attr = inode->ToAttr();
     is_amend = true;
   }
