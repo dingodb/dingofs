@@ -1260,17 +1260,17 @@ TEST_F(SliceWriterStreamingTest,
   });
   flush_waiter.Wait();
 
-  test::AsyncWaiter flush_drained;
-  flush_drained.Expect(1);
-  flush_executor_->Execute([&]() { flush_drained.Done(); });
-  flush_drained.Wait();
+  // Stop() joins the flush threads, so the DoFlush task -- the only async
+  // holder of a SliceWriter reference -- is destroyed before the expiry check.
+  // A drain task is not a barrier here: the pool has 2 threads, so it can
+  // finish on the idle thread while DoFlush is still unwinding on the other.
+  EXPECT_TRUE(flush_executor_->Stop());
 
   sw.reset();
   EXPECT_TRUE(weak_writer.expired());
 
   // A callback arriving after an earlier Fail only cleans up its barrier entry;
   // it has no dependency on SliceWriter or FlushExecutor.
-  EXPECT_TRUE(flush_executor_->Stop());
   StatusCallback late = take_callback(1);
   ASSERT_TRUE(static_cast<bool>(late));
   late(Status::OK());
@@ -1308,10 +1308,10 @@ TEST_F(SliceWriterStreamingTest,
   ASSERT_EQ(submitted_future.wait_for(std::chrono::seconds(5)),
             std::future_status::ready);
 
-  test::AsyncWaiter flush_drained;
-  flush_drained.Expect(1);
-  flush_executor_->Execute([&]() { flush_drained.Done(); });
-  flush_drained.Wait();
+  // Stop() joins the flush threads, so the DoFlush task -- the only async
+  // holder of a SliceWriter reference -- is destroyed before the expiry check
+  // (see UT13; a drain task is not a barrier on the 2-thread pool).
+  ASSERT_TRUE(flush_executor_->Stop());
 
   sw.reset();
   EXPECT_TRUE(weak_writer.expired());
