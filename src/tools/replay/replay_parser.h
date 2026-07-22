@@ -36,6 +36,8 @@
 #ifndef DINGOFS_TOOLS_REPLAY_REPLAY_PARSER_H_
 #define DINGOFS_TOOLS_REPLAY_REPLAY_PARSER_H_
 
+#include <sys/types.h>
+
 #include <cstdint>
 #include <ostream>
 #include <string>
@@ -44,7 +46,7 @@ namespace dingofs {
 namespace tools {
 namespace replay {
 
-enum class OpKind {
+enum class OpKind : uint8_t {
   kLookup,
   kGetAttr,
   kSetAttr,
@@ -84,9 +86,9 @@ const char* OpKindName(OpKind op);
 struct ParsedRecord {
   uint64_t seq = 0;  // assigned by the caller for stable ordering
 
-  double end_time_sec = 0;    // completion timestamp, from log line
-  double duration_sec = 0;    // recorded operation duration
-  double start_time_sec = 0;  // end_time_sec - duration_sec
+  double end_time_ms = 0;    // completion timestamp, from log line
+  double duration_ms = 0;    // recorded operation duration
+  double start_time_ms = 0;  // end_time_ms - duration_ms
 
   OpKind op = OpKind::kUnsupported;
   int32_t pid = 0;
@@ -139,7 +141,7 @@ struct ParsedRecord {
   uint64_t r_length = 0;
 };
 
-enum class LineParseStatus {
+enum class LineParseStatus : uint8_t {
   kOk,             // successfully parsed into `record`
   kIgnoredOther,   // not a fuse_access line (different logger/blank/etc.)
   kControlRecord,  // start:/stop: record, intentionally ignored

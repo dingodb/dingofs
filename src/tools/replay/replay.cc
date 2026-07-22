@@ -39,10 +39,11 @@
  *      be overwritten by a later generation.
  *   4. Replay: an open-loop dispatcher paces submission of records to a
  *      fixed-size thread pool (size = max inflight) by reconstructed start
- *      time / speed. Each task waits (via std::shared_future) on its
- *      producer records' completion, resolves target ino/fh, issues the
- *      VFSWrapper call, and (if it is itself a producer) publishes its
- *      resulting target ino/fh for dependents.
+ *      time / speed. Records with the same source pid are assigned to the
+ *      same worker. Each task waits (via std::shared_future) on its producer
+ *      records' completion, resolves target ino/fh, issues the VFSWrapper
+ *      call, and (if it is itself a producer) publishes its resulting target
+ *      ino/fh for dependents.
  */
 
 #include <fcntl.h>
@@ -68,6 +69,7 @@
 #include "client/vfs/vfs_wrapper.h"
 #include "common/logging.h"
 #include "common/meta.h"
+#include "common/options/cache.h"
 #include "common/status.h"
 #include "common/types.h"
 #include "fmt/format.h"
@@ -97,6 +99,7 @@ DEFINE_string(replay_mds_addr, "", "MDS address (e.g. 10.0.0.1:8801)");
 DEFINE_string(replay_fs_name, "", "Target filesystem name (must be empty)");
 DEFINE_string(replay_mount_point, "/dingo_replay_mount",
               "Logical mount point label");
+DEFINE_string(replay_subdir, "/", "Subdirectory to replay into (must exist)");
 DEFINE_string(replay_conf, "", "Config file path (gflags format)");
 DEFINE_string(replay_log_dir, "/tmp/dingo_replay_log",
               "Log directory for glog");
@@ -128,7 +131,6 @@ using dingofs::Ino;
 using dingofs::Status;
 using dingofs::client::Context;
 using dingofs::client::DataBuffer;
-using dingofs::client::DingofsConfig;
 using dingofs::client::VFSWrapper;
 
 // ---------------------------------------------------------------------------
@@ -165,9 +167,9 @@ struct EngineRecord {
   Ino target_ino = 0;
   bool produced_fh = false;
   uint64_t target_fh = 0;
-  double schedule_target_sec = 0;
-  double schedule_lag_sec = 0;
-  double replay_latency_sec = 0;
+  double schedule_target_ms = 0;
+  double schedule_lag_ms = 0;
+  double replay_latency_ms = 0;
 
   // Only allocated for records that are (a) not skipped and (b) capable of
   // producing a mapping (has_result_ino or has_result_fh in the source).
@@ -223,6 +225,15 @@ DepSpec ComputeDepSpec(const ParsedRecord& p) {
   return d;
 }
 
+void RestoreReleasePid(const std::vector<EngineRecord>& records,
+                       EngineRecord* record) {
+  if (record->p.pid == 0 && record->num_fh_dep > 0 &&
+      (record->p.op == OpKind::kRelease ||
+       record->p.op == OpKind::kReleaseDir)) {
+    record->p.pid = records[static_cast<size_t>(record->fh_dep[0])].p.pid;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Anomaly report: file/line/category/reason for every malformed, skipped,
 // approximate, or divergent record. Written from both the single-threaded
@@ -263,9 +274,9 @@ struct Stats {
   std::array<OpCounters, kNumOpKinds> per_op;
 
   std::mutex lat_mu;
-  std::vector<double> source_lat_sec;
-  std::vector<double> replay_lat_sec;
-  std::vector<double> schedule_lag_sec;
+  std::vector<double> source_lat_ms;
+  std::vector<double> replay_lat_ms;
+  std::vector<double> schedule_lag_ms;
 
   void CountSkip(OpKind op) {
     per_op[static_cast<size_t>(op)].skipped.fetch_add(1);
@@ -282,43 +293,44 @@ struct Stats {
     if (diverged) c.diverged.fetch_add(1);
 
     std::lock_guard<std::mutex> lk(lat_mu);
-    source_lat_sec.push_back(source_lat);
-    replay_lat_sec.push_back(replay_lat);
+    source_lat_ms.push_back(source_lat);
+    replay_lat_ms.push_back(replay_lat);
   }
 
   void RecordScheduleLag(double lag) {
     std::lock_guard<std::mutex> lk(lat_mu);
-    schedule_lag_sec.push_back(lag);
+    schedule_lag_ms.push_back(lag);
   }
 };
 
 double Percentile(std::vector<double> v, double p) {
   if (v.empty()) return 0.0;
-  std::sort(v.begin(), v.end());
+  std::sort(v.begin(), v.end());  // NOLINT
   size_t idx = static_cast<size_t>(p * static_cast<double>(v.size() - 1));
   return v[idx];
 }
 
 // ---------------------------------------------------------------------------
-// Minimal fixed-size thread pool with an unbounded FIFO queue. Bounding the
-// worker count to `max_inflight` naturally caps concurrent *execution*;
-// arrivals beyond that just wait in the queue, which is exactly the
-// "schedule lag" the caller measures at dequeue time.
+// Minimal fixed-size thread pool with one unbounded FIFO queue per worker.
+// Affinity keeps records from the same source pid on one replay thread.
 // ---------------------------------------------------------------------------
 
 class ThreadPool {
  public:
-  explicit ThreadPool(int n) {
+  explicit ThreadPool(int n) : queues_(n) {
     workers_.reserve(n);
-    for (int i = 0; i < n; i++) workers_.emplace_back([this] { WorkerLoop(); });
+    for (int i = 0; i < n; i++) {
+      workers_.emplace_back([this, i] { WorkerLoop(i); });
+    }
   }
 
-  void Submit(std::function<void()> task) {
+  void Submit(uint64_t affinity, std::function<void()> task) {
+    size_t worker = affinity % queues_.size();
     {
       std::lock_guard<std::mutex> lk(mu_);
-      queue_.push(std::move(task));
+      queues_[worker].push(std::move(task));
     }
-    cv_.notify_one();
+    cv_.notify_all();
   }
 
   // Signals that no more tasks will be submitted, then blocks until every
@@ -335,18 +347,19 @@ class ThreadPool {
   }
 
  private:
-  void WorkerLoop() {
+  void WorkerLoop(size_t worker) {
     for (;;) {
       std::function<void()> task;
       {
         std::unique_lock<std::mutex> lk(mu_);
-        cv_.wait(lk, [this] { return stopped_ || !queue_.empty(); });
-        if (queue_.empty()) {
+        auto& queue = queues_[worker];
+        cv_.wait(lk, [this, &queue] { return stopped_ || !queue.empty(); });
+        if (queue.empty()) {
           if (stopped_) return;
           continue;
         }
-        task = std::move(queue_.front());
-        queue_.pop();
+        task = std::move(queue.front());
+        queue.pop();
       }
       task();
     }
@@ -354,10 +367,33 @@ class ThreadPool {
 
   std::mutex mu_;
   std::condition_variable cv_;
-  std::queue<std::function<void()>> queue_;
+  std::vector<std::queue<std::function<void()>>> queues_;
   bool stopped_ = false;
   std::vector<std::thread> workers_;
 };
+
+bool RunThreadPoolSelfCheck(std::ostream& out) {
+  std::array<std::thread::id, 3> thread_ids;
+  ThreadPool pool(2);
+  pool.Submit(1, [&] { thread_ids[0] = std::this_thread::get_id(); });
+  pool.Submit(2, [&] { thread_ids[1] = std::this_thread::get_id(); });
+  pool.Submit(1, [&] { thread_ids[2] = std::this_thread::get_id(); });
+  pool.ShutdownAndJoin();
+
+  bool affinity_ok =
+      thread_ids[0] == thread_ids[2] && thread_ids[0] != thread_ids[1];
+  out << "thread affinity: " << (affinity_ok ? "PASS" : "FAIL") << '\n';
+
+  std::vector<EngineRecord> records(2);
+  records[0].p.pid = 42;
+  records[1].p.op = OpKind::kRelease;
+  records[1].num_fh_dep = 1;
+  records[1].fh_dep[0] = 0;
+  RestoreReleasePid(records, &records[1]);
+  bool release_pid_ok = records[1].p.pid == records[0].p.pid;
+  out << "release pid: " << (release_pid_ok ? "PASS" : "FAIL") << '\n';
+  return affinity_ok && release_pid_ok;
+}
 
 // ---------------------------------------------------------------------------
 // Peak overlap sweep, used as the default max_inflight.
@@ -367,8 +403,8 @@ int ComputePeakOverlap(const std::vector<EngineRecord>& records) {
   std::vector<std::pair<double, int>> events;
   events.reserve(records.size() * 2);
   for (const auto& r : records) {
-    double start = r.p.start_time_sec;
-    double end = start + r.p.duration_sec;
+    double start = r.p.start_time_ms;
+    double end = start + r.p.duration_ms;
     events.emplace_back(start, 1);
     events.emplace_back(end, -1);
   }
@@ -380,7 +416,7 @@ int ComputePeakOverlap(const std::vector<EngineRecord>& records) {
   int peak = 0;
   for (const auto& ev : events) {
     cur += ev.second;
-    if (cur > peak) peak = cur;
+    peak = std::max(cur, peak);
   }
   return peak;
 }
@@ -427,6 +463,7 @@ void PreScan(std::vector<EngineRecord>* records_ptr, AnomalyReport* report) {
         r.fh_dep[k] = it->second;
       }
     }
+    if (!missing) RestoreReleasePid(records, &r);
 
     if (!missing) {
       if (r.p.op == OpKind::kCreate && !r.p.ok) {
@@ -710,11 +747,15 @@ void ExecuteRecord(VFSWrapper* vfs, std::vector<EngineRecord>* records_ptr,
   auto& records = *records_ptr;
   EngineRecord& r = records[idx];
 
-  double now =
-      std::chrono::duration<double>(std::chrono::steady_clock::now() - t0)
-          .count();
-  double lag = now - r.schedule_target_sec;
-  r.schedule_lag_sec = lag;
+  std::cout << fmt::format("replaying record {} line({}) op({}) ino({},{})",
+                           idx, r.line, OpKindName(r.p.op), r.p.ino1, r.p.ino2)
+            << "\n";
+
+  double now = std::chrono::duration<double, std::milli>(
+                   std::chrono::steady_clock::now() - t0)
+                   .count();
+  double lag = now - r.schedule_target_ms;
+  r.schedule_lag_ms = lag;
   stats->RecordScheduleLag(lag);
 
   if (r.skip) {
@@ -760,13 +801,14 @@ void ExecuteRecord(VFSWrapper* vfs, std::vector<EngineRecord>* records_ptr,
   auto t_start = std::chrono::steady_clock::now();
   Status s = ExecuteOp(vfs, &r, ctx, t_ino1, t_ino2, t_fh1, t_fh2);
   auto t_end = std::chrono::steady_clock::now();
-  r.replay_latency_sec = std::chrono::duration<double>(t_end - t_start).count();
+  r.replay_latency_ms =
+      std::chrono::duration<double, std::milli>(t_end - t_start).count();
   r.replay_ok = s.ok();
   r.replay_status_type = StatusTypeName(s);
 
   bool diverged = (r.replay_status_type != r.p.status_type);
-  stats->CountOutcome(r.p.op, r.approximate, diverged, r.p.duration_sec,
-                      r.replay_latency_sec);
+  stats->CountOutcome(r.p.op, r.approximate, diverged, r.p.duration_ms,
+                      r.replay_latency_ms);
   if (diverged) {
     report->Write(r.file, r.line, "divergence",
                   fmt::format("source status={} replay status={}",
@@ -780,19 +822,28 @@ void RunReplay(VFSWrapper* vfs, std::vector<EngineRecord>* records_ptr,
                int max_inflight, double speed, Stats* stats,
                AnomalyReport* report) {
   auto& records = *records_ptr;
-  double first_start = records.front().p.start_time_sec;
+  double first_start = records.front().p.start_time_ms;
   auto t0 = std::chrono::steady_clock::now();
 
   ThreadPool pool(max_inflight);
   for (size_t i = 0; i < records.size(); i++) {
-    double rel_sec = (records[i].p.start_time_sec - first_start) / speed;
-    records[i].schedule_target_sec = rel_sec;
-    std::this_thread::sleep_until(t0 + std::chrono::duration<double>(rel_sec));
-    pool.Submit([&records, i, vfs, stats, report, t0] {
-      ExecuteRecord(vfs, &records, i, stats, report, t0);
-    });
+    double rel_ms = (records[i].p.start_time_ms - first_start) / speed;
+    records[i].schedule_target_ms = rel_ms;
+
+    std::this_thread::sleep_until(
+        t0 + std::chrono::duration<double, std::milli>(rel_ms));
+
+    pool.Submit(static_cast<uint32_t>(records[i].p.pid),
+                [&records, i, vfs, stats, report, t0] {
+                  ExecuteRecord(vfs, &records, i, stats, report, t0);
+                });
   }
+
+  std::cout << "All records submitted; waiting for completion...\n";
+
   pool.ShutdownAndJoin();
+
+  std::cout << "All records completed.\n";
 }
 
 // ---------------------------------------------------------------------------
@@ -840,22 +891,22 @@ void PrintSummary(const std::vector<EngineRecord>& records, const Stats& stats,
 
   auto print_lat = [](const char* label, std::vector<double> v) {
     std::cout << fmt::format(
-        "{:<22} p50={:.6f}s p95={:.6f}s p99={:.6f}s (n={})\n", label,
+        "{:<22} p50={:.3f}ms p95={:.3f}ms p99={:.3f}ms (n={})\n", label,
         Percentile(v, 0.50), Percentile(v, 0.95), Percentile(v, 0.99),
         v.size());
   };
   std::cout << "\n";
-  print_lat("source latency:", stats.source_lat_sec);
-  print_lat("replay latency:", stats.replay_lat_sec);
+  print_lat("source latency:", stats.source_lat_ms);
+  print_lat("replay latency:", stats.replay_lat_ms);
 
-  std::vector<double> lag = stats.schedule_lag_sec;
+  std::vector<double> lag = stats.schedule_lag_ms;
   std::vector<double> positive_lag;
   positive_lag.reserve(lag.size());
   for (double l : lag) {
     if (l > 0) positive_lag.push_back(l);
   }
   std::cout << fmt::format(
-      "schedule lag:          p50={:.6f}s p95={:.6f}s p99={:.6f}s "
+      "schedule lag:          p50={:.3f}ms p95={:.3f}ms p99={:.3f}ms "
       "(delayed={}/{})\n",
       Percentile(lag, 0.50), Percentile(lag, 0.95), Percentile(lag, 0.99),
       positive_lag.size(), lag.size());
@@ -922,7 +973,8 @@ int main(int argc, char** argv) {
   gflags::ParseCommandLineFlags(&argc, &argv, true);
 
   if (FLAGS_replay_self_check) {
-    bool ok = dingofs::tools::replay::RunParserSelfCheck(std::cout);
+    bool ok = dingofs::tools::replay::RunParserSelfCheck(std::cout) &&
+              dingofs::tools::replay::RunThreadPoolSelfCheck(std::cout);
     return ok ? 0 : 1;
   }
 
@@ -949,6 +1001,10 @@ int main(int argc, char** argv) {
     return 1;
   }
 
+  // reset gflags
+  dingofs::cache::FLAGS_cache_store = "none";
+  // dingofs::client::FLAGS_vfs_dummy_server_port = 10000;
+
   FLAGS_log_dir = FLAGS_replay_log_dir;
   dingofs::FLAGS_log_level = FLAGS_replay_log_level;
   dingofs::Logger::Init("dingo-replay");
@@ -967,7 +1023,7 @@ int main(int argc, char** argv) {
   std::stable_sort(records.begin(), records.end(),  // NOLINT
                    [](const dingofs::tools::replay::EngineRecord& a,
                       const dingofs::tools::replay::EngineRecord& b) {
-                     return a.p.start_time_sec < b.p.start_time_sec;
+                     return a.p.start_time_ms < b.p.start_time_ms;
                    });
 
   int max_inflight = FLAGS_replay_max_inflight;
@@ -986,7 +1042,7 @@ int main(int argc, char** argv) {
   config.metasystem_type =
       dingofs::MetaSystemTypeToString(dingofs::MetaSystemType::MDS);
   config.storage_info = "";
-  config.subdir = "/";
+  config.subdir = FLAGS_replay_subdir;
 
   std::cout << "Mounting " << FLAGS_replay_mds_addr << "/"
             << FLAGS_replay_fs_name << " ...\n";
@@ -1004,7 +1060,9 @@ int main(int argc, char** argv) {
   dingofs::tools::replay::RunReplay(vfs.get(), &records, max_inflight,
                                     FLAGS_replay_speed, &stats, &report);
 
+  std::cout << "stoping...\n";
   vfs->Stop(false);
+  std::cout << "stopped.\n";
 
   dingofs::tools::replay::PrintSummary(records, stats, record_stat,
                                        max_inflight);

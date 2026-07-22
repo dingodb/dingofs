@@ -330,7 +330,7 @@ Status VFSWrapper::Start(const DingofsConfig& config, int upgrade_from_pid) {
     // Remove the old process's state file now that we've consumed it.
     const std::string state_path =
         fmt::format("{}.{}", kFdStatePath, upgrade_from_pid);
-    std::remove(state_path.c_str());
+    std::remove(state_path.c_str());  // NOLINT
   }
 
   uid_ = dingofs::Helper::GetOriginalUid();
