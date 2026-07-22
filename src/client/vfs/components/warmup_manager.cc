@@ -322,6 +322,7 @@ void WarmupManager::WarmupFile(Ino ino, WarmupTask* task, AsyncWarmupCb cb) {
     PrefetchReq req;
     req.block = block.key;
     req.block_size = block.len;
+    req.source = cache::BlockSource::kWarmup;
 
     block_store_->PrefetchAsync(
         SpanScope::GetContext(span), req,

@@ -133,7 +133,8 @@ void BlockCacheServiceImpl::Cache(google::protobuf::RpcController* controller,
   status = CheckBodySize(request->block_size(), buffer.Size());
   if (status.ok()) {
     status = node_->AsyncCache(ctx, BlockKey(request->block_key()),
-                               Block(std::move(buffer)));
+                               Block(std::move(buffer)),
+                               BlockSourceFromRaw(request->source()));
   }
   response->set_status(ToPBErr(status));
 }
@@ -149,7 +150,8 @@ void BlockCacheServiceImpl::Prefetch(
   brpc::ClosureGuard done_guard(srv_done);
 
   status = node_->AsyncPrefetch(ctx, BlockKey(request->block_key()),
-                                request->block_size());
+                                request->block_size(),
+                                BlockSourceFromRaw(request->source()));
   response->set_status(ToPBErr(status));
 }
 

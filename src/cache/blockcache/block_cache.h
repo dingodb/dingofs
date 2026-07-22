@@ -47,8 +47,13 @@ struct RangeOption {
   bool is_subrequest{false};
 };
 
-struct CacheOption {};
-struct PrefetchOption {};
+struct CacheOption {
+  BlockSource source{BlockSource::kReadMiss};
+};
+
+struct PrefetchOption {
+  BlockSource source{BlockSource::kReadahead};
+};
 
 // async callback
 using AsyncCallback = std::function<void(Status)>;

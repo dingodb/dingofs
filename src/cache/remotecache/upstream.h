@@ -104,9 +104,9 @@ class Upstream {
                           size_t length, IOBuffer* buffer,
                           size_t block_whole_length);
   Status SendCacheRequest(ContextSPtr ctx, const BlockKey& key,
-                          const Block& block);
+                          const Block& block, BlockSource source);
   Status SendPrefetchRequest(ContextSPtr ctx, const BlockKey& key,
-                             size_t length);
+                             size_t length, BlockSource source);
 
   bool Dump(Json::Value& value);
 

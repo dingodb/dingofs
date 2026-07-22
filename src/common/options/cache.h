@@ -186,15 +186,23 @@ DECLARE_string(cache_dir_uuid);
 // Sets the maximum size of the cache in MB.
 DECLARE_uint32(cache_size_mb);
 
-// Sets the ratio of free space of total disk space.
-// If the free space is less than this ratio, will trigger cleanup.
+// Cull watermark: start background eviction when the disk free space
+// or inode ratio is below it.
 DECLARE_double(free_space_ratio);
+
+// Run watermark: background eviction frees space until the disk free
+// ratio is restored above it.
+DECLARE_double(free_space_run_ratio);
+
+// Stop watermark: reject caching new blocks when the disk free ratio is
+// below it (last-resort backstop).
+DECLARE_double(free_space_stop_ratio);
 
 // Sets the expiration time for cache blocks in seconds.
 DECLARE_uint32(cache_expire_s);
 
 // Sets the interval for cleaning up expired cache blocks in milliseconds.
-DECLARE_uint32(cleanup_expire_interval_ms);
+DECLARE_uint32(cache_cleanup_expire_interval_ms);
 
 // Sets the IO depth for iouring.
 DECLARE_uint32(iodepth);

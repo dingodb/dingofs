@@ -217,8 +217,9 @@ Status DiskCache::Stage(ContextSPtr ctx, const BlockKey& key,
     status = Status::OK();  // ignore link error
   }
 
-  manager_->Add(key, CacheValue(block.size, iutil::TimeNow()),
-                BlockPhase::kStaging);
+  CacheValue value(block.size, iutil::TimeNow());
+  value.source = static_cast<uint8_t>(BlockSource::kWriteback);
+  manager_->Add(key, value, BlockPhase::kStaging);
 
   uploader_(NewContext(ctx->TraceId()), key, block.size, option.block_attr);
   return status;
@@ -241,7 +242,7 @@ Status DiskCache::RemoveStage(ContextSPtr /*ctx*/, const BlockKey& key,
 }
 
 Status DiskCache::Cache(ContextSPtr ctx, const BlockKey& key,
-                        const Block& block, CacheOption /*option*/) {
+                        const Block& block, CacheOption option) {
   auto status = CheckStatus(kWantExec | kWantCache);
   if (!status.ok()) {
     LOG(ERROR) << "Disk cache status is unavailable, skip cache: key="
@@ -256,6 +257,12 @@ Status DiskCache::Cache(ContextSPtr ctx, const BlockKey& key,
     return Status::OK();
   }
 
+  if (!manager_->Admit(key, option.source, block.size)) {
+    VLOG(9) << "Block rejected by admission, skip cache: key = "
+            << key.Filename() << ", length = " << block.size;
+    return Status::OK();  // caching is best-effort: a rejected fill is a no-op
+  }
+
   auto cache_path = GetCachePath(key);
   status = localfs_->WriteFile(ctx, cache_path, &block.buffer);
   if (!status.ok()) {
@@ -263,8 +270,9 @@ Status DiskCache::Cache(ContextSPtr ctx, const BlockKey& key,
     return status;
   }
 
-  manager_->Add(key, CacheValue(block.size, iutil::TimeNow()),
-                BlockPhase::kCached);
+  CacheValue value(block.size, iutil::TimeNow());
+  value.source = static_cast<uint8_t>(option.source);
+  manager_->Add(key, value, BlockPhase::kCached);
 
   return status;
 }
@@ -286,6 +294,10 @@ Status DiskCache::Load(ContextSPtr ctx, const BlockKey& key, off_t offset,
     status = Status::NotFound("cache not found");
     return status;
   }
+
+  // a real cache hit: the only place access recency is refreshed, so probes
+  // (IsCached, dedup checks, prefetch fast-paths) never fake hotness
+  manager_->Touch(key);
 
   auto cache_path = GetCachePath(key);
   status = localfs_->ReadFile(ctx, cache_path, offset, length, buffer);

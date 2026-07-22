@@ -162,10 +162,10 @@ Status BlockCacheImpl::Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
 }
 
 Status BlockCacheImpl::Cache(ContextSPtr ctx, const BlockKey& key,
-                             const Block& block, CacheOption /*option*/) {
+                             const Block& block, CacheOption option) {
   DCHECK_RUNNING("BlockCacheImpl");
 
-  auto status = store_->Cache(ctx, key, block);
+  auto status = store_->Cache(ctx, key, block, {.source = option.source});
   if (status.IsCacheFull()) {
     LOG_EVERY_SECOND(WARNING)
         << "Cache block failed: key = " << key.Filename()
@@ -178,7 +178,7 @@ Status BlockCacheImpl::Cache(ContextSPtr ctx, const BlockKey& key,
 }
 
 Status BlockCacheImpl::Prefetch(ContextSPtr ctx, const BlockKey& key,
-                                size_t length, PrefetchOption /*option*/) {
+                                size_t length, PrefetchOption option) {
   DCHECK_RUNNING("BlockCacheImpl");
 
   if (IsCached(key)) {
@@ -193,7 +193,7 @@ Status BlockCacheImpl::Prefetch(ContextSPtr ctx, const BlockKey& key,
     return status;
   }
 
-  status = store_->Cache(ctx, key, Block(buffer));
+  status = store_->Cache(ctx, key, Block(buffer), {.source = option.source});
   if (!status.ok()) {
     LOG(ERROR) << "Fail to prefetch block key=" << key.Filename();
   }

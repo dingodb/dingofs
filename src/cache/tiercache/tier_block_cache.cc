@@ -391,11 +391,13 @@ Block TierBlockCache::CopyBlock(const Block& block) {
 void TierBlockCache::FillGroupCache(ContextSPtr ctx, const BlockKey& key,
                                     const Block& block) {
   remote_block_cache_->AsyncCache(
-      ctx, key, block, [ctx, key, block](Status status) {
+      ctx, key, block,
+      [ctx, key, block](Status status) {
         if (!status.ok()) {
           LOG(ERROR) << "Fail to async block, status=" << status.ToString();
         }
-      });
+      },
+      {.source = BlockSource::kWriteback});
 }
 
 }  // namespace cache

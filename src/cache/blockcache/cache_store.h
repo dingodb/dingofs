@@ -39,6 +39,23 @@
 namespace dingofs {
 namespace cache {
 
+// where a block being cached came from; carried end-to-end (client ->
+// cache group RPC) so admission and eviction can tell explicit warmup from
+// speculative or demand fills
+enum class BlockSource : uint8_t {
+  kUnknown = 0,    // older peer without the field
+  kReadMiss = 1,   // read-miss backfill
+  kReadahead = 2,  // read-triggered prefetch
+  kWarmup = 3,     // explicit warmup (dingocli)
+  kWriteback = 4,  // fill-on-write (fill_group_cache)
+};
+
+inline BlockSource BlockSourceFromRaw(uint32_t raw) {
+  return raw <= static_cast<uint32_t>(BlockSource::kWriteback)
+             ? static_cast<BlockSource>(raw)
+             : BlockSource::kUnknown;
+}
+
 // store type
 enum class StoreType : uint8_t {
   kNone = 0,
@@ -159,7 +176,12 @@ class CacheStore {
     BlockAttr block_attr;
   };
 
-  struct CacheOption {};
+  struct CacheOption {
+    // no default member initializer: this nested aggregate is used as a
+    // default argument below, where gcc defers NSDMI parsing; value-init
+    // yields kUnknown(0), the right meaning for "caller did not say"
+    BlockSource source;
+  };
 
   struct LoadOption {
     BlockAttr block_attr;

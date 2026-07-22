@@ -143,13 +143,14 @@ Status Upstream::SendRangeRequest(ContextSPtr ctx, const BlockKey& key,
 }
 
 Status Upstream::SendCacheRequest(ContextSPtr /*ctx*/, const BlockKey& key,
-                                  const Block& block) {
+                                  const Block& block, BlockSource source) {
   Status status;
   UpstreamVarsRecordGuard guard("Cache", block.size, status, vars_.get());
 
   pb::cache::CacheRequest raw;
   *raw.mutable_block_key() = key.ToPB();
   raw.set_block_size(block.buffer.Size());
+  raw.set_source(static_cast<uint32_t>(source));
   auto request = MakeRequest("Cache", raw, &block.buffer);
 
   auto response =
@@ -164,13 +165,14 @@ Status Upstream::SendCacheRequest(ContextSPtr /*ctx*/, const BlockKey& key,
 }
 
 Status Upstream::SendPrefetchRequest(ContextSPtr /*ctx*/, const BlockKey& key,
-                                     size_t length) {
+                                     size_t length, BlockSource source) {
   Status status;
   UpstreamVarsRecordGuard guard("Prefetch", length, status, vars_.get());
 
   pb::cache::PrefetchRequest raw;
   *raw.mutable_block_key() = key.ToPB();
   raw.set_block_size(length);
+  raw.set_source(static_cast<uint32_t>(source));
   auto request = MakeRequest("Prefetch", raw);
 
   auto response =

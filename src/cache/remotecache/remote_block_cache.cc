@@ -142,10 +142,10 @@ Status RemoteBlockCacheImpl::Range(ContextSPtr ctx, const BlockKey& key,
 }
 
 Status RemoteBlockCacheImpl::Cache(ContextSPtr ctx, const BlockKey& key,
-                                   const Block& block, CacheOption /*option*/) {
+                                   const Block& block, CacheOption option) {
   DCHECK_RUNNING("RemoteBlockCache");
 
-  auto status = upstream_->SendCacheRequest(ctx, key, block);
+  auto status = upstream_->SendCacheRequest(ctx, key, block, option.source);
   if (!status.ok()) {
     LOG(ERROR) << "Fail to cache block to remote cache";
   }
@@ -154,10 +154,11 @@ Status RemoteBlockCacheImpl::Cache(ContextSPtr ctx, const BlockKey& key,
 
 Status RemoteBlockCacheImpl::Prefetch(ContextSPtr ctx, const BlockKey& key,
                                       size_t length,
-                                      PrefetchOption /*option*/) {
+                                      PrefetchOption option) {
   DCHECK_RUNNING("RemoteBlockCache");
 
-  auto status = upstream_->SendPrefetchRequest(ctx, key, length);
+  auto status =
+      upstream_->SendPrefetchRequest(ctx, key, length, option.source);
   if (!status.ok()) {
     LOG(ERROR) << "Fail to submit prefetch task to remote cache";
   }

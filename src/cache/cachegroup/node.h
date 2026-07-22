@@ -48,8 +48,10 @@ class CacheNode {
   Status Put(ContextSPtr ctx, const BlockKey& key, const Block& block);
   Status Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
                size_t length, IOBuffer* buffer, size_t block_length);
-  Status AsyncCache(ContextSPtr ctx, const BlockKey& key, const Block& block);
-  Status AsyncPrefetch(ContextSPtr ctx, const BlockKey& key, size_t length);
+  Status AsyncCache(ContextSPtr ctx, const BlockKey& key, const Block& block,
+                    BlockSource source);
+  Status AsyncPrefetch(ContextSPtr ctx, const BlockKey& key, size_t length,
+                       BlockSource source);
 
  private:
   bool IsRunning() const { return running_.load(std::memory_order_relaxed); }

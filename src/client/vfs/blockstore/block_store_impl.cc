@@ -139,7 +139,7 @@ void BlockStoreImpl::PrefetchAsync(ContextSPtr ctx, PrefetchReq req,
 
   // transfer ownership of block_data to BlockDataFlushed
   block_cache_->AsyncPrefetch(cache::NewContext(), req.block, req.block_size,
-                              std::move(wrapper));
+                              std::move(wrapper), {.source = req.source});
 }
 
 // utility

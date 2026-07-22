@@ -26,8 +26,11 @@
 #include <bthread/execution_queue.h>
 #include <bthread/mutex.h>
 
+#include "cache/blockcache/admission.h"
 #include "cache/blockcache/disk_cache_layout.h"
-#include "cache/blockcache/lru_cache.h"
+#include "cache/blockcache/eviction_guard.h"
+#include "cache/blockcache/eviction_policy.h"
+#include "cache/blockcache/free_space_monitor.h"
 #include "utils/concurrent/task_thread_pool.h"
 
 namespace dingofs {
@@ -41,7 +44,24 @@ struct DiskCacheManagerVarsCollector {
         stage_full(Name("stage_full"), false),
         cache_blocks(Name("cache_blocks")),
         cache_bytes(Name("cache_bytes")),
-        cache_full(Name("cache_full"), false) {}
+        cache_full(Name("cache_full"), false),
+        free_space_band(Name("free_space_band"), 0),
+        evict_blocks_capacity(Name("evict_blocks_capacity")),
+        evict_bytes_capacity(Name("evict_bytes_capacity")),
+        evict_blocks_free_space(Name("evict_blocks_free_space")),
+        evict_bytes_free_space(Name("evict_bytes_free_space")),
+        evict_blocks_expire(Name("evict_blocks_expire")),
+        evict_bytes_expire(Name("evict_bytes_expire")),
+        eviction_policy(Name("eviction_policy"), ""),
+        s3fifo_small_bytes(Name("s3fifo_small_bytes"), 0),
+        ghost_entries(Name("ghost_entries"), 0),
+        ghost_hits(Name("ghost_hits"), 0),
+        protected_bytes(Name("protected_bytes"), 0),
+        protect_skips(Name("protect_skips"), 0),
+        evict_force_unprotect(Name("evict_force_unprotect"), 0),
+        admit_accepts(Name("admit_accepts"), 0),
+        admit_rejects_second_hit(Name("admit_rejects_second_hit"), 0),
+        admit_rejects_write_budget(Name("admit_rejects_write_budget"), 0) {}
 
   std::string Name(const std::string& name) const {
     CHECK_GT(prefix.length(), 0);
@@ -55,6 +75,22 @@ struct DiskCacheManagerVarsCollector {
     cache_blocks.reset();
     cache_bytes.reset();
     cache_full.set_value(false);
+    free_space_band.set_value(0);
+    evict_blocks_capacity.reset();
+    evict_bytes_capacity.reset();
+    evict_blocks_free_space.reset();
+    evict_bytes_free_space.reset();
+    evict_blocks_expire.reset();
+    evict_bytes_expire.reset();
+    s3fifo_small_bytes.set_value(0);
+    ghost_entries.set_value(0);
+    ghost_hits.set_value(0);
+    protected_bytes.set_value(0);
+    protect_skips.set_value(0);
+    evict_force_unprotect.set_value(0);
+    admit_accepts.set_value(0);
+    admit_rejects_second_hit.set_value(0);
+    admit_rejects_write_budget.set_value(0);
   }
 
   std::string prefix;
@@ -64,6 +100,23 @@ struct DiskCacheManagerVarsCollector {
   bvar::Adder<int64_t> cache_blocks;
   bvar::Adder<int64_t> cache_bytes;
   bvar::Status<bool> cache_full;
+  bvar::Status<int64_t> free_space_band;
+  bvar::Adder<int64_t> evict_blocks_capacity;
+  bvar::Adder<int64_t> evict_bytes_capacity;
+  bvar::Adder<int64_t> evict_blocks_free_space;
+  bvar::Adder<int64_t> evict_bytes_free_space;
+  bvar::Adder<int64_t> evict_blocks_expire;
+  bvar::Adder<int64_t> evict_bytes_expire;
+  bvar::Status<std::string> eviction_policy;
+  bvar::Status<int64_t> s3fifo_small_bytes;
+  bvar::Status<int64_t> ghost_entries;
+  bvar::Status<int64_t> ghost_hits;
+  bvar::Status<int64_t> protected_bytes;
+  bvar::Status<int64_t> protect_skips;
+  bvar::Status<int64_t> evict_force_unprotect;
+  bvar::Status<int64_t> admit_accepts;
+  bvar::Status<int64_t> admit_rejects_second_hit;
+  bvar::Status<int64_t> admit_rejects_write_budget;
 };
 
 using DiskCacheManagerVarsCollectorUPtr =
@@ -79,15 +132,27 @@ enum class BlockPhase : uint8_t {
 // Manage cache items and its capacity
 class DiskCacheManager {
  public:
+  enum class EvictReason : uint8_t {
+    kCapacity = 0,
+    kFreeSpace = 1,
+    kExpire = 2,
+  };
+
   DiskCacheManager(uint64_t capacity, DiskCacheLayoutSPtr layout);
   virtual ~DiskCacheManager() = default;
 
   virtual void Start();
   virtual void Shutdown();
 
+  // admission decision for a cache-fill disk write; warmup always admits,
+  // stage/writeback does not route through here
+  virtual bool Admit(const CacheKey& key, BlockSource source, size_t size);
   virtual void Add(const CacheKey& key, const CacheValue& value,
                    BlockPhase phase);
   virtual void Delete(const CacheKey& key);
+  // the only operation counted as an access: refreshes recency on a real hit
+  virtual void Touch(const CacheKey& key);
+  // pure query, never promotes: probing must not fake hotness
   virtual bool Exist(const CacheKey& key);
 
   virtual bool StageFull() const;
@@ -102,10 +167,15 @@ class DiskCacheManager {
   void Init();
 
   void CheckFreeSpace();
-  void CleanupFull(uint64_t want_free_bytes, uint64_t want_free_files);
+  void CleanupFull(uint64_t want_free_bytes, uint64_t want_free_files,
+                   EvictReason reason);
   void CleanupExpire();
   static int HandleTask(void* meta, bthread::TaskIterator<ToDel>& iter);
+  // Enqueues blocks for async unlink and tracks them as in-flight frees
+  // until DeleteBlocks() completes them.
+  void SubmitDelete(CacheItems items, EvictReason reason);
   void DeleteBlocks(const ToDel& to_del);
+  void RecordEvicted(EvictReason reason, uint64_t blocks, uint64_t bytes);
   void UpdateUsage(int64_t n, int64_t used_bytes);
 
   std::string GetRootDir() const;
@@ -123,7 +193,12 @@ class DiskCacheManager {
   const uint64_t capacity_bytes_;
   std::atomic<bool> stage_full_;
   std::atomic<bool> cache_full_;
-  LRUCacheUPtr cached_blocks_;
+  // deletions enqueued for async unlink, not yet visible to statfs
+  std::atomic<uint64_t> inflight_free_bytes_;
+  std::atomic<uint64_t> inflight_free_files_;
+  EvictionPolicyUPtr cached_blocks_;
+  EvictionGuard guard_;
+  AdmissionController admission_;
   std::unordered_map<std::string, CacheValue> staging_blocks_;
   utils::TaskThreadPoolUPtr thread_pool_;
   DiskCacheLayoutSPtr layout_;

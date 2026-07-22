@@ -45,12 +45,18 @@ LRUCache::~LRUCache() {
 }
 
 void LRUCache::Add(const CacheKey& key, const CacheValue& value) {
-  ListNode* node = new ListNode(value);
+  ListNode* node;
+  if (HashLookup(key.Filename(), &node)) {  // duplicate: refresh in place
+    node->value = value;
+    return;
+  }
+
+  node = new ListNode(value);
   HashInsert(key.Filename(), node);
   ListAddFront(&inactive_, node);
 }
 
-bool LRUCache::Get(const CacheKey& key, CacheValue* value) {
+bool LRUCache::Touch(const CacheKey& key, CacheValue* value) {
   ListNode* node;
   bool find = HashLookup(key.Filename(), &node);
   if (!find) {
@@ -60,6 +66,18 @@ bool LRUCache::Get(const CacheKey& key, CacheValue* value) {
   ListRemove(node);
   ListAddFront(&active_, node);
   node->value.atime = iutil::TimeNow();  // update access time
+  if (node->value.freq < 3) {
+    node->value.freq++;
+  }
+  *value = node->value;
+  return true;
+}
+
+bool LRUCache::Get(const CacheKey& key, CacheValue* value) const {
+  ListNode* node;
+  if (!HashLookup(key.Filename(), &node)) {
+    return false;
+  }
   *value = node->value;
   return true;
 }
@@ -77,7 +95,7 @@ bool LRUCache::Delete(const CacheKey& key, CacheValue* deleted) {
   return true;
 }
 
-bool LRUCache::Exist(const CacheKey& key) {
+bool LRUCache::Exist(const CacheKey& key) const {
   ListNode* node;
   return HashLookup(key.Filename(), &node);
 }
@@ -90,7 +108,11 @@ CacheItems LRUCache::Evict(FilterFunc filter) {
   return evicted;
 }
 
-size_t LRUCache::Size() { return hash_->TotalCharge(); }
+// LRU eviction already scans without reordering retained nodes, so a sweep
+// is the same single pass.
+CacheItems LRUCache::Sweep(FilterFunc filter) { return Evict(filter); }
+
+size_t LRUCache::Size() const { return hash_->TotalCharge(); }
 
 void LRUCache::Clear() {
   EvictAllNodes(&inactive_);
@@ -102,7 +124,7 @@ void LRUCache::HashInsert(const std::string& key, ListNode* node) {
   node->handle = handle;
 }
 
-bool LRUCache::HashLookup(const std::string& key, ListNode** node) {
+bool LRUCache::HashLookup(const std::string& key, ListNode** node) const {
   auto* handle = hash_->Lookup(key);
   if (nullptr == handle) {
     return false;

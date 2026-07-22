@@ -197,33 +197,40 @@ Status CacheNode::Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
 }
 
 Status CacheNode::AsyncCache(ContextSPtr ctx, const BlockKey& key,
-                             const Block& block) {
+                             const Block& block, BlockSource source) {
   if (!IsRunning()) {
     LOG(ERROR) << "Cache node is down, skip async cache block, key="
                << key.Filename();
     return Status::CacheDown("cache node is down");
   }
 
-  block_cache_->AsyncCache(ctx, key, block, [](Status status) {
-    if (!status.ok()) {
-      LOG(ERROR) << "Fail to async cache block, status=" << status.ToString();
-    }
-  });
+  block_cache_->AsyncCache(
+      ctx, key, block,
+      [](Status status) {
+        if (!status.ok()) {
+          LOG(ERROR) << "Fail to async cache block, status="
+                     << status.ToString();
+        }
+      },
+      {.source = source});
   return Status::OK();
 }
 
 Status CacheNode::AsyncPrefetch(ContextSPtr ctx, const BlockKey& key,
-                                size_t length) {
+                                size_t length, BlockSource source) {
   if (!IsRunning()) {
     return Status::CacheDown("cache node is down");
   }
 
-  block_cache_->AsyncPrefetch(ctx, key, length, [key](Status status) {
-    if (!status.ok()) {
-      LOG(ERROR) << "Fail to async prefetch block, key=" << key.Filename()
-                 << ", status=" << status.ToString();
-    }
-  });
+  block_cache_->AsyncPrefetch(
+      ctx, key, length,
+      [key](Status status) {
+        if (!status.ok()) {
+          LOG(ERROR) << "Fail to async prefetch block, key=" << key.Filename()
+                     << ", status=" << status.ToString();
+        }
+      },
+      {.source = source});
   return Status::OK();
 }
 
@@ -280,7 +287,8 @@ Status CacheNode::RetrievePartBlock(ContextSPtr ctx, const BlockKey& key,
 
   status = storage_client->Range(ctx, key, offset, length, buffer);
   if (status.ok() && block_length > 0) {
-    block_cache_->AsyncPrefetch(ctx, key, block_length, nullptr);
+    block_cache_->AsyncPrefetch(ctx, key, block_length, nullptr,
+                                {.source = BlockSource::kReadMiss});
   }
   return status;
 }
@@ -298,12 +306,14 @@ Status CacheNode::RetrieveWholeBlock(ContextSPtr ctx, const BlockKey& key,
 
   BRPC_SCOPE_EXIT {
     if (status.ok()) {
-      block_cache_->AsyncCache(ctx, key, Block(*buffer),
-                               [this, created, key](Status /*status*/) {
-                                 if (created) {
-                                   task_tracker_->RemoveTask(key);
-                                 }
-                               });
+      block_cache_->AsyncCache(
+          ctx, key, Block(*buffer),
+          [this, created, key](Status /*status*/) {
+            if (created) {
+              task_tracker_->RemoveTask(key);
+            }
+          },
+          {.source = BlockSource::kReadMiss});
     }
   };
 

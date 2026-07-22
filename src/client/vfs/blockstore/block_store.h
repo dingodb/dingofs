@@ -49,6 +49,7 @@ struct PutReq {
 struct PrefetchReq {
   BlockKey block;
   size_t block_size{0};
+  cache::BlockSource source{cache::BlockSource::kReadahead};
 };
 
 class BlockStore {

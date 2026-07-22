@@ -23,33 +23,11 @@
 #ifndef DINGOFS_SRC_CACHE_BLOCKCACHE_LRU_CACHE_H_
 #define DINGOFS_SRC_CACHE_BLOCKCACHE_LRU_CACHE_H_
 
-#include <functional>
-
-#include "cache/blockcache/cache_store.h"
+#include "cache/blockcache/eviction_policy.h"
 #include "cache/iutil/cache.h"
-#include "cache/iutil/time_util.h"
 
 namespace dingofs {
 namespace cache {
-
-using CacheKey = BlockKey;
-
-struct CacheValue {
-  CacheValue() = default;
-  CacheValue(size_t size, iutil::TimeSpec atime) : size(size), atime(atime) {}
-
-  size_t size;
-  iutil::TimeSpec atime;  // access time
-};
-
-struct CacheItem {
-  CacheItem(CacheKey key, CacheValue value) : key(key), value(value) {}
-
-  CacheKey key;
-  CacheValue value;
-};
-
-using CacheItems = std::vector<CacheItem>;
 
 struct ListNode {
   ListNode() = default;
@@ -80,35 +58,29 @@ inline void ListRemove(ListNode* node) {
   node->prev->next = node->next;
 }
 
-enum class FilterStatus : uint8_t {
-  kEvictIt,
-  kSkip,
-  kFinish,
-};
-
-// How it implements:
+// The classic two-list LRU policy (compat/fallback option):
 //  hash table: using base::Cache
 //  lru policy: manage inactive and active list
-class LRUCache {
+class LRUCache final : public EvictionPolicy {
  public:
-  using FilterFunc = std::function<FilterStatus(const CacheValue& value)>;
-
   LRUCache();
 
-  virtual ~LRUCache();
+  ~LRUCache() override;
 
-  virtual void Add(const CacheKey& key, const CacheValue& value);
-  virtual bool Get(const CacheKey& key, CacheValue* value);
-  virtual bool Delete(const CacheKey& key, CacheValue* deleted);
-  virtual bool Exist(const CacheKey& key);
-  virtual CacheItems Evict(FilterFunc filter);
+  void Add(const CacheKey& key, const CacheValue& value) override;
+  bool Touch(const CacheKey& key, CacheValue* value) override;
+  bool Exist(const CacheKey& key) const override;
+  bool Get(const CacheKey& key, CacheValue* value) const override;
+  bool Delete(const CacheKey& key, CacheValue* deleted) override;
+  CacheItems Evict(FilterFunc filter) override;
+  CacheItems Sweep(FilterFunc filter) override;
 
-  virtual size_t Size();
-  virtual void Clear();
+  size_t Size() const override;
+  void Clear() override;
 
  private:
   void HashInsert(const std::string& key, ListNode* node);
-  bool HashLookup(const std::string& key, ListNode** node);
+  bool HashLookup(const std::string& key, ListNode** node) const;
   void HashDelete(ListNode* node);
 
   CacheItem KV(ListNode* node);
@@ -120,8 +92,6 @@ class LRUCache {
   ListNode active_;
   ListNode inactive_;
 };
-
-using LRUCacheUPtr = std::unique_ptr<LRUCache>;
 
 }  // namespace cache
 }  // namespace dingofs
