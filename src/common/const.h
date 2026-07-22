@@ -46,6 +46,10 @@ inline bool IsInternalNode(uint64_t ino) {
   return ino == kStatsIno || ino == kRecycleIno || ino == kRootIno;
 }
 
+inline bool IsInternalIno(uint64_t ino) {
+  return ino == kStatsIno || ino == kRecycleIno;
+}
+
 inline bool IsInternalName(const std::string& name) {
   return name == kStatsName || name == kRecycleName;
 }
