@@ -58,9 +58,11 @@ DEFINE_bool(coverage, false,
 
 namespace {
 
-// Known-flaky timing case (200ms upper bound flakes under load); excluded by
-// default, override with --gtest_filter to run it explicitly.
-constexpr char kDefaultFilter[] = "-IOUringTest.WaitIO";
+// Excluded from the default run, override with --gtest_filter to run
+// explicitly: IOUringTest.WaitIO is a known-flaky timing case (200ms upper
+// bound flakes under load); SlabAllocatorTest.Perf* are benchmarks (several
+// seconds, LOG-only, no assertions) meant to be run on demand.
+constexpr char kDefaultFilter[] = "-IOUringTest.WaitIO:SlabAllocatorTest.Perf*";
 
 std::string Dirname(const std::string& path) {
   auto pos = path.find_last_of('/');
