@@ -54,6 +54,9 @@ struct AwsSdkConfig {
   // cores. The thread count is applied to the AWS CRT EventLoopGroup which is
   // shared by all S3CrtClient instances in this process.
   int crt_event_loop_threads{0};
+  // >0 overrides crt throughputTargetGbps (real concurrency knob on the
+  // crt path); 0 keeps the sdk default of 10.0 (=25 connections).
+  int crt_throughput_target_gbps{20};
 
   bool use_thread_pool{true};  // this only work when use_crt_client is false
   int async_thread_num{16};    // this only work when use_crt_client is false
@@ -92,6 +95,8 @@ inline void FillAwsSdkConfigFromGFlags(AwsSdkConfig* aws_sdk_config) {
   aws_sdk_config->request_timeout = FLAGS_s3_request_timeout;
 
   aws_sdk_config->use_crt_client = FLAGS_s3_use_crt_client;
+  aws_sdk_config->crt_throughput_target_gbps =
+      FLAGS_s3_crt_throughput_target_gbps;
   if (aws_sdk_config->use_crt_client) {
     LOG(INFO) << "s3 use crt client.";
   }

@@ -20,6 +20,7 @@
 
 #include <algorithm>
 #include <any>
+#include <cmath>
 #include <memory>
 
 #include "aws/s3-crt/model/DeleteObjectRequest.h"
@@ -61,6 +62,17 @@ void AwsCrtS3Client::Init(const S3Options& options) {
     config->verifySSL = options.aws_sdk_config.verify_ssl;
     config->region = options.aws_sdk_config.region;
     config->maxConnections = options.aws_sdk_config.max_connections;
+    if (options.aws_sdk_config.crt_throughput_target_gbps > 0) {
+      // crt ignores maxConnections; its connection count is
+      // ceil(throughputTargetGbps / 0.4Gbps-per-connection).
+      config->throughputTargetGbps =
+          static_cast<double>(
+              options.aws_sdk_config.crt_throughput_target_gbps);
+      LOG(INFO) << fmt::format(
+          "[s3_crt] throughputTargetGbps={} (~{} connections).",
+          config->throughputTargetGbps,
+          static_cast<int>(std::ceil(config->throughputTargetGbps / 0.4)));
+    }
     config->connectTimeoutMs = options.aws_sdk_config.connect_timeout;
     config->requestTimeoutMs = options.aws_sdk_config.request_timeout;
     config->useVirtualAddressing =
