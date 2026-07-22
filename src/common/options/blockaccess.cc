@@ -29,6 +29,11 @@ DEFINE_string(s3_region, "us-east-1", "aws s3 region");
 DEFINE_int32(s3_loglevel, 4, "aws sdk log level");
 DEFINE_bool(s3_verify_ssl, false, "whether to verify ssl");
 DEFINE_int32(s3_max_connections, 32, "max connections to s3");
+DEFINE_int32(s3_crt_throughput_target_gbps, 20,
+              "crt client throughput target in Gbps; crt derives its real "
+              "connection count from ceil(target/0.4), maxConnections is "
+              "ignored on the crt path. Defaults to 20; 0 keeps the sdk "
+              "default (10.0 -> 25 connections)");
 DEFINE_int32(s3_connect_timeout, 60000, "s3 connect timeout in milliseconds");
 DEFINE_int32(s3_request_timeout, 10000, "s3 request timeout in milliseconds");
 DEFINE_bool(s3_use_crt_client, true, "whether to use crt client");
