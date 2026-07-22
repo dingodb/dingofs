@@ -75,6 +75,9 @@ Status StorageClientPoolImpl::CreateStorageClient(
   // New block accesser
   blockaccess::BlockAccessOptions block_access_opt;
   FillBlockAccessOption(fs_info, &block_access_opt);
+  // apply the s3_*/throttle flags (e.g. s3_use_crt_client); without this the
+  // cache node silently ignores them all
+  blockaccess::InitBlockAccessOption(&block_access_opt);
   accesseres_[fs_id] = blockaccess::NewBlockAccesser(block_access_opt);
   auto* block_accesser = accesseres_[fs_id].get();
   status = block_accesser->Init();
