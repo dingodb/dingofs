@@ -29,6 +29,7 @@ DECLARE_string(s3_region);
 DECLARE_int32(s3_loglevel);
 DECLARE_bool(s3_verify_ssl);
 DECLARE_int32(s3_max_connections);
+DECLARE_int32(s3_crt_throughput_target_gbps);
 DECLARE_int32(s3_connect_timeout);
 DECLARE_int32(s3_request_timeout);
 DECLARE_bool(s3_use_crt_client);
