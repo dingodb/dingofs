@@ -31,6 +31,7 @@ target_link_libraries(fuse_client_lib
     cache_tiercache
     jsoncpp
     ${FUSE3_LIBRARY}
+    numa  # libfuse3 built with io_uring support references numa_* symbols
 )
 
 add_executable(dingo-client main.cc)
