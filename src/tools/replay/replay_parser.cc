@@ -149,7 +149,7 @@ bool FindTrailingParenBlock(string_view sv, size_t* open_idx) {
   return false;
 }
 
-// Parses the "YYYY-MM-DD HH:MM:SS.mmm" spdlog timestamp into epoch seconds
+// Parses the "YYYY-MM-DD HH:MM:SS.mmm" spdlog timestamp into epoch milliseconds
 // (UTC; only relative differences are used by the caller, so timezone does
 // not matter as long as it is applied consistently).
 bool ParseTimestamp(string_view sv, double* out) {
@@ -170,7 +170,7 @@ bool ParseTimestamp(string_view sv, double* out) {
   tm.tm_sec = sec;
   time_t t = timegm(&tm);
   if (t == static_cast<time_t>(-1)) return false;
-  *out = static_cast<double>(t) + ms / 1000.0;
+  *out = static_cast<double>(t) * 1000 + ms;
   return true;
 }
 
@@ -186,7 +186,7 @@ bool StripDuration(string_view sv, string_view* content, double* duration) {
   std::string tmp(num);
   double v = std::strtod(tmp.c_str(), &end);
   if (end != tmp.c_str() + tmp.size()) return false;
-  *duration = v;
+  *duration = v * 1000;
   *content = sv.substr(0, lt - 1);
   return true;
 }
@@ -898,9 +898,9 @@ LineParseResult ParseAccessLogLine(const std::string& line) {
   rec.pid = pid;
   rec.uid = uid;
   rec.gid = gid;
-  rec.end_time_sec = end_time;
-  rec.duration_sec = duration;
-  rec.start_time_sec = end_time - duration;
+  rec.end_time_ms = end_time;
+  rec.duration_ms = duration;
+  rec.start_time_ms = end_time - duration;
 
   if (op == OpKind::kUnsupported) {
     res.status = LineParseStatus::kOk;
@@ -988,6 +988,11 @@ bool RunParserSelfCheck(std::ostream& out) {
     bool pass = (r.status == c.expect_status);
     if (pass && c.expect_status == LineParseStatus::kOk) {
       pass = (r.record.op == c.expect_op) && (r.record.ok == c.expect_ok);
+    }
+    if (pass && idx == 1) {
+      pass = r.record.duration_ms > 0.122 && r.record.duration_ms < 0.124 &&
+             r.record.end_time_ms - r.record.start_time_ms > 0.122 &&
+             r.record.end_time_ms - r.record.start_time_ms < 0.124;
     }
     out << "[self-check] case " << idx << ": " << (pass ? "PASS" : "FAIL");
     if (!pass) {
