@@ -17,9 +17,9 @@
 #ifndef DINGOFS_TEST_UNIT_CLIENT_VFS_TEST_COMMON_H_
 #define DINGOFS_TEST_UNIT_CLIENT_VFS_TEST_COMMON_H_
 
+#include <glog/logging.h>
 #include <gtest/gtest.h>
 
-#include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <mutex>
@@ -38,26 +38,40 @@ namespace test {
 //   waiter.Expect(N);
 //   ... submit N ops, each calling waiter.Done() in callback ...
 //   waiter.Wait();
+// A timed-out Wait() only records an EXPECT failure; the callbacks it was
+// waiting for are still queued and still reference this object. The destructor
+// drains them before the stack frame dies -- otherwise a late Done() writes to
+// a dead frame, and its continuation may Execute() on an already-stopped
+// executor (SIGSEGV / CHECK abort seen under heavy scheduler starvation).
 struct AsyncWaiter {
   std::mutex mtx;
   std::condition_variable cv;
-  std::atomic<int> pending{0};
+  int pending{0};  // guarded by mtx (destructor handshake needs the lock)
 
-  void Expect(int n) { pending.store(n, std::memory_order_relaxed); }
+  ~AsyncWaiter() {
+    std::unique_lock<std::mutex> lk(mtx);
+    bool drained = cv.wait_for(lk, std::chrono::seconds(60),
+                               [this] { return pending <= 0; });
+    CHECK(drained) << "AsyncWaiter destroyed with " << pending
+                   << " callback(s) still pending";
+  }
+
+  void Expect(int n) {
+    std::lock_guard<std::mutex> lk(mtx);
+    pending = n;
+  }
 
   void Done() {
-    if (pending.fetch_sub(1, std::memory_order_acq_rel) == 1) {
-      std::lock_guard<std::mutex> lk(mtx);
+    std::lock_guard<std::mutex> lk(mtx);
+    if (--pending <= 0) {
       cv.notify_all();
     }
   }
 
   void Wait(std::chrono::seconds timeout = std::chrono::seconds(10)) {
     std::unique_lock<std::mutex> lk(mtx);
-    cv.wait_for(lk, timeout, [this] {
-      return pending.load(std::memory_order_acquire) == 0;
-    });
-    EXPECT_EQ(pending.load(std::memory_order_relaxed), 0);
+    cv.wait_for(lk, timeout, [this] { return pending <= 0; });
+    EXPECT_EQ(pending, 0);
   }
 };
 
