@@ -108,9 +108,6 @@ DEFINE_validator(mds_storage_engine, [](const char*, const std::string& value) -
   return value == "dingo-store" || value == "tikv" || value == "tikv-go" || value == "dummy";
 });
 
-DEFINE_bool(mds_update_inode_cache_enable, false, "Update inode cache enable.");
-DEFINE_validator(mds_update_inode_cache_enable, brpc::PassValidate);
-
 DECLARE_uint32(mds_txn_max_retry_times);
 
 static SuffixSet g_suffix_set;
@@ -944,9 +941,7 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryWithPaOut& 
   auto& parent_attr_or_mutation = result.parent_attr_or_mutation;
 
   // update cache
-  if (FLAGS_mds_update_inode_cache_enable) {
-    UpsertInodeCache(attr, reason);
-  }
+  UpsertInodeCache(attr, reason);
 
   AttrEntry last_parent_attr = parent_inode->ToAttr();
   AddDentryToPartition(parent, dentry, last_parent_attr.version());
