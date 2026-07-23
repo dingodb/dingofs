@@ -218,7 +218,8 @@ Status DiskCache::Stage(BlockHandle handle, IOBuffer block,
     status = Status::OK();  // ignore link error
   }
 
-  manager_->AddStaging(handle, CacheValue(length, iutil::TimeNow()));
+  manager_->AddStaging(handle, static_cast<uint32_t>(length),
+                       static_cast<uint32_t>(iutil::TimeNow().sec));
 
   uploader_(handle, length, option.block_attr);
   return status;
@@ -264,7 +265,8 @@ Status DiskCache::Cache(BlockHandle handle, IOBuffer block,
     return status;
   }
 
-  manager_->AddCached(handle, CacheValue(length, iutil::TimeNow()));
+  manager_->AddCached(handle, static_cast<uint32_t>(length),
+                      static_cast<uint32_t>(iutil::TimeNow().sec));
 
   return status;
 }

@@ -82,6 +82,9 @@ DECLARE_double(free_space_ratio);
 // Expiration time for cached blocks in seconds. Staged blocks are not expired.
 DECLARE_uint32(cache_expire_s);
 
+// Cache eviction policy: sieve | s3fifo | 2random | lru | none (restart to change).
+DECLARE_string(cache_eviction);
+
 // Interval for scanning and removing expired cached blocks in milliseconds.
 DECLARE_uint32(cache_cleanup_expire_interval_ms);
 

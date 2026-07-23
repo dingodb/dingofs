@@ -63,6 +63,12 @@ struct TensorKey {
 
   uint64_t StoreSize() const { return 0; }
 
+  bool operator==(const TensorKey& o) const {
+    return world_size == o.world_size && worker_id == o.worker_id &&
+           chunk_hash == o.chunk_hash && model_name == o.model_name &&
+           dtype == o.dtype;
+  }
+
   std::string model_name;
   uint32_t world_size{0};
   uint32_t worker_id{0};
