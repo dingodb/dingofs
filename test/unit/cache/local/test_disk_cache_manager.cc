@@ -16,7 +16,7 @@
 
 /*
  * Project: DingoFS
- * Created Date: 2026-06-21
+ * Created Date: 2026-07-23
  * Author: AI
  */
 
@@ -33,7 +33,6 @@
 #include <thread>
 #include <vector>
 
-#include "cache/iutil/time_util.h"
 #include "cache/local/disk_cache_layout.h"
 #include "cache/local/disk_cache_manager.h"
 #include "common/block/block_handle.h"
@@ -44,6 +43,8 @@ namespace cache {
 
 class DiskCacheManagerTest : public ::testing::Test {
  protected:
+  static constexpr uint32_t kAtime = 1000000;  // fixed access time for tests
+
   void SetUp() override {
     static int seq = 0;
     cache_index_ = 100 + (seq++);
@@ -55,20 +56,26 @@ class DiskCacheManagerTest : public ::testing::Test {
 
   void TearDown() override { std::filesystem::remove_all(root_dir_); }
 
-  static CacheKey Key(uint64_t id) {
+  static BlockHandle Key(uint64_t id) {
     return BlockHandle(1, BlockKey(id, 0, 4194304));
   }
-  static CacheValue Val(size_t size) {
-    return CacheValue(size, iutil::TimeNow());
+
+  static void Cache(DiskCacheManager& m, const BlockHandle& k,
+                    uint32_t size = 4096) {
+    m.AddCached(k, size, kAtime);
+  }
+  static void Stage(DiskCacheManager& m, const BlockHandle& k,
+                    uint32_t size = 4096) {
+    m.AddStaging(k, size, kAtime);
   }
 
-  // Returns `n` keys whose Filename() hashes to the same shard, so tests that
-  // need a deterministic per-shard LRU eviction order can opt in.
-  static std::vector<CacheKey> SameShardKeys(size_t n) {
-    std::vector<std::vector<CacheKey>> buckets(DiskCacheManager::kShardCount);
+  // Returns `n` keys whose Hash() maps to the same shard, so tests that need a
+  // deterministic per-shard eviction order can opt in.
+  static std::vector<BlockHandle> SameShardKeys(size_t n) {
+    std::vector<std::vector<BlockHandle>> buckets(DiskCacheManager::kShardCount);
     for (uint64_t id = 1; id < 1000000; ++id) {
       auto key = Key(id);
-      auto& bucket = buckets[DiskCacheManager::ShardIndex(key.Filename())];
+      auto& bucket = buckets[DiskCacheManager::ShardIndex(key)];
       bucket.push_back(key);
       if (bucket.size() >= n) {
         bucket.resize(n);
@@ -80,11 +87,11 @@ class DiskCacheManagerTest : public ::testing::Test {
   }
 
   // Returns a key that maps to a different shard than `other`.
-  static CacheKey KeyInOtherShard(const CacheKey& other) {
-    auto avoid = DiskCacheManager::ShardIndex(other.Filename());
+  static BlockHandle KeyInOtherShard(const BlockHandle& other) {
+    auto avoid = DiskCacheManager::ShardIndex(other);
     for (uint64_t id = 1; id < 1000000; ++id) {
       auto key = Key(id);
-      if (DiskCacheManager::ShardIndex(key.Filename()) != avoid) {
+      if (DiskCacheManager::ShardIndex(key) != avoid) {
         return key;
       }
     }
@@ -110,10 +117,10 @@ TEST_F(DiskCacheManagerTest, AddAndExist) {
 
   EXPECT_FALSE(manager.Exist(Key(1)));
 
-  manager.AddStaging(Key(1), Val(4096));
+  Stage(manager, Key(1));
   EXPECT_TRUE(manager.Exist(Key(1)));
 
-  manager.AddCached(Key(2), Val(4096));
+  Cache(manager, Key(2));
   EXPECT_TRUE(manager.Exist(Key(2)));
 
   EXPECT_FALSE(manager.Exist(Key(3)));
@@ -122,11 +129,11 @@ TEST_F(DiskCacheManagerTest, AddAndExist) {
 TEST_F(DiskCacheManagerTest, PromoteStagingToCached) {
   DiskCacheManager manager(100 * 1024 * 1024, layout_);
 
-  manager.AddStaging(Key(1), Val(4096));
+  Stage(manager, Key(1));
   EXPECT_TRUE(manager.Exist(Key(1)));
 
   // Upload completion transitions the block from pinned staging into the cached
-  // LRU.
+  // eviction order.
   manager.PromoteStagingToCached(Key(1));
   EXPECT_TRUE(manager.Exist(Key(1)));
 
@@ -139,14 +146,14 @@ TEST_F(DiskCacheManagerTest, DeleteOnlyAffectsCachedBlocks) {
   DiskCacheManager manager(100 * 1024 * 1024, layout_);
 
   {  // a cached block can be deleted
-    manager.AddCached(Key(1), Val(4096));
+    Cache(manager, Key(1));
     manager.DeleteCached(Key(1));
     EXPECT_FALSE(manager.Exist(Key(1)));
   }
 
   {  // a staging block is intentionally NOT removed by Delete (it must stay
      // until uploaded, otherwise it is lost from both disk and storage)
-    manager.AddStaging(Key(2), Val(4096));
+    Stage(manager, Key(2));
     manager.DeleteCached(Key(2));
     EXPECT_TRUE(manager.Exist(Key(2)));
   }
@@ -156,8 +163,8 @@ TEST_F(DiskCacheManagerTest, AddCachedDoesNotUnpinStaging) {
   DiskCacheManager manager(100 * 1024 * 1024, layout_);
   auto key = Key(1);
 
-  manager.AddStaging(key, Val(4096));
-  manager.AddCached(key, Val(4096));
+  Stage(manager, key);
+  Cache(manager, key);  // must not turn the pinned staging block evictable
   manager.DeleteCached(key);
   EXPECT_TRUE(manager.Exist(key));
 
@@ -167,8 +174,8 @@ TEST_F(DiskCacheManagerTest, AddCachedDoesNotUnpinStaging) {
 }
 
 TEST_F(DiskCacheManagerTest, PerShardCapacityTriggersEviction) {
-  // Eviction is now per-shard: capacity is split into kShardCount shards. Scale
-  // the whole-disk capacity so each shard holds 1000 bytes, and drive three
+  // Eviction is per-shard: capacity is split into kShardCount shards. Scale the
+  // whole-disk capacity so each shard holds 1000 bytes, and drive three
   // same-shard 400B blocks into one shard.
   constexpr uint64_t kShardCap = 1000;
   DiskCacheManager manager(kShardCap * DiskCacheManager::kShardCount, layout_);
@@ -176,13 +183,13 @@ TEST_F(DiskCacheManagerTest, PerShardCapacityTriggersEviction) {
 
   auto keys = SameShardKeys(3);
 
-  // No Exist() probing before the trigger: cached Exist() promotes the entry in
-  // the LRU and would change the eviction victim.
-  manager.AddCached(keys[0], Val(400));
-  manager.AddCached(keys[1], Val(400));
+  // No Exist() probing before the trigger: a cached Exist() promotes the entry
+  // in the LRU order and would change the eviction victim.
+  Cache(manager, keys[0], 400);
+  Cache(manager, keys[1], 400);
 
   // shard used (1200) >= shard capacity (1000) trips CleanupFull on this shard.
-  manager.AddCached(keys[2], Val(400));
+  Cache(manager, keys[2], 400);
 
   EXPECT_FALSE(manager.Exist(keys[0]));  // oldest in the shard, evicted
   EXPECT_TRUE(manager.Exist(keys[1]));
@@ -200,10 +207,10 @@ TEST_F(DiskCacheManagerTest, EvictionIsPerShardIndependent) {
   auto keys = SameShardKeys(3);           // all land on the same shard X
   auto other = KeyInOtherShard(keys[0]);  // lands on a different shard Y
 
-  manager.AddCached(other, Val(400));
-  manager.AddCached(keys[0], Val(400));
-  manager.AddCached(keys[1], Val(400));
-  manager.AddCached(keys[2], Val(400));  // X over quota: evict X
+  Cache(manager, other, 400);
+  Cache(manager, keys[0], 400);
+  Cache(manager, keys[1], 400);
+  Cache(manager, keys[2], 400);  // X over quota: evict X
 
   EXPECT_FALSE(manager.Exist(keys[0]));  // evicted within shard X
   EXPECT_TRUE(manager.Exist(keys[1]));
@@ -222,9 +229,9 @@ TEST_F(DiskCacheManagerTest, StagingBlockSurvivesShardEviction) {
 
   auto keys = SameShardKeys(3);
 
-  manager.AddStaging(keys[0], Val(400));
-  manager.AddCached(keys[1], Val(400));
-  manager.AddCached(keys[2], Val(400));  // shard over quota
+  Stage(manager, keys[0], 400);
+  Cache(manager, keys[1], 400);
+  Cache(manager, keys[2], 400);  // shard over quota
 
   EXPECT_TRUE(manager.Exist(keys[0]));   // staging: never evicted
   EXPECT_FALSE(manager.Exist(keys[1]));  // oldest cached: evicted
@@ -233,12 +240,53 @@ TEST_F(DiskCacheManagerTest, StagingBlockSurvivesShardEviction) {
   manager.Shutdown();
 }
 
+TEST_F(DiskCacheManagerTest, NonePolicyNeverEvicts) {
+  // Pin mode: a shard may exceed capacity without any eviction.
+  constexpr uint64_t kShardCap = 1000;
+  DiskCacheManager manager(kShardCap * DiskCacheManager::kShardCount, layout_,
+                           "none");
+  manager.Start();
+
+  auto keys = SameShardKeys(4);
+  for (const auto& key : keys) {
+    Cache(manager, key, 400);  // 1600 bytes into a 1000-byte shard
+  }
+
+  for (const auto& key : keys) {
+    EXPECT_TRUE(manager.Exist(key));  // nothing evicted under "none"
+  }
+
+  manager.Shutdown();
+}
+
+TEST_F(DiskCacheManagerTest, EvictionWorksForEachPolicy) {
+  constexpr uint64_t kShardCap = 1000;
+  for (const std::string& policy : {"lru", "sieve", "s3fifo", "2random"}) {
+    DiskCacheManager manager(kShardCap * DiskCacheManager::kShardCount, layout_,
+                             policy);
+    manager.Start();
+
+    auto keys = SameShardKeys(4);  // 4 * 400 = 1600 into a 1000-byte shard
+    for (const auto& key : keys) {
+      Cache(manager, key, 400);
+    }
+
+    int present = 0;
+    for (const auto& key : keys) {
+      present += manager.Exist(key) ? 1 : 0;
+    }
+    EXPECT_LT(present, 4) << "policy=" << policy;  // some were evicted
+    EXPECT_GT(present, 0) << "policy=" << policy;  // but not all
+
+    manager.Shutdown();
+  }
+}
+
 TEST_F(DiskCacheManagerTest, DeleteNonExistentKeyIsNoop) {
   DiskCacheManager manager(100 * 1024 * 1024, layout_);
-  manager.AddCached(Key(1), Val(4096));
+  Cache(manager, Key(1));
 
-  manager.DeleteCached(
-      Key(2));  // not present: must not touch the existing block
+  manager.DeleteCached(Key(2));  // not present: must not touch existing blocks
   EXPECT_TRUE(manager.Exist(Key(1)));
   EXPECT_FALSE(manager.Exist(Key(2)));
 }
@@ -258,9 +306,9 @@ TEST_F(DiskCacheManagerTest, EvictionDeletesRealCacheFiles) {
   std::ofstream(victim_path) << "block-data";
   ASSERT_TRUE(std::filesystem::exists(victim_path));
 
-  manager.AddCached(keys[0], Val(400));
-  manager.AddCached(keys[1], Val(400));
-  manager.AddCached(keys[2], Val(400));  // evicts LRU keys[0]
+  Cache(manager, keys[0], 400);
+  Cache(manager, keys[1], 400);
+  Cache(manager, keys[2], 400);  // evicts LRU keys[0]
 
   bool deleted = false;
   for (int i = 0; i < 500 && !deleted; ++i) {
@@ -292,9 +340,9 @@ TEST_F(DiskCacheManagerTest, StagingHardLinkSurvivesEvictionDeleteTask) {
       std::filesystem::path(victim_path).parent_path());
   std::ofstream(victim_path) << "victim-data";
 
-  manager.AddStaging(keys[0], Val(400));
-  manager.AddCached(keys[1], Val(400));
-  manager.AddCached(keys[2], Val(400));  // evicts cached keys[1]
+  Stage(manager, keys[0], 400);
+  Cache(manager, keys[1], 400);
+  Cache(manager, keys[2], 400);  // evicts cached keys[1]
 
   bool victim_deleted = false;
   for (int i = 0; i < 500 && !victim_deleted; ++i) {
@@ -322,16 +370,16 @@ TEST_F(DiskCacheManagerTest, UploadWithoutStagingDies) {
 }
 
 TEST_F(DiskCacheManagerTest, ShardIndexIsStableAndDistributes) {
-  {  // stable: the same filename always maps to the same shard
+  {  // stable: the same handle always maps to the same shard
     auto key = Key(42);
-    EXPECT_EQ(DiskCacheManager::ShardIndex(key.Filename()),
-              DiskCacheManager::ShardIndex(key.Filename()));
+    EXPECT_EQ(DiskCacheManager::ShardIndex(key),
+              DiskCacheManager::ShardIndex(key));
   }
 
   {  // in range and spreads across more than one shard over many keys
     std::set<size_t> shards;
     for (uint64_t id = 1; id <= 1000; ++id) {
-      auto shard = DiskCacheManager::ShardIndex(Key(id).Filename());
+      auto shard = DiskCacheManager::ShardIndex(Key(id));
       EXPECT_LT(shard, DiskCacheManager::kShardCount);
       shards.insert(shard);
     }
@@ -354,7 +402,7 @@ TEST_F(DiskCacheManagerTest, ConcurrentAddDeleteExistIsSafe) {
     workers.emplace_back([&, t] {
       for (int i = 0; i < kKeysPerThread; ++i) {
         auto key = Key((t * kKeysPerThread) + i);
-        manager.AddCached(key, Val(4096));
+        Cache(manager, key);
         manager.Exist(key);
         if (i % 2 == 0) {
           manager.DeleteCached(key);

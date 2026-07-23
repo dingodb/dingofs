@@ -29,12 +29,14 @@
 
 #include <array>
 #include <atomic>
-#include <functional>
-#include <unordered_map>
-#include <utility>
+#include <cstdint>
+#include <string>
+#include <vector>
 
+#include "cache/local/cache_entry.h"
+#include "cache/local/cache_policy.h"
 #include "cache/local/disk_cache_layout.h"
-#include "cache/local/lru_cache.h"
+#include "common/block/block_handle.h"
 #include "utils/concurrent/task_thread_pool.h"
 
 namespace dingofs {
@@ -48,7 +50,11 @@ struct DiskCacheManagerMetrics {
         stage_full(Name("stage_full"), false),
         cache_blocks(Name("cache_blocks")),
         cache_bytes(Name("cache_bytes")),
-        cache_full(Name("cache_full"), false) {}
+        cache_full(Name("cache_full"), false),
+        evict_blocks(Name("evict_blocks")),
+        evict_bytes(Name("evict_bytes")),
+        expire_blocks(Name("expire_blocks")),
+        eviction_policy(Name("eviction_policy"), "") {}
 
   std::string Name(const std::string& name) const {
     CHECK_GT(prefix.length(), 0);
@@ -62,6 +68,9 @@ struct DiskCacheManagerMetrics {
     cache_blocks.reset();
     cache_bytes.reset();
     cache_full.set_value(false);
+    evict_blocks.reset();
+    evict_bytes.reset();
+    expire_blocks.reset();
   }
 
   std::string prefix;
@@ -71,112 +80,109 @@ struct DiskCacheManagerMetrics {
   bvar::Adder<int64_t> cache_blocks;
   bvar::Adder<int64_t> cache_bytes;
   bvar::Status<bool> cache_full;
+  bvar::Adder<int64_t> evict_blocks;   // blocks freed by capacity/free-space
+  bvar::Adder<int64_t> evict_bytes;    // bytes freed by capacity/free-space
+  bvar::Adder<int64_t> expire_blocks;  // blocks freed by TTL expiry
+  bvar::Status<std::string> eviction_policy;
 };
 
 using DiskCacheManagerMetricsUPtr = std::unique_ptr<DiskCacheManagerMetrics>;
 
-enum class CacheEntryState : uint8_t {
-  // The only local copy of a not-yet-uploaded writeback block. It is readable
-  // through the hard-linked cache path, but must never be evicted or deleted by
-  // normal cache cleanup.
-  kStaging = 0,
-  // A normal read cache block. It can be evicted by LRU/expiry cleanup.
-  kCached = 1,
-};
-
-struct CacheEntry {
-  CacheEntry() = default;
-  CacheEntry(CacheKey key, CacheValue value, CacheEntryState state)
-      : key(std::move(key)), value(value), state(state) {}
-
-  CacheKey key;
-  CacheValue value;
-  CacheEntryState state{CacheEntryState::kCached};
-};
-
 // Manage cache items and its capacity.
 //
-// The cache index (entry table + cached-block LRU + capacity accounting) is
-// sharded by block-key hash into kShardCount independent shards, each with its
-// own mutex. Operations on different keys land on different shards and no
-// longer serialize on a single global lock. This mirrors the MemCache sharding
-// paradigm (src/cache/local/mem_cache.h).
+// Each block owns a single CacheEntry living in one per-shard index
+// (node_hash_map, keyed by BlockHandle). That entry is simultaneously the node
+// linked into the shard's EvictionPolicy ordering, so a read hit is a single
+// lookup plus one bit/counter write -- no second map, no string key, no
+// allocation. Staging (not-yet-uploaded writeback) blocks are present in the
+// index but never handed to the policy, so they can never be evicted.
+//
+// The index is sharded by BlockHandle::Hash() into kShardCount independent
+// shards, each with its own mutex.
 class DiskCacheManager {
  public:
-  static constexpr size_t kShardCount =
-      32;  // aligned with MemCache, power of 2
+  static constexpr size_t kShardCount = 32;  // power of 2
   static_assert((kShardCount & (kShardCount - 1)) == 0,
                 "kShardCount must be a power of 2");
 
-  // Same as MemCache::ShardIndex: low bits of the filename hash. Staging and
-  // cached states of one block share key.Filename(), so state transitions
-  // always land on the same shard.
-  static size_t ShardIndex(const std::string& filename) {
-    return std::hash<std::string>{}(filename) & (kShardCount - 1);
+  static size_t ShardIndex(const BlockHandle& handle) {
+    return handle.Hash() & (kShardCount - 1);
   }
 
-  DiskCacheManager(uint64_t capacity, DiskCacheLayoutSPtr layout);
+  DiskCacheManager(uint64_t capacity, DiskCacheLayoutSPtr layout,
+                   std::string eviction_policy = "");
   virtual ~DiskCacheManager() = default;
 
   virtual void Start();
   virtual void Shutdown();
 
-  virtual void AddStaging(const CacheKey& key, const CacheValue& value);
-  virtual void PromoteStagingToCached(const CacheKey& key);
-  virtual void AddCached(const CacheKey& key, const CacheValue& value);
-  virtual void DeleteCached(const CacheKey& key);
-  virtual bool Exist(const CacheKey& key);
+  virtual void AddStaging(const BlockHandle& handle, uint32_t size,
+                          uint32_t atime_sec);
+  virtual void PromoteStagingToCached(const BlockHandle& handle);
+  virtual void AddCached(const BlockHandle& handle, uint32_t size,
+                         uint32_t atime_sec);
+  virtual void DeleteCached(const BlockHandle& handle);
+  virtual bool Exist(const BlockHandle& handle);
 
   virtual bool StageFull() const;
   virtual bool CacheFull() const;
 
  private:
+  struct DelItem {
+    BlockHandle handle;
+    uint32_t size;
+  };
   struct ToDel {
-    CacheItems items;
+    std::vector<DelItem> items;
     std::string reason;
   };
 
-  // Cache-line aligned to avoid false sharing between adjacent shards
-  // (mirrors mem_cache.h Shard). Every block is tracked in entries; only normal
-  // cached blocks are linked into cached_lru and can be selected for eviction.
+  // Cache-line aligned to avoid false sharing between adjacent shards. The
+  // index owns every block's CacheEntry; only cached (non-staged) entries are
+  // linked into the policy and can be evicted.
   struct alignas(64) Shard {
     mutable bthread::Mutex mutex;
-    uint64_t used_bytes{0};  // used bytes of this shard (staging + cached)
-    std::unordered_map<std::string, CacheEntry> entries;
-    LRUCacheUPtr cached_lru;
+    uint64_t used_bytes{0};  // staging + cached bytes of this shard
+    CacheIndex index;
+    EvictionPolicyUPtr policy;
   };
 
-  Shard& GetShard(const std::string& filename) {
-    return shards_[ShardIndex(filename)];
+  Shard& GetShard(const BlockHandle& handle) {
+    return shards_[ShardIndex(handle)];
   }
 
   void Init();
 
   void CheckFreeSpace();
-  // Evict from a single shard's LRU; assumes shard.mutex is held.
+  // Evict from a single shard when it reaches capacity; assumes mutex held.
   void CleanupFullIfNeededLocked(Shard& shard);
   void CleanupFullLocked(Shard& shard, uint64_t want_free_bytes,
                          uint64_t want_free_files);
-  // Spread a whole-disk want_free across all shards, locking each in turn.
   void CleanupAllShardsFull(uint64_t want_free_bytes, uint64_t want_free_files);
   void CleanupExpire();
+  // Account for, erase from the index, and async-delete the given victims;
+  // returns total bytes freed. Assumes shard.mutex is held.
+  uint64_t FlushVictimsLocked(Shard& shard, const CacheVictims& victims,
+                              const std::string& reason);
   static int HandleTask(void* meta, bthread::TaskIterator<ToDel>& iter);
   void DeleteBlocks(const ToDel& to_del);
-  void RemoveEntryLocked(Shard& shard, const std::string& filename);
-  // Update shard.used_bytes (locked) and total_used_bytes_ (atomic) + bvar.
-  // Assumes shard.mutex is held.
+  // Update shard.used_bytes and total_used_bytes_ + bvar. Assumes mutex held.
   void UpdateUsageLocked(Shard& shard, int64_t n, int64_t used_bytes);
 
   std::string GetRootDir() const;
-  std::string GetCachePath(const CacheKey& key) const;
+  std::string GetCachePath(const BlockHandle& handle) const;
 
   std::atomic<bool> running_;
   const uint64_t capacity_bytes_;        // whole-disk capacity
   const uint64_t shard_capacity_bytes_;  // ceil(capacity_bytes_ / kShardCount)
+  const std::string eviction_policy_;    // resolved policy name
   std::atomic<bool> stage_full_;
   std::atomic<bool> cache_full_;
-  // whole-disk used bytes, only for monitoring; per-shard eviction reads its
-  // own shard.used_bytes instead, so it never contends on this atomic.
+  // Coarse, seconds-granularity clock, refreshed by the free-space loop and
+  // read on the hit path so Exist never issues a clock syscall.
+  std::atomic<uint32_t> now_sec_;
+  // whole-disk used bytes, monitoring only; eviction reads its own
+  // shard.used_bytes, so it never contends on this atomic.
   std::atomic<int64_t> total_used_bytes_;
   std::array<Shard, kShardCount> shards_;
   utils::TaskThreadPoolUPtr thread_pool_;
