@@ -14,6 +14,6 @@
 
 add_compile_options(-Wall -Wno-reorder -Wno-overloaded-virtual)
 
-add_subdirectory(bench)
+add_subdirectory(bench EXCLUDE_FROM_ALL)
 add_subdirectory(mds-cli)
-add_subdirectory(replay)
+add_subdirectory(replay EXCLUDE_FROM_ALL)

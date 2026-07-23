@@ -28,6 +28,19 @@ add_library(dingofs_common
     logging.cc
     sync_point.cc
 )
+
+set_property(SOURCE version.cc APPEND PROPERTY COMPILE_DEFINITIONS
+    GIT_VERSION="${GIT_VERSION}"
+    GIT_TAG_NAME="${GIT_TAG_NAME}"
+    GIT_COMMIT_USER="${GIT_COMMIT_USER}"
+    GIT_COMMIT_MAIL="${GIT_COMMIT_MAIL}"
+    GIT_COMMIT_TIME="${GIT_COMMIT_TIME}"
+    GIT_LAST_COMMIT_ID="${GIT_LAST_COMMIT_ID}"
+    GIT_BRANCH_NAME="${GIT_BRANCH_NAME}"
+    PROTO_GIT_COMMIT_ID="${PROTO_GIT_COMMIT_ID}"
+    DINGOFS_BUILD_TYPE="${CMAKE_BUILD_TYPE}"
+)
+
 target_link_libraries(dingofs_common
     dingofs_utils
     brpc::brpc
