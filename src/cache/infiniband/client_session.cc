@@ -215,12 +215,27 @@ void ClientSession::WaitingResponse(Waiter* waiter) {
     return;
   }
 
+  // No response arrived. A late server-initiated one-sided RDMA READ/WRITE
+  // could still touch the caller's advertised buffer, which is about to be
+  // reused. Fence the QP first, before returning, so the client HCA stops
+  // servicing this connection; the caller then reconnects (IsConnBroken).
+  MarkBroken();
+
   auto* cntl = waiter->ctx.cntl;
   if (rc == ETIMEDOUT) {
     SetFailed(cntl, ErrorCode::Timeout, "wait response timeout");
   } else {
     SetFailed(cntl, ErrorCode::InternalError, "wait response failed");
   }
+}
+
+void ClientSession::MarkBroken() {
+  if (broken_.exchange(true, std::memory_order_relaxed)) {
+    return;  // already fenced
+  }
+  auto status = conn_->GetQueuePair()->ModifyQpToError();
+  LOG_IF(WARNING, !status.ok())
+      << "Fail to fence qp on timeout: " << status.ToString();
 }
 
 void ClientSession::PrepRecvWorkRequest(RDMABuffer* recv_buffer,
