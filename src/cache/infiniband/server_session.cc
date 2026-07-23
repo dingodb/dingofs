@@ -34,6 +34,7 @@
 #include <utility>
 #include <vector>
 
+#include "cache/common/slab_pool.h"
 #include "cache/infiniband/common.h"
 #include "cache/infiniband/connection.h"
 #include "cache/infiniband/controller.h"
@@ -215,26 +216,26 @@ void ServerSession::ParseRequest(Controller* cntl, RDMABuffer* buffer,
 void ServerSession::ReadAttachment(Controller* cntl,
                                    const std::vector<Region>& src,
                                    size_t size) {
-  auto* buffer = AllocReadBuffer(size);
-  if (buffer == nullptr) {
+  // The lease returns the slab on every early-return path; only MoveInto (the
+  // success path) hands it to the IOBuffer's refcount world.
+  auto lease = GetGlobalSlabPool()->Acquire(size);
+  if (!lease.ok()) {
     SetFailed(cntl, ErrorCode::NoMem, "alloc request attachment buffer failed");
     return;
-  } else if (buffer->lkey == 0) {
+  } else if (lease.lkey() == 0) {
     SetFailed(cntl, ErrorCode::InternalError,
               "request attachment buffer is not registered for rdma");
     return;
   }
 
-  auto status = body_reader_->Read(buffer, src, size);
+  auto status = body_reader_->Read(lease.data(), lease.lkey(), src, size);
   if (!status.ok()) {
     SetFailed(cntl, ErrorCode::InternalError, status.ToString());
     return;
   }
 
   IOBuffer attachment;
-  attachment.AppendUserDataWithMeta(
-      buffer->data, size, [this, buffer](void*) { FreeReadBuffer(buffer); },
-      buffer->lkey);
+  lease.MoveInto(&attachment, size);
   cntl->request_attachment() = std::move(attachment);
 }
 

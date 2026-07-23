@@ -29,7 +29,7 @@
 #include <thread>
 #include <vector>
 
-#include "cache/common/slab_buffer.h"
+#include "cache/common/slab_pool.h"
 #include "cache/iutil/file_util.h"
 #include "cache/iutil/string_util.h"
 #include "cache/tools/bench/common/format.h"

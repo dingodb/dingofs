@@ -26,7 +26,7 @@
 
 #include <iostream>
 
-#include "cache/common/slab_buffer.h"
+#include "cache/common/slab_pool.h"
 #include "cache/infiniband/memory.h"
 #include "cache/node/cache_server.h"
 #include "common/flag.h"

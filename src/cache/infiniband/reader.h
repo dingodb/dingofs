@@ -36,11 +36,13 @@ class BodyReader {
  public:
   explicit BodyReader(Connection* conn);
 
-  Status Read(RDMABuffer* dst, const std::vector<Region>& src, size_t size);
+  Status Read(const char* dst, uint32_t lkey, const std::vector<Region>& src,
+              size_t size);
 
  private:
   Status CheckSource(const std::vector<Region>& regions, size_t size);
-  void PrepWorkRequests(RDMABuffer* dst, const std::vector<Region>& regions,
+  void PrepWorkRequests(const char* dst, uint32_t lkey,
+                        const std::vector<Region>& regions,
                         InflightContext* ctx,
                         std::vector<SendWorkRequest>* work_requests);
 

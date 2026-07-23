@@ -31,7 +31,7 @@
 #include <utility>
 #include <vector>
 
-#include "cache/common/slab_buffer.h"
+#include "cache/common/slab_pool.h"
 #include "cache/common/storage_client.h"
 #include "cache/iutil/string_util.h"
 #include "cache/local/cache_store.h"

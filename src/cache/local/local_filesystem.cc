@@ -34,7 +34,7 @@
 #include <memory>
 #include <string>
 
-#include "cache/common/slab_buffer.h"
+#include "cache/common/slab_pool.h"
 #include "cache/iutil/file_util.h"
 #include "cache/iutil/inflight_tracker.h"
 #include "cache/local/aio.h"
@@ -49,65 +49,38 @@
 namespace dingofs {
 namespace cache {
 
-FixedBuffers::FixedBuffers()
-    : write_pool_(GetGlobalReadSlabPool()),
-      read_pool_(GetGlobalWriteSlabPool()) {}
+FixedBuffers::FixedBuffers() : pool_(GetGlobalSlabPool()) {}
 
-Status FixedBuffers::Alloc(size_t size, bool for_read, IOBuffer* buffer,
-                           int* buf_index) {
-  SlabBufferPool* pool = for_read ? read_pool_ : write_pool_;
-  auto* slab_buffer = pool->Alloc();
-  if (slab_buffer == nullptr) {
+Status FixedBuffers::Alloc(size_t size, IOBuffer* buffer, int* buf_index) {
+  auto lease = pool_->Acquire(size);
+  if (!lease.ok()) {
     return Status::OutOfMemory("out of memory");
   }
 
-  buffer->AppendUserDataWithMeta(
-      slab_buffer->data, size,
-      [pool, slab_buffer](void*) { pool->Free(slab_buffer); },
-      slab_buffer->lkey);
-
-  *buf_index = GetIndex(slab_buffer, for_read);
+  *buf_index = lease.index();
+  lease.MoveInto(buffer, size);
   return Status::OK();
 }
 
-bool FixedBuffers::IsFixed(const IOBuffer* buffer, bool for_read,
-                           int* buf_index) {
-  // A fixed buffer is a single contiguous block carved from a slab pool, so a
-  // multi-block buffer can never be one.
+bool FixedBuffers::IsFixed(const IOBuffer* buffer, int* buf_index) {
+  // A fixed buffer is a single contiguous slab from the pool, so a multi-block
+  // buffer can never be one.
   if (buffer->ConstIOBuf().backing_block_num() != 1) {
     *buf_index = -1;
     return false;
   }
 
-  SlabBufferPool* pool = for_read ? read_pool_ : write_pool_;
-  int index = pool->IndexOf(buffer->Fetch1());
+  int index = pool_->IndexOf(buffer->Fetch1());
   if (index < 0) {
     *buf_index = -1;
     return false;
   }
 
-  *buf_index = for_read ? write_pool_->BufferCount() + index : index;
+  *buf_index = index;
   return true;
 }
 
-int FixedBuffers::GetIndex(SlabBuffer* slab_buffer, bool for_read) {
-  if (!for_read) {
-    return write_pool_->IndexOf(slab_buffer);
-  }
-  return write_pool_->BufferCount() + read_pool_->IndexOf(slab_buffer);
-}
-
-std::vector<iovec> FixedBuffers::Fetch() {
-  auto write_buffers = write_pool_->Fetch();
-  auto read_buffers = read_pool_->Fetch();
-
-  std::vector<iovec> buffers;
-  buffers.reserve(write_buffers.size() + read_buffers.size());
-  buffers.insert(buffers.end(), write_buffers.begin(), write_buffers.end());
-  buffers.insert(buffers.end(), read_buffers.begin(), read_buffers.end());
-
-  return buffers;
-}
+std::vector<iovec> FixedBuffers::Fetch() { return pool_->Fetch(); }
 
 struct InflightAioGuard {
   InflightAioGuard(int fd, iutil::InflightTracker* inflight)
@@ -232,10 +205,10 @@ Status LocalFileSystem::WriteFile(const std::string& path,
   IOBuffer fixed;
   IOBuffer* write_buffer;
   int buf_index;
-  if (fixed_buffers_->IsFixed(buffer, false, &buf_index)) {
+  if (fixed_buffers_->IsFixed(buffer, &buf_index)) {
     write_buffer = const_cast<IOBuffer*>(buffer);
   } else {
-    status = fixed_buffers_->Alloc(aligned_length, false, &fixed, &buf_index);
+    status = fixed_buffers_->Alloc(aligned_length, &fixed, &buf_index);
     if (!status.ok()) {
       LOG(ERROR) << "Fail to allocate fixed write buffer for `" << path << "'";
       return status;
@@ -293,7 +266,7 @@ Status LocalFileSystem::ReadFile(const std::string& path, off_t offset,
 
   IOBuffer aligned;
   int buf_index;
-  status = fixed_buffers_->Alloc(aligned_length, true, &aligned, &buf_index);
+  status = fixed_buffers_->Alloc(aligned_length, &aligned, &buf_index);
   if (!status.ok()) {
     LOG(ERROR) << "Fail to allocate read buffer for `" << path << "'";
     return status;

@@ -33,7 +33,7 @@
 #include <string>
 #include <unordered_map>
 
-#include "cache/common/slab_buffer.h"
+#include "cache/common/slab_pool.h"
 #include "cache/infiniband/infiniband.h"
 #include "common/options/cache.h"
 #include "common/status.h"
@@ -190,22 +190,21 @@ uint64_t GetRkey(const std::string& device_name, void* addr, size_t length) {
 }
 
 Status RegisterGlobalSlabPoolsForRDMA() {
-  for (auto* pool : {GetGlobalReadSlabPool(), GetGlobalWriteSlabPool()}) {
-    if (pool == nullptr) {
-      return Status::Internal("global slab pool not initialized");
-    }
-
-    void* addr = pool->BaseAddr();
-    size_t size = pool->TotalSize();
-    auto status = RegisterMemoryForRDMA(FLAGS_cache_rdma_device, addr, size);
-    if (!status.ok()) {
-      return status;
-    }
-
-    pool->SetRdmaKeys(
-        GetLkey(FLAGS_cache_rdma_device, addr, size),
-        static_cast<uint32_t>(GetRkey(FLAGS_cache_rdma_device, addr, size)));
+  auto* pool = GetGlobalSlabPool();
+  if (pool == nullptr) {
+    return Status::Internal("global slab pool not initialized");
   }
+
+  void* addr = pool->BaseAddr();
+  size_t size = pool->TotalSize();
+  auto status = RegisterMemoryForRDMA(FLAGS_cache_rdma_device, addr, size);
+  if (!status.ok()) {
+    return status;
+  }
+
+  pool->SetRdmaKeys(
+      GetLkey(FLAGS_cache_rdma_device, addr, size),
+      static_cast<uint32_t>(GetRkey(FLAGS_cache_rdma_device, addr, size)));
   return Status::OK();
 }
 

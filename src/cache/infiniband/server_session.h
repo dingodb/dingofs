@@ -28,7 +28,6 @@
 
 #include <memory>
 
-#include "cache/common/slab_buffer.h"
 #include "cache/infiniband/common.h"
 #include "cache/infiniband/connection.h"
 #include "cache/infiniband/controller.h"
@@ -73,15 +72,6 @@ class ServerSession : public EventHandler {
   void SendResponse(Controller* cntl, uint64_t correlation_id,
                     google::protobuf::Message* response = nullptr,
                     const Attachment& attachment = {});
-
-  RDMABuffer* AllocReadBuffer(size_t /*size*/) {
-    // TODO: real slab buffer pool
-    return GetGlobalReadSlabPool()->Alloc();
-  }
-
-  void FreeReadBuffer(RDMABuffer* buffer) {
-    GetGlobalReadSlabPool()->Free(buffer);
-  }
 
   ConnectionUPtr conn_;
   std::vector<WorkRequestContext> recv_contexts_;

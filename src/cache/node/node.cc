@@ -35,7 +35,7 @@
 #include "cache/api/block_cache.h"
 #include "cache/common/macro.h"
 #include "cache/common/mds_client.h"
-#include "cache/common/slab_buffer.h"
+#include "cache/common/slab_pool.h"
 #include "cache/common/storage_client.h"
 #include "cache/common/storage_client_pool.h"
 #include "cache/common/task_tracker.h"
@@ -296,7 +296,10 @@ Status CacheNode::RetrievePartBlock(const BlockHandle& handle, off_t offset,
     return status;
   }
 
-  AllocSlabBuffer(buffer, length);
+  status = AllocSlabBuffer(buffer, length);
+  if (!status.ok()) {
+    return status;
+  }
   status = storage_client->Range(handle, offset, length, buffer);
   if (!status.ok() || block_length == 0) {
     return status;
@@ -346,7 +349,10 @@ Status CacheNode::RetrieveWholeBlock(const BlockHandle& handle,
     }
   }
 
-  AllocSlabBuffer(buffer, block_length);
+  status = AllocSlabBuffer(buffer, block_length);
+  if (!status.ok()) {
+    return status;
+  }
   status = storage_client->Range(handle, 0, block_length, buffer);
   return status;
 }
@@ -355,9 +361,11 @@ Status CacheNode::RunTask(StorageClient* storage_client,
                           DownloadTaskSPtr task) {
   const auto& attr = task->Attr();
   auto& result = task->Result();
-  AllocSlabBuffer(&result.buffer, attr.length);
-  auto status =
-      storage_client->Range(attr.handle, 0, attr.length, &result.buffer);
+  auto status = AllocSlabBuffer(&result.buffer, attr.length);
+  if (status.ok()) {
+    status =
+        storage_client->Range(attr.handle, 0, attr.length, &result.buffer);
+  }
   // result must be filled before Run() wakes waiters: they read
   // Result().status as the download outcome, which defaults to OK.
   result.status = status;
@@ -384,14 +392,15 @@ Status CacheNode::WaitTask(DownloadTaskSPtr task) {
   return Status::Internal("wait download task timeout");
 }
 
-void CacheNode::AllocSlabBuffer(IOBuffer* buffer, size_t length) {
-  auto* pool = GetGlobalReadSlabPool();
-  auto* slab = pool->Alloc();
-  CHECK(slab != nullptr) << "rdma read slab pool exhausted";
-  CHECK_LE(length, static_cast<size_t>(slab->capacity));
-  buffer->AppendUserDataWithMeta(
-      slab->data, length, [pool, slab](void*) { pool->Free(slab); },
-      slab->lkey);
+Status CacheNode::AllocSlabBuffer(IOBuffer* buffer, size_t length) {
+  auto lease = GetGlobalSlabPool()->Acquire(length);
+  if (!lease.ok()) {
+    // Pool exhaustion is a transient condition, not a fatal one: return an
+    // error so the client tier falls back to reading directly from storage.
+    return Status::OutOfMemory("rdma read slab pool exhausted");
+  }
+  lease.MoveInto(buffer, length);
+  return Status::OK();
 }
 
 std::ostream& operator<<(std::ostream& os, const CacheNode& /*node*/) {

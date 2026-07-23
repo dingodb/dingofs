@@ -29,7 +29,7 @@
 #include <memory>
 #include <string>
 
-#include "cache/common/slab_buffer.h"
+#include "cache/common/slab_pool.h"
 #include "cache/iutil/inflight_tracker.h"
 #include "cache/local/aio_queue.h"
 #include "cache/local/disk_cache_layout.h"
@@ -43,15 +43,12 @@ class FixedBuffers {
  public:
   FixedBuffers();
 
-  Status Alloc(size_t size, bool for_read, IOBuffer* buffer, int* buf_index);
-  bool IsFixed(const IOBuffer* buffer, bool for_read, int* buf_index);
+  Status Alloc(size_t size, IOBuffer* buffer, int* buf_index);
+  bool IsFixed(const IOBuffer* buffer, int* buf_index);
   std::vector<iovec> Fetch();
 
  private:
-  int GetIndex(SlabBuffer* slab_buffer, bool for_read);
-
-  SlabBufferPool* write_pool_;
-  SlabBufferPool* read_pool_;
+  SlabPool* pool_;
 };
 
 using FixedBuffersUPtr = std::unique_ptr<FixedBuffers>;
