@@ -23,6 +23,9 @@
 #ifndef DINGOFS_SRC_COMMON_BLOCK_BLOCK_HANDLE_H_
 #define DINGOFS_SRC_COMMON_BLOCK_BLOCK_HANDLE_H_
 
+#include <cstddef>
+#include <cstdint>
+#include <functional>
 #include <utility>
 #include <variant>
 
@@ -75,8 +78,47 @@ class BlockHandle {
     return std::visit(std::forward<Visitor>(v), key_);
   }
 
+  // fs_id is excluded: the on-disk cache path has no fs_id, so the loader
+  // recovers blocks with fs_id 0 while runtime uses the real fs_id and they
+  // must still match. The slice id is globally unique, so (id,index,size) is
+  // the identity. Keep Hash() consistent with this.
+  bool operator==(const BlockHandle& o) const {
+    return type_ == o.type_ && key_ == o.key_;
+  }
+  bool operator!=(const BlockHandle& o) const { return !(*this == o); }
+
+  // Identity hash from integer fields (BlockKey) or strings (TensorKey); never
+  // builds a Filename() string. Consistent with operator== (fs_id excluded).
+  size_t Hash() const {
+    if (type_ == HandleType::kBlock) {
+      const auto& k = std::get<BlockKey>(key_);
+      uint64_t h = Mix(k.id);
+      h = Mix(h ^ ((static_cast<uint64_t>(k.index) << 32) | k.size));
+      return static_cast<size_t>(h);
+    }
+    const auto& k = std::get<TensorKey>(key_);
+    size_t h = std::hash<std::string>{}(k.chunk_hash);
+    HashCombine(&h, std::hash<std::string>{}(k.model_name));
+    HashCombine(&h, std::hash<std::string>{}(k.dtype));
+    HashCombine(&h, (static_cast<uint64_t>(k.world_size) << 32) | k.worker_id);
+    return h;
+  }
+
  private:
   enum class HandleType : uint8_t { kBlock = 0, kTensor = 1 };
+
+  // splitmix64 finalizer: strong avalanche in ~5 ops, no allocation.
+  static uint64_t Mix(uint64_t x) {
+    x ^= x >> 30;
+    x *= 0xbf58476d1ce4e5b9ULL;
+    x ^= x >> 27;
+    x *= 0x94d049bb133111ebULL;
+    x ^= x >> 31;
+    return x;
+  }
+  static void HashCombine(size_t* h, size_t v) {
+    *h ^= v + 0x9e3779b97f4a7c15ULL + (*h << 6) + (*h >> 2);
+  }
 
   HandleType type_{};
   uint32_t fs_id_{0};

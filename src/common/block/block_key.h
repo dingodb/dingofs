@@ -49,6 +49,10 @@ struct BlockKey {
 
   uint64_t StoreSize() const { return size; }
 
+  bool operator==(const BlockKey& o) const {
+    return id == o.id && index == o.index && size == o.size;
+  }
+
   uint64_t id{0};     // slice ID (globally unique)
   uint32_t index{0};  // block index within the slice
   uint32_t size{0};   // block size in bytes

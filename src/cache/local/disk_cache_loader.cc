@@ -186,12 +186,14 @@ void DiskCacheLoader::RegisterBlock(const BlockHandle& handle,
                                     BlockType type) {
   switch (type) {
     case BlockType::kStageBlock:
-      manager_->AddStaging(handle, CacheValue(file.size, file.atime));
+      manager_->AddStaging(handle, static_cast<uint32_t>(file.size),
+                           static_cast<uint32_t>(file.atime.sec));
       uploader_(handle, file.size, BlockAttr(BlockAttr::kFromReload, disk_id_));
       break;
     case BlockType::kCacheBlock:
       if (file.nlink == 1) {
-        manager_->AddCached(handle, CacheValue(file.size, file.atime));
+        manager_->AddCached(handle, static_cast<uint32_t>(file.size),
+                            static_cast<uint32_t>(file.atime.sec));
       }
       break;
   }
