@@ -232,7 +232,10 @@ void RDMAConnection::Send(const std::string& method,
 
 bool RDMAConnection::IsConnBroken(int error_code) {
   using EC = pb::infiniband::ErrorCode;
-  return error_code == EC::QueuePairError || error_code == EC::InternalError;
+  // Timeout is a broken connection: the QP has been fenced to error (see
+  // ClientSession::MarkBroken), so it must be closed and rebuilt before retry.
+  return error_code == EC::QueuePairError || error_code == EC::InternalError ||
+         error_code == EC::Timeout;
 }
 
 }  // namespace cache

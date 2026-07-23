@@ -66,6 +66,9 @@ class ClientSession : public EventHandler {
                    std::string_view service_name, std::string_view method_name,
                    const google::protobuf::Message& request);
   void WaitingResponse(Waiter* Waiter);
+  // Idempotently transition the QP to error so the client HCA stops servicing
+  // late one-sided RDMA from the server (memory-safety fence on timeout).
+  void MarkBroken();
   void PrepRecvWorkRequest(RDMABuffer* recv_buffer, RecvWorkRequest* wr);
   void OnResponseReceived(const WorkCompletion& wc, RDMABuffer* buffer);
   void ParseResponse(Controller* cntl, RDMABuffer* recv_buffer,
@@ -76,6 +79,7 @@ class ClientSession : public EventHandler {
   }
 
   ConnectionUPtr conn_;
+  std::atomic<bool> broken_{false};
   std::atomic<uint64_t> next_correlation_id_;
   std::vector<WorkRequestContext> recv_contexts_;
   RequestSerializerUPtr request_serializer_;
