@@ -24,7 +24,7 @@
 
 #include <vector>
 
-#include "cache/common/slab_buffer.h"
+#include "cache/common/slab_pool.h"
 #include "cache/infiniband/common.h"
 #include "cache/infiniband/controller.h"
 #include "cache/infiniband/memory.h"
@@ -99,9 +99,8 @@ TEST(InfinibandMemoryTest, MissingRegistrationReturnsNotFoundAndZeroRkey) {
   EXPECT_EQ(GetRkey("missing-device", buffer, sizeof(buffer)), 0u);
 }
 
-TEST(InfinibandSlabPoolTest, GlobalGettersAreStable) {
-  EXPECT_EQ(GetGlobalReadSlabPool(), GetGlobalReadSlabPool());
-  EXPECT_EQ(GetGlobalWriteSlabPool(), GetGlobalWriteSlabPool());
+TEST(InfinibandSlabPoolTest, GlobalGetterIsStable) {
+  EXPECT_EQ(GetGlobalSlabPool(), GetGlobalSlabPool());
 }
 
 }  // namespace infiniband

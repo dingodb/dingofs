@@ -28,7 +28,7 @@
 #include <memory>
 #include <string>
 
-#include "cache/common/slab_buffer.h"
+#include "cache/common/slab_pool.h"
 #include "cache/local/disk_cache_layout.h"
 #include "cache/local/local_filesystem.h"
 #include "common/io_buffer.h"

@@ -69,7 +69,7 @@ class CacheNode {
                             IOBuffer* buffer);
   Status RunTask(StorageClient* storage_client, DownloadTaskSPtr task);
   Status WaitTask(DownloadTaskSPtr task);
-  void AllocSlabBuffer(IOBuffer* buffer, size_t length);
+  Status AllocSlabBuffer(IOBuffer* buffer, size_t length);
 
  private:
   std::atomic<bool> running_;
