@@ -29,6 +29,7 @@
 #include <glog/logging.h>
 
 #include <atomic>
+#include <cstdlib>
 #include <memory>
 #include <utility>
 
@@ -296,11 +297,7 @@ Status CacheNode::RetrievePartBlock(const BlockHandle& handle, off_t offset,
     return status;
   }
 
-  status = AllocSlabBuffer(buffer, length);
-  if (!status.ok()) {
-    return status;
-  }
-  status = storage_client->Range(handle, offset, length, buffer);
+  status = DownloadBlock(storage_client, handle, offset, length, buffer);
   if (!status.ok() || block_length == 0) {
     return status;
   }
@@ -349,11 +346,7 @@ Status CacheNode::RetrieveWholeBlock(const BlockHandle& handle,
     }
   }
 
-  status = AllocSlabBuffer(buffer, block_length);
-  if (!status.ok()) {
-    return status;
-  }
-  status = storage_client->Range(handle, 0, block_length, buffer);
+  status = DownloadBlock(storage_client, handle, 0, block_length, buffer);
   return status;
 }
 
@@ -361,11 +354,8 @@ Status CacheNode::RunTask(StorageClient* storage_client,
                           DownloadTaskSPtr task) {
   const auto& attr = task->Attr();
   auto& result = task->Result();
-  auto status = AllocSlabBuffer(&result.buffer, attr.length);
-  if (status.ok()) {
-    status =
-        storage_client->Range(attr.handle, 0, attr.length, &result.buffer);
-  }
+  auto status = DownloadBlock(storage_client, attr.handle, 0, attr.length,
+                              &result.buffer);
   // result must be filled before Run() wakes waiters: they read
   // Result().status as the download outcome, which defaults to OK.
   result.status = status;
@@ -400,6 +390,39 @@ Status CacheNode::AllocSlabBuffer(IOBuffer* buffer, size_t length) {
     return Status::OutOfMemory("rdma read slab pool exhausted");
   }
   lease.MoveInto(buffer, length);
+  return Status::OK();
+}
+
+Status CacheNode::AllocOrdinaryBuffer(IOBuffer* buffer, size_t length) {
+  char* data = static_cast<char*>(std::malloc(length));
+  if (data == nullptr) {
+    return Status::OutOfMemory("alloc download buffer failed");
+  }
+  buffer->AppendUserData(data, length, [](void* p) { std::free(p); });
+  return Status::OK();
+}
+
+Status CacheNode::DownloadBlock(StorageClient* storage_client,
+                                const BlockHandle& handle, off_t offset,
+                                size_t length, IOBuffer* buffer) {
+  // Download into ordinary heap memory so the slow storage round-trip (up to
+  // minutes of retries) never pins a scarce registered slab. Only once the
+  // bytes are ready do we copy into a slab, which is then held briefly for the
+  // RDMA write-back and the local cache write (both bounded).
+  IOBuffer scratch;
+  auto status = AllocOrdinaryBuffer(&scratch, length);
+  if (!status.ok()) {
+    return status;
+  }
+  status = storage_client->Range(handle, offset, length, &scratch);
+  if (!status.ok()) {
+    return status;
+  }
+  status = AllocSlabBuffer(buffer, length);
+  if (!status.ok()) {
+    return status;
+  }
+  scratch.CopyTo(buffer->Fetch1(), length);
   return Status::OK();
 }
 

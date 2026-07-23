@@ -69,6 +69,9 @@ class CacheNode {
                             IOBuffer* buffer);
   Status RunTask(StorageClient* storage_client, DownloadTaskSPtr task);
   Status WaitTask(DownloadTaskSPtr task);
+  Status DownloadBlock(StorageClient* storage_client, const BlockHandle& handle,
+                       off_t offset, size_t length, IOBuffer* buffer);
+  static Status AllocOrdinaryBuffer(IOBuffer* buffer, size_t length);
   Status AllocSlabBuffer(IOBuffer* buffer, size_t length);
 
  private:
