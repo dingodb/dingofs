@@ -37,6 +37,7 @@
 #include "common/version.h"
 #include "utils/daemonize.h"
 #include "utils/numa_binder.h"
+#include "utils/string.h"
 
 namespace dingofs {
 namespace cache {
@@ -82,9 +83,17 @@ int DingoCache::ParseFlags(int argc, char** argv) {
     return -1;
   }
 
+  // Strip stray whitespace from --listen_ip: a trailing space still binds and
+  // registers as online, but clients read back the dirty IP and their
+  // str2endpoint("10.220.70.79 :port") fails.
+  FLAGS_listen_ip = utils::TrimSpace(FLAGS_listen_ip);
+
   // validate flags
   if (FLAGS_mds_addrs.empty()) {
     std::cerr << "mds_addrs is empty, please set it by --mds_addrs\n";
+    return -1;
+  } else if (FLAGS_listen_ip.empty()) {
+    std::cerr << "listen_ip is empty, please set it by --listen_ip\n";
     return -1;
   } else if (FLAGS_cache_store != "disk") {
     std::cerr
