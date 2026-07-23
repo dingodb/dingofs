@@ -191,7 +191,11 @@ Status IOUring::PrepareIO(Aio* aio) {
   DCHECK_RUNNING("IOUring");
 
   struct io_uring_sqe* sqe = io_uring_get_sqe(&io_uring_);
-  CHECK_NOTNULL(sqe);
+  if (sqe == nullptr) {
+    // Submission queue is full; fail this io gracefully rather than abort.
+    LOG(ERROR) << "Fail to get sqe: submission queue is full";
+    return Status::Internal("submission queue is full");
+  }
 
   if (aio->Attr().for_read) {
     PrepRead(sqe, aio);
@@ -214,7 +218,8 @@ Status IOUring::SubmitIO() {
   return Status::OK();
 }
 
-int IOUring::WaitIO(uint64_t timeout_ms, Aio* completed_aios[]) {
+int IOUring::WaitIO(uint64_t timeout_ms, Aio* completed_aios[],
+                    int max_completions) {
   DCHECK_RUNNING("IOUring");
 
   struct epoll_event ev;
@@ -230,6 +235,9 @@ int IOUring::WaitIO(uint64_t timeout_ms, Aio* completed_aios[]) {
   unsigned head;
   struct io_uring_cqe* cqe;
   io_uring_for_each_cqe(&io_uring_, head, cqe) {
+    if (nr >= max_completions) {
+      break;  // reap the rest on the next call (level-triggered epoll)
+    }
     auto* aio = static_cast<Aio*>(io_uring_cqe_get_data(cqe));
     OnComplete(aio, cqe->res);
     completed_aios[nr++] = aio;

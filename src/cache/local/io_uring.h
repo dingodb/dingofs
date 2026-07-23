@@ -27,6 +27,7 @@
 #include <liburing.h>
 #include <sys/epoll.h>
 
+#include <limits>
 #include <memory>
 #include <ostream>
 #include <vector>
@@ -53,7 +54,14 @@ class IOUring {
 
   Status PrepareIO(Aio* aio);
   Status SubmitIO();
-  int WaitIO(uint64_t timeout_ms, Aio* completed_aios[]);
+  // Reaps at most `max_completions` into `completed_aios`, leaving the rest for
+  // the next call (level-triggered epoll re-fires). Callers must size
+  // `completed_aios` for `max_completions`; the reaper passes its buffer
+  // capacity so a burst of completions can never overflow it.
+  int WaitIO(uint64_t timeout_ms, Aio* completed_aios[],
+             int max_completions = std::numeric_limits<int>::max());
+
+  uint32_t Capacity() const { return options_.entries; }
 
  private:
   FRIEND_TEST(IOUringTest, FixedBuffers);

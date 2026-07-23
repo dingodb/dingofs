@@ -27,6 +27,7 @@
 #include <atomic>
 #include <memory>
 #include <thread>
+#include <vector>
 
 #include "cache/local/aio.h"
 #include "cache/local/io_uring.h"
@@ -146,19 +147,16 @@ void AioQueue::BatchSubmitIO(Aio* aios[], int n) {
 }
 
 void AioQueue::BackgroundWait() {
-  Aio* completed_aios[FLAGS_iodepth * 2];
+  // Size the reap buffer to the io_uring capacity so a burst of completions
+  // can never overflow it; WaitIO also bounds itself to this capacity.
+  const int capacity = static_cast<int>(io_uring_->Capacity());
+  std::vector<Aio*> completed_aios(capacity);
 
   // Keep reaping until all inflight aios are completed, otherwise their
   // waiters will be blocked forever on shutdown.
   while (running_.load(std::memory_order_relaxed) ||
          num_inflights_.load(std::memory_order_relaxed) > 0) {
-    int n = io_uring_->WaitIO(1000, completed_aios);
-    if (n == 0) {
-      continue;
-    }
-
-    CHECK_LE(n, FLAGS_iodepth * 2);
-
+    int n = io_uring_->WaitIO(1000, completed_aios.data(), capacity);
     for (int i = 0; i < n; i++) {
       OnComplete(completed_aios[i]);
     }
