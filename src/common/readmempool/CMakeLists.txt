@@ -12,7 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Self-contained read memory pool: buddy over arena (+ slab/TLS). No dependency on common/writemempool/memory_pool.
+# Self-contained read memory pool: buddy over arena (+ slab/TLS). No dependency
+# on cache/common/memory_pool.
 # Links brpc for bvar::Adder metrics counters (per-thread sharded, lock-free).
 add_library(dingofs_read_mempool
     arena.cc

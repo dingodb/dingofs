@@ -24,7 +24,7 @@
 #include "bvar/passive_status.h"
 #include "bvar/reducer.h"
 #include "bvar/status.h"
-#include "common/writemempool/memory_pool.h"
+#include "cache/common/memory_pool.h"
 
 namespace dingofs {
 

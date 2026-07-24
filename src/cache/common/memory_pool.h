@@ -20,8 +20,8 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_COMMON_WRITEMEMPOOL_MEMORY_POOL_H_
-#define DINGOFS_SRC_COMMON_WRITEMEMPOOL_MEMORY_POOL_H_
+#ifndef DINGOFS_SRC_CACHE_COMMON_MEMORY_POOL_H_
+#define DINGOFS_SRC_CACHE_COMMON_MEMORY_POOL_H_
 
 #include <glog/logging.h>
 
@@ -116,4 +116,4 @@ class MemoryPool {
 
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_COMMON_WRITEMEMPOOL_MEMORY_POOL_H_
+#endif  // DINGOFS_SRC_CACHE_COMMON_MEMORY_POOL_H_
