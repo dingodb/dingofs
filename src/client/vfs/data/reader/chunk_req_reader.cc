@@ -96,9 +96,17 @@ void ChunkReqReader::OnAllBlocksComplete(ReaderSharedState* shared) {
     std::lock_guard<std::mutex> lock(shared->mtx);
     final_status = shared->status;
     if (!final_status.ok()) {
-      LOG(WARNING) << fmt::format(
-          "{} ChunkReqReader Read failed, status: {}, req: {}", UUID(),
-          final_status.ToString(), req_.ToString());
+      // MDS guarantees that every non-hole block referenced by inode slice
+      // metadata has valid block metadata. Sparse holes are handled by
+      // IsHole() before reaching here. Therefore, any failure at this point is
+      // a data-block read failure and must be reported as EIO.
+      const std::string original_status = final_status.ToString();
+      LOG(ERROR) << fmt::format(
+          "{} Data block read failed, convert status to IoError, "
+          "original_status: {}, req: {}",
+          UUID(), original_status, req_.ToString());
+      final_status = Status::IoError(
+          fmt::format("data block read failed: {}", original_status));
     }
   }
 
