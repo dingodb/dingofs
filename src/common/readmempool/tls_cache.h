@@ -28,7 +28,7 @@
 namespace dingofs {
 
 // Concurrent fast-path cache for buddy's small/mid classes. Modeled on
-// common/writemempool/memory_pool's per-thread Cache, but **without
+// cache/common/memory_pool's per-thread Cache, but **without
 // thread_local**: a fixed
 // array of cache slots (caches_[kNumCaches]); a thread maps to one slot via a
 // thread-local slot id (threads beyond kNumCaches share, guarded by an

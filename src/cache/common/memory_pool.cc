@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "common/writemempool/memory_pool.h"
+#include "cache/common/memory_pool.h"
 
 #include <glog/logging.h>
 #include <sys/mman.h>
@@ -94,10 +94,10 @@ uint32_t MemoryPool::ThreadSlot() {
 //
 // Safe under concurrent pops: the NextOf(idx) read may be stale if idx was
 // concurrently popped and reused, but that value is only ever fed back into the
-// CAS, never dereferenced -- and a stale read implies the head moved, so the CAS
-// fails and we report contention. This is the crucial difference from a batch
-// pop that walks interior next-pointers, which would dereference a reused node
-// (NextOf(garbage)) and fault.
+// CAS, never dereferenced -- and a stale read implies the head moved, so the
+// CAS fails and we report contention. This is the crucial difference from a
+// batch pop that walks interior next-pointers, which would dereference a reused
+// node (NextOf(garbage)) and fault.
 uint32_t MemoryPool::TryPopFromShard(Shard& shard) {
   uint64_t old_head = shard.head.load(std::memory_order_acquire);
   uint32_t idx = Idx(old_head);
@@ -121,11 +121,11 @@ char* MemoryPool::TryRequireFromShard(Shard& shard) {
 }
 
 // Refill the thread cache one version-checked CAS at a time. An earlier version
-// popped a whole batch per CAS by walking interior next-pointers, but that races
-// with concurrent pops that reuse those nodes mid-walk -- NextOf(reused) becomes
-// a wild index and the next hop faults. Popping one node at a time never
-// dereferences anything but the current head, so it is race-safe; the extra CAS
-// per buffer only lands on the cold cache-refill path.
+// popped a whole batch per CAS by walking interior next-pointers, but that
+// races with concurrent pops that reuse those nodes mid-walk -- NextOf(reused)
+// becomes a wild index and the next hop faults. Popping one node at a time
+// never dereferences anything but the current head, so it is race-safe; the
+// extra CAS per buffer only lands on the cold cache-refill path.
 void MemoryPool::RefillCacheFromShards(Cache& c, uint32_t start_shard) {
   for (uint32_t i = 0; i < kNumShards && c.size < kRefillBatch; ++i) {
     Shard& s = shards_[(start_shard + i) % kNumShards];
