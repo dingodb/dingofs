@@ -218,7 +218,7 @@ Status FileWriter::Write(ContextSPtr ctx, const char* buf, uint64_t size,
       // successful short write; the outcome is recorded uniformly in
       // VFSWrapper's access log (status + out_wsize), the pool-pressure
       // locality in SliceWriter, and the failure rate in the
-      // vfs_write_pool_alloc_fail_num metric.
+      // vfs_write_buffer_alloc_fail_num metric.
       VLOG(3) << "stop write at chunk, ino: " << ino_
               << ", chunk_index: " << chunk_index
               << ", chunk_offset: " << chunk_offset

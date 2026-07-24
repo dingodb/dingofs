@@ -45,11 +45,11 @@ WriteMemPool::WriteMemPool(int64_t total_bytes, int64_t page_size)
     : total_bytes_(total_bytes),
       page_size_(page_size),
       page_pool_(CreatePagePool(total_bytes, page_size)),
-      capacity_pages_("vfs_write_pool_capacity_pages",
+      capacity_pages_("vfs_write_buffer_capacity_pages",
                       static_cast<int64_t>(page_pool_->BufferCount())),
-      used_pages_var_("vfs_write_pool_used_pages", UsedPages, this),
-      used_bytes_var_("vfs_write_pool_used_bytes", UsedBytes, this),
-      alloc_fail_num_("vfs_write_pool_alloc_fail_num") {}
+      used_pages_var_("vfs_write_buffer_used_pages", UsedPages, this),
+      used_bytes_var_("vfs_write_buffer_used_bytes", UsedBytes, this),
+      alloc_fail_num_("vfs_write_buffer_alloc_fail_num") {}
 
 size_t WriteMemPool::TryAllocateBatch(size_t count, char** pages) {
   const size_t allocated = page_pool_->RequireBatch(pages, count);

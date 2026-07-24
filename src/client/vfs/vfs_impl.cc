@@ -711,7 +711,7 @@ Status VFSImpl::Write(ContextSPtr ctx, Ino ino, const char* buf, uint64_t size,
   // No status logging here: VFSImpl returns Status without logging per-op
   // outcomes (like the other ops); the uniform status + out_wsize record lives
   // in VFSWrapper's access log, the pool-pressure locality in SliceWriter, and
-  // the failure rate in the vfs_write_pool_alloc_fail_num metric.
+  // the failure rate in the vfs_write_buffer_alloc_fail_num metric.
   return s;
 }
 

@@ -27,8 +27,8 @@
 
 namespace dingofs {
 
-// Every var is named "{prefix}_read_mempool_{metric}" (built once, here).
-#define DINGOFS_RMP_NAME(metric) (prefix + "_read_mempool_" metric)
+// Every var is named "{prefix}_read_buffer_{metric}" (built once, here).
+#define DINGOFS_RMP_NAME(metric) (prefix + "_read_buffer_" metric)
 
 // A PassiveStatus<int64_t> whose scrape thunk reads one pool getter. A
 // captureless lambda decays to the int64_t(*)(void*) the ctor wants (+[] pins
@@ -39,7 +39,7 @@ namespace dingofs {
   }, pool)
 
 // Publishes a (singleton) ReadMemPool's metrics under brpc /vars as
-// {prefix}_read_mempool_* (the caller supplies the subsystem prefix, e.g.
+// {prefix}_read_buffer_* (the caller supplies the subsystem prefix, e.g.
 // "vfs", so this common component doesn't bake in a client naming convention).
 // The pool itself keeps anonymous bvar::Adder counters (so multiple pool
 // instances don't collide on global bvar names); this layer wraps named
@@ -47,14 +47,13 @@ namespace dingofs {
 // pool; its lifetime must be a subset of the pool's.
 //
 // usage_ratio is intentionally NOT exposed: derive it monitoring-side from
-// outstanding_bytes / total_bytes.
+// used_bytes / total_bytes.
 class ReadMemPoolVars {
  public:
   ReadMemPoolVars(ReadMemPool* pool, const std::string& prefix)
       : total_bytes_(DINGOFS_RMP_NAME("total_bytes"),
                      static_cast<int64_t>(pool->TotalSize())),
-        DINGOFS_RMP_VAR(outstanding_bytes_, "outstanding_bytes",
-                        OutstandingBytes),
+        DINGOFS_RMP_VAR(used_bytes_, "used_bytes", OutstandingBytes),
         DINGOFS_RMP_VAR(buddy_used_bytes_, "buddy_used_bytes", BuddyUsedBytes),
         DINGOFS_RMP_VAR(slab_occupied_bytes_, "slab_occupied_bytes",
                         SlabOccupiedBytes),
@@ -71,7 +70,7 @@ class ReadMemPoolVars {
 
  private:
   bvar::Status<int64_t> total_bytes_;
-  bvar::PassiveStatus<int64_t> outstanding_bytes_;
+  bvar::PassiveStatus<int64_t> used_bytes_;
   bvar::PassiveStatus<int64_t> buddy_used_bytes_;
   bvar::PassiveStatus<int64_t> slab_occupied_bytes_;
   bvar::PassiveStatus<int64_t> slab_used_bytes_;
