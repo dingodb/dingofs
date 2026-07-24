@@ -181,6 +181,110 @@ TEST_F(SliceWriterTest, FlushAsync_BasicSuccess) {
   EXPECT_EQ(sw_->GetCommitSlice().id, 42u);
 }
 
+TEST_F(SliceWriterTest, FlushAsync_PutPayloadPreservesCrossBlockByteOrder) {
+  EXPECT_CALL(*mock_meta_system_, NewSliceId(_, _, _))
+      .WillOnce(DoAll(SetArgPointee<2>(43u), Return(Status::OK())));
+
+  const int32_t first_size = static_cast<int32_t>(kPageSize + 137);
+  const int32_t total_size =
+      static_cast<int32_t>(kBlockSize + (2 * kPageSize) + 333);
+  std::vector<char> input(total_size);
+  for (size_t i = 0; i < input.size(); ++i) {
+    input[i] = static_cast<char>((i * 41 + 17) % 251);
+  }
+
+  std::mutex payload_mutex;
+  std::map<uint32_t, std::vector<char>> uploaded;
+  EXPECT_CALL(*mock_block_store_, PutAsync(_, _, _))
+      .WillRepeatedly(Invoke([&](ContextSPtr, PutReq req, StatusCallback cb) {
+        std::vector<char> bytes(req.data.Size());
+        req.data.CopyTo(bytes.data(), bytes.size());
+        {
+          std::lock_guard<std::mutex> lock(payload_mutex);
+          uploaded.emplace(HandleIndex(req.handle), std::move(bytes));
+        }
+        cb(Status::OK());
+      }));
+
+  ASSERT_TRUE(sw_->Write(ctx_, input.data(), first_size, 0).ok());
+  ASSERT_TRUE(sw_
+                  ->Write(ctx_, input.data() + first_size,
+                          total_size - first_size, first_size)
+                  .ok());
+
+  test::AsyncWaiter waiter;
+  waiter.Expect(1);
+  sw_->FlushAsync([&](Status status) {
+    EXPECT_TRUE(status.ok()) << status.ToString();
+    waiter.Done();
+  });
+  waiter.Wait();
+
+  std::lock_guard<std::mutex> lock(payload_mutex);
+  ASSERT_EQ(uploaded.size(), 2);
+  ASSERT_EQ(uploaded[0].size(), kBlockSize);
+  ASSERT_EQ(uploaded[1].size(), input.size() - kBlockSize);
+  EXPECT_TRUE(std::equal(uploaded[0].begin(), uploaded[0].end(), input.begin()));
+  EXPECT_TRUE(std::equal(uploaded[1].begin(), uploaded[1].end(),
+                         input.begin() + kBlockSize));
+}
+
+TEST_F(SliceWriterTest, FlushAsync_PagesLiveUntilUploadCallback) {
+  EXPECT_CALL(*mock_meta_system_, NewSliceId(_, _, _))
+      .WillOnce(DoAll(SetArgPointee<2>(44u), Return(Status::OK())));
+
+  std::mutex callback_mutex;
+  StatusCallback held_callback;
+  PutReq held_request;
+  std::promise<void> submitted;
+  auto submitted_future = submitted.get_future();
+  EXPECT_CALL(*mock_block_store_, PutAsync(_, _, _))
+      .WillOnce(Invoke([&](ContextSPtr, PutReq req, StatusCallback cb) {
+        {
+          std::lock_guard<std::mutex> lock(callback_mutex);
+          held_request = std::move(req);
+          held_callback = std::move(cb);
+        }
+        submitted.set_value();
+      }));
+
+  constexpr int32_t kSize = (2 * kPageSize) + 123;
+  std::vector<char> input(kSize);
+  for (size_t i = 0; i < input.size(); ++i) {
+    input[i] = static_cast<char>((i * 29 + 7) % 253);
+  }
+  ASSERT_TRUE(sw_->Write(ctx_, input.data(), input.size(), 0).ok());
+  ASSERT_GT(write_buf_mgr_->GetUsedBytes(), 0);
+
+  test::AsyncWaiter waiter;
+  waiter.Expect(1);
+  sw_->FlushAsync([&](Status status) {
+    EXPECT_TRUE(status.ok()) << status.ToString();
+    waiter.Done();
+  });
+  ASSERT_EQ(submitted_future.wait_for(std::chrono::seconds(5)),
+            std::future_status::ready);
+
+  // PutAsync has returned but its completion has not fired. BlockData must
+  // still own the pages, and the non-owning IOBuffer observed by the backend
+  // must contain the original bytes.
+  EXPECT_GT(write_buf_mgr_->GetUsedBytes(), 0);
+
+  StatusCallback callback;
+  std::vector<char> uploaded;
+  {
+    std::lock_guard<std::mutex> lock(callback_mutex);
+    uploaded.resize(held_request.data.Size());
+    held_request.data.CopyTo(uploaded.data(), uploaded.size());
+    callback = std::move(held_callback);
+  }
+  EXPECT_EQ(uploaded, input);
+  ASSERT_TRUE(static_cast<bool>(callback));
+  callback(Status::OK());
+  waiter.Wait(std::chrono::seconds(5));
+  EXPECT_EQ(write_buf_mgr_->GetUsedBytes(), 0);
+}
+
 // 4. Verify slice has correct offset, length, id after flush.
 TEST_F(SliceWriterTest, FlushAsync_CommitSlice_CorrectFields) {
   EXPECT_CALL(*mock_meta_system_, NewSliceId(_, _, _))

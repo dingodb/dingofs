@@ -609,7 +609,7 @@ TEST_F(ChunkWriterTest, ConcurrentFlush_HoldsSliceMutexUntilQueuePush) {
 #endif  // NDEBUG
 }
 
-// --- P2 failure-path: pool exhaustion (WriteMemPool::TryAllocate -> nullptr)
+// --- P2 failure-path: pool exhaustion (TryAllocateBatch returns short)
 // ---
 
 // A tiny pool makes exhaustion deterministic (TryAllocate never waits). A write

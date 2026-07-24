@@ -14,6 +14,8 @@
 # Define the BASE_FLAGS and DINGO_DEFAULT_COPTS variables
 
 add_library(dingofs_write_mempool
+    cpu_local.cc
+    write_page_pool.cc
     write_mem_pool.cc
 )
 target_link_libraries(dingofs_write_mempool
@@ -21,5 +23,14 @@ target_link_libraries(dingofs_write_mempool
     gflags::gflags
     brpc::brpc
     fmt::fmt
+)
+
+add_executable(write_mem_pool_bench EXCLUDE_FROM_ALL
+    bench/write_mem_pool_bench.cc
+)
+target_link_libraries(write_mem_pool_bench
+    dingofs_write_mempool
     cache_common
+    glog::glog
+    gflags::gflags
 )

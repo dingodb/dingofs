@@ -24,7 +24,7 @@
 #include "bvar/passive_status.h"
 #include "bvar/reducer.h"
 #include "bvar/status.h"
-#include "cache/common/memory_pool.h"
+#include "common/writemempool/write_page_pool.h"
 
 namespace dingofs {
 
@@ -34,15 +34,17 @@ class WriteMemPool {
 
   ~WriteMemPool() = default;
 
-  // Single try, never blocks -- the only allocation primitive. Safe under
-  // write_flush_mutex_ / slice_mutex_ (SliceWriter, BlockData hold them). The
-  // underlying MemoryPool::Require() already sweeps every shard and steals from
-  // other caches, so a nullptr is a strong (near-)exhaustion signal, not a
-  // casual shard-race miss. Any waiting/retry on a null is the caller's job
-  // (FileWriter's lock-free throttle / short-write retry), never this layer.
-  char* TryAllocate();
+  // Try-style capacity semantics: never waits for pages to be returned and
+  // does not use a capacity wait queue. Internal synchronization may be
+  // briefly contended. Each call only consumes pages currently available in
+  // the backing pool, then returns the pages acquired so far; the caller owns
+  // rollback and any later retry.
+  size_t TryAllocateBatch(size_t count, char** pages);
 
-  void DeAllocate(char* page);
+  // Returns exactly `count` pairwise-distinct outstanding pages previously
+  // obtained from this pool. Duplicate, stale, or foreign pages violate the
+  // contract and may corrupt the underlying intrusive free lists.
+  void DeAllocateBatch(char* const* pages, size_t count);
 
   int64_t GetPageSize() const;
 
@@ -54,9 +56,12 @@ class WriteMemPool {
 
   bool IsHighPressure(double threshold = 0.8) const;
 
-  // RDMA-ready: forward the underlying pool's contiguous arena base + total
-  // length for ibv_reg_mr. Mirrors ReadMemPool::BaseAddr()/TotalSize().
+  // RDMA-ready: expose the complete fixed-page arena geometry for MR
+  // registration, buffer descriptor construction, and address-to-index
+  // conversion.
   char* BaseAddr() const;
+  size_t BufferSize() const;
+  size_t BufferCount() const;
   size_t TotalSize() const;
 
  private:
@@ -72,25 +77,20 @@ class WriteMemPool {
 
   const int64_t total_bytes_{0};
   const int64_t page_size_{0};
-  // Outstanding page count. A single shared atomic here was a true-sharing
-  // bottleneck: every Allocate/DeAllocate RMW'd one cache line, so the
-  // per-thread-cache MemoryPool below it could not scale (measured 64-thread
-  // alloc went 15ns->2939ns). bvar::Adder is per-thread sharded -- "<< 1" hits
-  // only the caller's shard; get_value() aggregates and is read only on the
-  // throttle check / bvar dump, not per page.
+
+  // Outstanding pages. bvar::Adder keeps updates sharded per thread; reads
+  // aggregate only on throttle checks and bvar sampling.
   bvar::Adder<int64_t> used_pages_;
-  MemoryPoolUPtr pool_;
+
+  WritePagePoolUPtr page_pool_;
 
   // Capacity / usage. PassiveStatus is sampled on /vars dump (off the hot
-  // path); the underlying used_pages_ atomic is the only per-op cost and it
-  // predates pooling.
+  // path); updates use the sharded reducer above.
   bvar::Status<int64_t> capacity_pages_;
   bvar::PassiveStatus<int64_t> used_pages_var_;
   bvar::PassiveStatus<int64_t> used_bytes_var_;
 
-  // Count of TryAllocate() failures (pool returned null -> caller surfaces
-  // ENOSPC / short write). Lock-free per-thread Adder, bumped only on the miss
-  // branch.
+  // Count of allocation requests that were not fully satisfied.
   bvar::Adder<int64_t> alloc_fail_num_;
 };
 

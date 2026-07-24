@@ -33,18 +33,16 @@ namespace vfs {
 void BlockData::FreePageData() {
   VLOG(6) << fmt::format("{} FreePageData, block_data: {}", UUID(), ToString());
 
-  for (auto it = pages_.begin(); it != pages_.end();) {
-    uint32_t page_index = it->first;
-    PageData* page_data = it->second.get();
+  std::vector<char*> pages;
+  pages.reserve(pages_.size());
+  for (const auto& [page_index, page_data] : pages_) {
     CHECK_NOTNULL(page_data->page);
-
-    write_buffer_manager_->DeAllocate(page_data->page);
-
+    pages.push_back(page_data->page);
     VLOG(16) << fmt::format("{} Deallocating page at: {}", UUID(),
                             Helper::Char2Addr(page_data->page));
-
-    it = pages_.erase(it);
   }
+  pages_.clear();
+  write_buffer_manager_->DeAllocateBatch(pages.data(), pages.size());
 }
 
 PageData* BlockData::FindPageData(uint32_t page_index) {
@@ -68,46 +66,54 @@ Status BlockData::ReservePages(int32_t size, int32_t block_offset,
   uint32_t page_index = block_offset / page_size;
   int32_t page_offset = block_offset % page_size;
   int32_t remain_len = size;
-
-  // Allocate only the pages this write actually needs. Existing pages (e.g. a
-  // partially-filled straddle page) need no allocation and are NOT recorded, so
-  // a later RollbackPages won't free pages that predate this transaction. The
-  // first new page keeps its in-page offset; later pages start at 0 -- this
-  // matches the data_offset PageData::Write's contiguity CHECK expects.
+  std::vector<uint32_t> missing_indexes;
   while (remain_len > 0) {
     int32_t write_size = std::min(remain_len, page_size - page_offset);
     if (FindPageData(page_index) == nullptr) {
-      char* page = write_buffer_manager_->TryAllocate();
-      if (page == nullptr) {
-        return Status::NoSpace("write page pool exhausted");
-      }
-      auto [iter, inserted] = pages_.emplace(
-          page_index,
-          std::make_unique<PageData>(vfs_hub_, page_index, context_.page_size,
-                                     page, page_offset));
-      CHECK(inserted);
-      created_pages->push_back(page_index);
-      VLOG(12) << fmt::format(
-          "{} Reserved new page_data: {} for page index: {}", UUID(),
-          iter->second->ToString(), page_index);
+      missing_indexes.push_back(page_index);
     }
     remain_len -= write_size;
     page_offset = 0;
     ++page_index;
   }
-  return Status::OK();
+
+  if (missing_indexes.empty()) return Status::OK();
+  std::vector<char*> allocated(missing_indexes.size());
+  const size_t allocated_count = write_buffer_manager_->TryAllocateBatch(
+      allocated.size(), allocated.data());
+  const uint32_t first_page_index =
+      static_cast<uint32_t>(block_offset / page_size);
+  const int32_t first_page_offset = block_offset % page_size;
+  for (size_t i = 0; i < allocated_count; ++i) {
+    const uint32_t new_page_index = missing_indexes[i];
+    auto [iter, inserted] = pages_.emplace(
+        new_page_index,
+        std::make_unique<PageData>(
+            vfs_hub_, new_page_index, context_.page_size, allocated[i],
+            new_page_index == first_page_index ? first_page_offset : 0));
+    CHECK(inserted);
+    created_pages->push_back(new_page_index);
+    VLOG(12) << fmt::format("{} Reserved new page_data: {} for page index: {}",
+                            UUID(), iter->second->ToString(), new_page_index);
+  }
+  return allocated_count == missing_indexes.size()
+             ? Status::OK()
+             : Status::NoSpace("write page pool exhausted");
 }
 
 void BlockData::RollbackPages(const std::vector<uint32_t>& created_pages) {
+  std::vector<char*> pages;
+  pages.reserve(created_pages.size());
   for (uint32_t idx : created_pages) {
     auto it = pages_.find(idx);
     if (it != pages_.end()) {
       if (it->second->page != nullptr) {
-        write_buffer_manager_->DeAllocate(it->second->page);
+        pages.push_back(it->second->page);
       }
       pages_.erase(it);
     }
   }
+  write_buffer_manager_->DeAllocateBatch(pages.data(), pages.size());
   VLOG(6) << fmt::format("{} RollbackPages freed {} pages", UUID(),
                          created_pages.size());
 }
