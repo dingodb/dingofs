@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 
-#include <glog/logging.h>
 #include <gtest/gtest.h>
 
+#include <array>
 #include <atomic>
-#include <chrono>
 #include <thread>
 #include <vector>
 
@@ -28,15 +27,27 @@ namespace dingofs {
 
 // ─── WriteMemPool ──────────────────────────────────────────────────────
 
-TEST(WriteMemPoolTest, DeAllocate_DecreasesUsed) {
+TEST(WriteMemPoolDeathTest, RejectsZeroPageSizeBeforeDivision) {
+  EXPECT_DEATH({ WriteMemPool pool(4096, 0); }, "page_size > 0");
+}
+
+TEST(WriteMemPoolDeathTest, RejectsCapacitySmallerThanOnePage) {
+  EXPECT_DEATH({ WriteMemPool pool(4096, 8192); }, "total_bytes >= page_size");
+}
+
+TEST(WriteMemPoolDeathTest, RejectsNonIntegralPageCapacity) {
+  EXPECT_DEATH({ WriteMemPool pool(10 * 1024, 4096); }, "exact multiple");
+}
+
+TEST(WriteMemPoolTest, DeAllocateBatch_DecreasesUsed) {
   constexpr int64_t kPageSize = 4096;
   WriteMemPool mgr(kPageSize * 4, kPageSize);
 
-  char* page = mgr.TryAllocate();
-  ASSERT_NE(page, nullptr);
+  char* page = nullptr;
+  ASSERT_EQ(mgr.TryAllocateBatch(1, &page), 1);
   EXPECT_EQ(mgr.GetUsedBytes(), kPageSize);
 
-  mgr.DeAllocate(page);
+  mgr.DeAllocateBatch(&page, 1);
   EXPECT_EQ(mgr.GetUsedBytes(), 0);
 }
 
@@ -47,6 +58,10 @@ TEST(WriteMemPoolTest, GetPageSize_GetTotalBytes) {
 
   EXPECT_EQ(mgr.GetPageSize(), kPageSize);
   EXPECT_EQ(mgr.GetTotalBytes(), kTotal);
+  EXPECT_NE(mgr.BaseAddr(), nullptr);
+  EXPECT_EQ(mgr.BufferSize(), kPageSize);
+  EXPECT_EQ(mgr.BufferCount(), 8);
+  EXPECT_EQ(mgr.TotalSize(), kTotal);
 }
 
 TEST(WriteMemPoolTest, IsHighPressure_True_WhenAboveThreshold) {
@@ -54,15 +69,12 @@ TEST(WriteMemPoolTest, IsHighPressure_True_WhenAboveThreshold) {
   // 2 pages total; allocate 2 to hit 100% usage
   WriteMemPool mgr(kPageSize * 2, kPageSize);
 
-  char* p1 = mgr.TryAllocate();
-  char* p2 = mgr.TryAllocate();
-  ASSERT_NE(p1, nullptr);
-  ASSERT_NE(p2, nullptr);
+  std::array<char*, 2> pages{};
+  ASSERT_EQ(mgr.TryAllocateBatch(pages.size(), pages.data()), pages.size());
 
   EXPECT_TRUE(mgr.IsHighPressure());
 
-  mgr.DeAllocate(p1);
-  mgr.DeAllocate(p2);
+  mgr.DeAllocateBatch(pages.data(), pages.size());
 }
 
 TEST(WriteMemPoolTest, Concurrent_AllocAndDealloc_FinalZero) {
@@ -78,8 +90,9 @@ TEST(WriteMemPoolTest, Concurrent_AllocAndDealloc_FinalZero) {
   for (int t = 0; t < kThreads; ++t) {
     threads.emplace_back([&mgr]() {
       for (int i = 0; i < kIters; ++i) {
-        char* page = mgr.TryAllocate();
-        mgr.DeAllocate(page);
+        char* page = nullptr;
+        const size_t count = mgr.TryAllocateBatch(1, &page);
+        mgr.DeAllocateBatch(&page, count);
       }
     });
   }
@@ -90,116 +103,88 @@ TEST(WriteMemPoolTest, Concurrent_AllocAndDealloc_FinalZero) {
   EXPECT_EQ(mgr.GetUsedBytes(), 0);
 }
 
-// ─── TryAllocate ───────────────────────────────────────────────────────
+// ─── TryAllocateBatch ──────────────────────────────────────────────────
 
-TEST(WriteMemPoolTest, TryAllocate_ReturnsNonNull_IncreasesUsed) {
+TEST(WriteMemPoolTest, TryAllocateBatch_ReturnsPage_IncreasesUsed) {
   constexpr int64_t kPageSize = 4096;
   WriteMemPool mgr(kPageSize * 4, kPageSize);
 
-  char* page = mgr.TryAllocate();
-  ASSERT_NE(page, nullptr);
+  char* page = nullptr;
+  ASSERT_EQ(mgr.TryAllocateBatch(1, &page), 1);
   EXPECT_EQ(mgr.GetUsedBytes(), kPageSize);
 
-  mgr.DeAllocate(page);
+  mgr.DeAllocateBatch(&page, 1);
   EXPECT_EQ(mgr.GetUsedBytes(), 0);
 }
 
-TEST(WriteMemPoolTest, TryAllocate_ReturnsNull_WhenExhausted_NoBlock) {
+TEST(WriteMemPoolTest, TryAllocateBatch_ReturnsShort_WhenExhausted_NoBlock) {
   constexpr int64_t kPageSize = 4096;
   WriteMemPool mgr(kPageSize * 2, kPageSize);  // 2 slots
 
-  char* a = mgr.TryAllocate();
-  char* b = mgr.TryAllocate();
-  ASSERT_NE(a, nullptr);
-  ASSERT_NE(b, nullptr);
+  std::array<char*, 2> pages{};
+  ASSERT_EQ(mgr.TryAllocateBatch(pages.size(), pages.data()), pages.size());
 
-  // Pool drained -- TryAllocate returns immediately (no bounded wait) and used
-  // stays at capacity (a null result must not bump used_pages_).
-  char* c = mgr.TryAllocate();
-  EXPECT_EQ(c, nullptr);
+  // Pool drained -- TryAllocateBatch returns immediately (no bounded wait) and
+  // used stays at capacity (a short result must not bump used_pages_).
+  char* extra = nullptr;
+  EXPECT_EQ(mgr.TryAllocateBatch(1, &extra), 0);
   EXPECT_EQ(mgr.GetUsedBytes(), 2 * kPageSize);
 
-  mgr.DeAllocate(a);
-  mgr.DeAllocate(b);
+  mgr.DeAllocateBatch(pages.data(), pages.size());
 }
 
-// ─── Perf: pooled Allocate/DeAllocate vs new char[] baseline ───────────
+TEST(WriteMemPoolTest, EmptyBatchIsNoOp) {
+  constexpr int64_t kPageSize = 4096;
+  WriteMemPool mgr(kPageSize * 2, kPageSize);
 
-namespace {
+  EXPECT_EQ(mgr.TryAllocateBatch(0, nullptr), 0);
+  mgr.DeAllocateBatch(nullptr, 0);
+  EXPECT_EQ(mgr.GetUsedBytes(), 0);
+}
 
-// One op = Allocate + DeAllocate. Pool is sized so the fast path always hits
-// (no bounded-acquire, no slow-path metric bumps), so this measures the
-// steady-state hot path: Require() + used_pages atomic (+ the untriggered
-// metric branch). Returns ops/sec across all threads.
-double RunPooledBench(WriteMemPool* wmp, int num_threads, int iters) {
-  std::atomic<bool> start{false};
-  std::vector<std::thread> ts;
-  ts.reserve(num_threads);
-  for (int t = 0; t < num_threads; ++t) {
-    ts.emplace_back([&] {
-      while (!start.load(std::memory_order_acquire)) std::this_thread::yield();
-      for (int i = 0; i < iters; ++i) {
-        char* p = wmp->TryAllocate();
-        if (p != nullptr) wmp->DeAllocate(p);
+TEST(WriteMemPoolTest, CrossThreadBatchAccountingReturnsToZero) {
+  constexpr int64_t kPageSize = 4096;
+  constexpr size_t kMaxBatch = 64;
+  constexpr int kIterations = 2000;
+  constexpr std::array<size_t, 3> kBatchSizes = {1, 16, 64};
+  WriteMemPool mgr(kPageSize * 256, kPageSize);
+
+  struct TransferSlot {
+    // 0: producer may allocate; 1: releaser owns the returned prefix.
+    std::atomic<uint32_t> state{0};
+    size_t count{0};
+    std::array<char*, kMaxBatch> pages{};
+  } slot;
+  std::atomic<bool> short_allocation{false};
+
+  std::thread producer([&]() {
+    for (int iteration = 0; iteration < kIterations; ++iteration) {
+      while (slot.state.load(std::memory_order_acquire) != 0) {
+        std::this_thread::yield();
       }
-    });
-  }
-  auto t0 = std::chrono::steady_clock::now();
-  start.store(true, std::memory_order_release);
-  for (auto& t : ts) t.join();
-  double sec =
-      std::chrono::duration<double>(std::chrono::steady_clock::now() - t0)
-          .count();
-  return static_cast<double>(num_threads) * iters / sec;
-}
-
-// Baseline: new char[page]/delete[] -- exactly what WriteMemPool::Allocate did
-// before pooling. Touch byte 0 so the alloc isn't optimized away.
-double RunMallocBench(int64_t page_size, int num_threads, int iters) {
-  std::atomic<bool> start{false};
-  std::vector<std::thread> ts;
-  ts.reserve(num_threads);
-  for (int t = 0; t < num_threads; ++t) {
-    ts.emplace_back([&] {
-      while (!start.load(std::memory_order_acquire)) std::this_thread::yield();
-      for (int i = 0; i < iters; ++i) {
-        char* p = new char[page_size];
-        p[0] = static_cast<char>(i);
-        delete[] p;
+      const size_t requested =
+          kBatchSizes[iteration % kBatchSizes.size()];
+      slot.count = mgr.TryAllocateBatch(requested, slot.pages.data());
+      if (slot.count != requested) {
+        short_allocation.store(true, std::memory_order_relaxed);
       }
-    });
-  }
-  auto t0 = std::chrono::steady_clock::now();
-  start.store(true, std::memory_order_release);
-  for (auto& t : ts) t.join();
-  double sec =
-      std::chrono::duration<double>(std::chrono::steady_clock::now() - t0)
-          .count();
-  return static_cast<double>(num_threads) * iters / sec;
-}
+      slot.state.store(1, std::memory_order_release);
+    }
+  });
+  std::thread releaser([&]() {
+    for (int iteration = 0; iteration < kIterations; ++iteration) {
+      while (slot.state.load(std::memory_order_acquire) != 1) {
+        std::this_thread::yield();
+      }
+      mgr.DeAllocateBatch(slot.pages.data(), slot.count);
+      slot.state.store(0, std::memory_order_release);
+    }
+  });
 
-}  // namespace
-
-// Prints throughput + ns/op for pooled (incl. metrics埋点) vs new char[] at
-// 1/4/16/64 threads. Not asserting numbers -- visibility for the "接池+埋点 vs
-// new char[]" comparison. Pool sized large (256 MiB) so the fast path is hit
-// and slow-path metric branches never fire.
-TEST(WriteMemPoolPerf, PooledVsMalloc) {
-  constexpr int64_t kPageSize = 65536;
-  constexpr int64_t kTotalBytes = 4096LL * kPageSize;  // 256 MiB, 4096 slots
-  constexpr int kIters = 200000;
-  WriteMemPool wmp(kTotalBytes, kPageSize);
-
-  for (int n : {1, 4, 16, 64}) {
-    double pooled = RunPooledBench(&wmp, n, kIters);
-    double mallocd = RunMallocBench(kPageSize, n, kIters);
-    LOG(INFO) << "threads=" << n
-              << "  pooled=" << static_cast<long long>(pooled) << " ops/s ("
-              << (1e9 / pooled * n)
-              << " ns/op)  malloc=" << static_cast<long long>(mallocd)
-              << " ops/s (" << (1e9 / mallocd * n)
-              << " ns/op)  pooled/malloc=" << (pooled / mallocd) << "x";
-  }
+  producer.join();
+  releaser.join();
+  EXPECT_FALSE(short_allocation.load(std::memory_order_relaxed));
+  EXPECT_EQ(mgr.GetUsedBytes(), 0);
 }
 
 }  // namespace dingofs

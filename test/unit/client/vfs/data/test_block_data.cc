@@ -119,6 +119,38 @@ TEST_F(BlockDataTest, ReservePages_SkipsExistingPages) {
   EXPECT_EQ(pool->GetUsedBytes(), 2 * kPageSize);
 }
 
+TEST_F(BlockDataTest, ExistingPagePartialBatchRollbackKeepsExistingPage) {
+  auto pool = MakePool(2);
+  auto block = MakeBlock(pool.get());
+
+  std::vector<uint32_t> existing;
+  ASSERT_TRUE(block->ReservePages(kPageSize, 0, &existing).ok());
+  ASSERT_EQ(existing, std::vector<uint32_t>({0}));
+  ASSERT_EQ(pool->GetUsedBytes(), kPageSize);
+
+  // Page 0 already exists. Only one pool page remains, so page 1 is returned
+  // as the successful prefix and page 2 causes a short allocation.
+  std::vector<uint32_t> created;
+  Status status = block->ReservePages(3 * kPageSize, 0, &created);
+  ASSERT_TRUE(status.IsNoSpace()) << status.ToString();
+  ASSERT_EQ(created, std::vector<uint32_t>({1}));
+  EXPECT_EQ(pool->GetUsedBytes(), 2 * kPageSize);
+
+  block->RollbackPages(created);
+  EXPECT_EQ(pool->GetUsedBytes(), kPageSize);
+
+  // The pre-existing page must remain usable after rolling back the partial
+  // batch, and a same-offset retry must not hit a contiguity CHECK.
+  std::vector<uint32_t> retry_created;
+  ASSERT_TRUE(block->ReservePages(kPageSize, 0, &retry_created).ok());
+  EXPECT_TRUE(retry_created.empty());
+  std::vector<char> data(kPageSize, 'r');
+  block->ApplyWrite(ctx_, data.data(), data.size(), 0);
+  std::vector<char> copied(data.size());
+  block->ToIOBuffer().CopyTo(copied.data(), copied.size());
+  EXPECT_EQ(copied, data);
+}
+
 // RollbackPages frees exactly the named pages and nothing else.
 TEST_F(BlockDataTest, RollbackPages_FreesOnlyNamedPages) {
   auto pool = MakePool(4);
@@ -134,6 +166,14 @@ TEST_F(BlockDataTest, RollbackPages_FreesOnlyNamedPages) {
 
   // Roll back the rest -> back to empty.
   block->RollbackPages({created[0], created[1]});
+  EXPECT_EQ(pool->GetUsedBytes(), 0);
+}
+
+TEST_F(BlockDataTest, EmptyRollbackIsNoOp) {
+  auto pool = MakePool(2);
+  auto block = MakeBlock(pool.get());
+
+  block->RollbackPages({});
   EXPECT_EQ(pool->GetUsedBytes(), 0);
 }
 
@@ -155,6 +195,41 @@ TEST_F(BlockDataTest, ApplyWrite_NoAllocation_AfterReserve) {
   EXPECT_EQ(pool->GetUsedBytes(), size);  // ApplyWrite did not allocate
   // Data is durable in the pages.
   EXPECT_EQ(block->ToIOBuffer().Size(), static_cast<size_t>(size));
+}
+
+TEST_F(BlockDataTest, MultiPageUnalignedWritePreservesByteOrder) {
+  auto pool = MakePool(4);
+  constexpr int32_t kStart = 137;
+  constexpr int32_t kSize = 2 * kPageSize + 777;
+  auto block = MakeBlock(pool.get(), kStart);
+
+  std::vector<uint32_t> created;
+  ASSERT_TRUE(block->ReservePages(kSize, kStart, &created).ok());
+  ASSERT_EQ(created.size(), 3);
+
+  std::vector<char> input(kSize);
+  for (size_t i = 0; i < input.size(); ++i) {
+    input[i] = static_cast<char>((i * 37 + 11) % 251);
+  }
+  block->ApplyWrite(ctx_, input.data(), input.size(), kStart);
+
+  IOBuffer output = block->ToIOBuffer();
+  ASSERT_EQ(output.Size(), input.size());
+  ASSERT_EQ(output.BackingBlockNum(), created.size());
+  std::vector<char> copied(input.size());
+  output.CopyTo(copied.data(), copied.size());
+  EXPECT_EQ(copied, input);
+}
+
+TEST_F(BlockDataTest, DestructorReturnsAllPagesInOneBatch) {
+  auto pool = MakePool(4);
+  {
+    auto block = MakeBlock(pool.get());
+    std::vector<uint32_t> created;
+    ASSERT_TRUE(block->ReservePages(3 * kPageSize, 0, &created).ok());
+    ASSERT_EQ(pool->GetUsedBytes(), 3 * kPageSize);
+  }
+  EXPECT_EQ(pool->GetUsedBytes(), 0);
 }
 
 // The reserve -> rollback -> reserve+apply sequence (what SliceWriter drives

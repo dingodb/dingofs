@@ -52,10 +52,10 @@ class BlockData {
 
   // Phase 1: ensure every page this write needs exists; allocate only, no
   // memcpy, no len_ bump. New pages are appended to *created_pages (existing
-  // pages are skipped, not recorded). Allocates via TryAllocate (never blocks
-  // under the slice lock); on a miss returns NoSpace WITHOUT self-rollback so
-  // the caller can also undo pages it reserved in other blocks of the same
-  // SliceWriter transaction.
+  // pages are skipped, not recorded). Allocates via TryAllocateBatch (never
+  // waits for capacity under the slice lock); on a short allocation returns
+  // NoSpace WITHOUT self-rollback so the caller can also undo pages it
+  // reserved in other blocks of the same SliceWriter transaction.
   Status ReservePages(int32_t size, int32_t block_offset,
                       std::vector<uint32_t>* created_pages);
 
