@@ -318,6 +318,73 @@ TEST_F(FileReaderTest, Read_BlockStoreError_ReturnsError) {
   CloseAndRelease(r);
 }
 
+// A failure after resolving a non-hole block from inode slice metadata is a
+// data I/O failure. It must not leak a storage/cache status such as NotFound
+// (ENOENT) to the file read caller.
+TEST_F(FileReaderTest, Read_BlockStoreNotFound_ReturnsIoError) {
+  ON_CALL(*mock_meta_system_, ReadSlice)
+      .WillByDefault([](ContextSPtr, Ino, uint64_t, uint64_t,
+                        std::vector<Slice>* s, uint64_t& v) {
+        s->clear();
+        Slice sl;
+        sl.id = 1;
+        sl.pos = 0;
+        sl.size = 4 * 1024 * 1024;
+        sl.off = 0;
+        sl.len = sl.size;
+        s->push_back(sl);
+        v = 1;
+        return Status::OK();
+      });
+
+  ON_CALL(*mock_block_store_, RangeAsync)
+      .WillByDefault([](ContextSPtr, RangeReq, StatusCallback cb) {
+        cb(Status::NotFound("no such object"));
+      });
+
+  auto* r = MakeOpenReader();
+
+  DataBuffer buf;
+  uint64_t rsize = 0;
+  Status s = r->Read(ctx_, &buf, 4096, 0, &rsize);
+  EXPECT_TRUE(s.IsIoError());
+  EXPECT_EQ(s.ToSysErrNo(), EIO);
+
+  CloseAndRelease(r);
+}
+
+TEST_F(FileReaderTest, Read_BlockStoreNonIoError_ReturnsIoError) {
+  ON_CALL(*mock_meta_system_, ReadSlice)
+      .WillByDefault([](ContextSPtr, Ino, uint64_t, uint64_t,
+                        std::vector<Slice>* s, uint64_t& v) {
+        s->clear();
+        Slice sl;
+        sl.id = 1;
+        sl.pos = 0;
+        sl.size = 4 * 1024 * 1024;
+        sl.off = 0;
+        sl.len = sl.size;
+        s->push_back(sl);
+        v = 1;
+        return Status::OK();
+      });
+
+  ON_CALL(*mock_block_store_, RangeAsync)
+      .WillByDefault([](ContextSPtr, RangeReq, StatusCallback cb) {
+        cb(Status::Timeout("storage timeout"));
+      });
+
+  auto* r = MakeOpenReader();
+
+  DataBuffer buf;
+  uint64_t rsize = 0;
+  Status s = r->Read(ctx_, &buf, 4096, 0, &rsize);
+  EXPECT_TRUE(s.IsIoError());
+  EXPECT_EQ(s.ToSysErrNo(), EIO);
+
+  CloseAndRelease(r);
+}
+
 // 7. Invalidate() on a range where there are no active requests does not crash.
 TEST_F(FileReaderTest, Invalidate_NoRequests_NoCrash) {
   auto* r = MakeOpenReader();
