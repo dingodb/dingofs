@@ -70,10 +70,17 @@ void DestroyIoctx(rados_ioctx_t ioctx) {
 }
 
 void AppendPayload(rados_write_op_t op, const PutPayload& payload) {
-  uint64_t offset = 0;
-  for (const auto& segment : payload.Segments()) {
-    rados_write_op_write(op, segment.data, segment.size, offset);
-    offset += segment.size;
+  // The first segment goes as write_full: it atomically replaces the whole
+  // object, truncating any longer previous version (a plain offset-0 write
+  // neither truncates on replicated pools nor is accepted on EC pools
+  // without allow_ec_overwrites once the object exists). The remaining
+  // segments extend the object in order within the same op.
+  const auto& segments = payload.Segments();
+  rados_write_op_write_full(op, segments[0].data, segments[0].size);
+  uint64_t offset = segments[0].size;
+  for (size_t i = 1; i < segments.size(); i++) {
+    rados_write_op_write(op, segments[i].data, segments[i].size, offset);
+    offset += segments[i].size;
   }
 }
 }  // namespace
@@ -262,8 +269,8 @@ Status RadosAccesser::Put(const std::string& key, const PutPayload& payload) {
                  << ", length: " << payload.Size()
                  << ", err: " << strerror(-err);
       if (err == -EOPNOTSUPP) {
-        // e.g. overwrite on an EC pool without allow_ec_overwrites: resending
-        // the identical request can never succeed, must not be retried.
+        // semantic rejection by the osd, resending the identical request can
+        // never succeed, must not be retried.
         return Status::NotSupport(strerror(-err));
       }
       return Status::IoError("Failed to write object");
@@ -519,8 +526,8 @@ static void AsyncPutCallback(RadosAsyncIOUnit* io_unit, int ret_code) {
   if (ret_code == -ENOMEM) {
     put_context->status = Status::OutOfMemory("rados put ran out of memory");
   } else if (ret_code == -EOPNOTSUPP) {
-    // e.g. overwrite on an EC pool without allow_ec_overwrites: resending the
-    // identical request can never succeed, must not be retried.
+    // semantic rejection by the osd, resending the identical request can
+    // never succeed, must not be retried.
     put_context->status = Status::NotSupport(strerror(-ret_code));
   } else if (ret_code < 0) {
     put_context->status = Status::IoError(strerror(-ret_code));

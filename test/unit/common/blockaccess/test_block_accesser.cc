@@ -19,6 +19,7 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <cstdlib>
 #include <filesystem>
 #include <list>
 #include <memory>
@@ -244,6 +245,156 @@ TEST(S3AccesserTest, BatchDeleteEmptyKeys) {
   S3Accesser accesser(options);
 
   EXPECT_TRUE(accesser.BatchDelete({}).ok());
+}
+
+// ---- Rados Put whole-object-replace semantics (needs a real cluster) ----
+
+// Skipped unless a cluster is provided via environment:
+//   DINGOFS_UT_RADOS_MON_HOST  e.g. 192.168.10.2
+//   DINGOFS_UT_RADOS_KEY       e.g. $(ceph auth get-key client.admin)
+//   DINGOFS_UT_RADOS_POOL      pool to write test objects into
+//   DINGOFS_UT_RADOS_USER      optional, default client.admin
+// Run once against a replicated pool and once against an EC pool with
+// allow_ec_overwrites=false: a put over an existing object must succeed on
+// both (offset-write based puts get EOPNOTSUPP on the EC pool), and a
+// shorter re-put must truncate instead of leaving a stale tail.
+class RadosPutSemanticsTest : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    const char* mon_host = std::getenv("DINGOFS_UT_RADOS_MON_HOST");
+    const char* key = std::getenv("DINGOFS_UT_RADOS_KEY");
+    const char* pool = std::getenv("DINGOFS_UT_RADOS_POOL");
+    if (mon_host == nullptr || key == nullptr || pool == nullptr) {
+      GTEST_SKIP() << "DINGOFS_UT_RADOS_{MON_HOST,KEY,POOL} not set";
+    }
+
+    RadosOptions options;
+    options.mon_host = mon_host;
+    options.key = key;
+    options.pool_name = pool;
+    const char* user = std::getenv("DINGOFS_UT_RADOS_USER");
+    options.user_name = user != nullptr ? user : "client.admin";
+
+    accesser_ = std::make_unique<RadosAccesser>(options);
+    ASSERT_TRUE(accesser_->Init());
+
+    key_ = std::string("dingofs_ut_put_semantics_") +
+           ::testing::UnitTest::GetInstance()->current_test_info()->name();
+  }
+
+  void TearDown() override {
+    if (accesser_) {
+      (void)accesser_->Delete(key_);
+      accesser_->Destroy();
+    }
+  }
+
+  // 1 MiB boundaries stay aligned to any practical EC stripe_width: EC pools
+  // without overwrites accept the non-first segments only as aligned appends.
+  static constexpr size_t kSegSize = 1ULL << 20;
+
+  static std::string MakeSegment(char fill) {
+    return std::string(kSegSize, fill);
+  }
+
+  static PutPayload BuildPayload(const std::vector<std::string>& segments) {
+    std::vector<PayloadSegment> refs;
+    refs.reserve(segments.size());
+    for (const auto& segment : segments) {
+      refs.push_back({segment.data(), segment.size()});
+    }
+    return PutPayload::Build(std::move(refs));
+  }
+
+  Status AsyncPutAndWait(const PutPayload& payload) {
+    auto ctx = std::make_shared<PutObjectAsyncContext>(key_, payload);
+    std::mutex mtx;
+    std::condition_variable cv;
+    bool done = false;
+    ctx->cb = [&](const std::shared_ptr<PutObjectAsyncContext>&) {
+      std::lock_guard<std::mutex> lock(mtx);
+      done = true;
+      cv.notify_one();
+    };
+
+    accesser_->AsyncPut(key_, ctx);
+
+    std::unique_lock<std::mutex> lock(mtx);
+    if (!cv.wait_for(lock, std::chrono::seconds(30), [&] { return done; })) {
+      return Status::Internal("async put timed out");
+    }
+    return ctx->status;
+  }
+
+  std::unique_ptr<RadosAccesser> accesser_;
+  std::string key_;
+};
+
+TEST_F(RadosPutSemanticsTest, MultiSegmentPutRoundTrip) {
+  std::vector<std::string> segments = {MakeSegment('A'), MakeSegment('B')};
+  auto status = accesser_->Put(key_, BuildPayload(segments));
+  ASSERT_TRUE(status.ok()) << status.ToString();
+
+  std::string data;
+  ASSERT_TRUE(accesser_->Get(key_, &data).ok());
+  ASSERT_EQ(data.size(), 2 * kSegSize);
+  EXPECT_EQ(data.front(), 'A');
+  EXPECT_EQ(data[kSegSize - 1], 'A');
+  EXPECT_EQ(data[kSegSize], 'B');
+  EXPECT_EQ(data.back(), 'B');
+}
+
+TEST_F(RadosPutSemanticsTest, RePutExistingObject) {
+  auto status =
+      accesser_->Put(key_, BuildPayload({MakeSegment('A'), MakeSegment('A')}));
+  ASSERT_TRUE(status.ok()) << status.ToString();
+
+  // The re-upload of an already-persisted block (e.g. a reloaded stage
+  // block): with offset writes this fails EOPNOTSUPP on EC pools.
+  std::vector<std::string> segments = {MakeSegment('C'), MakeSegment('D')};
+  status = accesser_->Put(key_, BuildPayload(segments));
+  ASSERT_TRUE(status.ok()) << status.ToString();
+
+  std::string data;
+  ASSERT_TRUE(accesser_->Get(key_, &data).ok());
+  ASSERT_EQ(data.size(), 2 * kSegSize);
+  EXPECT_EQ(data.front(), 'C');
+  EXPECT_EQ(data.back(), 'D');
+}
+
+TEST_F(RadosPutSemanticsTest, ShorterRePutTruncates) {
+  auto status =
+      accesser_->Put(key_, BuildPayload({MakeSegment('A'), MakeSegment('A'),
+                                         MakeSegment('A'), MakeSegment('A')}));
+  ASSERT_TRUE(status.ok()) << status.ToString();
+
+  status = accesser_->Put(key_, BuildPayload({MakeSegment('B')}));
+  ASSERT_TRUE(status.ok()) << status.ToString();
+
+  // Get sizes the read from stat: a non-truncating put would return 4 MiB
+  // here with a stale 'A' tail after the first MiB.
+  std::string data;
+  ASSERT_TRUE(accesser_->Get(key_, &data).ok());
+  ASSERT_EQ(data.size(), kSegSize);
+  EXPECT_EQ(data.front(), 'B');
+  EXPECT_EQ(data.back(), 'B');
+}
+
+TEST_F(RadosPutSemanticsTest, AsyncRePutExistingObject) {
+  auto status =
+      accesser_->Put(key_, BuildPayload({MakeSegment('A'), MakeSegment('A')}));
+  ASSERT_TRUE(status.ok()) << status.ToString();
+
+  std::vector<std::string> segments = {MakeSegment('E'), MakeSegment('F')};
+  auto payload = BuildPayload(segments);
+  status = AsyncPutAndWait(payload);
+  ASSERT_TRUE(status.ok()) << status.ToString();
+
+  std::string data;
+  ASSERT_TRUE(accesser_->Get(key_, &data).ok());
+  ASSERT_EQ(data.size(), 2 * kSegSize);
+  EXPECT_EQ(data.front(), 'E');
+  EXPECT_EQ(data.back(), 'F');
 }
 
 }  // namespace unit_test
