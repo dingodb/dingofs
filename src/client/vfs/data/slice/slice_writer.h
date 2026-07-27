@@ -75,6 +75,10 @@ class SliceWriter : public std::enable_shared_from_this<SliceWriter> {
     return len_;
   }
 
+  // Published slice id, or 0 if allocation has not succeeded. Uploads can
+  // only be submitted after an id is published.
+  uint64_t SliceId() const { return slice_id_state_->Get(); }
+
   bool IsFlushCompleted() const {
     return flush_completion_state_->IsCompleted();
   }

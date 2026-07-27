@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <gflags/gflags.h>
 #include <gtest/gtest.h>
 
 #include <atomic>
@@ -29,16 +30,20 @@
 #include "client/vfs/metasystem/mds/compact.h"
 #include "client/vfs/metasystem/mds/mds_client.h"
 #include "client/vfs/vfs_meta.h"
+#include "common/block/block_key.h"
 #include "common/status.h"
 #include "common/trace/trace_manager.h"
 #include "mds/filesystem/fs_info.h"
 #include "test/unit/client/vfs/mock/mock_compactor.h"
 #include "test/unit/client/vfs/test_base.h"
 #include "test/unit/client/vfs/test_common.h"
+#include "test/unit/common/blockaccess/mock/mock_accesser.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
+
+DECLARE_uint32(vfs_compact_cleanup_batch_size);
 
 using ::testing::_;
 using ::testing::AnyNumber;
@@ -349,6 +354,127 @@ TEST_F(CompactorTest, RegressionHeapAllocSliceWriter_RepeatedDoCompact_Stable) {
     ASSERT_TRUE(s.ok()) << "iter=" << i << " status=" << s.ToString();
     ASSERT_EQ(out.size(), 1u) << "iter=" << i;
   }
+}
+
+// 12. CleanupUncommittedSlices reconstructs the exact dense block layout of a
+// slice: full blocks plus a partial tail, keyed under the slice id.
+TEST_F(CompactorTest, CleanupUncommittedSlices_EnumeratesDenseBlockKeys) {
+  blockaccess::MockBlockAccesser accesser;
+  ON_CALL(*mock_hub_, GetBlockAccesser()).WillByDefault(Return(&accesser));
+  EXPECT_CALL(*mock_hub_, GetBlockAccesser()).Times(AnyNumber());
+
+  std::list<std::string> deleted;
+  EXPECT_CALL(accesser, BatchDelete(_))
+      .WillOnce([&](const std::list<std::string>& keys) {
+        deleted = keys;
+        return Status::OK();
+      });
+
+  // 10 MB slice with 4 MB blocks: two full blocks + one 2 MB tail. The hole
+  // slice (id=0) must contribute nothing.
+  constexpr int32_t kSize = 10 * 1024 * 1024;
+  std::vector<Slice> slices = {
+      dingofs::client::vfs::test::MakeSlice(/*id=*/1001, /*pos=*/0, kSize),
+      MakeZeroSlice(0, 4096)};
+  Status s = compactor_->CleanupUncommittedSlices(ctx_, slices);
+  EXPECT_TRUE(s.ok()) << s.ToString();
+
+  std::list<std::string> expected = {
+      BlockKey(1001, 0, 4 * 1024 * 1024).StoreKey(),
+      BlockKey(1001, 1, 4 * 1024 * 1024).StoreKey(),
+      BlockKey(1001, 2, 2 * 1024 * 1024).StoreKey()};
+  EXPECT_EQ(deleted, expected);
+}
+
+// 13. Hole-only input never touches the accesser.
+TEST_F(CompactorTest, CleanupUncommittedSlices_HolesOnly_NoDelete) {
+  blockaccess::MockBlockAccesser accesser;
+  ON_CALL(*mock_hub_, GetBlockAccesser()).WillByDefault(Return(&accesser));
+  EXPECT_CALL(*mock_hub_, GetBlockAccesser()).Times(AnyNumber());
+  EXPECT_CALL(accesser, BatchDelete(_)).Times(0);
+
+  std::vector<Slice> slices = {MakeZeroSlice(0, 4096)};
+  EXPECT_TRUE(compactor_->CleanupUncommittedSlices(ctx_, slices).ok());
+}
+
+// 14. CleanupUncommittedSlices after Stop is rejected like other entry points.
+TEST_F(CompactorTest, CleanupUncommittedSlices_AfterStop_ReturnsStopError) {
+  compactor_->Stop();
+  std::vector<Slice> slices = {
+      dingofs::client::vfs::test::MakeSlice(1, 0, 4096)};
+  Status s = compactor_->CleanupUncommittedSlices(ctx_, slices);
+  EXPECT_TRUE(s.IsStop()) << s.ToString();
+}
+
+// 15. A failed flush waits for all block callbacks before reclaiming the
+// never-committed slice. Cleanup failure must not replace the flush error.
+TEST_F(CompactorTest,
+       ForceCompact_PartialUploadFailure_CleansUpAfterAllCallbacks) {
+  std::atomic<int> upload_callbacks{0};
+  ON_CALL(*mock_block_store_, PutAsync)
+      .WillByDefault([&](ContextSPtr, PutReq, StatusCallback cb) {
+        int completed = upload_callbacks.fetch_add(1) + 1;
+        if (completed == 2) {
+          cb(Status::IoError("simulated upload failure"));
+        } else {
+          cb(Status::OK());
+        }
+      });
+  EXPECT_CALL(*mock_block_store_, PutAsync).Times(3);
+
+  blockaccess::MockBlockAccesser accesser;
+  ON_CALL(*mock_hub_, GetBlockAccesser()).WillByDefault(Return(&accesser));
+  EXPECT_CALL(*mock_hub_, GetBlockAccesser()).Times(AnyNumber());
+
+  std::list<std::string> deleted;
+  EXPECT_CALL(accesser, BatchDelete(_))
+      .WillOnce([&](const std::list<std::string>& keys) {
+        EXPECT_EQ(upload_callbacks.load(), 3);
+        deleted = keys;
+        return Status::IoError("simulated cleanup failure");
+      });
+
+  constexpr int32_t kSize = 10 * 1024 * 1024;
+  std::vector<Slice> slices = {
+      dingofs::client::vfs::test::MakeSlice(1, 0, kSize)};
+  std::vector<Slice> out;
+  Status s = compactor_->ForceCompact(ctx_, 400, 0, slices, out);
+
+  EXPECT_TRUE(s.IsIoError()) << s.ToString();
+  EXPECT_NE(s.ToString().find("simulated upload failure"), std::string::npos);
+  EXPECT_TRUE(out.empty());
+  EXPECT_EQ(deleted.size(), 3u);
+}
+
+// 16. The cleanup batch loop splits keys by vfs_compact_cleanup_batch_size
+// and keeps deleting the remaining batches after one fails.
+TEST_F(CompactorTest, CleanupUncommittedSlices_SplitsBatches_KeepsGoingOnFail) {
+  const uint32_t saved_batch_size = FLAGS_vfs_compact_cleanup_batch_size;
+  FLAGS_vfs_compact_cleanup_batch_size = 1;
+
+  blockaccess::MockBlockAccesser accesser;
+  ON_CALL(*mock_hub_, GetBlockAccesser()).WillByDefault(Return(&accesser));
+  EXPECT_CALL(*mock_hub_, GetBlockAccesser()).Times(AnyNumber());
+
+  int calls = 0;
+  EXPECT_CALL(accesser, BatchDelete(_))
+      .Times(3)
+      .WillRepeatedly([&](const std::list<std::string>& keys) {
+        EXPECT_EQ(keys.size(), 1u);
+        return ++calls == 2 ? Status::IoError("simulated delete failure")
+                            : Status::OK();
+      });
+
+  // 10 MB slice with 4 MB blocks: 3 keys -> 3 single-key batches.
+  constexpr int32_t kSize = 10 * 1024 * 1024;
+  std::vector<Slice> slices = {
+      dingofs::client::vfs::test::MakeSlice(/*id=*/1002, /*pos=*/0, kSize)};
+  Status s = compactor_->CleanupUncommittedSlices(ctx_, slices);
+
+  EXPECT_TRUE(s.IsIoError()) << s.ToString();
+  EXPECT_EQ(calls, 3);
+
+  FLAGS_vfs_compact_cleanup_batch_size = saved_batch_size;
 }
 
 }  // namespace vfs

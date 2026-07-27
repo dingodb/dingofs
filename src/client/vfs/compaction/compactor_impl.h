@@ -50,9 +50,15 @@ class CompactorImpl : public Compactor {
                       const std::vector<Slice>& slices,
                       std::vector<Slice>& out_slices) override;
 
+  Status CleanupUncommittedSlices(ContextSPtr ctx,
+                                  const std::vector<Slice>& slices) override;
+
  private:
   Status DoCompact(ContextSPtr ctx, Ino ino, int64_t chunk_index,
                    const std::vector<Slice>& slices, Slice& out_slice);
+
+  Status DoCleanupUncommittedSlices(ContextSPtr ctx,
+                                    const std::vector<Slice>& slices);
 
   Status IncInflight();
   void DecInflight();

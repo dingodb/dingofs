@@ -44,6 +44,18 @@ class Compactor {
   virtual Status ForceCompact(ContextSPtr ctx, Ino ino, int64_t chunk_index,
                               const std::vector<Slice>& slices,
                               std::vector<Slice>& out_slices) = 0;
+
+  // Best-effort cleanup for slices produced by compaction but never committed
+  // to metadata. Callers must never pass committed slices: their blocks are
+  // live data. Two traps for the commit path:
+  // - An unknown-outcome commit failure (e.g. CompactChunk RPC timeout) must
+  //   NOT be cleaned up: the MDS may have accepted the slices, and deleting
+  //   their blocks would destroy committed data. Leak instead.
+  // - Compact() folds the skipped prefix of the input into out_slices, so on
+  //   commit failure the caller must filter out_slices down to the ids absent
+  //   from the input before passing them here.
+  virtual Status CleanupUncommittedSlices(ContextSPtr ctx,
+                                          const std::vector<Slice>& slices) = 0;
 };
 
 }  // namespace vfs

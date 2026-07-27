@@ -16,9 +16,12 @@
 
 #include "client/vfs/compaction/compactor_impl.h"
 
+#include <gflags/gflags.h>
 #include <glog/logging.h>
 
+#include <algorithm>
 #include <cstdint>
+#include <list>
 
 #include "client/vfs/common/basync_util.h"
 #include "client/vfs/common/helper.h"
@@ -27,12 +30,20 @@
 #include "client/vfs/data/slice/common.h"
 #include "client/vfs/data/slice/slice_writer.h"
 #include "client/vfs/hub/vfs_hub.h"
+#include "common/block/block_utils.h"
 #include "utils/scoped_cleanup.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
 using namespace compaction;
+
+DEFINE_uint32(vfs_compact_cleanup_batch_size, 100,
+              "maximum block keys per uncommitted compaction cleanup batch");
+
+// S3 DeleteObjects hard limit; the sync BatchDelete path has no guard of its
+// own, so clamp here (same bound as mds gc kBatchDeleteObjectSize).
+constexpr size_t kMaxCleanupBatchSize = 1000;
 
 Status CompactorImpl::Start() {
   LOG(INFO) << "CompactorImpl started";
@@ -148,8 +159,27 @@ Status CompactorImpl::DoCompact(ContextSPtr ctx, Ino ino, int64_t chunk_index,
     writer->FlushAsync(sync.AsStatusCallBack(s));
     sync.Wait();
     if (!s.ok()) {
+      uint64_t slice_id = writer->SliceId();
       LOG(WARNING) << "Fail compaction because flush failed: " << s.ToString()
-                   << ", ino: " << ino << ", chunk_index: " << chunk_index;
+                   << ", ino: " << ino << ", chunk_index: " << chunk_index
+                   << ", slice_id: " << slice_id;
+      // slice_id 0 means allocation never published: no block was ever
+      // uploaded, so there is nothing to reclaim.
+      if (slice_id != 0) {
+        int32_t len = writer->Len();
+        Slice orphan{.id = slice_id,
+                     .size = len,
+                     .off = 0,
+                     .len = len,
+                     .pos = offset_in_chunk};
+        Status cleanup_status =
+            DoCleanupUncommittedSlices(SpanScope::GetContext(span), {orphan});
+        if (!cleanup_status.ok()) {
+          LOG(WARNING) << "Fail cleanup of uncommitted compaction slice "
+                       << slice_id << ": " << cleanup_status.ToString()
+                       << ", ino: " << ino << ", chunk_index: " << chunk_index;
+        }
+      }
       return s;
     }
 
@@ -161,7 +191,9 @@ Status CompactorImpl::DoCompact(ContextSPtr ctx, Ino ino, int64_t chunk_index,
   return Status::OK();
 }
 
-// TODO: delete compact object after fail
+// Read/write failures upload nothing and flush failures self-clean in
+// DoCompact; the remaining orphan case is a failed metadata commit, which the
+// caller reclaims via CleanupUncommittedSlices.
 Status CompactorImpl::Compact(ContextSPtr ctx, Ino ino, int64_t chunk_index,
                               const std::vector<Slice>& slices,
                               std::vector<Slice>& out_slices) {
@@ -231,6 +263,66 @@ Status CompactorImpl::ForceCompact(ContextSPtr ctx, Ino ino,
   out_slices.push_back(compacted);
 
   return Status::OK();
+}
+
+Status CompactorImpl::CleanupUncommittedSlices(
+    ContextSPtr ctx, const std::vector<Slice>& slices) {
+  DINGOFS_RETURN_NOT_OK(IncInflight());
+  auto cleanup = MakeScopedCleanup([&]() { DecInflight(); });
+
+  return DoCleanupUncommittedSlices(ctx, slices);
+}
+
+Status CompactorImpl::DoCleanupUncommittedSlices(
+    ContextSPtr ctx, const std::vector<Slice>& slices) {
+  auto span = vfs_hub_->GetTraceManager()->StartChildSpan(
+      "CompactorImpl::CleanupUncommittedSlices", ctx->GetTraceSpan());
+
+  uint32_t block_size = vfs_hub_->GetFsInfo().block_size;
+
+  std::list<std::string> keys;
+  for (const auto& slice : slices) {
+    if (slice.id == 0 || slice.size <= 0) continue;  // holes have no blocks
+    size_t slice_blocks = 0;
+    for (const auto& key :
+         EnumerateBlockKeys(slice.id, slice.size, block_size)) {
+      keys.push_back(key.StoreKey());
+      slice_blocks++;
+    }
+    LOG(INFO) << "Cleanup uncommitted compaction slice, slice_id: " << slice.id
+              << ", size: " << slice.size << ", block_size: " << block_size
+              << ", blocks: " << slice_blocks;
+  }
+
+  if (keys.empty()) return Status::OK();
+
+  VLOG(9) << "CompactorImpl::CleanupUncommittedSlices slices: " << slices.size()
+          << ", blocks: " << keys.size();
+
+  // Keep each cleanup request bounded: zero would stall this loop forever,
+  // and the upper cap keeps a misconfigured flag from tripping the backend
+  // request limit.
+  const size_t batch_size = std::clamp<size_t>(
+      FLAGS_vfs_compact_cleanup_batch_size, 1, kMaxCleanupBatchSize);
+
+  auto* accesser = vfs_hub_->GetBlockAccesser();
+  Status status = Status::OK();
+  while (!keys.empty()) {
+    auto it = keys.begin();
+    std::advance(it, std::min(keys.size(), batch_size));
+    std::list<std::string> batch;
+    batch.splice(batch.begin(), keys, keys.begin(), it);
+
+    Status s = accesser->BatchDelete(batch);
+    if (!s.ok()) {
+      LOG(WARNING)
+          << "CompactorImpl::CleanupUncommittedSlices batch delete failed: "
+          << s.ToString() << ", batch size: " << batch.size();
+      status = s;
+    }
+  }
+
+  return status;
 }
 
 }  // namespace vfs
