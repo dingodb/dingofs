@@ -74,7 +74,13 @@ void FlushBarrier::FinishUpload(uint32_t index, const Status& status) {
     CHECK_EQ(erased, 1) << fmt::format("{} missing inflight block index {}",
                                        tag_, index);
 
-    if (!status.ok() && first_error_.ok()) {
+    // First error wins, except ReachThrottle upgrades a generic error: the
+    // storage layer reports throttling with a message only sometimes (the CRT
+    // may fail sibling requests without one), and the compact layer keys its
+    // back-off on seeing ReachThrottle, so it must survive mixed failures.
+    if (!status.ok() &&
+        (first_error_.ok() ||
+         (status.IsReachThrottle() && !first_error_.IsReachThrottle()))) {
       first_error_ = status;
     }
     completion = TakeCompletionUnlocked();

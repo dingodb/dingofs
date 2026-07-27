@@ -162,6 +162,9 @@ std::string Status::ToString() const {
       case kDeleted:
         type = "Deleted";
         break;
+      case kReachThrottle:
+        type = "ReachThrottle";
+        break;
       default:
         type = std::to_string(static_cast<int>(code_));
         LOG(ERROR) << fmt::format("Unknown code({}):", type);

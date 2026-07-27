@@ -16,6 +16,7 @@
 
 #include "fmt/format.h"
 #include "glog/logging.h"
+#include "utils/time.h"
 
 namespace dingofs {
 namespace client {
@@ -28,6 +29,9 @@ DEFINE_uint32(vfs_compact_worker_num, 8, "number of compact workers");
 DEFINE_uint32(vfs_compact_worker_max_pending_num, 8096,
               "compact worker max pending num");
 DEFINE_bool(vfs_compact_worker_use_pthread, true, "compact worker use pthread");
+DEFINE_uint32(vfs_compact_throttle_cooldown_s, 300,
+              "seconds to drop all compact tasks after storage reports "
+              "throughput throttling");
 
 void CompactChunkTask::Run() {
   if (compact_processor_.IsStopped() || IsDeleted()) {
@@ -39,8 +43,21 @@ void CompactChunkTask::Run() {
     return;
   }
 
+  if (compact_processor_.InThrottleCooldown()) {
+    LOG(INFO) << fmt::format(
+        "[meta.compact.{}.{}.{}] drop compact chunk task in storage throttle "
+        "cooldown.",
+        ino_, chunk_->GetIndex(), Id());
+
+    status_ = Status::ReachThrottle("compact dropped in throttle cooldown");
+    Signal();
+    return;
+  }
+
   auto status = Compact();
-  if (!status.ok() && !status.IsNotFit() && !status.IsStop()) {
+  if (status.IsReachThrottle()) {
+    compact_processor_.OnReachThrottle();
+  } else if (!status.ok() && !status.IsNotFit() && !status.IsStop()) {
     LOG(ERROR) << fmt::format(
         "[meta.compact.{}.{}.{}] compact chunk fail, status({}).", ino_,
         chunk_->GetIndex(), Id(), status.ToString());
@@ -137,9 +154,31 @@ void CompactProcessor::Stop() {
   executor_.Stop();
 }
 
+void CompactProcessor::OnReachThrottle() {
+  uint64_t cooldown_ms = FLAGS_vfs_compact_throttle_cooldown_s * 1000ULL;
+  uint64_t until_ms = utils::TimestampMs() + cooldown_ms;
+  uint64_t prev = throttle_until_ms_.exchange(until_ms);
+  // Log once per cooldown window, not for every task that trips it.
+  if (prev < utils::TimestampMs()) {
+    LOG(WARNING) << fmt::format(
+        "[meta.compact] storage throughput throttled, drop all compact tasks "
+        "for {}s.",
+        FLAGS_vfs_compact_throttle_cooldown_s);
+  }
+}
+
+bool CompactProcessor::InThrottleCooldown() const {
+  uint64_t until_ms = throttle_until_ms_.load(std::memory_order_relaxed);
+  return until_ms > 0 && utils::TimestampMs() < until_ms;
+}
+
 Status CompactProcessor::LaunchCompact(Ino ino, InodeSPtr inode,
                                        ChunkSPtr& chunk, MDSClient& mds_client,
                                        Compactor& compactor, bool is_async) {
+  if (InThrottleCooldown()) {
+    return Status::ReachThrottle("compact suspended in throttle cooldown");
+  }
+
   auto task =
       CompactChunkTask::New(ino, inode, chunk, mds_client, compactor, *this);
 

@@ -106,8 +106,17 @@ class CompactProcessor {
 
   bool IsStopped() { return is_stopped_.load(); }
 
+  // Storage reported throughput throttling: retrying merged uploads on a
+  // rate-limited link cannot converge and only worsens the congestion, so
+  // drop every pending compact task and reject new ones until the cooldown
+  // expires.
+  void OnReachThrottle();
+  bool InThrottleCooldown() const;
+
  private:
   std::atomic<bool> is_stopped_{false};
+  // Timestamp(ms) until which compact tasks are dropped; 0 means no cooldown.
+  std::atomic<uint64_t> throttle_until_ms_{0};
 
   Executor executor_;
 };

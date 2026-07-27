@@ -96,6 +96,14 @@ inline Status S3ErrorToStatus(const Aws::Client::AWSError<E>& error) {
       error.GetResponseCode() == Aws::Http::HttpResponseCode::NOT_FOUND) {
     return Status::NotFound(error.GetMessage());
   }
+  // aws-crt kills any connection whose throughput stays below the configured
+  // minimum (a stalled transfer on a rate-limited network). The SDK surfaces
+  // that client-side error only through the message text, so classify by the
+  // stable aws-c-http error name.
+  if (error.GetMessage().find("AWS_ERROR_HTTP_CHANNEL_THROUGHPUT_FAILURE") !=
+      Aws::String::npos) {
+    return Status::ReachThrottle(error.GetMessage());
+  }
   return Status::IoError(error.GetMessage());
 }
 
