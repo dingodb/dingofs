@@ -239,13 +239,17 @@ bool RadosAccesser::ContainerExist() {
 Status RadosAccesser::Put(const std::string& key, const char* buffer,
                           size_t length) {
   return ExecuteSyncOp(key, [&](rados_ioctx_t ioctx) {
-    int err = rados_write(ioctx, key.c_str(), buffer, length, 0);
+    // write_full replaces the whole object atomically. An offset write on an
+    // existing object is rejected (EOPNOTSUPP) on EC pools without
+    // allow_ec_overwrites, and keeps the stale tail on replicated pools when
+    // the new data is shorter.
+    int err = rados_write_full(ioctx, key.c_str(), buffer, length);
     if (err < 0) {
       LOG(ERROR) << "Failed to write object, key: " << key
                  << ", length: " << length << ", err: " << strerror(-err);
       if (err == -EOPNOTSUPP) {
-        // e.g. overwrite on an EC pool without allow_ec_overwrites: resending
-        // the identical request can never succeed, must not be retried.
+        // semantic rejection by the osd, resending the identical request can
+        // never succeed, must not be retried.
         return Status::NotSupport(strerror(-err));
       }
       return Status::IoError("Failed to write object");
@@ -452,8 +456,8 @@ static void AsyncPutCallback(RadosAsyncIOUnit* io_unit, int ret_code) {
   auto put_context =
       std::get<std::shared_ptr<PutObjectAsyncContext>>(io_unit->async_context);
   if (ret_code == -EOPNOTSUPP) {
-    // e.g. overwrite on an EC pool without allow_ec_overwrites: resending the
-    // identical request can never succeed, must not be retried.
+    // semantic rejection by the osd, resending the identical request can
+    // never succeed, must not be retried.
     put_context->status = Status::NotSupport(strerror(-ret_code));
   } else if (ret_code < 0) {
     put_context->status = Status::IoError(strerror(-ret_code));
@@ -469,9 +473,10 @@ void RadosAccesser::AsyncPut(std::shared_ptr<PutObjectAsyncContext> context) {
 
   // transfer ownership of io_unit to the callback
   ExecuteAsyncOperation(io_unit, [this, context](RadosAsyncIOUnit* unit) {
-    int err =
-        rados_aio_write(unit->ioctx, context->key.c_str(), unit->completion,
-                        context->buffer, context->buffer_size, 0);
+    // whole-object replace, same semantics as the sync Put above
+    int err = rados_aio_write_full(unit->ioctx, context->key.c_str(),
+                                   unit->completion, context->buffer,
+                                   context->buffer_size);
     if (err < 0) {
       LOG(ERROR) << "Fail AsyncPut key: " << context->key
                  << ", length: " << context->buffer_size
