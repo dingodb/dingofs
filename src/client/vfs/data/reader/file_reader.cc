@@ -346,8 +346,6 @@ ReadRequestSptr FileReader::NewReadRequest(int64_t s, int64_t e) {
     }
   }
 
-  RunReadRequest(new_req);
-
   return new_req;
 }
 
@@ -368,24 +366,25 @@ void FileReader::DeleteReadRequest(ReadRequestSptr req) {
 
 // Caller holds mutex_; req->mutex is not required.
 //
-// erase() is intentionally idempotent. A request may be reclaimed by several
-// uncoordinated paths that all delete on the same (kInvalid && readers==0)
-// condition: the scheduled cleanup from ScheduleReadRequestCleanup,
-// OnReadRequestComplete, the per-read CleanUpRequest, the periodic ShrinkMem,
-// and the foreground Read cleanup. The async path decides to delete while
-// holding only req->mutex and erases later under mutex_, so a synchronous path
-// can erase the same request in the gap -- erase() then legitimately finds it
-// already gone. A CHECK(erase()==1) here SIGABRTs once pool exhaustion turns
-// many readahead requests kInvalid at the same time.
+// The CHECK is sound because eligibility is stable once true: kInvalid has no
+// outgoing transition, and readers can only rise under mutex_ (PrepareRequests
+// registers the reference before the request first runs). A failure means that
+// invariant was broken — an IncReader outside mutex_, or a request made
+// runnable before its reference was registered.
+//
+// erase() stays idempotent on purpose: several paths reclaim on the same
+// (kInvalid && readers == 0) condition — the scheduled async cleanup,
+// CleanUpRequest, ShrinkMem, InvalidateRange, the foreground Read release,
+// and the destructor. A synchronous path can erase the request between the
+// async decision and this call, so finding it already gone is legitimate;
+// assert eligibility, never the erase count.
 void FileReader::DeleteReadRequestUnlock(ReadRequestSptr req) {
   VLOG(9) << fmt::format("{} DeleteReadRequest req: {}", uuid_,
                          req->ToString());
-  CHECK(CanDeleteRequest(req));
+  CHECK(CanDeleteRequest(req)) << req->ToString() << " cannot be deleted";
 
-  // The pool slot is released when req->buffer's IOBuf block refcount hits zero
-  // (after the reply), which auto-updates the pool's OutstandingBytes. No
-  // explicit release here.
-
+  // The pool slot is released when req->buffer's IOBuf block refcount hits
+  // zero (after the reply), which auto-updates the pool's OutstandingBytes.
   requests_.erase(req->ReqId());
 }
 
@@ -605,6 +604,7 @@ void FileReader::MakeReadahead(ContextSPtr ctx, const FileRange& frange) {
           "{} MakeReadahead create new req for range [{},{}), len: {}", uuid_,
           s, e, (e - s));
       auto req = NewReadRequest(s, e);
+      RunReadRequest(req);
 
       s = req->req.frange.End();
     }
@@ -733,6 +733,11 @@ std::vector<PartialReadRequest> FileReader::PrepareRequests(
         read_reqs.emplace_back(PartialReadRequest{
             .req = req, .offset = 0, .len = req->req.frange.len});
         req->IncReader();
+        // Publish the foreground ownership before the request can complete.
+        // Some BlockStore implementations and test doubles invoke callbacks
+        // synchronously; starting first would let completion observe zero
+        // readers and race a cleanup task against this acquisition.
+        RunReadRequest(req);
 
         s = req->req.frange.End();
       }
