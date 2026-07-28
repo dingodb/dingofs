@@ -2108,6 +2108,8 @@ void MDSServiceImpl::DoRename(google::protobuf::RpcController*, const pb::mds::R
   response->set_new_parent_version(result.new_parent_version);
   response->set_child_ino(result.child_ino);
   response->set_deleted_ino(result.deleted_ino);
+  response->set_child_version(result.child_version);
+  response->set_deleted_version(result.deleted_version);
 }
 
 void MDSServiceImpl::Rename(google::protobuf::RpcController* controller, const pb::mds::RenameRequest* request,
@@ -3533,9 +3535,9 @@ void MDSServiceImpl::RestoreFromTrash(google::protobuf::RpcController* controlle
 
   Context ctx(request->context(), request->info().request_id(), __func__);
 
-  auto status = file_system->RestoreFromTrash(ctx, request->trash_parent(), request->trash_name(),
-                                              request->allow_trash_parent(), request->carried_bytes(),
-                                              request->carried_inodes());
+  auto status =
+      file_system->RestoreFromTrash(ctx, request->trash_parent(), request->trash_name(), request->allow_trash_parent(),
+                                    request->carried_bytes(), request->carried_inodes());
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (!status.ok()) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());

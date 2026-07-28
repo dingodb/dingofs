@@ -62,6 +62,8 @@ class RenameTask : public TaskRunnable {
   uint64_t GetNewParentVersion() const { return new_parent_version_; }
   Ino GetChildIno() const { return child_ino_; }
   Ino GetDeletedIno() const { return deleted_ino_; }
+  uint64_t GetChildVersion() const { return child_version_; }
+  uint64_t GetDeletedVersion() const { return deleted_version_; }
 
  private:
   // not delete at here
@@ -75,6 +77,8 @@ class RenameTask : public TaskRunnable {
   uint64_t new_parent_version_;
   Ino child_ino_{0};
   Ino deleted_ino_{0};
+  uint64_t child_version_{0};
+  uint64_t deleted_version_{0};
 
   RenameCbFunc cb_;
   FileSystemSPtr fs_;
@@ -103,6 +107,8 @@ class Renamer {
     uint64_t new_parent_version{0};
     Ino child_ino{0};
     Ino deleted_ino{0};
+    uint64_t child_version{0};
+    uint64_t deleted_version{0};
   };
   template <typename T>
   Status Execute(FileSystemSPtr fs, Context& ctx, const T& param, Result& out);
@@ -126,6 +132,8 @@ Status Renamer::Execute(FileSystemSPtr fs, Context& ctx, const T& param, Result&
   out.new_parent_version = task->GetNewParentVersion();
   out.child_ino = task->GetChildIno();
   out.deleted_ino = task->GetDeletedIno();
+  out.child_version = task->GetChildVersion();
+  out.deleted_version = task->GetDeletedVersion();
 
   return task->GetStatus();
 }

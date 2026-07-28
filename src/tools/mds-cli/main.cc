@@ -179,14 +179,13 @@ int main(int argc, char* argv[]) {
 
   //  parse gflags
   int rc = dingofs::ParseFlags(&argc, &argv, extras);
-  if (rc != 0) {
-    return 1;
-  }
+  if (rc != 0) return 1;
 
   dingofs::mds::MetaCodec::SetClusterID(FLAGS_cluster_id);
 
   std::string program_name = GetLastName(std::string(argv[0]));
-  ::FLAGS_log_dir = "./log/";
+  // ponytail: Logger::Init expands "~" and creates the directory.
+  if (::FLAGS_log_dir.empty()) ::FLAGS_log_dir = "~/.dingo/logs";
   dingofs::Logger::Init(program_name);
 
   std::string lower_cmd = Helper::ToLowerCase(FLAGS_cmd);

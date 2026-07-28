@@ -264,6 +264,8 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
     uint64_t new_parent_version{0};
     Ino child_ino{0};
     Ino deleted_ino{0};
+    uint64_t child_version{0};
+    uint64_t deleted_version{0};
   };
   Status Rename(Context& ctx, const RenameParam& param, RenameResult& out);
 
