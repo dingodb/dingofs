@@ -51,8 +51,8 @@ inline std::string GetBaseDir() {
   if (env != nullptr && env[0] != '\0') {
     return env;
   }
-  return (getuid() == 0) ? "/var/dingofs"
-                         : fmt::format("{}/.dingofs", Helper::GetHomeDir());
+  return (getuid() == 0) ? "/var/dingo"
+                         : fmt::format("{}/.dingo", Helper::GetHomeDir());
 }
 
 inline std::string GetDefaultDir(const std::string& sub_dir) {

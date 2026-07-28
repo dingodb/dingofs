@@ -184,8 +184,6 @@ int main(int argc, char* argv[]) {
   dingofs::mds::MetaCodec::SetClusterID(FLAGS_cluster_id);
 
   std::string program_name = GetLastName(std::string(argv[0]));
-  // ponytail: Logger::Init expands "~" and creates the directory.
-  if (::FLAGS_log_dir.empty()) ::FLAGS_log_dir = "~/.dingo/logs";
   dingofs::Logger::Init(program_name);
 
   std::string lower_cmd = Helper::ToLowerCase(FLAGS_cmd);
