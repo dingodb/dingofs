@@ -3099,7 +3099,7 @@ Status FileSystem::Fallocate(Context& ctx, Ino ino, int32_t mode, uint64_t offse
   utils::Duration duration;
 
   if (mode == 0) {
-    // Plain preallocate: extend file size and reserve slices for the new tail.
+    // Plain preallocate: only the file size changes, no chunk is touched.
     uint64_t new_length = offset + len;
     if (new_length > inode->Length()) {
       if (!quota_manager_.CheckQuota(trace, ino, new_length - inode->Length(), 0)) {

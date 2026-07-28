@@ -1159,16 +1159,6 @@ Status SymLinkOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param
   return Status::OK();
 }
 
-static Status GetChunk(TxnUPtr& txn, uint32_t fs_id, Ino ino, uint64_t chunk_index, ChunkEntry& chunk) {
-  std::string value;
-  auto status = txn->Get(MetaCodec::EncodeChunkKey(fs_id, ino, chunk_index), value);
-  if (!status.ok()) return status;
-
-  chunk = MetaCodec::DecodeChunkValue(value);
-
-  return Status::OK();
-}
-
 static Status ScanChunk(TxnUPtr& txn, uint32_t fs_id, Ino ino, std::map<uint64_t, ChunkEntry>& chunks) {
   Range range = MetaCodec::GetChunkRange(fs_id, ino);
 
@@ -1532,87 +1522,17 @@ Status ScanSliceRefOperation::Run(TxnUPtr& txn) {
   });
 }
 
-Status FallocateOperation::PreAlloc(TxnUPtr& txn, AttrEntry& attr, uint64_t offset, uint32_t len) {
-  uint64_t length = attr.length();
-  const uint64_t new_length = offset + len;
+Status FallocateOperation::PreAlloc(AttrEntry& attr, uint64_t offset, uint64_t len) {
+  // ponytail: mode=0 only extends the file length, exactly like truncate-up.
+  // It must NOT touch chunks: appending zero slices over [offset, offset+len)
+  // shadows already-written data (slices are append-ordered), which turned
+  // plain fallocate into a punch-hole and corrupted data. Bytes past the old
+  // EOF are a hole and already read as zero without any slice.
+  attr.set_length(std::max(attr.length(), offset + len));
+  attr.set_ctime(std::max(attr.ctime(), GetTime()));
+  attr.set_mtime(std::max(attr.mtime(), GetTime()));
 
-  if (length >= new_length) return Status::OK();
-
-  const uint32_t fs_id = attr.fs_id();
-  const Ino ino = attr.ino();
-  const uint64_t chunk_size = param_.chunk_size;
-  const uint64_t block_size = param_.block_size;
-
-  // GetChunk returns ENOT_FOUND when no chunk exists at the starting index —
-  // expected for an empty (0-byte) file or a chunk-aligned current length.
-  // Track existence explicitly so the loop always takes the "create new chunk"
-  // branch when there is nothing to append to (which sets chunk_size and
-  // block_size properly instead of writing a zero-init ChunkEntry back).
-  ChunkEntry max_chunk;
-  bool max_chunk_exists = false;
-  {
-    auto status = GetChunk(txn, fs_id, ino, length / chunk_size, max_chunk);
-    if (status.ok()) {
-      max_chunk_exists = true;
-    } else if (status.error_code() != pb::error::ENOT_FOUND) {
-      return status;
-    }
-  }
-
-  std::vector<ChunkEntry> effected_chunks;
-  while (length < new_length) {
-    uint64_t chunk_pos = length % chunk_size;
-    uint64_t chunk_index = length / chunk_size;
-    uint64_t delta_size = new_length - length;
-    uint64_t delta_chunk_size = (chunk_pos + delta_size > chunk_size) ? (chunk_size - chunk_pos) : delta_size;
-
-    SliceEntry slice;
-    slice.set_id(0);
-    slice.set_size(0);
-    slice.set_pos(chunk_pos);
-    slice.set_off(0);
-    slice.set_len(delta_chunk_size);
-
-    CHECK(!max_chunk_exists || chunk_index >= max_chunk.index()) << fmt::format(
-        "chunk_index({}) should be greater than or equal to max_chunk.index({}).", chunk_index, max_chunk.index());
-
-    if (!max_chunk_exists || chunk_index > max_chunk.index()) {
-      ChunkEntry chunk;
-      chunk.set_index(chunk_index);
-      chunk.set_chunk_size(chunk_size);
-      chunk.set_block_size(block_size);
-      chunk.set_version(1);
-      chunk.add_slices()->Swap(&slice);
-
-      LOG_DEBUG << fmt::format("[operation.{}.{}] update chunk, version({}), value({}).", fs_id, ino, chunk.version(),
-                               chunk.ShortDebugString());
-
-      txn->Put(MetaCodec::EncodeChunkKey(fs_id, ino, chunk_index), MetaCodec::EncodeChunkValue(chunk));
-      effected_chunks.push_back(std::move(chunk));
-
-    } else {
-      max_chunk.add_slices()->Swap(&slice);
-      // bump version so ChunkCache::PutIf accepts the updated slice list.
-      max_chunk.set_version(max_chunk.version() + 1);
-      LOG_DEBUG << fmt::format("[operation.{}.{}] update chunk, version({}), value({}).", fs_id, ino,
-                               max_chunk.version(), max_chunk.ShortDebugString());
-
-      txn->Put(MetaCodec::EncodeChunkKey(fs_id, ino, chunk_index), MetaCodec::EncodeChunkValue(max_chunk));
-      effected_chunks.push_back(max_chunk);
-      // After we append to max_chunk in this iteration, subsequent iterations
-      // will be in new chunks (chunk_index > max_chunk.index()).
-      max_chunk_exists = false;
-    }
-
-    length += delta_chunk_size;
-  }
-
-  // PreAlloc extends file size unconditionally (plain mode=0 semantic).
-  // Without this, fallocate(2) with mode=0 returns success but the file
-  // length never grows past the original — `ls -la` reports the old size.
-  attr.set_length(new_length);
-
-  result_.effected_chunks = std::move(effected_chunks);
+  result_.effected_chunks.clear();
 
   return Status::OK();
 }
@@ -1648,7 +1568,7 @@ Status FallocateOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_par
 
   if (mode_ == 0) {
     // pre allocate
-    auto status = PreAlloc(txn, attr, offset, len);
+    auto status = PreAlloc(attr, offset, len);
     if (!status.ok()) {
       return Status(pb::error::EINTERNAL,
                     fmt::format("pre allocate file length({}) fail, {}", offset + len, status.error_str()));
