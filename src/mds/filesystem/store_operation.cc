@@ -1542,7 +1542,6 @@ Status FallocateOperation::PreAlloc(TxnUPtr& txn, AttrEntry& attr, uint64_t offs
   const Ino ino = attr.ino();
   const uint64_t chunk_size = param_.chunk_size;
   const uint64_t block_size = param_.block_size;
-  const uint32_t slice_num = param_.slice_num;
 
   // GetChunk returns ENOT_FOUND when no chunk exists at the starting index —
   // expected for an empty (0-byte) file or a chunk-aligned current length.
@@ -1561,7 +1560,6 @@ Status FallocateOperation::PreAlloc(TxnUPtr& txn, AttrEntry& attr, uint64_t offs
   }
 
   std::vector<ChunkEntry> effected_chunks;
-  uint32_t count = 0;
   while (length < new_length) {
     uint64_t chunk_pos = length % chunk_size;
     uint64_t chunk_index = length / chunk_size;
@@ -1575,10 +1573,8 @@ Status FallocateOperation::PreAlloc(TxnUPtr& txn, AttrEntry& attr, uint64_t offs
     slice.set_off(0);
     slice.set_len(delta_chunk_size);
 
-    if (max_chunk_exists) {
-      CHECK(chunk_index >= max_chunk.index()) << fmt::format(
-          "chunk_index({}) should be greater than or equal to max_chunk.index({}).", chunk_index, max_chunk.index());
-    }
+    CHECK(!max_chunk_exists || chunk_index >= max_chunk.index()) << fmt::format(
+        "chunk_index({}) should be greater than or equal to max_chunk.index({}).", chunk_index, max_chunk.index());
 
     if (!max_chunk_exists || chunk_index > max_chunk.index()) {
       ChunkEntry chunk;
@@ -1609,10 +1605,6 @@ Status FallocateOperation::PreAlloc(TxnUPtr& txn, AttrEntry& attr, uint64_t offs
     }
 
     length += delta_chunk_size;
-    ++count;
-    if (count > slice_num) {
-      return Status(pb::error::EINTERNAL, fmt::format("beyond slice num({})", slice_num));
-    }
   }
 
   // PreAlloc extends file size unconditionally (plain mode=0 semantic).
@@ -1751,7 +1743,6 @@ Status CloseFileOperation::Run(TxnUPtr& txn) {
 }
 
 Status FlushFileOperation::Run(TxnUPtr& txn) {
-  CHECK(param_.slice_id != 0) << "slice_id not should be 0.";
   CHECK(param_.chunk_size != 0) << "chunk_size not should be 0.";
 
   const std::string key = MetaCodec::EncodeInodeKey(fs_id_, ino_);
