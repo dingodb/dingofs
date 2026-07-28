@@ -44,14 +44,12 @@ namespace mds {
 namespace client {
 
 MDSClient::MDSClient(uint32_t fs_id) : fs_id_(fs_id) {
-  FLAGS_logtostdout = true;
-  FLAGS_logtostderr = true;
+  // ponytail: alsologtostderr keeps console output while still writing log
+  // files; logtostdout/logtostderr disable file output entirely.
+  FLAGS_alsologtostderr = true;
 }
 
-MDSClient::~MDSClient() {
-  FLAGS_logtostdout = false;
-  FLAGS_logtostderr = false;
-}
+MDSClient::~MDSClient() { FLAGS_alsologtostderr = false; }
 
 bool MDSClient::Init(const std::string& mds_addr) {
   interaction_ = dingofs::mds::client::Interaction::New();
