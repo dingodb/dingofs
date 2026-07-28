@@ -51,6 +51,41 @@ void CompactChunkTask::Run() {
   Signal();
 }
 
+void CompactChunkTask::TryCleanupUncommittedSlices(
+    const std::vector<Slice>& old_slices,
+    const std::vector<Slice>& new_slices) {
+  // Cleanup uncommitted slices that are not in the new_slices list
+  std::vector<Slice> pure_new_slices;
+  for (const auto& slice : new_slices) {
+    if (slice.id == 0) continue;
+
+    bool is_old_slice = false;
+    for (const auto& old_slice : old_slices) {
+      if (slice.id == old_slice.id) {
+        is_old_slice = true;
+        break;
+      }
+    }
+    if (!is_old_slice) pure_new_slices.push_back(slice);
+    
+  }
+
+  if (pure_new_slices.empty()) return;
+
+  ContextSPtr ctx = std::make_shared<Context>("");
+  Status status = compactor_.CleanupUncommittedSlices(ctx, pure_new_slices);
+  if (!status.ok()) {
+    LOG(ERROR) << fmt::format(
+        "[meta.compact.{}.{}.{}] cleanup slices fail, status({}).", ino_,
+        chunk_->GetIndex(), Id(), status.ToString());
+
+  } else {
+    LOG_DEBUG << fmt::format(
+        "[meta.compact.{}.{}.{}] cleanup slices success, slices({}).", ino_,
+        chunk_->GetIndex(), Id(), Helper::ToString(pure_new_slices));
+  }
+}
+
 Status CompactChunkTask::Compact() {
   const uint32_t chunk_index = chunk_->GetIndex();
 
@@ -59,7 +94,7 @@ Status CompactChunkTask::Compact() {
 
   // do compact
   uint64_t version = 0;
-  auto old_slices = chunk_->GetCommitedSlice(version);
+  std::vector<Slice> old_slices = chunk_->GetCommitedSlice(version);
   if (old_slices.empty()) return Status::OK();
 
   LOG(INFO) << fmt::format(
@@ -98,12 +133,8 @@ Status CompactChunkTask::Compact() {
   status = mds_client_.CompactChunk(ctx, ino_, chunk_->GetIndex(), param,
                                     chunk_entry);
   if (!status.ok()) {
-    Status cleanup_status =
-        compactor_.CleanupUncommittedSlices(ctx, new_slices);
-    if (!cleanup_status.ok()) {
-      LOG(ERROR) << fmt::format(
-          "[meta.compact.{}.{}.{}] cleanup slices fail, status({}).", ino_,
-          chunk_index, Id(), cleanup_status.ToString());
+    if (!status.IsTimeout() && !status.IsNetError() && !status.IsIoError()) {
+      TryCleanupUncommittedSlices(old_slices, new_slices);
     }
 
     if (!status.IsInvalidParam() && !status.IsTimeout()) return status;

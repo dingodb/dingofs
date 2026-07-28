@@ -71,6 +71,9 @@ class CompactChunkTask : public TaskRunnable {
 
  private:
   bool IsDeleted() { return inode_ != nullptr && inode_->IsDeleted(); }
+  void TryCleanupUncommittedSlices(const std::vector<Slice>& old_slices,
+                                   const std::vector<Slice>& new_slices);
+
   Status Compact();
 
   Ino ino_;

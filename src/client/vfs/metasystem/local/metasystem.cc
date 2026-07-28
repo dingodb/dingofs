@@ -1200,10 +1200,12 @@ Status LocalMetaSystem::Fallocate(ContextSPtr, Ino ino, int mode,
     std::vector<KeyValue> kvs;
 
     // Write zero slices covering [offset, end_offset), split by chunk
-    // boundaries. This is used for both PUNCH_HOLE and allocate-with-zero,
-    // since in local mode data on object storage is untouched and reads
-    // return zeros via id=0 slices.
-    uint64_t cursor = offset;
+    // boundaries, for PUNCH_HOLE / ZERO_RANGE only: data on object storage is
+    // untouched and reads return zeros via id=0 slices.
+    // ponytail: plain allocate (mode == 0) must only extend the length —
+    // appending zero slices there shadows already-written data (slices are
+    // append-ordered) and silently corrupts the file.
+    uint64_t cursor = (mode == 0) ? end_offset : offset;
     while (cursor < end_offset) {
       const uint64_t chunk_index = cursor / chunk_size;
       const uint64_t chunk_pos = cursor % chunk_size;

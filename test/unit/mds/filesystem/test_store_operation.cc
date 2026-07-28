@@ -915,7 +915,7 @@ TEST_F(CopyFileRangeRunTest, SrcOffsetBeyondEofReturnsError) {
 // txn. We drive RunInBatch directly with a hand-built shared_param.
 //
 // Four mode families are covered:
-//   - mode == 0                 -> PreAlloc (extend size, append zero slices)
+//   - mode == 0                 -> PreAlloc (extend size only, no chunk write)
 //   - FALLOC_FL_PUNCH_HOLE      -> SetZero, keep_size = true
 //   - FALLOC_FL_ZERO_RANGE      -> SetZero, keep_size = (mode & KEEP_SIZE)
 //   - FALLOC_FL_COLLAPSE_RANGE  -> ENOT_SUPPORT
@@ -1004,13 +1004,13 @@ class FallocateRunTest : public ::testing::Test {
   KVStorageSPtr storage_;
 };
 
-// mode == 0 on an empty (0-byte) file: a brand new chunk is created holding a
-// single zero slice (id=0) covering the requested range, and the file grows.
+// mode == 0 only extends the file length (like truncate-up): it must never
+// write chunks. Bytes past the old EOF are a hole and read back as zero
+// without any slice.
 TEST_F(FallocateRunTest, PreAllocExtendsEmptyFile) {
   const Ino ino = 100;
   AttrEntry attr = MakeFallocInode(ino, 0);
 
-  // slice_num is computed by the caller as ((new_len - len)/chunk)+1.
   FallocateOperation op(trace_, MakeParam(ino, /*mode=*/0, /*offset=*/0,
                                           /*len=*/4096, /*slice_num=*/1));
   Operation::BatchSharedParam shared_param;
@@ -1020,24 +1020,12 @@ TEST_F(FallocateRunTest, PreAllocExtendsEmptyFile) {
   ASSERT_TRUE(op.RunInBatch(txn, shared_param).ok());
   ASSERT_TRUE(txn->Commit().ok());
 
-  // File length grew and the in-place attr reflects it. SetResultAttr copies
-  // the mutated attr into the result for the caller.
   EXPECT_EQ(shared_param.attr.length(), 4096u);
   op.SetResultAttr(shared_param);
   EXPECT_EQ(op.GetResult().attr.length(), 4096u);
   EXPECT_EQ(op.GetResult().delta_bytes, 4096);
-  ASSERT_EQ(op.GetResult().effected_chunks.size(), 1u);
-
-  ChunkEntry chunk = GetChunk(ino, 0);
-  EXPECT_EQ(chunk.chunk_size(), kFallocChunkSize);
-  EXPECT_EQ(chunk.block_size(), kFallocBlockSize);
-  ASSERT_EQ(chunk.slices_size(), 1);
-  const auto& s = chunk.slices(0);
-  EXPECT_EQ(s.id(), 0u);
-  EXPECT_EQ(s.pos(), 0u);
-  EXPECT_EQ(s.off(), 0u);
-  EXPECT_EQ(s.len(), 4096u);
-  EXPECT_EQ(s.size(), 0u);
+  EXPECT_TRUE(op.GetResult().effected_chunks.empty());
+  EXPECT_FALSE(ChunkExists(ino, 0));
 }
 
 // mode == 0 where offset+len <= current length is a no-op: no chunk is written
@@ -1068,16 +1056,18 @@ TEST_F(FallocateRunTest, PreAllocNoOpWhenWithinLength) {
   EXPECT_EQ(chunk.slices(0).id(), 1000u);
 }
 
-// mode == 0 extending within an existing chunk appends the zero slice to that
-// chunk and bumps its version (rather than recreating it).
-TEST_F(FallocateRunTest, PreAllocAppendsToExistingChunk) {
+// Regression (fsx READ BAD DATA): mode == 0 overlapping already-written data
+// must not append zero slices — that shadowed the real data and turned plain
+// fallocate into a punch hole.
+TEST_F(FallocateRunTest, PreAllocOverlappingDataKeepsSlices) {
   const Ino ino = 102;
   AttrEntry attr = MakeFallocInode(ino, 4096);
   SeedChunk(ino, MakeSizedChunk(0, {MakeSlice(/*id=*/1000, /*off=*/0,
                                               /*len=*/4096, /*pos=*/0)}));
 
-  FallocateOperation op(trace_, MakeParam(ino, /*mode=*/0, /*offset=*/4096,
-                                          /*len=*/2048, /*slice_num=*/1));
+  // Straddles the written [0, 4096) and extends past EOF.
+  FallocateOperation op(trace_, MakeParam(ino, /*mode=*/0, /*offset=*/2048,
+                                          /*len=*/4096, /*slice_num=*/1));
   Operation::BatchSharedParam shared_param;
   shared_param.attr = attr;
 
@@ -1087,23 +1077,15 @@ TEST_F(FallocateRunTest, PreAllocAppendsToExistingChunk) {
 
   EXPECT_EQ(shared_param.attr.length(), 6144u);
   EXPECT_EQ(op.GetResult().delta_bytes, 2048);
+  EXPECT_TRUE(op.GetResult().effected_chunks.empty());
 
   ChunkEntry chunk = GetChunk(ino, 0);
-  EXPECT_EQ(chunk.version(), 1u);  // bumped so ChunkCache::PutIf accepts it
-  auto slices = SortedSlices(chunk);
-  ASSERT_EQ(slices.size(), 2u);
-  EXPECT_EQ(slices[0].id(), 1000u);
-  EXPECT_EQ(slices[0].pos(), 0u);
-  EXPECT_EQ(slices[1].id(), 0u);  // appended zero slice
-  EXPECT_EQ(slices[1].pos(), 4096u);
-  EXPECT_EQ(slices[1].off(), 0u);
-  EXPECT_EQ(slices[1].len(), 2048u);
-  EXPECT_EQ(slices[1].size(), 0u);
+  ASSERT_EQ(chunk.slices_size(), 1);
+  EXPECT_EQ(chunk.slices(0).id(), 1000u);
 }
 
-// mode == 0 extending a multi-chunk range from an empty file creates one new
-// chunk per touched chunk, each with a full-chunk zero slice.
-TEST_F(FallocateRunTest, PreAllocAcrossMultipleNewChunks) {
+// mode == 0 spanning several chunks still writes nothing but the new length.
+TEST_F(FallocateRunTest, PreAllocAcrossMultipleChunksWritesNoChunk) {
   const Ino ino = 103;
   AttrEntry attr = MakeFallocInode(ino, 0);
 
@@ -1119,77 +1101,9 @@ TEST_F(FallocateRunTest, PreAllocAcrossMultipleNewChunks) {
 
   EXPECT_EQ(shared_param.attr.length(), len);
   EXPECT_EQ(op.GetResult().delta_bytes, static_cast<int64_t>(len));
-  ASSERT_EQ(op.GetResult().effected_chunks.size(), 2u);
-
-  for (uint64_t index : {0u, 1u}) {
-    ChunkEntry chunk = GetChunk(ino, index);
-    ASSERT_EQ(chunk.slices_size(), 1) << "chunk " << index;
-    EXPECT_EQ(chunk.slices(0).id(), 0u);
-    EXPECT_EQ(chunk.slices(0).pos(), 0u);
-    EXPECT_EQ(chunk.slices(0).len(), kFallocChunkSize);
-  }
-}
-
-// mode == 0 that both appends to the existing max chunk AND spills into a new
-// chunk: exercises the max_chunk_exists -> false transition mid-loop.
-TEST_F(FallocateRunTest, PreAllocAppendThenNewChunk) {
-  const Ino ino = 104;
-  AttrEntry attr = MakeFallocInode(ino, 4096);
-  SeedChunk(ino, MakeSizedChunk(0, {MakeSlice(/*id=*/4000, /*off=*/0,
-                                              /*len=*/4096, /*pos=*/0)}));
-
-  // Extend [4096, 12288): fills the tail of chunk 0 then starts chunk 1.
-  FallocateOperation op(trace_,
-                        MakeParam(ino, /*mode=*/0, /*offset=*/4096,
-                                  /*len=*/kFallocChunkSize, /*slice_num=*/2));
-  Operation::BatchSharedParam shared_param;
-  shared_param.attr = attr;
-
-  auto txn = storage_->NewTxn();
-  ASSERT_TRUE(op.RunInBatch(txn, shared_param).ok());
-  ASSERT_TRUE(txn->Commit().ok());
-
-  EXPECT_EQ(shared_param.attr.length(), 12288u);
-  EXPECT_EQ(op.GetResult().delta_bytes, static_cast<int64_t>(kFallocChunkSize));
-  ASSERT_EQ(op.GetResult().effected_chunks.size(), 2u);
-
-  // Chunk 0 keeps its real slice and gains a zero slice on the tail.
-  ChunkEntry chunk0 = GetChunk(ino, 0);
-  EXPECT_EQ(chunk0.version(), 1u);
-  auto slices0 = SortedSlices(chunk0);
-  ASSERT_EQ(slices0.size(), 2u);
-  EXPECT_EQ(slices0[0].id(), 4000u);
-  EXPECT_EQ(slices0[1].id(), 0u);
-  EXPECT_EQ(slices0[1].pos(), 4096u);
-  EXPECT_EQ(slices0[1].len(), 4096u);
-
-  // Chunk 1 is freshly created holding the remaining zero slice.
-  ChunkEntry chunk1 = GetChunk(ino, 1);
-  EXPECT_EQ(chunk1.version(), 1u);
-  EXPECT_EQ(chunk1.chunk_size(), kFallocChunkSize);
-  ASSERT_EQ(chunk1.slices_size(), 1);
-  EXPECT_EQ(chunk1.slices(0).id(), 0u);
-  EXPECT_EQ(chunk1.slices(0).pos(), 0u);
-  EXPECT_EQ(chunk1.slices(0).len(), 4096u);
-}
-
-// mode == 0 where the range needs more zero slices than slice_num allows fails
-// with EINTERNAL ("beyond slice num").
-TEST_F(FallocateRunTest, PreAllocBeyondSliceNumReturnsError) {
-  const Ino ino = 105;
-  AttrEntry attr = MakeFallocInode(ino, 0);
-
-  // Range spans 2 chunks but only 1 slice is permitted.
-  FallocateOperation op(trace_, MakeParam(ino, /*mode=*/0, /*offset=*/0,
-                                          /*len=*/2 * kFallocChunkSize,
-                                          /*slice_num=*/1));
-  Operation::BatchSharedParam shared_param;
-  shared_param.attr = attr;
-
-  auto txn = storage_->NewTxn();
-  auto status = op.RunInBatch(txn, shared_param);
-  ASSERT_FALSE(status.ok());
-  EXPECT_EQ(status.error_code(), pb::error::EINTERNAL);
+  EXPECT_TRUE(op.GetResult().effected_chunks.empty());
+  EXPECT_FALSE(ChunkExists(ino, 0));
+  EXPECT_FALSE(ChunkExists(ino, 1));
 }
 
 // FALLOC_FL_PUNCH_HOLE keeps the file size and shadows the requested byte range
