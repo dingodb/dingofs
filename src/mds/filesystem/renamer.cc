@@ -34,6 +34,8 @@ void RenameTask<T>::Run() {
     new_parent_version_ = out.new_parent_version;
     child_ino_ = out.child_ino;
     deleted_ino_ = out.deleted_ino;
+    child_version_ = out.child_version;
+    deleted_version_ = out.deleted_version;
 
     status_ = status;
     Signal();

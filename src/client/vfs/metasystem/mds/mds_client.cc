@@ -1357,7 +1357,11 @@ Status MDSClient::Rename(ContextSPtr& ctx, Ino old_parent,
       parent_memo_.Upsert(response.child_ino(), new_parent);
   }
 
-  if (response.deleted_ino() != 0) parent_memo_.Delete(response.deleted_ino());
+  if (response.child_ino() != 0)
+    parent_memo_.UpsertVersion(response.child_ino(), response.child_version());
+  if (response.deleted_ino() != 0)
+    parent_memo_.UpsertVersion(response.deleted_ino(),
+                               response.deleted_version());
 
   // update effected inodes
   effected_inos.push_back(old_parent);

@@ -2679,9 +2679,14 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, RenameResult& 
   out.new_parent_version = is_same_parent ? out.old_parent_version : new_parent_attr_with_mutation.Version();
 
   out.child_ino = old_attr.ino();
+  out.child_version = old_attr.version();
   out.deleted_ino = is_exist_new_dentry ? prev_new_attr.ino() : 0;
+  out.deleted_version = is_exist_new_dentry ? prev_new_attr.version() : 0;
 
   std::string reason = fmt::format("rename.{}.{}.{}->{}.{}", request_id, old_parent, old_name, new_parent, new_name);
+
+  UpsertInodeCache(old_attr, reason);
+
   if (IsMonoPartition()) {
     // update cache
     PartitionPtr old_parent_partition;
@@ -2692,8 +2697,6 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, RenameResult& 
       // update old parent attr
       UpsertInodeCache(old_parent_attr_with_mutation, reason);
     }
-
-    UpsertInodeCache(old_attr, reason);
 
     // check new parent dentry/inode
     PartitionPtr new_parent_partition;
@@ -2850,6 +2853,8 @@ Status FileSystem::CommitRename(Context& ctx, const RenameParam& param, RenameRe
   out.new_parent_version = result.new_parent_version;
   out.child_ino = result.child_ino;
   out.deleted_ino = result.deleted_ino;
+  out.child_version = result.child_version;
+  out.deleted_version = result.deleted_version;
 
   trace.RecordElapsedTime("post_handle");
 
