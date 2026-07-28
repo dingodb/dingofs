@@ -37,10 +37,13 @@ class Compactor {
 
   virtual Status Stop() = 0;
 
+  // On success, replaces out_slices with the complete replacement list. The
+  // list is empty when every input slice is skipped.
   virtual Status Compact(ContextSPtr ctx, Ino ino, int64_t chunk_index,
                          const std::vector<Slice>& slices,
                          std::vector<Slice>& out_slices) = 0;
 
+  // On success, replaces out_slices with exactly one compacted slice.
   virtual Status ForceCompact(ContextSPtr ctx, Ino ino, int64_t chunk_index,
                               const std::vector<Slice>& slices,
                               std::vector<Slice>& out_slices) = 0;

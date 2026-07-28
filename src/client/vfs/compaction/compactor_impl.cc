@@ -219,6 +219,7 @@ Status CompactorImpl::Compact(ContextSPtr ctx, Ino ino, int64_t chunk_index,
 
   if (to_compact.empty()) {
     LOG(INFO) << "No slices to compact after skipping";
+    out_slices.clear();
     return Status::OK();
   }
 
@@ -260,7 +261,9 @@ Status CompactorImpl::ForceCompact(ContextSPtr ctx, Ino ino,
   Slice compacted;
   DINGOFS_RETURN_NOT_OK(DoCompact(SpanScope::GetContext(span), ino, chunk_index,
                                   slices, compacted));
-  out_slices.push_back(compacted);
+  std::vector<Slice> out;
+  out.push_back(compacted);
+  out_slices.swap(out);
 
   return Status::OK();
 }
