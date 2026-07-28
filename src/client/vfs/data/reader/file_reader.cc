@@ -312,9 +312,9 @@ ReadRequestSptr FileReader::NewReadRequest(int64_t s, int64_t e) {
       "actual=[{}-{}), len={}",
       uuid_, s, e, block_end, s, req_end, (req_end - s));
 
-  std::shared_ptr<ReadRequest> req(
-      new ReadRequest(ino_, chunk_indx, chunk_offset,
-                      FileRange{.offset = s, .len = (req_end - s)}));
+  std::shared_ptr<ReadRequest> req = std::make_shared<ReadRequest>(
+      ino_, chunk_indx, chunk_offset,
+      FileRange{.offset = s, .len = (req_end - s)});
 
   req->state = ReadRequestState::kNew;
   req->status = Status::OK();
@@ -353,7 +353,7 @@ ReadRequestSptr FileReader::NewReadRequest(int64_t s, int64_t e) {
 // path so request erasure runs in the reader cleanup lane.
 void FileReader::ScheduleReadRequestCleanup(ReadRequestSptr req) {
   AcquireRef();
-  vfs_hub_->GetReadCleanupExecutor()->Execute([&, req]() {
+  vfs_hub_->GetReadCleanupExecutor()->Execute([this, req]() {
     DeleteReadRequest(req);
     ReleaseRef();
   });
@@ -548,8 +548,10 @@ void FileReader::MakeReadahead(ContextSPtr ctx, const FileRange& frange) {
     int64_t req_id = it->first;
     ReadRequest* req = it->second.get();
 
+    std::unique_lock<std::mutex> req_lock(req->mutex);
+
     VLOG(9) << fmt::format("{} MakeReadahead check req: {} for frange: {}",
-                           uuid_, req->ToString(), ahead.ToString());
+                           uuid_, req->ToStringUnlock(), ahead.ToString());
 
     if (req->state == ReadRequestState::kInvalid) {
       continue;
@@ -661,8 +663,12 @@ std::vector<int64_t> FileReader::SplitRange(ContextSPtr ctx,
   };
 
   for (const auto& [uuid, req] : requests_) {
+    // state is written by completion threads under req->mutex only; an
+    // unlocked read here is a data race even though mutex_ is held.
+    std::unique_lock<std::mutex> req_lock(req->mutex);
+
     VLOG(9) << fmt::format("{} SplitRange check req: {} for frange: {}", uuid_,
-                           req->ToString(), frange.ToString());
+                           req->ToStringUnlock(), frange.ToString());
 
     if (req->state == ReadRequestState::kInvalid) {
       continue;
@@ -822,15 +828,27 @@ void FileReader::CheckPrefetch(ContextSPtr ctx, const Attr& attr,
       "FileReader::CheckPrefetch", ctx->GetTraceSpan());
 
   uint64_t time_now = butil::monotonic_time_s();
-  if (FLAGS_vfs_intime_warmup_enable &&
-      ((time_now - last_intime_warmup_trigger_) >
-           FLAGS_vfs_warmup_trigger_restart_interval_secs ||
-       (attr.mtime - last_intime_warmup_mtime_) >
-           FLAGS_vfs_warmup_mtime_restart_interval_secs)) {
-    LOG(INFO) << fmt::format("{} Trigger intime warmup", uuid_);
-    last_intime_warmup_trigger_ = time_now;
-    last_intime_warmup_mtime_ = attr.mtime;
+  bool trigger_warmup = false;
+  if (FLAGS_vfs_intime_warmup_enable) {
+    // Concurrent reads reach here without mutex_, so checking and advancing
+    // the two watermarks must be one atomic step or racing readers all pass
+    // the threshold and double-submit. An mtime regression (clock fix,
+    // cross-node drift, truncate-recreate) means changed content, so it
+    // triggers explicitly instead of via unsigned-subtraction wraparound.
+    std::lock_guard<std::mutex> lk(intime_warmup_mutex_);
+    if ((time_now - last_intime_warmup_trigger_) >
+            FLAGS_vfs_warmup_trigger_restart_interval_secs ||
+        attr.mtime < last_intime_warmup_mtime_ ||
+        (attr.mtime - last_intime_warmup_mtime_) >
+            FLAGS_vfs_warmup_mtime_restart_interval_secs) {
+      last_intime_warmup_trigger_ = time_now;
+      last_intime_warmup_mtime_ = attr.mtime;
+      trigger_warmup = true;
+    }
+  }
 
+  if (trigger_warmup) {
+    LOG(INFO) << fmt::format("{} Trigger intime warmup", uuid_);
     vfs_hub_->GetWarmupManager()->SubmitTask(WarmupTaskContext{ino_});
   }
 
