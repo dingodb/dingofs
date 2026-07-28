@@ -185,18 +185,8 @@ Handle* HandleManager::NewHandle(uint64_t fh, Ino ino, int flags) {
   // Reader is always per-fh.
   handle->resources.reader = new FileReader(vfs_hub_, fh, ino);
   handle->resources.reader->AcquireRef();
-  Status s = handle->resources.reader->Open();
-  if (!s.ok()) {
-    LOG(ERROR) << fmt::format(
-        "NewHandle: reader Open failed, fh={}, ino={}, "
-        "status={}",
-        fh, ino, s.ToString());
-    // Reader holds 1 ref from AcquireRef above; release it (reader will
-    // delete-this when refs hit 0). Then drop the bare handle.
-    handle->resources.reader->ReleaseRef();
-    delete handle;
-    return nullptr;
-  }
+  CHECK(handle->resources.reader->Open().ok())
+      << "FileReader::Open is currently infallible";
 
   // Writer only for writable opens. Borrowed from WriterTable.
   if ((flags & O_ACCMODE) != O_RDONLY) {
