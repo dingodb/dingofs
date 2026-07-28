@@ -51,13 +51,17 @@ class StorageClientTest : public ::testing::Test {
   void SetUp() override {
     saved_upload_max_tries_ = FLAGS_storage_upload_max_tries;
     saved_download_max_tries_ = FLAGS_storage_download_max_tries;
+    saved_notfound_max_tries_ = FLAGS_storage_download_notfound_max_tries;
     saved_upload_backoff_base_ms_ = FLAGS_storage_upload_retry_backoff_base_ms;
     saved_download_backoff_base_ms_ =
         FLAGS_storage_download_retry_backoff_base_ms;
+    saved_notfound_backoff_base_ms_ =
+        FLAGS_storage_download_notfound_retry_backoff_base_ms;
 
     // keep retries fast by default, individual cases override as needed
     FLAGS_storage_upload_retry_backoff_base_ms = 1;
     FLAGS_storage_download_retry_backoff_base_ms = 1;
+    FLAGS_storage_download_notfound_retry_backoff_base_ms = 1;
 
     client_ = std::make_unique<StorageClient>(&accesser_);
     ASSERT_TRUE(client_->Start().ok());
@@ -68,9 +72,12 @@ class StorageClientTest : public ::testing::Test {
 
     FLAGS_storage_upload_max_tries = saved_upload_max_tries_;
     FLAGS_storage_download_max_tries = saved_download_max_tries_;
+    FLAGS_storage_download_notfound_max_tries = saved_notfound_max_tries_;
     FLAGS_storage_upload_retry_backoff_base_ms = saved_upload_backoff_base_ms_;
     FLAGS_storage_download_retry_backoff_base_ms =
         saved_download_backoff_base_ms_;
+    FLAGS_storage_download_notfound_retry_backoff_base_ms =
+        saved_notfound_backoff_base_ms_;
   }
 
   static BlockHandle Handle(uint64_t id) {
@@ -93,8 +100,10 @@ class StorageClientTest : public ::testing::Test {
 
   uint32_t saved_upload_max_tries_;
   uint32_t saved_download_max_tries_;
+  uint32_t saved_notfound_max_tries_;
   uint32_t saved_upload_backoff_base_ms_;
   uint32_t saved_download_backoff_base_ms_;
+  uint32_t saved_notfound_backoff_base_ms_;
 };
 
 TEST_F(StorageClientTest, StartAndShutdownIdempotent) {
@@ -323,10 +332,16 @@ TEST_F(StorageClientTest, RangeShortObjectReturnsError) {
   EXPECT_EQ(calls, 1);
 }
 
-TEST_F(StorageClientTest, RangeNotFoundIsNotRetried) {
+TEST_F(StorageClientTest, RangeNotFoundIsNotRetriedByDefault) {
+  // prefetch and cache-node retrieval rely on fail-fast NotFound; the
+  // notfound budget must stay dormant unless the caller opts in
+  FLAGS_storage_download_notfound_max_tries = 8;
+
+  int calls = 0;
   EXPECT_CALL(accesser_, AsyncGet(_, _))
       .WillOnce(Invoke(
-          [](const std::string&, std::shared_ptr<GetObjectAsyncContext> ctx) {
+          [&](const std::string&, std::shared_ptr<GetObjectAsyncContext> ctx) {
+            calls++;
             ctx->status = Status::NotFound("no such object");
             ctx->cb(ctx);
           }));
@@ -334,11 +349,87 @@ TEST_F(StorageClientTest, RangeNotFoundIsNotRetried) {
   std::string storage;
   IOBuffer buffer = PreAlloc(&storage, 4096);
   EXPECT_TRUE(client_->Range(Handle(201), 0, 4096, &buffer).IsNotFound());
+  EXPECT_EQ(calls, 1);
+}
+
+TEST_F(StorageClientTest, RangeNotFoundRetriedThenSucceeds) {
+  const std::string data = "0123456789";
+
+  int calls = 0;
+  EXPECT_CALL(accesser_, AsyncGet(_, _))
+      .Times(3)
+      .WillRepeatedly(Invoke(
+          [&](const std::string&, std::shared_ptr<GetObjectAsyncContext> ctx) {
+            calls++;
+            if (calls < 3) {  // writeback upload completes before the third try
+              ctx->status = Status::NotFound("not uploaded yet");
+            } else {
+              std::memcpy(ctx->buf, data.data(), data.size());
+              ctx->actual_len = data.size();
+              ctx->status = Status::OK();
+            }
+            ctx->cb(ctx);
+          }));
+
+  std::string storage;
+  IOBuffer buffer = PreAlloc(&storage, data.size());
+  auto status = client_->Range(Handle(206), 0, data.size(), &buffer,
+                               {.retry_notfound = true});
+  ASSERT_TRUE(status.ok());
+  ASSERT_EQ(calls, 3);
+  ASSERT_EQ(std::string(buffer.Fetch1(), buffer.Size()), data);
+}
+
+TEST_F(StorageClientTest, RangeNotFoundBoundedRetries) {
+  FLAGS_storage_download_notfound_max_tries = 3;
+
+  int calls = 0;
+  EXPECT_CALL(accesser_, AsyncGet(_, _))
+      .Times(3)
+      .WillRepeatedly(Invoke(
+          [&](const std::string&, std::shared_ptr<GetObjectAsyncContext> ctx) {
+            calls++;
+            ctx->status = Status::NotFound("no such object");
+            ctx->cb(ctx);
+          }));
+
+  std::string storage;
+  IOBuffer buffer = PreAlloc(&storage, 4096);
+  EXPECT_TRUE(
+      client_->Range(Handle(207), 0, 4096, &buffer, {.retry_notfound = true})
+          .IsNotFound());
+  EXPECT_EQ(calls, 3);
+}
+
+TEST_F(StorageClientTest, RangeNotFoundBudgetIndependentOfGenericRetries) {
+  FLAGS_storage_download_max_tries = 3;
+  FLAGS_storage_download_notfound_max_tries = 2;
+
+  // alternate transient errors and notfound: each class consumes only its
+  // own budget, so the second notfound ends the loop after four attempts
+  int calls = 0;
+  EXPECT_CALL(accesser_, AsyncGet(_, _))
+      .Times(4)
+      .WillRepeatedly(Invoke(
+          [&](const std::string&, std::shared_ptr<GetObjectAsyncContext> ctx) {
+            calls++;
+            ctx->status = (calls % 2 == 1) ? Status::IoError("inject io error")
+                                           : Status::NotFound("no such object");
+            ctx->cb(ctx);
+          }));
+
+  std::string storage;
+  IOBuffer buffer = PreAlloc(&storage, 4096);
+  EXPECT_TRUE(
+      client_->Range(Handle(208), 0, 4096, &buffer, {.retry_notfound = true})
+          .IsNotFound());
+  EXPECT_EQ(calls, 4);
 }
 
 TEST_F(StorageClientTest, BackoffFormula) {
   FLAGS_storage_upload_retry_backoff_base_ms = 1000;
   FLAGS_storage_download_retry_backoff_base_ms = 300;
+  FLAGS_storage_download_notfound_retry_backoff_base_ms = 500;
 
   {  // upload: min(base * tried * tried, 60s)
     ASSERT_EQ(UploadRetryBackoffMs(1), 1000);
@@ -353,6 +444,13 @@ TEST_F(StorageClientTest, BackoffFormula) {
     ASSERT_EQ(DownloadRetryBackoffMs(2), 600);
     ASSERT_EQ(DownloadRetryBackoffMs(9), 2700);
     ASSERT_EQ(DownloadRetryBackoffMs(100), 10000);  // 30s capped to 10s
+  }
+
+  {  // notfound: min(base * tried, 10s)
+    ASSERT_EQ(NotFoundRetryBackoffMs(1), 500);
+    ASSERT_EQ(NotFoundRetryBackoffMs(2), 1000);
+    ASSERT_EQ(NotFoundRetryBackoffMs(7), 3500);
+    ASSERT_EQ(NotFoundRetryBackoffMs(100), 10000);  // 50s capped to 10s
   }
 }
 
@@ -396,6 +494,34 @@ TEST_F(StorageClientTest, ShutdownAbortsBackoff) {
   });
 
   auto status = client_->Put(Handle(300), Buf("data"));
+  auto elapsed_ms = (butil::gettimeofday_us() - start_us) / 1000;
+
+  shutdown_thread.join();
+  ASSERT_TRUE(status.IsAbort());
+  ASSERT_LT(elapsed_ms, 2000);  // way below the 10s backoff
+}
+
+TEST_F(StorageClientTest, ShutdownAbortsNotFoundBackoff) {
+  FLAGS_storage_download_notfound_max_tries = 3;
+  FLAGS_storage_download_notfound_retry_backoff_base_ms = 10000;  // 10s
+
+  EXPECT_CALL(accesser_, AsyncGet(_, _))
+      .WillOnce(Invoke(
+          [](const std::string&, std::shared_ptr<GetObjectAsyncContext> ctx) {
+            ctx->status = Status::NotFound("no such object");
+            ctx->cb(ctx);
+          }));
+
+  auto start_us = butil::gettimeofday_us();
+  std::thread shutdown_thread([&]() {
+    bthread_usleep(200 * 1000);
+    client_->Shutdown();
+  });
+
+  std::string storage;
+  IOBuffer buffer = PreAlloc(&storage, 4096);
+  auto status =
+      client_->Range(Handle(303), 0, 4096, &buffer, {.retry_notfound = true});
   auto elapsed_ms = (butil::gettimeofday_us() - start_us) / 1000;
 
   shutdown_thread.join();

@@ -262,9 +262,13 @@ Status TierBlockCache::Range(BlockHandle handle, off_t offset, size_t length,
     }
   }
 
-  // Finally, retrieve from storage if allowed
+  // Finally, retrieve from storage if allowed. Retry NotFound here: with
+  // writeback the block may still be staged on the writer waiting for
+  // upload. This is the single waiting point on the read path — prefetch
+  // and cache-node retrieval keep failing fast.
   if (option.retrieve_storage) {
-    status = storage_client_->Range(handle, offset, length, buffer);
+    status = storage_client_->Range(handle, offset, length, buffer,
+                                    {.retry_notfound = true});
     if (!status.ok()) {
       LOG(ERROR) << "Fail to range block from storage, key="
                  << handle.Filename() << ", status=" << status.ToString();
