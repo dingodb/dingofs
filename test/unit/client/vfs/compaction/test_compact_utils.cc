@@ -221,6 +221,21 @@ TEST_F(CompactUtilsTest, SkipWorksWithNonZeroChunkStart) {
   EXPECT_EQ(Skip(64LL * kMiB, slices), 2);
 }
 
+TEST_F(CompactUtilsTest, SkipEquivalentHolesLeaveTwoTailSlices) {
+  constexpr int32_t kMiB = 1024 * 1024;
+  std::vector<Slice> slices;
+  slices.reserve(99);
+  for (int i = 0; i < 97; ++i) {
+    slices.push_back(CreateSlice(0, 0, 2 * kMiB));
+  }
+  // These small adjacent tails are below the 1 MiB skip threshold. Keeping
+  // them outside the hole range lets all 97 equivalent holes remain skippable.
+  slices.push_back(CreateSlice(101, 2 * kMiB, 256 * 1024));
+  slices.push_back(CreateSlice(102, 2 * kMiB + 256 * 1024, 256 * 1024));
+
+  EXPECT_EQ(Skip(0, slices), 97);
+}
+
 }  // namespace compaction
 }  // namespace vfs
 }  // namespace client
