@@ -49,6 +49,10 @@ namespace fuse {
 DEFINE_string(fuse_mount_options, "default_permissions",
               "mount options for libfuse");
 
+DEFINE_string(fuse_subtype, "dingofs",
+              "fuse subtype mount option; empty mounts as plain 'fuse' "
+              "(required by xfstests, which expects fstype == FSTYP=fuse)");
+
 DEFINE_bool(fuse_use_single_thread, false, "use single thread for libfuse");
 DEFINE_validator(fuse_use_single_thread, brpc::PassValidate);
 
@@ -134,7 +138,10 @@ int FuseServer::AddMountOptions() {
 
   //  Values shown in "df -T" and friends first column "Filesystem",DindoFS +
   //  filesystem name
-  if (FuseAddOpts(&args_, (const char*)"subtype=dingofs") != 0) return 1;
+  if (!FLAGS_fuse_subtype.empty()) {
+    std::string subtype_opt = fmt::format("subtype={}", FLAGS_fuse_subtype);
+    if (FuseAddOpts(&args_, subtype_opt.c_str()) != 0) return 1;
+  }
 
   std::string arg_value =
       fmt::format("fsname=DingoFS:{}", mount_option_->fs_name);
