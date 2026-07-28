@@ -1109,9 +1109,6 @@ class FallocateOperation : public Operation {
     uint64_t offset;
     uint64_t len;
 
-    uint64_t slice_id{0};
-    uint32_t slice_num{0};
-
     uint64_t chunk_size{0};
     uint64_t block_size{0};
   };
@@ -1218,7 +1215,6 @@ class FlushFileOperation : public Operation {
     ExtraParam(const std::string& data) : data(data) {}
     const std::string& data;
     uint64_t length;
-    uint64_t slice_id{0};
     uint64_t chunk_size{0};
     bool is_final{false};
   };

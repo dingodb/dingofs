@@ -995,7 +995,6 @@ class FallocateRunTest : public ::testing::Test {
     param.mode = mode;
     param.offset = offset;
     param.len = len;
-    param.slice_num = slice_num;
     param.chunk_size = kFallocChunkSize;
     param.block_size = kFallocBlockSize;
     return param;

@@ -1314,10 +1314,6 @@ Status FileSystem::FlushFile(Context& ctx, Ino ino, const FlushFileParam& param,
     }
   }
 
-  if (!slice_id_generator_->GenID(1, extra_param.slice_id)) {
-    return Status(pb::error::EALLOC_ID, "generate slice id fail");
-  }
-
   trace.RecordElapsedTime("prepare");
 
   FlushFileOperation operation(trace, fs_id_, ino, extra_param);
@@ -3102,18 +3098,12 @@ Status FileSystem::Fallocate(Context& ctx, Ino ino, int32_t mode, uint64_t offse
 
   utils::Duration duration;
 
-  uint64_t slice_num = 0;
-  uint64_t slice_id = 0;
   if (mode == 0) {
     // Plain preallocate: extend file size and reserve slices for the new tail.
     uint64_t new_length = offset + len;
     if (new_length > inode->Length()) {
       if (!quota_manager_.CheckQuota(trace, ino, new_length - inode->Length(), 0)) {
         return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
-      }
-      slice_num = ((new_length - inode->Length()) / fs_info_->GetChunkSize()) + 1;
-      if (!slice_id_generator_->GenID(slice_num, 0, slice_id)) {
-        return Status(pb::error::EALLOC_ID, "generate slice id fail");
       }
     }
   } else if (mode & (FALLOC_FL_PUNCH_HOLE | FALLOC_FL_ZERO_RANGE)) {
@@ -3129,10 +3119,6 @@ Status FileSystem::Fallocate(Context& ctx, Ino ino, int32_t mode, uint64_t offse
         }
       }
     }
-    slice_num = (len / fs_info_->GetChunkSize()) + 1;
-    if (!slice_id_generator_->GenID(slice_num, 0, slice_id)) {
-      return Status(pb::error::EALLOC_ID, "generate slice id fail");
-    }
   }
 
   FallocateOperation::Param param;
@@ -3143,16 +3129,14 @@ Status FileSystem::Fallocate(Context& ctx, Ino ino, int32_t mode, uint64_t offse
   param.len = len;
   param.block_size = fs_info_->GetBlockSize();
   param.chunk_size = fs_info_->GetChunkSize();
-  param.slice_id = slice_id;
-  param.slice_num = slice_num;
 
   FallocateOperation operation(trace, param);
 
   trace.RecordElapsedTime("prepare");
 
-  LOG_DEBUG << fmt::format("[fs.{}.{}.{}][{}us] fallocate finish, param({}|{}|{}|{}|{}) status({}).", fs_id_, ino,
+  LOG_DEBUG << fmt::format("[fs.{}.{}.{}][{}us] fallocate finish, param({}|{}|{}) status({}).", fs_id_, ino,
                            ctx.RequestId(), trace.GetReqTypeInt(), duration.ElapsedUs(), parse_mode_fn(mode), offset,
-                           len, slice_id, slice_num, status.error_str());
+                           len, status.error_str());
 
   status = RunOperation(&operation);
   trace.RecordElapsedTime("resume");
