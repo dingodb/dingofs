@@ -211,6 +211,15 @@ DECLARE_uint32(storage_upload_retry_backoff_base_ms);
 // base * tried, capped at 10 seconds.
 DECLARE_uint32(storage_download_retry_backoff_base_ms);
 
+// Maximum tries (including the first attempt) for downloading one block that
+// storage reports as not found; only applied by callers that opt in
+// (foreground reads racing a writeback upload). Set to 1 to disable.
+DECLARE_uint32(storage_download_notfound_max_tries);
+
+// Base backoff in milliseconds between notfound download retries, the real
+// backoff is base * tried, capped at 10 seconds.
+DECLARE_uint32(storage_download_notfound_retry_backoff_base_ms);
+
 // Number of worker threads for async storage upload tasks.
 DECLARE_uint64(storage_upload_thread_pool_size);
 

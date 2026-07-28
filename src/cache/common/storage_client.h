@@ -64,11 +64,15 @@ class TaskClosure : public Closure {
 // Backoff before the tried-th retry (tried starts from 1):
 //   upload:   min(base * tried * tried, 60s)
 //   download: min(base * tried, 10s)
+//   notfound: min(base * tried, 10s)
 uint64_t UploadRetryBackoffMs(uint32_t tried);
 uint64_t DownloadRetryBackoffMs(uint32_t tried);
+uint64_t NotFoundRetryBackoffMs(uint32_t tried);
 
 struct RetryOption {
-  uint32_t max_tries{0};  // 0 means use the corresponding FLAGS default
+  uint32_t max_tries{0};       // 0 means use the corresponding FLAGS default
+  bool retry_notfound{false};  // honored by Range only: bounded retry on
+                               // NotFound (writeback upload still in flight)
 };
 
 // The layer that owns storage-request retry: sdk-internal retry is
@@ -85,7 +89,7 @@ class StorageClient {
   Status Put(BlockHandle handle, const IOBuffer& block,
              RetryOption option = {});
   Status Range(BlockHandle handle, off_t offset, size_t length,
-               IOBuffer* buffer);
+               IOBuffer* buffer, RetryOption option = {});
 
  private:
   // Why use bthread::ExecutionQueue?
@@ -128,6 +132,8 @@ class StorageClient {
   bvar::Adder<int64_t> num_upload_retry_{"dingofs_storage_upload_total_retry"};
   bvar::Adder<int64_t> num_download_retry_{
       "dingofs_storage_download_total_retry"};
+  bvar::Adder<int64_t> num_download_notfound_retry_{
+      "dingofs_storage_download_notfound_total_retry"};
   bvar::Adder<int64_t> num_async_put_{"dingofs_storage_num_async_put"};
   bvar::Adder<int64_t> pending_async_put_{"dingofs_storage_pending_async_put"};
 };

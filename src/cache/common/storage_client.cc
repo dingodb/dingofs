@@ -59,6 +59,20 @@ DEFINE_uint32(storage_download_retry_backoff_base_ms, 300,
               "real backoff is base * tried, capped at 10 seconds");
 DEFINE_validator(storage_download_retry_backoff_base_ms, brpc::PassValidate);
 
+DEFINE_uint32(storage_download_notfound_max_tries, 8,
+              "maximum tries (including the first attempt) for downloading "
+              "one block that storage reports as not found; only applied by "
+              "callers that opt in (foreground reads racing a writeback "
+              "upload); set to 1 to disable notfound retry");
+DEFINE_validator(storage_download_notfound_max_tries, brpc::PassValidate);
+
+DEFINE_uint32(storage_download_notfound_retry_backoff_base_ms, 500,
+              "base backoff in milliseconds between notfound download "
+              "retries, the real backoff is base * tried, capped at 10 "
+              "seconds");
+DEFINE_validator(storage_download_notfound_retry_backoff_base_ms,
+                 brpc::PassValidate);
+
 DEFINE_uint64(storage_upload_thread_pool_size, 4,
               "thread pool size for upload tasks");
 
@@ -72,6 +86,11 @@ uint64_t UploadRetryBackoffMs(uint32_t tried) {
 
 uint64_t DownloadRetryBackoffMs(uint32_t tried) {
   uint64_t base = FLAGS_storage_download_retry_backoff_base_ms;
+  return std::min(base * tried, kDownloadBackoffCapMs);
+}
+
+uint64_t NotFoundRetryBackoffMs(uint32_t tried) {
+  uint64_t base = FLAGS_storage_download_notfound_retry_backoff_base_ms;
   return std::min(base * tried, kDownloadBackoffCapMs);
 }
 
@@ -228,12 +247,22 @@ Status StorageClient::PutAttempt(const BlockHandle& handle,
 }
 
 Status StorageClient::Range(BlockHandle handle, off_t offset, size_t length,
-                            IOBuffer* buffer) {
+                            IOBuffer* buffer, RetryOption option) {
   if (!running_.load(std::memory_order_acquire)) {
     return Status::Abort("storage client is not running");
   }
 
-  uint32_t max_tries = std::max(FLAGS_storage_download_max_tries, 1U);
+  uint32_t max_tries = option.max_tries > 0 ? option.max_tries
+                                            : FLAGS_storage_download_max_tries;
+  max_tries = std::max(max_tries, 1U);
+  // With writeback another client commits metadata before its block upload
+  // finishes; opted-in callers wait out that window with a NotFound budget
+  // independent from the generic retriable one, so alternating 404s and
+  // transient errors cannot starve either budget.
+  uint32_t notfound_max_tries =
+      option.retry_notfound
+          ? std::max(FLAGS_storage_download_notfound_max_tries, 1U)
+          : 1;
 
   // The caller pre-allocates a single backing block (slab/RDMA registered);
   // only one attempt is in flight at a time, so the same buffer is safely
@@ -241,7 +270,9 @@ Status StorageClient::Range(BlockHandle handle, off_t offset, size_t length,
   char* data = buffer->Fetch1();
 
   Status status;
-  for (uint32_t tried = 1;; tried++) {
+  uint32_t tried = 0;           // failed attempts with generic retriable errors
+  uint32_t notfound_tried = 0;  // failed attempts with NotFound
+  while (true) {
     size_t actual_len = 0;
     status = RangeAttempt(handle, offset, length, data, &actual_len);
     if (status.ok()) {
@@ -256,31 +287,45 @@ Status StorageClient::Range(BlockHandle handle, off_t offset, size_t length,
         return Status::Internal("downloaded block too short");
       }
       return status;
-    } else if (status.IsNotFound()) {
-      LOG(WARNING) << "Download block failed, object not found: key = "
-                   << handle.Filename()
-                   << ", status = " << status.ToString();
-      return status;
+    }
+
+    uint64_t backoff_ms;
+    if (status.IsNotFound()) {
+      if (++notfound_tried >= notfound_max_tries) {
+        LOG(WARNING) << "Download block failed, object not found: key = "
+                     << handle.Filename() << ", tried(" << notfound_tried
+                     << "/" << notfound_max_tries
+                     << "), status = " << status.ToString();
+        return status;
+      }
+      backoff_ms = NotFoundRetryBackoffMs(notfound_tried);
+      num_download_notfound_retry_ << 1;
+      LOG(WARNING) << "Retry download block, object not found (writeback "
+                      "upload may still be in flight): key = "
+                   << handle.Filename() << ", offset = " << offset
+                   << ", length = " << length << ", tried(" << notfound_tried
+                   << "/" << notfound_max_tries << "), backoff(" << backoff_ms
+                   << "ms)";
     } else if (!IsRetriable(status)) {
       LOG(ERROR) << "Give up downloading block for unretriable error: key = "
                  << handle.Filename() << ", offset = " << offset
                  << ", length = " << length
                  << ", status = " << status.ToString();
       return status;
-    } else if (tried >= max_tries) {
+    } else if (++tried >= max_tries) {
       LOG(ERROR) << "Download block exceed max tries: key = "
                  << handle.Filename() << ", offset = " << offset
                  << ", length = " << length << ", tried(" << tried << "/"
                  << max_tries << "), status = " << status.ToString();
       return status;
+    } else {
+      backoff_ms = DownloadRetryBackoffMs(tried);
+      num_download_retry_ << 1;
+      LOG(WARNING) << "Retry download block: key = " << handle.Filename()
+                   << ", offset = " << offset << ", length = " << length
+                   << ", tried(" << tried << "/" << max_tries << "), backoff("
+                   << backoff_ms << "ms), status = " << status.ToString();
     }
-
-    auto backoff_ms = DownloadRetryBackoffMs(tried);
-    num_download_retry_ << 1;
-    LOG(WARNING) << "Retry download block: key = " << handle.Filename()
-                 << ", offset = " << offset << ", length = " << length
-                 << ", tried(" << tried << "/" << max_tries << "), backoff("
-                 << backoff_ms << "ms), status = " << status.ToString();
 
     if (!BackoffSleep(backoff_ms)) {
       return Status::Abort("storage client is shutting down");
