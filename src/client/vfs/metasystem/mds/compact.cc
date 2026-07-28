@@ -25,7 +25,7 @@ namespace meta {
 const std::string kCompactWorkerSetName = "compact_worker_set";
 
 DEFINE_uint32(vfs_compact_worker_num, 8, "number of compact workers");
-DEFINE_uint32(vfs_compact_worker_max_pending_num, 8096,
+DEFINE_uint32(vfs_compact_worker_max_pending_num, 256,
               "compact worker max pending num");
 DEFINE_bool(vfs_compact_worker_use_pthread, true, "compact worker use pthread");
 
@@ -97,8 +97,16 @@ Status CompactChunkTask::Compact() {
   mds::ChunkEntry chunk_entry;
   status = mds_client_.CompactChunk(ctx, ino_, chunk_->GetIndex(), param,
                                     chunk_entry);
-  if (!status.ok() && !status.IsInvalidParam() && !status.IsTimeout()) {
-    return status;
+  if (!status.ok()) {
+    Status cleanup_status =
+        compactor_.CleanupUncommittedSlices(ctx, new_slices);
+    if (!cleanup_status.ok()) {
+      LOG(ERROR) << fmt::format(
+          "[meta.compact.{}.{}.{}] cleanup slices fail, status({}).", ino_,
+          chunk_index, Id(), cleanup_status.ToString());
+    }
+
+    if (!status.IsInvalidParam() && !status.IsTimeout()) return status;
   }
 
   if (status.IsTimeout()) chunk_->SetNotCompleted();
@@ -145,7 +153,12 @@ Status CompactProcessor::LaunchCompact(Ino ino, InodeSPtr inode,
 
   int64_t hash_id = ino + chunk->GetIndex();
   if (!executor_.ExecuteByHash(hash_id, task, false)) {
-    return Status::Internal("commit compact task fail");
+    LOG(WARNING) << fmt::format(
+        "[meta.compact.{}.{}] commit compact task fail, beyond max pending "
+        "num.",
+        ino, chunk->GetIndex());
+
+    return Status::Internal("commit compact task fail, beyond max pending num");
   }
 
   if (!is_async) {
