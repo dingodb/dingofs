@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-#include "common/status.h"
-
 #include <gtest/gtest.h>
 
 #include <cerrno>
+
+#include "common/status.h"
 
 namespace dingofs {
 
@@ -107,6 +107,7 @@ TEST(StatusTest, ToSysErrNoMapsEachCodeToExpectedErrno) {
   EXPECT_EQ(Status::Exist("").ToSysErrNo(), EEXIST);
   EXPECT_EQ(Status::NotFound("").ToSysErrNo(), ENOENT);
   EXPECT_EQ(Status::Deleted("").ToSysErrNo(), ENOENT);
+  EXPECT_EQ(Status::FileTooLarge("").ToSysErrNo(), EFBIG);
 }
 
 TEST(StatusTest, ToStringNamesEachRemainingErrorCode) {
