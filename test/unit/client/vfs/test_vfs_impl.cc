@@ -27,9 +27,11 @@
 #include "client/vfs/components/uid_gid_mapper.h"
 #include "client/vfs/data/writer_table.h"
 #include "client/vfs/data_buffer.h"
+#include "client/vfs/metasystem/mds/rpc.h"
 #include "client/vfs/vfs_impl.h"
 #include "common/blockaccess/accesser_common.h"
 #include "common/const.h"
+#include "common/file_size.h"
 #include "common/status.h"
 #include "common/trace/trace_manager.h"
 #include "common/writemempool/write_mem_pool.h"
@@ -152,6 +154,74 @@ TEST_F(VFSImplTest, GetAttr_DelegatesToMetaSystem) {
   Status s = vfs_->GetAttr(ctx_, 55u, &out);
   EXPECT_TRUE(s.ok());
   EXPECT_EQ(out.ino, 55u);
+}
+
+TEST_F(VFSImplTest, SetAttr_RejectsFileSizeAboveLimitBeforeMetaCall) {
+  Attr in;
+  Attr out;
+  ASSERT_TRUE(TryGetMaxFileSize(mock_hub_->GetFsInfo().chunk_size, &in.length));
+  ++in.length;
+
+  EXPECT_CALL(*mock_meta_system_, SetAttr(_, _, _, _, _)).Times(0);
+  Status s = vfs_->SetAttr(ctx_, 55, kSetAttrSize, in, &out);
+
+  EXPECT_TRUE(s.IsFileTooLarge()) << s.ToString();
+  EXPECT_EQ(s.ToSysErrNo(), EFBIG);
+}
+
+TEST_F(VFSImplTest, Fallocate_RejectsRangeAboveLimit) {
+  uint64_t max_file_size = 0;
+  ASSERT_TRUE(
+      TryGetMaxFileSize(mock_hub_->GetFsInfo().chunk_size, &max_file_size));
+
+  Status s = vfs_->Fallocate(ctx_, 55, 0, max_file_size - 1, 2);
+
+  EXPECT_TRUE(s.IsFileTooLarge()) << s.ToString();
+  EXPECT_EQ(s.ToSysErrNo(), EFBIG);
+}
+
+TEST_F(VFSImplTest, CopyFileRange_RejectsDestinationAboveLimit) {
+  uint64_t max_file_size = 0;
+  ASSERT_TRUE(
+      TryGetMaxFileSize(mock_hub_->GetFsInfo().chunk_size, &max_file_size));
+  uint64_t copied = 123;
+
+  Status s = vfs_->CopyFileRange(ctx_, 55, 0, 0, 56, max_file_size - 1, 0, 2, 0,
+                                 &copied);
+
+  EXPECT_TRUE(s.IsFileTooLarge()) << s.ToString();
+  EXPECT_EQ(s.ToSysErrNo(), EFBIG);
+  EXPECT_EQ(copied, 0);
+}
+
+TEST_F(VFSImplTest, Write_RejectsOffsetAtLimitBeforeBuffering) {
+  auto writer_table = std::make_unique<WriterTable>(mock_hub_);
+  ON_CALL(*mock_hub_, GetWriterTable())
+      .WillByDefault(Return(writer_table.get()));
+  EXPECT_CALL(*mock_hub_, GetWriterTable()).Times(AnyNumber());
+
+  constexpr Ino kIno = 57;
+  ON_CALL(*mock_meta_system_, Open(_, kIno, _, _))
+      .WillByDefault(Return(Status::OK()));
+  ON_CALL(*mock_meta_system_, Close(_, kIno, _))
+      .WillByDefault(Return(Status::OK()));
+
+  uint64_t fh = 0;
+  ASSERT_TRUE(vfs_->Open(ctx_, kIno, O_WRONLY, &fh).ok());
+
+  uint64_t max_file_size = 0;
+  ASSERT_TRUE(
+      TryGetMaxFileSize(mock_hub_->GetFsInfo().chunk_size, &max_file_size));
+  EXPECT_CALL(*mock_meta_system_, Write(_, _, _, _, _, _)).Times(0);
+
+  char byte = 'x';
+  uint64_t written = 123;
+  Status s = vfs_->Write(ctx_, kIno, &byte, 1, max_file_size, fh, &written);
+
+  EXPECT_TRUE(s.IsFileTooLarge()) << s.ToString();
+  EXPECT_EQ(s.ToSysErrNo(), EFBIG);
+  EXPECT_EQ(written, 0);
+  vfs_->Release(ctx_, kIno, fh);
 }
 
 // --- 4b. Write short-write: metadata gets out_wsize, not the requested size.

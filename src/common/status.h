@@ -200,6 +200,8 @@ class Status {
         return EIO;
       case kNotFound:
         return ENOENT;
+      case kFileTooLarge:
+        return EFBIG;
       case kStop:
         return EIO;
       case kNotFit:

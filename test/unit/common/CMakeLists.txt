@@ -19,6 +19,7 @@ add_subdirectory(writemempool)
 add_executable(test_common
   main.cc
   test_read_mem_pool.cc
+  test_file_size.cc
   test_status.cc
   test_string_slice.cc
   test_helper.cc
