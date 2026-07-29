@@ -1,0 +1,135 @@
+/*
+ * Copyright (c) 2026 dingodb.com, Inc. All Rights Reserved
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#ifndef DINGOFS_CACHE_CORE_IO_IO_RING_H_
+#define DINGOFS_CACHE_CORE_IO_IO_RING_H_
+
+#include <glog/logging.h>
+#include <liburing.h>
+
+#include <cstddef>
+#include <cstdint>
+#include <vector>
+
+#include "cache/v1/core/io/completion.h"
+#include "cache/v1/core/reactor/poller.h"
+
+namespace dingofs {
+namespace cache {
+
+inline constexpr uint16_t kNoBufIndex = 0xffff;
+
+class FixedBuffers {
+ public:
+  explicit FixedBuffers(io_uring* ring) : ring_(ring) {}
+
+  FixedBuffers(const FixedBuffers&) = delete;
+  FixedBuffers& operator=(const FixedBuffers&) = delete;
+
+  int Register(void* base, size_t bytes, size_t chunk);
+  void Unregister();
+
+  bool registered() const { return bytes_ != 0; }
+
+  uint16_t IndexOf(const void* p) const {
+    auto offset = static_cast<size_t>(static_cast<const char*>(p) - base_);
+    return offset < bytes_ ? static_cast<uint16_t>(offset >> chunk_shift_)
+                           : kNoBufIndex;
+  }
+
+ private:
+  io_uring* ring_;
+  const char* base_ = nullptr;
+  size_t bytes_ = 0;
+  unsigned chunk_shift_ = 0;
+};
+
+class FixedFiles {
+ public:
+  explicit FixedFiles(io_uring* ring) : ring_(ring) {}
+
+  FixedFiles(const FixedFiles&) = delete;
+  FixedFiles& operator=(const FixedFiles&) = delete;
+
+  int Acquire(int fd);
+  void Release(int slot);
+  void Unregister();
+
+ private:
+  static constexpr unsigned kSlots = 1024;
+
+  io_uring* ring_;
+  bool registered_ = false;
+  std::vector<int> free_slots_;
+};
+
+struct IoRingOption {
+  unsigned queue_len = 512;
+};
+
+class IoRing final : public Poller {
+ public:
+  explicit IoRing(const IoRingOption& option = {});
+  ~IoRing() override;
+
+  IoRing(const IoRing&) = delete;
+  IoRing& operator=(const IoRing&) = delete;
+
+  io_uring_sqe* GetSqe(IoCompletion* c);
+  FixedBuffers& buffers() { return buffers_; }
+  FixedFiles& files() { return files_; }
+
+  bool Poll() override;
+  bool PurePoll() override { return inflight_ > 0; }
+  bool TryEnterInterruptMode() override { return inflight_ == 0; }
+  void Flush() override { SubmitAndCollect(); }
+
+ private:
+  static constexpr unsigned kCqBatch = 256;
+
+  void Init(unsigned queue_len);
+  void SubmitAndCollect();
+  unsigned Reap();
+
+  io_uring ring_;
+  unsigned inflight_ = 0;
+  bool reaping_ = false;
+  FixedBuffers buffers_{&ring_};
+  FixedFiles files_{&ring_};
+};
+
+inline thread_local IoRing* tls_io_ring = nullptr;
+
+inline IoRing& ThisIoRing() {
+  DCHECK(tls_io_ring != nullptr) << "no io ring on this thread";
+  return *tls_io_ring;
+}
+
+inline bool HasIoRing() { return tls_io_ring != nullptr; }
+
+template <typename Derived>
+class UringAwaiter : public IoCompletion, public IoAwaiter<Derived> {
+ public:
+  void Complete(int32_t res) noexcept override { this->ResumeLater(res); }
+
+ protected:
+  ~UringAwaiter() = default;
+};
+
+}  // namespace cache
+}  // namespace dingofs
+
+#endif  // DINGOFS_CACHE_CORE_IO_IO_RING_H_
