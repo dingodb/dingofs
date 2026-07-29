@@ -110,6 +110,11 @@ cd build
 cmake ..
 make -j 32
 ```
+
+## 🧪 Testing
+
+To run the filesystem test suite ([xfstests](https://git.kernel.org/pub/scm/fs/xfs/xfstests-dev.git/)) against DingoFS, see [xfstests/README.md](./xfstests/README.md).
+
 ## 🙏 Special Thanks
 
 ### DataCanvas

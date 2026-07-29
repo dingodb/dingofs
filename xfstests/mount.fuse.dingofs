@@ -1,0 +1,173 @@
+#!/bin/bash
+# xfstests mount helper for DingoFS.
+#
+# Invoked by mount(8) as:  mount -t fuse.dingofs <dev> <mnt> -o <opts>
+# after xfstests is configured with FSTYP=fuse + FUSE_SUBTYP=.dingofs
+# (see local.config).
+#
+# <dev> is both the DingoFS filesystem name and the FUSE mount source.
+# xfstests unmounts FUSE scratch filesystems by device, so keep it free of ':'
+# (util-linux interprets strings containing ':' as remote filesystem specs).
+#
+# Install:  see setup.sh (writes /etc/dingofs-xfstests.conf and copies this
+# helper to /sbin/mount.fuse.dingofs).
+
+set -u
+
+# All parameters come from the conf written by setup.sh — mount(8) may invoke
+# this helper with a stripped environment, so the conf file is the only
+# reliable channel and a missing conf means a broken install: fail loudly
+# instead of falling back to guessed defaults.
+#
+# meta-url resolution, first match wins ({fsname} is substituted):
+#   1. META_URL_<fsname>   per-fs override (non-alnum chars in fsname -> '_')
+#   2. META_URL_TEMPLATE   e.g. 'mds://10.0.0.1:7400/{fsname}'
+#   3. built-in default    'local://{fsname}?storage=file&path=<base_dir>/storage'
+CONF=/etc/dingofs-xfstests.conf
+if [ ! -r "$CONF" ]; then
+  >&2 echo "mount.fuse.dingofs: $CONF not found — run xfstests/setup.sh first"
+  exit 1
+fi
+. "$CONF"
+
+if [ -z "${BASE_ROOT:-}" ]; then
+  >&2 echo "mount.fuse.dingofs: BASE_ROOT not set in $CONF — re-run xfstests/setup.sh"
+  exit 1
+fi
+CLIENT_BIN="${CLIENT_BIN:-}"
+META_URL_TEMPLATE="${META_URL_TEMPLATE:-}"
+EXTRA_FLAGS="${EXTRA_FLAGS:-}"
+MOUNT_WAIT_SECS=30
+EXIT_WAIT_SECS=30
+
+dev="$1"; shift
+mnt="$1"; shift
+# skip "-o"
+shift
+mntopts="${1:-}"; shift || true
+
+if ( echo "$mntopts" | grep -q remount ); then
+  exec mount -i "$dev" "$mnt" -o "$mntopts"
+fi
+
+case "$dev" in
+  *[!A-Za-z0-9_.-]*|"")
+    >&2 echo "mount.fuse.dingofs: device must be a non-empty filesystem name using [A-Za-z0-9_.-], got '$dev'"
+    exit 1
+    ;;
+  *) fsname="$dev" ;;
+esac
+
+if [ -z "$CLIENT_BIN" ] || [ ! -x "$CLIENT_BIN" ]; then
+  >&2 echo "mount.fuse.dingofs: dingo-client not found (set CLIENT_BIN in /etc/dingofs-xfstests.conf)"
+  exit 1
+fi
+
+base_dir="$BASE_ROOT/$fsname"
+mkdir -p "$base_dir/storage" "$base_dir/run"
+
+# Per-instance dummy-server port. The port is mandatory and must differ
+# between the concurrently-running TEST and SCRATCH clients: the client treats
+# a bind failure as fatal, and its built-in default (10000) is shared by every
+# instance. Default: stable cksum hash of the fsname into 11900-11989, so a
+# remount reuses its port; override per fs with PORT_<fsname> in the conf.
+var_suffix="$(printf %s "$fsname" | tr -c 'A-Za-z0-9_' '_')"
+port_var="PORT_$var_suffix"
+port="${!port_var:-$((11900 + $(printf %s "$fsname" | cksum | cut -d' ' -f1) % 90))}"
+
+fsname_var="META_URL_$var_suffix"
+meta_url="${!fsname_var:-}"
+if [ -z "$meta_url" ] && [ -n "$META_URL_TEMPLATE" ]; then
+  meta_url="${META_URL_TEMPLATE//\{fsname\}/$fsname}"
+fi
+if [ -z "$meta_url" ]; then
+  meta_url="local://${fsname}?storage=file&path=${base_dir}/storage"
+fi
+
+# The local metasystem holds a leveldb LOCK under the base dir; after umount(2)
+# returns, the old client needs a moment to shut down and release it (an mds://
+# client likewise still holds the dummy-server port). Wait for any previous
+# instance of this fs to exit before starting a new one. Match by the
+# DINGOFS_BASE_DIR environment variable we set on the client (same approach as
+# reset.sh): it identifies the instance regardless of the client binary name
+# and stays valid even if the meta-url in the conf was changed between mounts.
+# This helper itself never has DINGOFS_BASE_DIR in its environment, so there is
+# no self-match. grep -z treats the NUL-separated environ as records; the file
+# is passed as an argument (not a shell redirect) so a process vanishing
+# mid-scan cannot leak an error message into the mount output.
+deadline=$((SECONDS + EXIT_WAIT_SECS))
+while :; do
+  busy=0
+  for environ in /proc/[0-9]*/environ; do
+    if grep -qzFx "DINGOFS_BASE_DIR=$base_dir" "$environ" 2>/dev/null; then
+      busy=1
+      break
+    fi
+  done
+  [ "$busy" -eq 0 ] && break
+  if [ "$SECONDS" -ge "$deadline" ]; then
+    >&2 echo "mount.fuse.dingofs: previous dingo-client for '$fsname' still running"
+    exit 1
+  fi
+  sleep 0.2
+done
+
+ulimit -n 1048576
+ulimit -c unlimited
+
+# Split EXTRA_FLAGS on whitespace WITHOUT pathname expansion (an unquoted
+# $EXTRA_FLAGS would glob-expand values like '--filter=*' against the cwd).
+read -r -a extra_args <<< "$EXTRA_FLAGS"
+
+if mountpoint -q "$mnt"; then
+  >&2 echo "mount.fuse.dingofs: $mnt is already mounted; refusing to treat an old mount as a new one"
+  exit 1
+fi
+
+# --fuse_subtype= mounts as plain fstype "fuse" so the fs type matches
+# xfstests' FSTYP=fuse (FUSE_SUBTYP only selects this mount helper).
+#
+# fsname: the client hardcodes "fsname=DingoFS:<fs>" but appends
+# fuse_mount_options AFTER it, and libfuse resolves duplicate options
+# last-one-wins — so appending "fsname=$dev" here makes the kernel report the
+# bare device string as the mount source, which xfstests compares against
+# TEST_DEV/SCRATCH_DEV verbatim. default_permissions is the flag's default
+# value and must be kept when overriding.
+env DINGOFS_BASE_DIR="$base_dir" \
+  "$CLIENT_BIN" "$meta_url" "$mnt" \
+  --daemonize=true \
+  --fuse_subtype= \
+  --fuse_mount_options="default_permissions,fsname=$dev" \
+  --vfs_dummy_server_port="$port" \
+  "${extra_args[@]}" \
+  > "$base_dir/run/client.out" 2>&1
+
+# --daemonize forks before the FUSE mount completes, so the parent returning
+# does not mean the mountpoint is live yet. mount(8) callers (xfstests) start
+# IO immediately after we return — poll until the mount is really up.
+deadline=$((SECONDS + MOUNT_WAIT_SECS))
+while :; do
+  read -r mounted_source mounted_type < <(
+    findmnt -rn -M "$mnt" -o SOURCE,FSTYPE 2>/dev/null
+  )
+  if [ "$mounted_source" = "$dev" ] && [ "$mounted_type" = "fuse" ]; then
+    # The mount table entry alone is not proof of a live filesystem: the
+    # client mounts first and only then starts its VFS, so a fatal init error
+    # (e.g. dummy-server port already in use) kills the client right after
+    # the mount appears. statfs(2) round-trips to the daemon and fails with
+    # ENOTCONN on such a corpse mount — keep polling so the timeout path
+    # reports the real startup error instead of "success".
+    if stat -f "$mnt" >/dev/null 2>&1; then
+      break
+    fi
+  fi
+  if [ "$SECONDS" -ge "$deadline" ]; then
+    >&2 echo "mount.fuse.dingofs: expected '$dev' (fuse) on $mnt did not appear in ${MOUNT_WAIT_SECS}s"
+    >&2 echo "mount.fuse.dingofs: inspect startup output in $base_dir/run/client.out"
+    >&2 echo "mount.fuse.dingofs: inspect daemon stdout and glog files in $base_dir/log/"
+    exit 1
+  fi
+  sleep 0.2
+done
+
+exit 0
