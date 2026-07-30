@@ -62,9 +62,6 @@ DEFINE_validator(mds_txn_max_retry_times, brpc::PassValidate);
 DEFINE_uint32(mds_txn_timeout_ms, 8000, "txn timeout ms.");
 DEFINE_validator(mds_txn_timeout_ms, brpc::PassValidate);
 
-DEFINE_uint32(mds_store_operation_merge_delay_us, 40, "merge operation delay us.");
-DEFINE_validator(mds_store_operation_merge_delay_us, brpc::PassValidate);
-
 DEFINE_bool(mds_tiny_file_data_enable, false, "enable tiny file data feature.");
 DEFINE_validator(mds_tiny_file_data_enable, brpc::PassValidate);
 
@@ -74,12 +71,16 @@ DEFINE_validator(mds_check_before_create_enable, brpc::PassValidate);
 DEFINE_uint32(mds_store_operation_dispatcher_num, 8, "number of store operation dispatchers.");
 DEFINE_validator(mds_store_operation_dispatcher_num, brpc::PassValidate);
 
+DEFINE_uint32(mds_store_operation_max_inflight_per_key, 4,
+              "max in-flight store transactions per grouping key; operations beyond it are parked and merged.");
+DEFINE_validator(mds_store_operation_max_inflight_per_key, brpc::PositiveInteger);
+
 DECLARE_uint32(mds_filesession_live_time_s);
 
 static const uint32_t kOpNameBufInitSize = 128;
 static const uint32_t kCleanCompactedSliceIntervalS = 180;  // 3 minutes
 
-static constexpr uint32_t kTryMaxCount = 5;
+static constexpr uint32_t kTryMaxCount = 10;
 
 static uint32_t CalWaitTimeUs(int retry) {
   // exponential backoff
@@ -4037,6 +4038,18 @@ bool OperationProcessor::AsyncRun(OperationSPtr operation, OperationTask::PostHa
   return ret;
 }
 
+static void AppendToBatchOperation(Operation* operation, BatchOperation& batch_operation) {
+  if (operation->IsCreateType()) {
+    batch_operation.create_operations.push_back(operation);
+
+  } else if (operation->IsSetAttrType()) {
+    batch_operation.setattr_operations.push_back(operation);
+
+  } else {
+    LOG(FATAL) << "[operation] invalid operation type.";
+  }
+}
+
 void OperationProcessor::Grouping(std::vector<Operation*>& operations, BatchOperationMap& batch_operation_map) {
   for (auto* operation : operations) {
     auto [it, inserted] = batch_operation_map.try_emplace(operation->GroupingKey());
@@ -4045,16 +4058,7 @@ void OperationProcessor::Grouping(std::vector<Operation*>& operations, BatchOper
       it->second.ino = operation->GetIno();
     }
 
-    auto& batch_operation = it->second;
-    if (operation->IsCreateType()) {
-      batch_operation.create_operations.push_back(operation);
-
-    } else if (operation->IsSetAttrType()) {
-      batch_operation.setattr_operations.push_back(operation);
-
-    } else {
-      LOG(FATAL) << "[operation] invalid operation type.";
-    }
+    AppendToBatchOperation(operation, it->second);
   }
 }
 
@@ -4088,7 +4092,6 @@ void OperationProcessor::ProcessOperation(Dispatcher& dispatcher) {
       break;
     }
 
-    bool waited = false;
     uint32_t try_count = 0;
     do {
       operations.Dequeue(operation);
@@ -4097,13 +4100,6 @@ void OperationProcessor::ProcessOperation(Dispatcher& dispatcher) {
         operation = nullptr;
 
       } else {
-        if (stage_operations.size() == 1) break;
-
-        if (!waited && FLAGS_mds_store_operation_merge_delay_us > 0) {
-          waited = true;
-          std::this_thread::sleep_for(std::chrono::microseconds(FLAGS_mds_store_operation_merge_delay_us));
-        }
-
         ++try_count;
       }
 
@@ -4111,8 +4107,8 @@ void OperationProcessor::ProcessOperation(Dispatcher& dispatcher) {
 
     // grouping operations
     Grouping(stage_operations, batch_operation_map);
-    for (auto& [_, batch_operation] : batch_operation_map) {
-      LaunchExecuteBatchOperation(std::move(batch_operation));
+    for (auto& [key, batch_operation] : batch_operation_map) {
+      LaunchOrParkBatchOperation(dispatcher, key, std::move(batch_operation));
     }
     batch_operation_map.clear();
   }
@@ -4124,15 +4120,86 @@ void OperationProcessor::ProcessOperation(Dispatcher& dispatcher) {
   }
 }
 
-void OperationProcessor::LaunchExecuteBatchOperation(BatchOperation&& batch_operation) {
+// Group commit: a key that already reached the in-flight transaction limit
+// gets its new operations parked; a running transaction picks them up when it
+// finishes. Batch size therefore grows with load without any artificial delay.
+void OperationProcessor::LaunchOrParkBatchOperation(Dispatcher& dispatcher, const Operation::Key& key,
+                                                    BatchOperation&& batch_operation) {
+  SetElapsedTime(batch_operation, "store_queue");
+
+  bool parked = false;
+  dispatcher.parked_map_.withWLock(
+      [&](Dispatcher::Map& map) {
+        auto [it, inserted] = map.try_emplace(key, Dispatcher::ParkEntry{.inflight = 0, .operations = {}});
+        auto& park_entry = it->second;
+        if (park_entry.inflight >= FLAGS_mds_store_operation_max_inflight_per_key) {
+          for (auto* operation : batch_operation.setattr_operations) park_entry.operations.push_back(operation);
+          for (auto* operation : batch_operation.create_operations) park_entry.operations.push_back(operation);
+          parked = true;
+
+        } else {
+          ++park_entry.inflight;
+        }
+      },
+      key.fs_id, key.ino);
+
+  if (!parked) LaunchExecuteBatchOperation(dispatcher, key, std::move(batch_operation));
+}
+
+// Take the operations parked for `key`, at most one batch worth. Returns false
+// when nothing is parked, in which case this transaction slot is released.
+bool OperationProcessor::TakeParkedOperations(Dispatcher& dispatcher, const Operation::Key& key,
+                                              BatchOperation& batch_operation) {
+  bool ret = true;
+  std::vector<Operation*> operations;
+  dispatcher.parked_map_.withWLock(
+      [&](Dispatcher::Map& map) {
+        auto it = map.find(key);
+        if (it == map.end()) {
+          ret = false;
+
+        } else {
+          auto& park_entry = it->second;
+          const size_t batch_size = FLAGS_mds_store_operation_batch_size;
+
+          if (park_entry.operations.empty()) {
+            CHECK(park_entry.inflight > 0) << "[operation] in-flight count underflow.";
+            if (--park_entry.inflight == 0) map.erase(it);
+            ret = false;
+
+          } else if (park_entry.operations.size() <= batch_size) {
+            operations.swap(park_entry.operations);
+
+          } else {
+            operations.assign(park_entry.operations.begin(), park_entry.operations.begin() + batch_size);
+            park_entry.operations.erase(park_entry.operations.begin(), park_entry.operations.begin() + batch_size);
+          }
+        }
+      },
+      key.fs_id, key.ino);
+
+  if (!ret) return false;
+
+  for (auto* operation : operations) {
+    batch_operation.fs_id = operation->GetFsId();
+    batch_operation.ino = operation->GetIno();
+    AppendToBatchOperation(operation, batch_operation);
+  }
+
+  return true;
+}
+
+void OperationProcessor::LaunchExecuteBatchOperation(Dispatcher& dispatcher, const Operation::Key& key,
+                                                     BatchOperation&& batch_operation) {
   struct Params {
     OperationProcessor* self{nullptr};
+    Dispatcher* dispatcher{nullptr};
+    Operation::Key key;
     BatchOperation batch_operation;
   };
 
-  SetElapsedTime(batch_operation, "store_queue");
-
-  Params* params = new Params({.self = this, .batch_operation = std::move(batch_operation)});
+  Params* params =
+      new Params({.self = this, .dispatcher = &dispatcher, .key = key, .batch_operation = std::move(batch_operation)});
 
   bthread_t tid;
   bthread_attr_t attr = BTHREAD_ATTR_NORMAL;
@@ -4141,7 +4208,14 @@ void OperationProcessor::LaunchExecuteBatchOperation(BatchOperation&& batch_oper
           [](void* arg) -> void* {
             Params* params = reinterpret_cast<Params*>(arg);
 
-            params->self->ExecuteBatchOperation(params->batch_operation);
+            for (;;) {
+              params->self->ExecuteBatchOperation(params->batch_operation);
+
+              // Drain the operations that arrived while the transaction ran.
+              BatchOperation next_batch_operation;
+              if (!TakeParkedOperations(*params->dispatcher, params->key, next_batch_operation)) break;
+              params->batch_operation = std::move(next_batch_operation);
+            }
 
             delete params;
 
