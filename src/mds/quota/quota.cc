@@ -18,7 +18,6 @@
 #include <string>
 #include <vector>
 
-#include "common/const.h"
 #include "common/logging.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
@@ -30,6 +29,8 @@ namespace mds {
 namespace quota {
 
 static const uint32_t kMaxNotFoundCount = 30;
+
+static const uint32_t kMaxDepth = 4096;
 
 Quota::Quota(uint32_t fs_id, Ino ino, const QuotaEntry& quota) : fs_id_(fs_id), ino_(ino), quota_(quota) {
   last_time_ns_ = utils::TimestampNs();
@@ -219,7 +220,8 @@ bool DirQuotaMap::CheckQuota(Ino ino, int64_t byte_delta, int64_t inode_delta) {
   if (!HasQuota()) return true;
 
   Ino curr_ino = ino;
-  while (true) {
+  uint32_t depth = 0;
+  do {
     auto quota = GetQuota(curr_ino);
     if (quota != nullptr) {
       if (!quota->Check(byte_delta, inode_delta)) return false;
@@ -231,14 +233,17 @@ bool DirQuotaMap::CheckQuota(Ino ino, int64_t byte_delta, int64_t inode_delta) {
     if (!GetParent(curr_ino, parent)) break;
 
     curr_ino = parent;
-  }
+  } while (++depth <= kMaxDepth);
+
+  LOG(WARNING) << fmt::format("[quota.{}.{}] beyond max depth({}).", fs_id_, ino, depth);
 
   return true;
 }
 
 QuotaSPtr DirQuotaMap::GetNearestQuota(Ino ino) {
   Ino curr_ino = ino;
-  while (true) {
+  uint32_t depth = 0;
+  do {
     auto quota = GetQuota(curr_ino);
     if (quota != nullptr) return quota;
 
@@ -248,7 +253,9 @@ QuotaSPtr DirQuotaMap::GetNearestQuota(Ino ino) {
     if (!GetParent(curr_ino, parent)) break;
 
     curr_ino = parent;
-  }
+  } while (++depth <= kMaxDepth);
+
+  LOG(WARNING) << fmt::format("[quota.{}.{}] beyond max depth({}).", fs_id_, ino, depth);
 
   return nullptr;
 }
