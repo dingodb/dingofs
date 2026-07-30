@@ -104,7 +104,8 @@ class VFS {
   virtual Status Link(ContextSPtr ctx, Ino ino, Ino new_parent,
                       const std::string& new_name, Attr* attr) = 0;
 
-  virtual Status Open(ContextSPtr ctx, Ino ino, int flags, uint64_t* fh) = 0;
+  virtual Status Open(ContextSPtr ctx, Ino ino, int flags, uint64_t* fh,
+                      bool* keep_cache) = 0;
 
   virtual Status Create(ContextSPtr ctx, Ino parent, const std::string& name,
                         uint32_t uid, uint32_t gid, uint32_t mode, int flags,

@@ -60,7 +60,7 @@ class ChunkMemo {
   void Remember(Ino ino, uint32_t chunk_index, uint64_t version);
   void Forget(Ino ino);
   void Forget(Ino ino, uint32_t chunk_index);
-  void CleanExpired(uint64_t expire_time_ns);
+  void CleanExpired(uint64_t expire_time_s);
 
   uint64_t GetVersion(Ino ino, uint32_t chunk_index);
   std::vector<std::pair<uint32_t, uint64_t>> GetVersion(Ino ino);

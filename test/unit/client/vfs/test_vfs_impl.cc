@@ -201,13 +201,13 @@ TEST_F(VFSImplTest, Write_RejectsOffsetAtLimitBeforeBuffering) {
   EXPECT_CALL(*mock_hub_, GetWriterTable()).Times(AnyNumber());
 
   constexpr Ino kIno = 57;
-  ON_CALL(*mock_meta_system_, Open(_, kIno, _, _))
+  ON_CALL(*mock_meta_system_, Open(_, kIno, _, _, _))
       .WillByDefault(Return(Status::OK()));
   ON_CALL(*mock_meta_system_, Close(_, kIno, _))
       .WillByDefault(Return(Status::OK()));
 
   uint64_t fh = 0;
-  ASSERT_TRUE(vfs_->Open(ctx_, kIno, O_WRONLY, &fh).ok());
+  ASSERT_TRUE(vfs_->Open(ctx_, kIno, O_WRONLY, &fh, nullptr).ok());
 
   uint64_t max_file_size = 0;
   ASSERT_TRUE(
@@ -243,13 +243,13 @@ TEST_F(VFSImplTest, Write_ShortWrite_MetaGetsOutWsizeNotSize) {
   EXPECT_CALL(*mock_hub_, GetWriterTable()).Times(AnyNumber());
 
   const uint64_t ino = 300;
-  ON_CALL(*mock_meta_system_, Open(_, ino, _, _))
+  ON_CALL(*mock_meta_system_, Open(_, ino, _, _, _))
       .WillByDefault(Return(Status::OK()));
   ON_CALL(*mock_meta_system_, Close(_, ino, _))
       .WillByDefault(Return(Status::OK()));
 
   uint64_t fh = 0;
-  ASSERT_TRUE(vfs_->Open(ctx_, ino, O_WRONLY, &fh).ok());
+  ASSERT_TRUE(vfs_->Open(ctx_, ino, O_WRONLY, &fh, nullptr).ok());
 
   // Capture the size MetaSystem::Write receives (arg index 4).
   uint64_t meta_size = 0;
@@ -285,13 +285,13 @@ TEST_F(VFSImplTest, Write_MetaWriteFails_ReturnsErrorAfterDataBuffered) {
   // accepts the whole write.
 
   const uint64_t ino = 301;
-  ON_CALL(*mock_meta_system_, Open(_, ino, _, _))
+  ON_CALL(*mock_meta_system_, Open(_, ino, _, _, _))
       .WillByDefault(Return(Status::OK()));
   ON_CALL(*mock_meta_system_, Close(_, ino, _))
       .WillByDefault(Return(Status::OK()));
 
   uint64_t fh = 0;
-  ASSERT_TRUE(vfs_->Open(ctx_, ino, O_WRONLY, &fh).ok());
+  ASSERT_TRUE(vfs_->Open(ctx_, ino, O_WRONLY, &fh, nullptr).ok());
 
   // Writer accepts the data; the metadata update then fails.
   EXPECT_CALL(*mock_meta_system_, Write(_, ino, _, _, _, _))
@@ -327,11 +327,11 @@ TEST_F(VFSImplTest, Lookup_StatsFile_ReturnsVirtualAttr) {
 
 // --- 7. Open meta fail, no handle returned ---
 TEST_F(VFSImplTest, Open_MetaFail_NoHandle) {
-  EXPECT_CALL(*mock_meta_system_, Open(_, 100u, _, _))
+  EXPECT_CALL(*mock_meta_system_, Open(_, 100u, _, _, _))
       .WillOnce(Return(Status::Internal("meta error")));
 
   uint64_t fh = 0;
-  Status s = vfs_->Open(ctx_, 100u, 0, &fh);
+  Status s = vfs_->Open(ctx_, 100u, 0, &fh, nullptr);
   EXPECT_FALSE(s.ok());
   EXPECT_EQ(fh, 0u);
 }
@@ -342,7 +342,7 @@ TEST_F(VFSImplTest, Flush_StatsIno_ReturnsOk) {
   uint64_t fh = 0;
   // Open will try to dump bvar metrics - may or may not have data.
   // Just test that if open succeeds flush returns OK.
-  Status open_s = vfs_->Open(ctx_, kStatsIno, 0, &fh);
+  Status open_s = vfs_->Open(ctx_, kStatsIno, 0, &fh, nullptr);
   if (!open_s.ok()) {
     GTEST_SKIP() << "Skipping: no metrics data in .stats";
   }
@@ -359,7 +359,7 @@ TEST_F(VFSImplTest, Flush_StatsIno_ReturnsOk) {
 // --- 9. Release stats handle removes it ---
 TEST_F(VFSImplTest, Release_StatsHandle_RemovesHandle) {
   uint64_t fh = 0;
-  Status open_s = vfs_->Open(ctx_, kStatsIno, 0, &fh);
+  Status open_s = vfs_->Open(ctx_, kStatsIno, 0, &fh, nullptr);
   if (!open_s.ok()) {
     GTEST_SKIP() << "Skipping: no metrics data in .stats";
   }

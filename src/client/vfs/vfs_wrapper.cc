@@ -778,17 +778,21 @@ Status VFSWrapper::Link(const Context& ctx, Ino ino, Ino new_parent,
   return s;
 }
 
-Status VFSWrapper::Open(const Context& ctx, Ino ino, int flags, uint64_t* fh) {
+Status VFSWrapper::Open(const Context& ctx, Ino ino, int flags, uint64_t* fh,
+                        bool* keep_cache) {
   VLOG(2) << "VFSOpen ino: " << ino << " octal flags: " << std::oct << flags;
+  CHECK(fh != nullptr) << "fh is nullptr";
+  CHECK(keep_cache != nullptr) << "keep_cache is nullptr";
 
   auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::Open");
 
   Status s;
   AccessLogGuard log(
       [&]() {
-        return absl::StrFormat("[%s] open (%llu): %d %s %s [fh:%d]",
+        return absl::StrFormat("[%s] open (%llu): %d %s %s [fh:%d] %s",
                                ctx.ToShortString(), ino, flags,
-                               Helper::DescOpenFlags(flags), s.ToString(), *fh);
+                               Helper::DescOpenFlags(flags), s.ToString(), *fh,
+                               *keep_cache ? "true" : "false");
       },
       !dingofs::IsInternalIno(ino));
 
@@ -797,7 +801,7 @@ Status VFSWrapper::Open(const Context& ctx, Ino ino, int flags, uint64_t* fh) {
       !dingofs::IsInternalIno(ino));
 
   auto span_ctx = dingofs::SpanScope::GetContext(span);
-  s = vfs_->Open(span_ctx, ino, flags, fh);
+  s = vfs_->Open(span_ctx, ino, flags, fh, keep_cache);
   if (!s.ok()) op_metric.FailOp();
 
   return s;

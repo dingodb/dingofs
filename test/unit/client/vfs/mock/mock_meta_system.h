@@ -44,7 +44,9 @@ class MockMetaSystem : public MetaSystem {
                uint32_t uid, uint32_t gid, uint32_t mode, uint64_t rdev,
                Attr* attr),
               (override));
-  MOCK_METHOD(Status, Open, (ContextSPtr ctx, Ino ino, int flags, uint64_t fh),
+  MOCK_METHOD(Status, Open,
+              (ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
+               bool* keep_cache),
               (override));
   MOCK_METHOD(Status, Create,
               (ContextSPtr ctx, Ino parent, const std::string& name,

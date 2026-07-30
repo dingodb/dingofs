@@ -152,7 +152,8 @@ Status BindingClient::MkNod(Ino parent, const std::string& name, uint32_t uid,
 }
 
 Status BindingClient::Open(Ino ino, int flags, uint64_t* fh) {
-  return vfs_->Open(MakeContext(), ino, flags, fh);
+  bool keep_cache = true;
+  return vfs_->Open(MakeContext(), ino, flags, fh, &keep_cache);
 }
 
 Status BindingClient::Read(Ino ino, DataBuffer* data_buffer, uint64_t size,

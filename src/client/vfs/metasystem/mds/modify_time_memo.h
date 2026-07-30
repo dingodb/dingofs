@@ -36,11 +36,13 @@ class ModifyTimeMemo {
   ~ModifyTimeMemo() = default;
 
   void Remember(Ino ino);
-  void Forget(Ino ino);
-  void CleanExpired(uint64_t expire_time_ns);
+  void CleanExpired(uint64_t expire_time_s);
 
   uint64_t Get(Ino ino);
   bool ModifiedSince(Ino ino, uint64_t timestamp);
+
+  void UpdateKernelMtime(Ino ino, uint64_t mtime);
+  uint64_t GetKernelMtime(Ino ino);
 
   size_t Size();
   size_t Bytes();
@@ -50,8 +52,14 @@ class ModifyTimeMemo {
   bool Load(const Json::Value& value);
 
  private:
+  void DeleteIf(Ino ino, uint64_t expire_time_ns);
+
+  struct Entry {
+    uint64_t last_modify_time_ns{0};
+    uint64_t kernel_mtime{0};
+  };
   // ino -> modify time ns
-  using Map = absl::flat_hash_map<Ino, uint64_t>;
+  using Map = absl::flat_hash_map<Ino, Entry>;
 
   constexpr static size_t kShardNum = 128;
   utils::Shards<Map, kShardNum> shard_map_;

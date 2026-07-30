@@ -576,7 +576,8 @@ void FuseOpOpen(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) {
                          ino, fi->flags);
 
   uint64_t fh = 0;
-  Status s = g_vfs->Open(ctx, ino, fi->flags, &fh);
+  bool keep_cache = FLAGS_fuse_enable_keep_cache;
+  Status s = g_vfs->Open(ctx, ino, fi->flags, &fh, &keep_cache);
   if (!s.ok()) {
     ReplyError(req, s);
 
@@ -585,7 +586,7 @@ void FuseOpOpen(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) {
 
     fi->direct_io =
         (dingofs::IsInternalNode(ino) || FLAGS_fuse_enable_direct_io) ? 1 : 0;
-    fi->keep_cache = FLAGS_fuse_enable_keep_cache ? 1 : 0;
+    fi->keep_cache = keep_cache ? 1 : 0;
 
     ReplyOpen(req, fi);
   }

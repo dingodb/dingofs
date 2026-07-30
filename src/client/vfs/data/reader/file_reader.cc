@@ -1016,8 +1016,10 @@ Status FileReader::Read(ContextSPtr ctx, DataBuffer* data_buffer, int64_t size,
 Status FileReader::GetAttr(ContextSPtr ctx, Attr* attr) {
   auto span = vfs_hub_->GetTraceManager()->StartChildSpan("FileWriter::GetAttr",
                                                           ctx->GetTraceSpan());
-  Status s = vfs_hub_->GetMetaSystem()->GetAttr(SpanScope::GetContext(span),
-                                                ino_, attr);
+
+  auto span_ctx = SpanScope::GetContext(span);
+  span_ctx->inner_req = true;
+  Status s = vfs_hub_->GetMetaSystem()->GetAttr(span_ctx, ino_, attr);
   if (!s.ok()) {
     LOG(WARNING) << fmt::format("{} GetAttr failed, status: {}", uuid_,
                                 s.ToString());
