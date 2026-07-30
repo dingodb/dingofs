@@ -2684,30 +2684,15 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, RenameResult& 
   UpsertInodeCache(old_attr, reason);
 
   if (IsMonoPartition()) {
-    // update cache
-    PartitionPtr old_parent_partition;
-    auto status = GetPartition(ctx, old_parent, old_parent_partition);
-    if (status.ok()) {
-      // delete old dentry
-      old_parent_partition->Delete(old_name, old_parent_attr.version());
-      // update old parent attr
-      UpsertInodeCache(old_parent_attr_with_mutation, reason);
-    }
+    // old parent dentry/inode
+    DeleteDentryFromPartition(old_parent, old_name, out.old_parent_version);
+    UpsertInodeCache(old_parent_attr_with_mutation, reason);
 
-    // check new parent dentry/inode
-    PartitionPtr new_parent_partition;
-    status = GetPartition(ctx, new_parent, new_parent_partition);
-    if (status.ok()) {
-      // update new parent attr
-      auto new_parent_node = UpsertInodeCache(new_parent_attr_with_mutation, reason);
+    // new parent dentry/inode
+    auto new_parent_node = UpsertInodeCache(new_parent_attr_with_mutation, reason);
 
-      // delete prev new dentry
-      if (is_exist_new_dentry) new_parent_partition->Delete(new_name, new_parent_node->Version());
-
-      // add new dentry
-      Dentry new_dentry(fs_id_, new_name, new_parent, old_dentry.ino(), old_dentry.type(), 0);
-      new_parent_partition->Put(new_dentry, new_parent_node->Version());
-    }
+    Dentry new_dentry(fs_id_, new_name, new_parent, old_dentry.ino(), old_dentry.type(), 0);
+    AddDentryToPartition(new_parent, new_dentry, new_parent_node->Version());
 
     // delete exist new partition
     if (is_exist_new_dentry) {
@@ -2730,9 +2715,6 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, RenameResult& 
 
     // refresh new parent inode and dentry cache
     auto new_parent_inode = UpsertInodeCache(new_parent_attr_with_mutation, reason);
-    if (is_exist_new_dentry) {
-      DeleteDentryFromPartition(new_parent, prev_new_dentry.name(), new_parent_inode->Version());
-    }
     AddDentryToPartition(new_parent, new_dentry, new_parent_inode->Version());
     if (is_same_parent) {
       DeleteDentryFromPartition(new_parent, old_dentry.name(), new_parent_inode->Version());
