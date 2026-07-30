@@ -108,7 +108,8 @@ class MDSMetaSystem : public vfs::MetaSystem {
                uint32_t uid, uint32_t gid, uint32_t mode, uint64_t rdev,
                Attr* attr) override;
 
-  Status Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) override;
+  Status Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
+              bool* keep_cache) override;
 
   Status Flush(ContextSPtr ctx, Ino ino, uint64_t fh) override;
 

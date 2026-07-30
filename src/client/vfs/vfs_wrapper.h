@@ -117,7 +117,8 @@ class VFSWrapper {
   Status Link(const Context& ctx, Ino ino, Ino new_parent,
               const std::string& new_name, Attr* attr);
 
-  Status Open(const Context& ctx, Ino ino, int flags, uint64_t* fh);
+  Status Open(const Context& ctx, Ino ino, int flags, uint64_t* fh,
+              bool* keep_cache);
 
   Status Create(const Context& ctx, Ino parent, const std::string& name,
                 uint32_t mode, int flags, uint64_t* fh, Attr* attr);

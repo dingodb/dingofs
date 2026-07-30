@@ -95,8 +95,9 @@ class MetaWrapper {
     return target_->MkNod(ctx, parent, name, uid, gid, mode, rdev, attr);
   }
 
-  Status Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) {
-    return target_->Open(ctx, ino, flags, fh);
+  Status Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
+              bool* keep_cache) {
+    return target_->Open(ctx, ino, flags, fh, keep_cache);
   }
 
   Status Create(ContextSPtr ctx, Ino parent, const std::string& name,

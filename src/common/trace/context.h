@@ -34,6 +34,8 @@ struct Context {
 
   uint64_t start_time_ns{0};
 
+  bool inner_req{false};
+
   bool retry{true};
   bool timeout_retry{true};
 

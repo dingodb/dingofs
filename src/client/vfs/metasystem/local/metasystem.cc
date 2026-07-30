@@ -351,7 +351,7 @@ Status LocalMetaSystem::MkNod(ContextSPtr, Ino parent, const std::string& name,
   return Status::OK();
 }
 
-Status LocalMetaSystem::Open(ContextSPtr, Ino ino, int flags, uint64_t) {
+Status LocalMetaSystem::Open(ContextSPtr, Ino ino, int flags, uint64_t, bool*) {
   const uint32_t fs_id = fs_info_.fs_id();
   const uint64_t now_ns = utils::TimestampNs();
 
@@ -418,7 +418,8 @@ Status LocalMetaSystem::Create(ContextSPtr ctx, Ino parent,
   auto status = MkNod(ctx, parent, name, uid, gid, mode, 0, attr);
   if (!status.ok()) return status;
 
-  status = Open(ctx, attr->ino, flags, fh);
+  bool keep_cache = true;
+  status = Open(ctx, attr->ino, flags, fh, &keep_cache);
   if (!status.ok()) return status;
 
   return Status::OK();

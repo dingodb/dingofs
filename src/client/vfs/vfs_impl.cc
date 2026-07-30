@@ -99,7 +99,7 @@ VFSImpl::VFSImpl(const VFSConfig& vfs_conf, const ClientId& client_id)
     : client_id_(client_id),
       mount_root_path_(
           vfs_conf.mount_root_path.empty() ? "/" : vfs_conf.mount_root_path),
-      vfs_hub_(std::make_unique<VFSHubImpl>(vfs_conf, client_id_)){};
+      vfs_hub_(std::make_unique<VFSHubImpl>(vfs_conf, client_id_)) {};
 
 VFSImpl::VFSImpl(std::unique_ptr<VFSHub> hub)
     : client_id_(), vfs_hub_(std::move(hub)) {
@@ -140,6 +140,7 @@ Status VFSImpl::ResolveMountRoot() {
     if (dir_name.empty()) break;
 
     Attr attr;
+    ctx->inner_req = true;
     Status s = meta_system_->Lookup(ctx, parent, dir_name, &attr);
     if (!s.ok()) {
       LOG(ERROR) << fmt::format(
@@ -539,7 +540,8 @@ Status VFSImpl::Link(ContextSPtr ctx, Ino ino, Ino new_parent,
   return s;
 }
 
-Status VFSImpl::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t* fh) {
+Status VFSImpl::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t* fh,
+                     bool* keep_cache) {
   // check if ino is .stats inode,if true ,get metric data and generate
   // inodeattr information
   uint64_t gfh = vfs::FhGenerator::GenFh();
@@ -582,7 +584,7 @@ Status VFSImpl::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t* fh) {
     return Status::OK();
   }
 
-  Status s = meta_system_->Open(ctx, TranslateIno(ino), flags, gfh);
+  Status s = meta_system_->Open(ctx, TranslateIno(ino), flags, gfh, keep_cache);
   if (s.ok()) {
     auto* handle = handle_manager_->NewHandle(gfh, ino, flags);
     if (handle == nullptr) {
@@ -945,6 +947,7 @@ Status VFSImpl::Ioctl(ContextSPtr ctx, Ino ino, uint32_t uid, unsigned int cmd,
   }
 
   Attr attr;
+  ctx->inner_req = true;
   Status s = meta_system_->GetAttr(ctx, ino, &attr);
   if (!s.ok()) {
     return s;

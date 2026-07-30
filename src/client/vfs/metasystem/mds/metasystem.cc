@@ -569,6 +569,10 @@ Status MDSMetaSystem::Lookup(ContextSPtr ctx, Ino parent,
   status = CorrectAttr(ctx, ctx->start_time_ns, *attr, is_amend, "lookup");
   if (!status.ok()) return status;
 
+  if (!ctx->inner_req) {
+    modify_time_memo_.UpdateKernelMtime(attr->ino, attr->mtime);
+  }
+
   return Status::OK();
 }
 
@@ -587,6 +591,7 @@ Status MDSMetaSystem::Create(ContextSPtr ctx, Ino parent,
   InodeSPtr inode = PutInodeToCache(attr_entry);
   PutInodeToCache(parent_attr_entry);
   *attr = inode->ToAttr();
+
   if (FLAGS_vfs_tiny_file_data_enable) {
     tiny_file_data_cache_.Create(attr_entry.ino());
   }
@@ -595,6 +600,8 @@ Status MDSMetaSystem::Create(ContextSPtr ctx, Ino parent,
   auto file_session =
       file_session_map_.Put(attr_entry.ino(), fh, session_id, flags);
   file_session->SetInode(inode);
+
+  modify_time_memo_.UpdateKernelMtime(attr->ino, attr->mtime);
 
   return Status::OK();
 }
@@ -644,6 +651,8 @@ Status MDSMetaSystem::MkNod(ContextSPtr ctx, Ino parent,
   auto inode = PutInodeToCache(attr_entry);
   PutInodeToCache(parent_attr_entry);
   *attr = inode->ToAttr();
+
+  modify_time_memo_.UpdateKernelMtime(attr->ino, attr->mtime);
 
   return Status::OK();
 }
@@ -812,7 +821,8 @@ void MDSMetaSystem::AsyncOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
       true);
 }
 
-Status MDSMetaSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) {
+Status MDSMetaSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
+                           bool* keep_cache) {
   AssertStop();
 
   if ((flags & O_TRUNC) && !(flags & O_WRONLY || flags & O_RDWR)) {
@@ -844,6 +854,10 @@ Status MDSMetaSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) {
       // launch async open
       AsyncOpen(ctx, ino, flags, fh, session_id, file_session);
 
+      if (inode->Mtime() > modify_time_memo_.GetKernelMtime(ino)) {
+        *keep_cache = false;
+      }
+
       return Status::OK();
     }
   }
@@ -853,6 +867,13 @@ Status MDSMetaSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) {
     LOG(ERROR) << fmt::format("[meta.fs.{}.{}] open file fail, error({}).", ino,
                               fh, status.ToString());
     file_session_map_.Delete(ino, fh);
+
+  } else {
+    auto inode = GetInodeFromCache(ino);
+    if (inode == nullptr ||
+        inode->Mtime() > modify_time_memo_.GetKernelMtime(ino)) {
+      *keep_cache = false;
+    }
   }
 
   return status;
@@ -1293,6 +1314,8 @@ Status MDSMetaSystem::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh,
       // TTL/LRU. We never want a partial profile to drive warmup.
       break;
     }
+
+    modify_time_memo_.UpdateKernelMtime(entry.attr.ino, entry.attr.mtime);
     ++count;
   }
 
@@ -1331,6 +1354,8 @@ Status MDSMetaSystem::Link(ContextSPtr ctx, Ino ino, Ino new_parent,
   auto inode = PutInodeToCache(attr_entry);
   PutInodeToCache(parent_attr_entry);
   *attr = inode->ToAttr();
+
+  modify_time_memo_.UpdateKernelMtime(attr->ino, attr->mtime);
 
   return Status::OK();
 }
@@ -1395,6 +1420,8 @@ Status MDSMetaSystem::Symlink(ContextSPtr ctx, Ino parent,
   PutInodeToCache(parent_attr_entry);
   *attr = inode->ToAttr();
 
+  modify_time_memo_.UpdateKernelMtime(attr->ino, attr->mtime);
+
   return Status::OK();
 }
 
@@ -1440,8 +1467,13 @@ Status MDSMetaSystem::GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) {
       CorrectAttr(ctx, ctx->start_time_ns, *attr, is_amend, "getattr");
   if (!status.ok()) return status;
 
+  if (!ctx->inner_req) {
+    modify_time_memo_.UpdateKernelMtime(attr->ino, attr->mtime);
+  }
+
   LOG_DEBUG << fmt::format("[meta.fs.{}] get attr length({}) is_amend({}).",
                            ino, attr->length, is_amend);
+
   return Status::OK();
 }
 
@@ -1517,14 +1549,10 @@ Status MDSMetaSystem::SetAttr(ContextSPtr ctx, Ino ino, int set,
   if (!status.ok()) return status;
 
   modify_time_memo_.Remember(ino);
-  // When the file is shrunk, the MDS appends zero slices covering the truncated
-  // range. Forget chunk_memo_ so the next ReadSlice requests version 0 and the
-  // MDS returns the full current chunk; combined with the chunk_set read-cache
-  // invalidation above, the next read observes the zero slices rather than the
-  // stale pre-shrink data (which a later grow would otherwise re-expose).
-  if (out.shrink_file) {
-    chunk_memo_.Forget(ino);
-  }
+
+  if (out.shrink_file) chunk_memo_.Forget(ino);
+
+  modify_time_memo_.UpdateKernelMtime(out_attr->ino, out_attr->mtime);
 
   return Status::OK();
 }

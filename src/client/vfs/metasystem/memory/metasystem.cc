@@ -458,8 +458,8 @@ Status MemoryMetaSystem::MkNod(ContextSPtr ctx, Ino parent,
   return Status::OK();
 }
 
-Status MemoryMetaSystem::Open(ContextSPtr ctx, Ino ino, int flags,
-                              uint64_t fh) {
+Status MemoryMetaSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
+                              bool*) {
   if (open_file_memo_.IsOpened(ino)) {
     open_file_memo_.Open(ino);
     return Status::OK();
@@ -475,7 +475,8 @@ Status MemoryMetaSystem::Create(ContextSPtr ctx, Ino parent,
                                 uint32_t gid, uint32_t mode, int flags,
                                 Attr* attr, uint64_t fh) {
   DINGOFS_RETURN_NOT_OK(MkNod(ctx, parent, name, uid, gid, mode, 0, attr));
-  return Open(ctx, attr->ino, flags, fh);
+  bool keep_cache = true;
+  return Open(ctx, attr->ino, flags, fh, &keep_cache);
 }
 
 Status MemoryMetaSystem::Flush(ContextSPtr ctx, Ino ino, uint64_t fh) {
@@ -517,9 +518,9 @@ Status MemoryMetaSystem::WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
   const uint64_t chunk_start = index * fs_info_.chunk_size();
   uint64_t new_max_length = 0;
   for (const auto& slice : slices) {
-    new_max_length = std::max(
-        new_max_length,
-        chunk_start + static_cast<uint64_t>(slice.pos) + slice.len);
+    new_max_length =
+        std::max(new_max_length,
+                 chunk_start + static_cast<uint64_t>(slice.pos) + slice.len);
   }
 
   if (new_max_length > inode.length()) {

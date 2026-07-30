@@ -66,7 +66,9 @@ void ChunkMemo::Forget(Ino ino, uint32_t chunk_index) {
       ino);
 }
 
-void ChunkMemo::CleanExpired(uint64_t expire_time_ns) {
+void ChunkMemo::CleanExpired(uint64_t expire_time_s) {
+  uint64_t expire_time_ns = expire_time_s * 1000 * 1000 * 1000;
+
   shard_map_.iterateWLock([&](Map& map) {
     for (auto it = map.begin(); it != map.end();) {
       if (it->second.time_ns < expire_time_ns) {
