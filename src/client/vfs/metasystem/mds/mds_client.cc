@@ -1515,9 +1515,10 @@ Status MDSClient::CompactChunk(ContextSPtr& ctx, Ino ino, uint32_t chunk_index,
     request.add_new_slices()->CopyFrom(slice);
   }
 
-  ctx->timeout_retry = false;
-  auto status = SendRequest(SpanScope::GetContext(span, ctx), span, get_mds_fn,
-                            "MDSService", "CompactChunk", request, response);
+  auto span_ctx = SpanScope::GetContext(span, ctx);
+  span_ctx->retry = false;
+  auto status = SendRequest(span_ctx, span, get_mds_fn, "MDSService",
+                            "CompactChunk", request, response);
   chunk_entry.Swap(response.mutable_chunk());
   if (!status.ok()) {
     SpanScope::SetStatus(span, status);
@@ -1553,9 +1554,10 @@ Status MDSClient::CopyFileRange(ContextSPtr& ctx,
   request.set_len(param.len);
   request.set_flags(param.flags);
 
-  ctx->timeout_retry = false;
-  auto status = SendRequest(SpanScope::GetContext(span, ctx), span, get_mds_fn,
-                            "MDSService", "CopyFileRange", request, response);
+  auto span_ctx = SpanScope::GetContext(span, ctx);
+  span_ctx->timeout_retry = false;
+  auto status = SendRequest(span_ctx, span, get_mds_fn, "MDSService",
+                            "CopyFileRange", request, response);
   if (!status.ok()) {
     SpanScope::SetStatus(span, status);
     return status;

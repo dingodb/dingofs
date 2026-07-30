@@ -296,6 +296,7 @@ Status MDSClient::SendRequest(ContextSPtr ctx, SpanScopeSPtr& span,
   bool is_refresh_mds = true;
 
   SendRequestOption option;
+  option.retry = ctx ? ctx->retry : true;
   option.timeout_retry = ctx ? ctx->timeout_retry : true;
 
   request.mutable_info()->set_request_id(
@@ -353,7 +354,7 @@ Status MDSClient::SendRequest(ContextSPtr ctx, SpanScopeSPtr& span,
     }
 
     return status;
-  } while (IsRetry(retry, FLAGS_vfs_meta_rpc_retry_times));
+  } while (option.retry && IsRetry(retry, FLAGS_vfs_meta_rpc_retry_times));
 
   return status;
 }

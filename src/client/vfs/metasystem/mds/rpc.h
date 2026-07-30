@@ -94,6 +94,7 @@ struct SendRequestOption {
 
   int64_t timeout_ms;
   int max_retry;
+  bool retry{true};
   bool timeout_retry{true};
 };
 
@@ -311,7 +312,7 @@ Status RPC::SendRequest(const EndPoint& endpoint,
     cntl.set_log_id(butil::fast_rand());
     // InjectTraceHeader(&cntl);
     request.mutable_info()->set_timeout_ms(option.timeout_ms);
-    request.mutable_info()->set_retry_times(retry);
+    request.mutable_info()->set_retry_times(request.info().retry_times() + 1);
 
     uint64_t start_us = utils::TimestampUs();
     channel->CallMethod(method, &cntl, &request, &response, nullptr);
@@ -418,7 +419,7 @@ Status RPC::SendRequest(const EndPoint& endpoint,
       break;
     }
 
-  } while (IsRetry(retry, option.max_retry));
+  } while (option.retry && IsRetry(retry, option.max_retry));
 
   return TransformError(response.error());
 }
