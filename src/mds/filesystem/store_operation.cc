@@ -71,7 +71,7 @@ DEFINE_validator(mds_check_before_create_enable, brpc::PassValidate);
 DEFINE_uint32(mds_store_operation_dispatcher_num, 8, "number of store operation dispatchers.");
 DEFINE_validator(mds_store_operation_dispatcher_num, brpc::PassValidate);
 
-DEFINE_uint32(mds_store_operation_max_inflight_per_key, 4,
+DEFINE_uint32(mds_store_operation_max_inflight_per_key, 2,
               "max in-flight store transactions per grouping key; operations beyond it are parked and merged.");
 DEFINE_validator(mds_store_operation_max_inflight_per_key, brpc::PositiveInteger);
 
@@ -2542,7 +2542,7 @@ Status CompactChunkOperation::Run(TxnUPtr& txn) {
   CHECK(ino_ > 0) << "ino is 0.";
   CHECK(!param_.new_slices.empty()) << "new_slices is empty.";
   CHECK(param_.end_pos >= param_.start_pos) << "invalid pos range.";
-  CHECK(param_.new_slices.size() < (param_.end_pos - param_.start_pos)) << "new_slices size invalid.";
+  CHECK(param_.new_slices.size() <= (param_.end_pos - param_.start_pos)) << "new_slices size invalid.";
 
   std::string chunk_key = MetaCodec::EncodeChunkKey(fs_id, ino_, chunk_index);
 

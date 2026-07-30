@@ -67,7 +67,6 @@ void CompactChunkTask::TryCleanupUncommittedSlices(
       }
     }
     if (!is_old_slice) pure_new_slices.push_back(slice);
-    
   }
 
   if (pure_new_slices.empty()) return;
@@ -105,17 +104,10 @@ Status CompactChunkTask::Compact() {
   ContextSPtr ctx = std::make_shared<Context>("");
   status = compactor_.Compact(ctx, ino_, chunk_index, old_slices, new_slices);
   if (!status.ok()) return status;
-  if (IsDeleted()) return Status::OK();
-  if (new_slices.empty()) {
-    // All slices were skipped, so there is no valid non-empty replacement for
-    // MDS CompactChunk (the server requires new_slices to be non-empty). Leave
-    // the chunk unchanged instead of sending an invalid request. A chunk made
-    // entirely of skippable slices (for example, repeated equivalent id=0
-    // holes) therefore remains compaction-eligible and may be reconsidered
-    // after the compaction interval. This is intentionally deferred: fixing it
-    // requires either version-scoped NotFit suppression in Chunk or an MDS
-    // metadata-only compaction that preserves sparse holes without SliceWriter.
-    return Status::NotFit("all slices skipped");
+  if (new_slices.empty()) return Status::NotFit("all slices skipped");
+  if (IsDeleted()) {
+    TryCleanupUncommittedSlices(old_slices, new_slices);
+    return Status::OK();
   }
 
   MDSClient::CompactChunkParam param;
@@ -124,7 +116,6 @@ Status CompactChunkTask::Compact() {
   param.start_slice_id = old_slices.front().id;
   param.end_pos = old_slices.size() - 1;
   param.end_slice_id = old_slices.back().id;
-
   for (auto& slice : new_slices) {
     param.new_slices.push_back(Helper::ToSlice(slice));
   }
@@ -132,33 +123,34 @@ Status CompactChunkTask::Compact() {
   mds::ChunkEntry chunk_entry;
   status = mds_client_.CompactChunk(ctx, ino_, chunk_->GetIndex(), param,
                                     chunk_entry);
-  if (!status.ok()) {
-    if (!status.IsTimeout() && !status.IsNetError() && !status.IsIoError()) {
-      TryCleanupUncommittedSlices(old_slices, new_slices);
-    }
-
-    if (!status.IsInvalidParam() && !status.IsTimeout()) return status;
+  if (!status.ok() && !status.IsTimeout() && !status.IsNetError() &&
+      !status.IsIoError()) {
+    TryCleanupUncommittedSlices(old_slices, new_slices);
   }
 
-  if (status.IsTimeout()) chunk_->SetNotCompleted();
+  if (status.IsTimeout()) {
+    chunk_->SetNotCompleted();
 
-  bool extra_local_compact = false;
-  if (chunk_entry.version() > version && !chunk_->Put(chunk_entry, "compact")) {
-    if (status.ok()) {
-      extra_local_compact =
-          chunk_->Compact(param.start_pos, param.start_slice_id, param.end_pos,
-                          param.end_slice_id, new_slices);
+  } else if (status.ok() || status.IsInvalidParam()) {
+    bool extra_local_compact = false;
+    if (chunk_entry.version() > version &&
+        !chunk_->Put(chunk_entry, "compact")) {
+      if (status.ok()) {
+        extra_local_compact =
+            chunk_->Compact(param.start_pos, param.start_slice_id,
+                            param.end_pos, param.end_slice_id, new_slices);
+      }
     }
-  }
 
-  LOG(INFO) << fmt::format(
-      "[meta.compact.{}.{}.{}] do compact chunk finish, version({}->{}) "
-      "old_slice({}|{}|{}) new_slices({}) final_slices({}) extra({}) "
-      "status({}).",
-      ino_, chunk_index, Id(), version, chunk_entry.version(),
-      param.start_slice_id, param.end_slice_id, old_slices.size(),
-      Helper::ToString(new_slices), chunk_entry.slices_size(),
-      extra_local_compact, status.ToString());
+    LOG(INFO) << fmt::format(
+        "[meta.compact.{}.{}.{}] do compact chunk finish, version({}->{}) "
+        "old_slice({}|{}|{}) new_slices({}) final_slices({}) extra({}) "
+        "status({}).",
+        ino_, chunk_index, Id(), version, chunk_entry.version(),
+        param.start_slice_id, param.end_slice_id, old_slices.size(),
+        Helper::ToString(new_slices), chunk_entry.slices_size(),
+        extra_local_compact, status.ToString());
+  }
 
   return status;
 }

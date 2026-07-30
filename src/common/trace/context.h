@@ -34,6 +34,7 @@ struct Context {
 
   uint64_t start_time_ns{0};
 
+  bool retry{true};
   bool timeout_retry{true};
 
   // Caller uid carried to MDS via proto Context.uid. Currently only used by
