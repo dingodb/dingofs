@@ -41,6 +41,7 @@
 #include "mds/filesystem/dentry.h"
 #include "mds/filesystem/inode.h"
 #include "mds/storage/storage.h"
+#include "utils/shards.h"
 
 namespace dingofs {
 namespace mds {
@@ -2793,23 +2794,43 @@ class OperationProcessor : public std::enable_shared_from_this<OperationProcesso
   Status CreateTable(const std::string& table_name, const Range& range, int64_t& table_id);
 
  private:
+  using BatchOperationMap =
+      absl::flat_hash_map<Operation::Key, BatchOperation, Operation::Key::Hash, Operation::Key::Eq>;
+
   struct Dispatcher {
     std::thread thread;
     std::mutex thread_mutex;
     std::condition_variable thread_cond;
 
     butil::MPSCQueue<Operation*> operations;
+
+    struct ParkEntry {
+      // number of in-flight transactions for this key
+      uint32_t inflight{0};
+      // parked operations for this key
+      std::vector<Operation*> operations;
+    };
+
+    // Group commit: a bounded number of in-flight transactions per grouping
+    // key. Operations arriving for a saturated key are parked and merged into
+    // the next batch, so batch size grows with load instead of degenerating
+    // to 1.
+    using Map = absl::flat_hash_map<Operation::Key, ParkEntry, Operation::Key::Hash, Operation::Key::Eq>;
+
+    constexpr static size_t kShardNum = 8;
+    utils::Shards<Map, kShardNum> parked_map_;
+
     Dispatcher() = default;
   };
 
-  using BatchOperationMap =
-      absl::flat_hash_map<Operation::Key, BatchOperation, Operation::Key::Hash, Operation::Key::Eq>;
   static void Grouping(std::vector<Operation*>& operations, BatchOperationMap& batch_operation_map);
 
   uint32_t GetDispatcherIndex(const Operation::Key& key) const { return (key.ino + key.fs_id) % dispatchers_.size(); }
 
   void ProcessOperation(Dispatcher& dispatcher);
-  void LaunchExecuteBatchOperation(BatchOperation&& batch_operation);
+  void LaunchOrParkBatchOperation(Dispatcher& dispatcher, const Operation::Key& key, BatchOperation&& batch_operation);
+  void LaunchExecuteBatchOperation(Dispatcher& dispatcher, const Operation::Key& key, BatchOperation&& batch_operation);
+  static bool TakeParkedOperations(Dispatcher& dispatcher, const Operation::Key& key, BatchOperation& batch_operation);
   void ExecuteBatchOperation(BatchOperation& batch_operation);
 
   // use unique_ptr because Dispatcher holds non-movable members (mutex/condition_variable).

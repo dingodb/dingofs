@@ -116,7 +116,6 @@ DECLARE_uint32(mds_partition_cache_max_count);
 
 // store operation config
 DECLARE_uint32(mds_store_operation_batch_size);
-DECLARE_uint32(mds_store_operation_merge_delay_us);
 
 DECLARE_int32(mds_storage_dingodb_replica_num);
 

@@ -34,6 +34,7 @@ awk '
               t["store_pending"],
               t["store_txn"],
               t["store_finish"],
+              t["resume"],
               t["post_handle"]
     }
 }' $file_name
