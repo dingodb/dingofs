@@ -84,6 +84,70 @@ TEST(FlushBarrierTest, RegisteredUploadsCompleteOutOfOrderWithFirstError) {
   EXPECT_NE(result.ToString().find("first"), std::string::npos);
 }
 
+TEST(FlushBarrierTest, RetryExhaustedUpgradesEarlierGenericError) {
+  FlushBarrier barrier("ut-barrier");
+  int calls = 0;
+  Status result;
+  barrier.TrackStreamingUpload(Block(0));
+  EXPECT_TRUE(barrier.RegisterFinalUploads({Block(1), Block(2)},
+                                           CaptureCompletion(&calls, &result)));
+
+  barrier.FinishUpload(0, Status::IoError("generic"));
+  barrier.FinishUpload(1, Status::RetryExhausted("throttled"));
+  barrier.FinishUpload(2, Status::IoError("late"));
+
+  EXPECT_EQ(calls, 1);
+  EXPECT_TRUE(result.IsRetryExhausted());
+  EXPECT_NE(result.ToString().find("throttled"), std::string::npos);
+}
+
+TEST(FlushBarrierTest, GenericErrorDoesNotDowngradeRetryExhausted) {
+  FlushBarrier barrier("ut-barrier");
+  int calls = 0;
+  Status result;
+  barrier.TrackStreamingUpload(Block(0));
+  EXPECT_TRUE(barrier.RegisterFinalUploads({Block(1)},
+                                           CaptureCompletion(&calls, &result)));
+
+  barrier.FinishUpload(0, Status::RetryExhausted("exhausted"));
+  barrier.FinishUpload(1, Status::IoError("generic"));
+
+  EXPECT_EQ(calls, 1);
+  EXPECT_TRUE(result.IsRetryExhausted());
+  EXPECT_NE(result.ToString().find("exhausted"), std::string::npos);
+}
+
+TEST(FlushBarrierTest, FirstRetryExhaustedWinsOverLaterOne) {
+  FlushBarrier barrier("ut-barrier");
+  int calls = 0;
+  Status result;
+  barrier.TrackStreamingUpload(Block(0));
+  EXPECT_TRUE(barrier.RegisterFinalUploads({Block(1)},
+                                           CaptureCompletion(&calls, &result)));
+
+  barrier.FinishUpload(0, Status::RetryExhausted("first"));
+  barrier.FinishUpload(1, Status::RetryExhausted("second"));
+
+  EXPECT_EQ(calls, 1);
+  EXPECT_TRUE(result.IsRetryExhausted());
+  EXPECT_NE(result.ToString().find("first"), std::string::npos);
+}
+
+TEST(FlushBarrierTest, SuccessDoesNotClearRecordedError) {
+  FlushBarrier barrier("ut-barrier");
+  int calls = 0;
+  Status result;
+  barrier.TrackStreamingUpload(Block(0));
+  EXPECT_TRUE(barrier.RegisterFinalUploads({Block(1)},
+                                           CaptureCompletion(&calls, &result)));
+
+  barrier.FinishUpload(0, Status::RetryExhausted("exhausted"));
+  barrier.FinishUpload(1, Status::OK());
+
+  EXPECT_EQ(calls, 1);
+  EXPECT_TRUE(result.IsRetryExhausted());
+}
+
 TEST(FlushBarrierTest,
      ErrorBeforeFinalRegistrationFailsWithoutRegisteringRemaining) {
   FlushBarrier barrier("ut-barrier");

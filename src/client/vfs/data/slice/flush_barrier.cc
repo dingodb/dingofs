@@ -74,7 +74,13 @@ void FlushBarrier::FinishUpload(uint32_t index, const Status& status) {
     CHECK_EQ(erased, 1) << fmt::format("{} missing inflight block index {}",
                                        tag_, index);
 
-    if (!status.ok() && first_error_.ok()) {
+    // First error wins, except RetryExhausted upgrades a generic error: when
+    // storage is unwritable some blocks fail fast while others burn through
+    // their retries, and callers key their back-off on seeing RetryExhausted,
+    // so it must survive a mixed batch.
+    if (!status.ok() &&
+        (first_error_.ok() ||
+         (status.IsRetryExhausted() && !first_error_.IsRetryExhausted()))) {
       first_error_ = status;
     }
     completion = TakeCompletionUnlocked();

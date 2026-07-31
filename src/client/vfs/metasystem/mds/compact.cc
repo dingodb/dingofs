@@ -14,8 +14,11 @@
 
 #include "client/vfs/metasystem/mds/compact.h"
 
+#include <brpc/reloadable_flags.h>
+
 #include "fmt/format.h"
 #include "glog/logging.h"
+#include "utils/time.h"
 
 namespace dingofs {
 namespace client {
@@ -28,6 +31,10 @@ DEFINE_uint32(vfs_compact_worker_num, 8, "number of compact workers");
 DEFINE_uint32(vfs_compact_worker_max_pending_num, 256,
               "compact worker max pending num");
 DEFINE_bool(vfs_compact_worker_use_pthread, true, "compact worker use pthread");
+DEFINE_uint32(vfs_compact_cooldown_s, 300,
+              "seconds to suspend chunk compaction after storage exhausts its "
+              "block upload retries");
+DEFINE_validator(vfs_compact_cooldown_s, brpc::PassValidate);
 
 void CompactChunkTask::Run() {
   if (compact_processor_.IsStopped() || IsDeleted()) {
@@ -39,8 +46,20 @@ void CompactChunkTask::Run() {
     return;
   }
 
+  if (compact_processor_.InCooldown()) {
+    LOG(INFO) << fmt::format(
+        "[meta.compact.{}.{}.{}] drop compact chunk task in storage cooldown.",
+        ino_, chunk_->GetIndex(), Id());
+
+    status_ = Status::RetryExhausted("compact dropped in storage cooldown");
+    Signal();
+    return;
+  }
+
   auto status = Compact();
-  if (!status.ok() && !status.IsNotFit() && !status.IsStop()) {
+  if (status.IsRetryExhausted()) {
+    compact_processor_.EnterCooldown();
+  } else if (!status.ok() && !status.IsNotFit() && !status.IsStop()) {
     LOG(ERROR) << fmt::format(
         "[meta.compact.{}.{}.{}] compact chunk fail, status({}).", ino_,
         chunk_->GetIndex(), Id(), status.ToString());
@@ -168,9 +187,31 @@ void CompactProcessor::Stop() {
   executor_.Stop();
 }
 
+void CompactProcessor::EnterCooldown() {
+  uint64_t cooldown_ms = FLAGS_vfs_compact_cooldown_s * 1000ULL;
+  uint64_t until_ms = utils::TimestampMs() + cooldown_ms;
+  uint64_t prev = cooldown_until_ms_.exchange(until_ms);
+  // Log once per cooldown window, not for every task that trips it.
+  if (prev < utils::TimestampMs()) {
+    LOG(WARNING) << fmt::format(
+        "[meta.compact] storage upload retries exhausted, suspend compaction "
+        "for {}s.",
+        FLAGS_vfs_compact_cooldown_s);
+  }
+}
+
+bool CompactProcessor::InCooldown() const {
+  uint64_t until_ms = cooldown_until_ms_.load(std::memory_order_relaxed);
+  return until_ms > 0 && utils::TimestampMs() < until_ms;
+}
+
 Status CompactProcessor::LaunchCompact(Ino ino, InodeSPtr inode,
                                        ChunkSPtr& chunk, MDSClient& mds_client,
                                        Compactor& compactor, bool is_async) {
+  if (InCooldown()) {
+    return Status::RetryExhausted("compact suspended in storage cooldown");
+  }
+
   auto task =
       CompactChunkTask::New(ino, inode, chunk, mds_client, compactor, *this);
 

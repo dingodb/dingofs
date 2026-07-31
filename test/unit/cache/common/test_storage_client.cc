@@ -204,7 +204,10 @@ TEST_F(StorageClientTest, PutBoundedRetries) {
             ctx->cb(ctx);
           }));
 
-  EXPECT_TRUE(client_->Put(Handle(105), Buf("data")).IsIoError());
+  auto status = client_->Put(Handle(105), Buf("data"));
+  EXPECT_TRUE(status.IsRetryExhausted());
+  // The underlying cause stays visible in the message.
+  EXPECT_NE(status.ToString().find("inject io error"), std::string::npos);
   EXPECT_EQ(calls, 3);
 }
 
@@ -221,8 +224,8 @@ TEST_F(StorageClientTest, PutRetryOptionOverridesFlag) {
             ctx->cb(ctx);
           }));
 
-  EXPECT_TRUE(
-      client_->Put(Handle(106), Buf("data"), {.max_tries = 3}).IsIoError());
+  EXPECT_TRUE(client_->Put(Handle(106), Buf("data"), {.max_tries = 3})
+                  .IsRetryExhausted());
   EXPECT_EQ(calls, 3);
 }
 
@@ -307,7 +310,7 @@ TEST_F(StorageClientTest, RangeBoundedRetries) {
 
   std::string storage;
   IOBuffer buffer = PreAlloc(&storage, 4096);
-  EXPECT_TRUE(client_->Range(Handle(203), 0, 4096, &buffer).IsIoError());
+  EXPECT_TRUE(client_->Range(Handle(203), 0, 4096, &buffer).IsRetryExhausted());
   EXPECT_EQ(calls, 3);
 }
 
@@ -472,7 +475,7 @@ TEST_F(StorageClientTest, BackoffApplied) {
   auto status = client_->Range(Handle(205), 0, 4096, &buffer);
   auto elapsed_ms = (butil::gettimeofday_us() - start_us) / 1000;
 
-  ASSERT_TRUE(status.IsIoError());
+  ASSERT_TRUE(status.IsRetryExhausted());
   ASSERT_GE(elapsed_ms, 150);  // backoff 50ms + 100ms between the 3 tries
 }
 

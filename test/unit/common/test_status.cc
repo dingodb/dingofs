@@ -171,4 +171,13 @@ TEST(StatusTest, DINGOFS_RETURN_NOT_OK_PassesThroughOnOk) {
   EXPECT_TRUE(s.IsDeleted());
 }
 
+TEST(StatusTest, RetryExhaustedIsDistinctAndNamed) {
+  Status s = Status::RetryExhausted("IoError: upstream detail");
+  EXPECT_FALSE(s.ok());
+  EXPECT_TRUE(s.IsRetryExhausted());
+  EXPECT_FALSE(s.IsIoError());
+  EXPECT_EQ(s.ToSysErrNo(), EIO);
+  EXPECT_EQ(s.ToString(), "RetryExhausted: IoError: upstream detail");
+}
+
 }  // namespace dingofs

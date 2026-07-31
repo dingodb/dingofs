@@ -109,8 +109,17 @@ class CompactProcessor {
 
   bool IsStopped() { return is_stopped_.load(); }
 
+  // Storage exhausted its upload retries: a compaction rewrites the whole
+  // chunk, so replaying it against a backend that keeps refusing writes never
+  // converges and only adds load. Drop every pending task and reject new ones
+  // until the cooldown expires.
+  void EnterCooldown();
+  bool InCooldown() const;
+
  private:
   std::atomic<bool> is_stopped_{false};
+  // Timestamp(ms) until which compact tasks are dropped; 0 means no cooldown.
+  std::atomic<uint64_t> cooldown_until_ms_{0};
 
   Executor executor_;
 };

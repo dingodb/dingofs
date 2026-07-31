@@ -203,7 +203,9 @@ Status StorageClient::DoPut(const BlockHandle& handle, const IOBuffer& block,
       LOG(ERROR) << "Upload block exceed max tries: key = " << handle.Filename()
                  << ", size = " << size << ", tried(" << tried << "/"
                  << max_tries << "), status = " << status.ToString();
-      return status;
+      // Distinct code so callers can tell "storage kept refusing writes" from
+      // a one-off error and stop scheduling work that cannot succeed yet.
+      return Status::RetryExhausted(status.ToString());
     }
 
     auto backoff_ms = UploadRetryBackoffMs(tried);
@@ -317,7 +319,8 @@ Status StorageClient::Range(BlockHandle handle, off_t offset, size_t length,
                  << handle.Filename() << ", offset = " << offset
                  << ", length = " << length << ", tried(" << tried << "/"
                  << max_tries << "), status = " << status.ToString();
-      return status;
+      // NotFound keeps its own code above: tier fallback keys on it.
+      return Status::RetryExhausted(status.ToString());
     } else {
       backoff_ms = DownloadRetryBackoffMs(tried);
       num_download_retry_ << 1;
