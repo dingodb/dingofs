@@ -131,9 +131,15 @@ class MDSClient {
   Status RmDir(ContextSPtr& ctx, Ino parent, const std::string& name, Ino& ino,
                AttrEntry& parent_attr_entry);
 
+  struct ReadDirEntry {
+    Ino ino;
+    std::string name;
+    AttrEntry attr_entry;
+  };
   virtual Status ReadDir(ContextSPtr& ctx, Ino ino, uint64_t fh,
                          const std::string& last_name, uint32_t limit,
-                         bool with_attr, std::vector<DirEntry>& entries);
+                         bool with_attr,
+                         std::vector<ReadDirEntry>& entries);
 
   Status Open(ContextSPtr& ctx, Ino ino, int flags,
               const std::string& session_id, bool prefetch_chunk,

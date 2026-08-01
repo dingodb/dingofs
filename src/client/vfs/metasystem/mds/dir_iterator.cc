@@ -16,10 +16,12 @@
 
 #include <sys/types.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <vector>
 
 #include "client/vfs/common/helper.h"
+#include "client/vfs/metasystem/mds/helper.h"
 #include "common/options/client.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
@@ -59,11 +61,14 @@ Status DirIterator::GetValue(ContextSPtr& ctx, uint64_t off, bool with_attr,
         offset_);
 
     if (off < offset_ + entries_.size()) {
-      dir_entry = entries_[off - offset_];
+      const auto& entry = entries_[off - offset_];
+      dir_entry.ino = entry.ino;
+      dir_entry.name = entry.name;
+
       return Status::OK();
     }
 
-    if (is_fetch_ && entries_.size() < FLAGS_vfs_meta_read_dir_batch_size) {
+    if (is_fetch_ && is_eof_) {
       return Status::NoData("not more dentry");
     }
 
@@ -75,11 +80,54 @@ Status DirIterator::GetValue(ContextSPtr& ctx, uint64_t off, bool with_attr,
   return Status::OK();
 }
 
+// entries_ is name-ascending: MDS scans dentry keys in lexicographic order
+static std::vector<DirIterator::InoNamePair>::iterator LowerBoundByName(
+    std::vector<DirIterator::InoNamePair>& entries, const std::string& name) {
+  return std::lower_bound(entries.begin(), entries.end(), name,  // NOLINT
+                          [](const DirIterator::InoNamePair& entry,
+                             const std::string& n) { return entry.name < n; });
+}
+
+void DirIterator::DeleteEntry(const std::string& name) {
+  std::lock_guard<std::mutex> lock(mutex_);
+
+  auto it = LowerBoundByName(entries_, name);
+  if (it == entries_.end() || it->name != name) return;
+
+  // already handed to the kernel, can't revoke
+  if (offset_ + (it - entries_.begin()) < emitted_offset_) return;
+
+  entries_.erase(it);
+  LOG_DEBUG << fmt::format("[dir_iterator.{}.{}] delete stale entry({}).", ino_,
+                           fh_, name);
+}
+
+void DirIterator::InsertEntry(const std::string& name, Ino ino) {
+  std::lock_guard<std::mutex> lock(mutex_);
+
+  auto it = LowerBoundByName(entries_, name);
+  // sorts after this batch, the next Fetch will pick it up from MDS
+  if (it == entries_.end()) return;
+  // already handed to the kernel, too late to fix
+  if (offset_ + (it - entries_.begin()) < emitted_offset_) return;
+
+  if (it->name == name) {
+    it->ino = ino;
+  } else {
+    entries_.insert(it, InoNamePair{ino, name});
+  }
+
+  LOG_DEBUG << fmt::format("[dir_iterator.{}.{}] insert entry({}).", ino_, fh_,
+                           name);
+}
+
 Status DirIterator::Fetch(ContextSPtr& ctx) {
-  std::vector<DirEntry> entries;
+  last_fetch_time_ns_ = utils::TimestampNs();
+
+  std::vector<MDSClient::ReadDirEntry> dentries;
   auto status = mds_client_.ReadDir(ctx, ino_, fh_, last_name_,
                                     FLAGS_vfs_meta_read_dir_batch_size,
-                                    with_attr_, entries);
+                                    with_attr_, dentries);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
         "[dir_iterator.{}.{}] readdir fail, offset({}) last_name({}).", ino_,
@@ -90,22 +138,34 @@ Status DirIterator::Fetch(ContextSPtr& ctx) {
   LOG_DEBUG << fmt::format(
       "[dir_iterator.{}.{}] readdir success, offset({}) last_name({}) "
       "curr_batch_size({}) batch_size({}).",
-      ino_, fh_, offset_, last_name_, entries_.size(), entries.size());
+      ino_, fh_, offset_, last_name_, entries_.size(), dentries.size());
+
+  // update inode cache
+  for (const auto& dentry : dentries) {
+    inode_cache_.Put(dentry.ino, dentry.attr_entry);
+  }
 
   is_fetch_ = true;
+  is_eof_ = dentries.size() < FLAGS_vfs_meta_read_dir_batch_size;
 
   offset_ += entries_.size();
   last_name_memo_.insert({offset_, last_name_});
 
-  entries_ = std::move(entries);
+  entries_.clear();
+  for (const auto& dentry : dentries) {
+    entries_.emplace_back(dentry.ino, dentry.name);
+  }
   if (!entries_.empty()) {
     last_name_ = entries_.back().name;
   }
 
   // set dir profile
-  if (dir_profile_ != nullptr) {
-    for (auto& entry : entries_) {
-      dir_profile_->Accumulate(entry.ino, entry.attr.type, entry.attr.length);
+  if (dir_profile_ != nullptr && with_attr_) {
+    for (auto& dentry : dentries) {
+      auto& attr_entry = dentry.attr_entry;
+      dir_profile_->Accumulate(attr_entry.ino(),
+                               Helper::ToFileType(attr_entry.type()),
+                               attr_entry.length());
     }
   }
 
@@ -122,6 +182,7 @@ Status DirIterator::SeekBackward(ContextSPtr& ctx, uint64_t off) {
 
   entries_.clear();
   offset_ = it->first;
+  emitted_offset_ = off;
   last_name_ = it->second;
 
   return Fetch(ctx);
@@ -140,6 +201,7 @@ bool DirIterator::Dump(Json::Value& value) {
   value["with_attr"] = with_attr_;
   value["offset"] = offset_;
   value["is_fetch"] = is_fetch_;
+  value["is_eof"] = is_eof_;
   value["last_fetch_time_ns"] = last_fetch_time_ns_.load();
 
   // dump last_name_memo_
@@ -158,7 +220,6 @@ bool DirIterator::Dump(Json::Value& value) {
     Json::Value entry_item;
     entry_item["ino"] = entry.ino;
     entry_item["name"] = entry.name;
-    DumpAttr(entry.attr, entry_item["attr"]);
     entries.append(entry_item);
   }
   value["entries"] = entries;
@@ -176,6 +237,7 @@ bool DirIterator::Load(const Json::Value& value) {
   with_attr_ = value["with_attr"].asBool();
   offset_ = value["offset"].asUInt();
   is_fetch_ = value["is_fetch"].asBool();
+  is_eof_ = value["is_eof"].asBool();
   last_fetch_time_ns_.store(value["last_fetch_time_ns"].asUInt64());
 
   // load last_name_memo_
@@ -198,11 +260,10 @@ bool DirIterator::Load(const Json::Value& value) {
   }
 
   for (const auto& entry : entries) {
-    DirEntry dir_entry;
-    dir_entry.ino = entry["ino"].asUInt64();
-    dir_entry.name = entry["name"].asString();
-    LoadAttr(entry["attr"], dir_entry.attr);
-    entries_.push_back(dir_entry);
+    InoNamePair ino_name_pair;
+    ino_name_pair.ino = entry["ino"].asUInt64();
+    ino_name_pair.name = entry["name"].asString();
+    entries_.push_back(ino_name_pair);
   }
 
   return true;
@@ -282,6 +343,31 @@ void DirIteratorManager::Delete(Ino ino, uint64_t fh) {
       ino);
 }
 
+DirIteratorManager::DirIteratorSet DirIteratorManager::GetAll(Ino ino) {
+  DirIteratorSet dir_iterator_set;
+  shard_map_.withRLock(
+      [ino, &dir_iterator_set](Map& map) {
+        auto it = map.find(ino);
+        if (it != map.end()) dir_iterator_set = it->second;
+      },
+      ino);
+
+  return dir_iterator_set;
+}
+
+void DirIteratorManager::DeleteEntry(Ino parent, const std::string& name) {
+  for (auto& dir_iterator : GetAll(parent)) {
+    dir_iterator->DeleteEntry(name);
+  }
+}
+
+void DirIteratorManager::InsertEntry(Ino parent, const std::string& name,
+                                     Ino ino) {
+  for (auto& dir_iterator : GetAll(parent)) {
+    dir_iterator->InsertEntry(name, ino);
+  }
+}
+
 size_t DirIteratorManager::Size() {
   size_t size = 0;
   shard_map_.iterate([&size](const Map& map) {
@@ -348,7 +434,8 @@ bool DirIteratorManager::Dump(Json::Value& value) {
   return true;
 }
 
-bool DirIteratorManager::Load(MDSClient& mds_client, const Json::Value& value) {
+bool DirIteratorManager::Load(MDSClient& mds_client, InodeCache& inode_cache,
+                              const Json::Value& value) {
   if (value.isNull()) return true;
   if (value["dir_iterators_map"].isNull()) return true;
 
@@ -365,7 +452,7 @@ bool DirIteratorManager::Load(MDSClient& mds_client, const Json::Value& value) {
     for (auto const& sub_item : item["dir_iterators"]) {
       uint64_t fh = sub_item["fh"].asUInt64();
 
-      auto dir_iterator = DirIterator::New(mds_client, ino, fh);
+      auto dir_iterator = DirIterator::New(mds_client, inode_cache, ino, fh);
       if (!dir_iterator->Load(sub_item)) {
         LOG(ERROR) << fmt::format(
             "[meta.dir_iterator] load dir({}) iterator fail.", ino);

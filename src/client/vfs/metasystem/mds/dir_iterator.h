@@ -27,6 +27,7 @@
 
 #include "absl/container/flat_hash_map.h"
 #include "client/vfs/metasystem/mds/dir_profile.h"
+#include "client/vfs/metasystem/mds/inode_cache.h"
 #include "client/vfs/metasystem/mds/mds_client.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/status.h"
@@ -43,8 +44,17 @@ using DirIteratorSPtr = std::shared_ptr<DirIterator>;
 // used by read dir
 class DirIterator {
  public:
-  DirIterator(MDSClient& mds_client, Ino ino, uint64_t fh)
-      : mds_client_(mds_client), ino_(ino), fh_(fh) {
+  struct InoNamePair {
+    Ino ino;
+    std::string name;
+
+    InoNamePair() = default;
+    InoNamePair(Ino ino, const std::string& name) : ino(ino), name(name) {}
+  };
+
+  DirIterator(MDSClient& mds_client, InodeCache& inode_cache, Ino ino,
+              uint64_t fh)
+      : mds_client_(mds_client), inode_cache_(inode_cache), ino_(ino), fh_(fh) {
     last_fetch_time_ns_ = utils::TimestampNs();
     if (FLAGS_vfs_meta_warmup_small_file_enable) {
       dir_profile_ = DirProfile::New(ino, fh);
@@ -52,8 +62,9 @@ class DirIterator {
   }
   ~DirIterator();
 
-  static DirIteratorSPtr New(MDSClient& mds_client, Ino ino, uint64_t fh) {
-    return std::make_shared<DirIterator>(mds_client, ino, fh);
+  static DirIteratorSPtr New(MDSClient& mds_client, InodeCache& inode_cache,
+                             Ino ino, uint64_t fh) {
+    return std::make_shared<DirIterator>(mds_client, inode_cache, ino, fh);
   }
 
   Ino INo() const { return ino_; }
@@ -65,6 +76,16 @@ class DirIterator {
 
   Status GetValue(ContextSPtr& ctx, uint64_t off, bool with_attr,
                   DirEntry& dir_entry);
+
+  void MarkEmitted(uint64_t offset) { emitted_offset_ = offset; }
+
+  // drop a stale name from the snapshot, so readdirplus won't feed it back to
+  // the kernel dentry cache after the name is renamed/removed
+  void DeleteEntry(const std::string& name);
+
+  // publish a fresh name into the snapshot, overwriting a stale binding of the
+  // same name if there is one
+  void InsertEntry(const std::string& name, Ino ino);
 
   uint64_t LastFetchTimeNs() const { return last_fetch_time_ns_.load(); }
 
@@ -87,16 +108,20 @@ class DirIterator {
   bool with_attr_{true};
 
   uint64_t offset_{0};
+  // entries before this offset are already handed to the kernel, can't revoke
+  uint64_t emitted_offset_{0};
   std::string last_name_;
-  std::vector<DirEntry> entries_;
+  std::vector<InoNamePair> entries_;
 
   // offset -> last name, used for backward readdir
   std::map<uint64_t, std::string> last_name_memo_;
 
   bool is_fetch_{false};
+  bool is_eof_{false};
   std::atomic<uint64_t> last_fetch_time_ns_{0};
 
   MDSClient& mds_client_;
+  InodeCache& inode_cache_;
 
   // stat
   std::vector<uint64_t> offset_stats_;
@@ -118,15 +143,23 @@ class DirIteratorManager {
   DirIteratorSPtr Get(Ino ino, uint64_t fh);
   void Delete(Ino ino, uint64_t fh);
 
+  // drop a stale name from all in-flight iterators of the parent dir
+  void DeleteEntry(Ino parent, const std::string& name);
+
+  // publish a fresh name to all in-flight iterators of the parent dir
+  void InsertEntry(Ino parent, const std::string& name, Ino ino);
+
   size_t Size();
   size_t Bytes();
 
   void Summary(Json::Value& value);
   bool Dump(Json::Value& value);
-  bool Load(MDSClient& mds_client, const Json::Value& value);
+  bool Load(MDSClient& mds_client, InodeCache& inode_cache,
+            const Json::Value& value);
 
  private:
   void Put(Ino ino, DirIteratorSet& dir_iterator_set);
+  DirIteratorSet GetAll(Ino ino);
 
   using Map = absl::flat_hash_map<Ino, DirIteratorSet>;
 

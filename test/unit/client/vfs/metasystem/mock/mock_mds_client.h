@@ -36,7 +36,7 @@ class MockMDSClient : public MDSClient {
   MOCK_METHOD(Status, ReadDir,
               (ContextSPtr& ctx, Ino ino, uint64_t fh,
                const std::string& last_name, uint32_t limit, bool with_attr,
-               std::vector<DirEntry>& entries),
+               std::vector<ReadDirEntry>& entries),
               (override));
 };
 

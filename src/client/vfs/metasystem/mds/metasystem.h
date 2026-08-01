@@ -209,23 +209,11 @@ class MDSMetaSystem : public vfs::MetaSystem {
   // inode cache
   Status FetchInode(ContextSPtr& ctx, Ino ino, const std::string& reason,
                     InodeSPtr& inode);
-  InodeSPtr PutInodeToCache(const AttrEntry& attr_entry) {
-    return inode_cache_.Put(attr_entry.ino(), attr_entry);
-  }
+  InodeSPtr PutInodeToCache(const AttrEntry& attr_entry);
   void DeleteInodeFromCache(Ino ino) { inode_cache_.Delete(ino); }
   InodeSPtr GetInodeFromCache(Ino ino) { return inode_cache_.Get(ino); }
-  InodeSPtr GetInode(FileSessionSPtr& file_session) {
-    InodeSPtr inode = file_session->GetInode();
-    if (inode != nullptr) return inode;
-
-    inode = inode_cache_.Get(file_session->GetIno());
-    if (inode != nullptr) return inode;
-
-    ContextSPtr ctx = std::make_shared<Context>("");
-    FetchInode(ctx, file_session->GetIno(), "GetInode", inode);
-
-    return inode;
-  }
+  InodeSPtr GetInode(FileSessionSPtr& file_session);
+  Status GetInode(Ino ino, const std::string& reason, InodeSPtr& inode);
 
   // chunk cache
   Status DoFlushFile(ContextSPtr ctx, InodeSPtr inode, ChunkSetSPtr& chunk_set,

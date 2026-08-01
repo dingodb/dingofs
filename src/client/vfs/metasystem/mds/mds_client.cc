@@ -668,7 +668,8 @@ Status MDSClient::RmDir(ContextSPtr& ctx, Ino parent, const std::string& name,
 
 Status MDSClient::ReadDir(ContextSPtr& ctx, Ino ino, uint64_t fh,
                           const std::string& last_name, uint32_t limit,
-                          bool with_attr, std::vector<DirEntry>& entries) {
+                          bool with_attr,
+                          std::vector<ReadDirEntry>& entries) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this, ino](bool& is_primary_mds) -> MDSMeta {
@@ -709,7 +710,8 @@ Status MDSClient::ReadDir(ContextSPtr& ctx, Ino ino, uint64_t fh,
   entries.reserve(response.entries_size());
   for (const auto& entry : response.entries()) {
     parent_memo_.Upsert(entry.ino(), ino, entry.inode().version());
-    entries.push_back(Helper::ToDirEntry(entry));
+    entries.push_back(
+        ReadDirEntry{entry.ino(), entry.name(), entry.inode()});
   }
 
   return Status::OK();
@@ -1060,6 +1062,7 @@ Status MDSClient::GetAttr(ContextSPtr& ctx, Ino ino, AttrEntry& attr_entry) {
 
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
+  request.set_reason(ctx->reason);
 
   auto status = SendRequest(SpanScope::GetContext(span, ctx), span, get_mds_fn,
                             "MDSService", "GetAttr", request, response);
