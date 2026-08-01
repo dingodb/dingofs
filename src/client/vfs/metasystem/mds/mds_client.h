@@ -180,9 +180,15 @@ class MDSClient {
   Status ListXAttr(ContextSPtr& ctx, Ino ino,
                    std::map<std::string, std::string>& xattrs);
 
+  struct RenameResult {
+    AttrEntry old_parent_attr;
+    AttrEntry new_parent_attr;
+    AttrEntry child_attr;
+    AttrEntry deleted_attr;
+  };
   Status Rename(ContextSPtr& ctx, Ino old_parent, const std::string& old_name,
                 Ino new_parent, const std::string& new_name,
-                std::vector<Ino>& effected_inos);
+                RenameResult& result);
 
   Status NewSliceId(ContextSPtr& ctx, uint32_t num, uint64_t* id);
 
