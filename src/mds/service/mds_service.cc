@@ -813,6 +813,7 @@ void MDSServiceImpl::DoGetInode(google::protobuf::RpcController*, const pb::mds:
   }
 
   response->mutable_inode()->Swap(&entry_out.attr);
+  response->mutable_inode()->clear_shard_boundaries();
 }
 
 // inode interface
@@ -935,6 +936,7 @@ void MDSServiceImpl::DoLookup(google::protobuf::RpcController* controller, const
   }
 
   response->mutable_inode()->Swap(&entry_out.attr);
+  response->mutable_inode()->clear_shard_boundaries();
 }
 
 void MDSServiceImpl::Lookup(google::protobuf::RpcController* controller, const pb::mds::LookupRequest* request,
@@ -988,7 +990,12 @@ void MDSServiceImpl::DoBatchCreate(google::protobuf::RpcController*, const pb::m
   }
 
   response->mutable_parent_inode()->Swap(&entry_out.parent_attr);
-  for (auto& attr : entry_out.attrs) response->add_inodes()->Swap(&attr);
+  for (auto& attr : entry_out.attrs) {
+    attr.clear_shard_boundaries();
+    response->add_inodes()->Swap(&attr);
+  }
+
+  response->mutable_parent_inode()->clear_shard_boundaries();
 }
 
 void MDSServiceImpl::BatchCreate(google::protobuf::RpcController* controller,
@@ -1067,6 +1074,9 @@ void MDSServiceImpl::DoMkNod(google::protobuf::RpcController*, const pb::mds::Mk
 
   response->mutable_parent_inode()->Swap(&entry_out.parent_attr);
   response->mutable_inode()->Swap(&entry_out.attr);
+
+  response->mutable_parent_inode()->clear_shard_boundaries();
+  response->mutable_inode()->clear_shard_boundaries();
 }
 
 void MDSServiceImpl::MkNod(google::protobuf::RpcController* controller, const pb::mds::MkNodRequest* request,
@@ -1115,7 +1125,12 @@ void MDSServiceImpl::DoBatchMkNod(google::protobuf::RpcController*, const pb::md
   }
 
   response->mutable_parent_inode()->Swap(&entry_out.parent_attr);
-  for (auto& attr : entry_out.attrs) response->add_inodes()->Swap(&attr);
+  for (auto& attr : entry_out.attrs) {
+    attr.clear_shard_boundaries();
+    response->add_inodes()->Swap(&attr);
+  }
+
+  response->mutable_parent_inode()->clear_shard_boundaries();
 }
 
 void MDSServiceImpl::BatchMkNod(google::protobuf::RpcController* controller, const pb::mds::BatchMkNodRequest* request,
@@ -1181,6 +1196,9 @@ void MDSServiceImpl::DoMkDir(google::protobuf::RpcController*, const pb::mds::Mk
 
   response->mutable_parent_inode()->Swap(&entry_out.parent_attr);
   response->mutable_inode()->Swap(&entry_out.attr);
+
+  response->mutable_parent_inode()->clear_shard_boundaries();
+  response->mutable_inode()->clear_shard_boundaries();
 }
 
 void MDSServiceImpl::MkDir(google::protobuf::RpcController* controller, const pb::mds::MkDirRequest* request,
@@ -1229,7 +1247,12 @@ void MDSServiceImpl::DoBatchMkDir(google::protobuf::RpcController*, const pb::md
   }
 
   response->mutable_parent_inode()->Swap(&entry_out.parent_attr);
-  for (auto& attr : entry_out.attrs) response->add_inodes()->Swap(&attr);
+  for (auto& attr : entry_out.attrs) {
+    attr.clear_shard_boundaries();
+    response->add_inodes()->Swap(&attr);
+  }
+
+  response->mutable_parent_inode()->clear_shard_boundaries();
 }
 
 void MDSServiceImpl::BatchMkDir(google::protobuf::RpcController* controller, const pb::mds::BatchMkDirRequest* request,
@@ -1287,6 +1310,8 @@ void MDSServiceImpl::DoRmDir(google::protobuf::RpcController*, const pb::mds::Rm
 
   response->set_ino(entry_out.attr.ino());
   response->mutable_parent_inode()->Swap(&entry_out.parent_attr);
+
+  response->mutable_parent_inode()->clear_shard_boundaries();
 }
 
 void MDSServiceImpl::RmDir(google::protobuf::RpcController* controller, const pb::mds::RmDirRequest* request,
@@ -1386,6 +1411,8 @@ void MDSServiceImpl::DoOpen(google::protobuf::RpcController*, const pb::mds::Ope
   Helper::VectorToPbRepeated(entry_out.chunks, response->mutable_chunks());
   response->set_data(std::move(entry_out.data_out));
   response->set_data_version(entry_out.data_version);
+
+  response->mutable_inode()->clear_shard_boundaries();
 }
 
 void MDSServiceImpl::Open(google::protobuf::RpcController* controller, const pb::mds::OpenRequest* request,
@@ -1487,6 +1514,8 @@ void MDSServiceImpl::DoFlushFile(google::protobuf::RpcController*, const pb::mds
 
   response->mutable_inode()->Swap(&entry_out.attr);
   response->set_shrink_file(entry_out.shrink_file);
+
+  response->mutable_inode()->clear_shard_boundaries();
 }
 
 void MDSServiceImpl::FlushFile(google::protobuf::RpcController* controller, const pb::mds::FlushFileRequest* request,
@@ -1544,6 +1573,9 @@ void MDSServiceImpl::DoLink(google::protobuf::RpcController*, const pb::mds::Lin
 
   response->mutable_parent_inode()->Swap(&entry_out.parent_attr);
   response->mutable_inode()->Swap(&entry_out.attr);
+
+  response->mutable_parent_inode()->clear_shard_boundaries();
+  response->mutable_inode()->clear_shard_boundaries();
 }
 
 void MDSServiceImpl::Link(google::protobuf::RpcController* controller, const pb::mds::LinkRequest* request,
@@ -1583,6 +1615,9 @@ void MDSServiceImpl::DoUnLink(google::protobuf::RpcController*, const pb::mds::U
 
   response->mutable_parent_inode()->Swap(&entry_out.parent_attr);
   response->mutable_inode()->Swap(&entry_out.attr);
+
+  response->mutable_parent_inode()->clear_shard_boundaries();
+  response->mutable_inode()->clear_shard_boundaries();
 }
 
 void MDSServiceImpl::UnLink(google::protobuf::RpcController* controller, const pb::mds::UnLinkRequest* request,
@@ -1617,7 +1652,12 @@ void MDSServiceImpl::DoBatchUnLink(google::protobuf::RpcController*, const pb::m
   }
 
   response->mutable_parent_inode()->Swap(&entry_out.parent_attr);
-  for (auto& attr : entry_out.attrs) response->add_inodes()->Swap(&attr);
+  for (auto& attr : entry_out.attrs) {
+    attr.clear_shard_boundaries();
+    response->add_inodes()->Swap(&attr);
+  }
+
+  response->mutable_parent_inode()->clear_shard_boundaries();
 }
 
 void MDSServiceImpl::BatchUnLink(google::protobuf::RpcController* controller,
@@ -1676,6 +1716,9 @@ void MDSServiceImpl::DoSymlink(google::protobuf::RpcController*, const pb::mds::
 
   response->mutable_parent_inode()->Swap(&entry_out.parent_attr);
   response->mutable_inode()->Swap(&entry_out.attr);
+
+  response->mutable_parent_inode()->clear_shard_boundaries();
+  response->mutable_inode()->clear_shard_boundaries();
 }
 
 void MDSServiceImpl::Symlink(google::protobuf::RpcController* controller, const pb::mds::SymlinkRequest* request,
@@ -1752,6 +1795,8 @@ void MDSServiceImpl::DoGetAttr(google::protobuf::RpcController*, const pb::mds::
   }
 
   response->mutable_inode()->Swap(&entry_out.attr);
+
+  response->mutable_inode()->clear_shard_boundaries();
 }
 
 void MDSServiceImpl::GetAttr(google::protobuf::RpcController* controller, const pb::mds::GetAttrRequest* request,
@@ -1825,6 +1870,8 @@ void MDSServiceImpl::DoSetAttr(google::protobuf::RpcController*, const pb::mds::
   response->set_shrink_file(entry_out.shrink_file);
   response->set_expand_file(entry_out.expand_file);
   Helper::VectorToPbRepeated(entry_out.chunks, response->mutable_chunks());
+
+  response->mutable_inode()->clear_shard_boundaries();
 }
 
 void MDSServiceImpl::SetAttr(google::protobuf::RpcController* controller, const pb::mds::SetAttrRequest* request,
@@ -1940,6 +1987,8 @@ void MDSServiceImpl::DoSetXAttr(google::protobuf::RpcController*, const pb::mds:
   }
 
   response->mutable_inode()->Swap(&entry_out.attr);
+
+  response->mutable_inode()->clear_shard_boundaries();
 }
 
 void MDSServiceImpl::SetXAttr(google::protobuf::RpcController* controller, const pb::mds::SetXAttrRequest* request,
@@ -1999,6 +2048,8 @@ void MDSServiceImpl::DoRemoveXAttr(google::protobuf::RpcController*, const pb::m
   }
 
   response->mutable_inode()->Swap(&entry_out.attr);
+
+  response->mutable_inode()->clear_shard_boundaries();
 }
 
 void MDSServiceImpl::RemoveXAttr(google::protobuf::RpcController* controller,
@@ -2104,12 +2155,15 @@ void MDSServiceImpl::DoRename(google::protobuf::RpcController*, const pb::mds::R
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  response->set_old_parent_version(result.old_parent_version);
-  response->set_new_parent_version(result.new_parent_version);
-  response->set_child_ino(result.child_ino);
-  response->set_deleted_ino(result.deleted_ino);
-  response->set_child_version(result.child_version);
-  response->set_deleted_version(result.deleted_version);
+  response->mutable_old_parent_inode()->Swap(&result.old_parent_inode);
+  response->mutable_new_parent_inode()->Swap(&result.new_parent_inode);
+  response->mutable_child_inode()->Swap(&result.child_inode);
+  if (result.deleted_inode.ino() != 0) response->mutable_deleted_inode()->Swap(&result.deleted_inode);
+
+  response->mutable_old_parent_inode()->clear_shard_boundaries();
+  response->mutable_new_parent_inode()->clear_shard_boundaries();
+  response->mutable_child_inode()->clear_shard_boundaries();
+  response->mutable_deleted_inode()->clear_shard_boundaries();
 }
 
 void MDSServiceImpl::Rename(google::protobuf::RpcController* controller, const pb::mds::RenameRequest* request,
@@ -2378,6 +2432,8 @@ void MDSServiceImpl::DoFallocate(google::protobuf::RpcController*, const pb::mds
   response->set_shrink_file(entry_out.shrink_file);
   response->set_expand_file(entry_out.expand_file);
   Helper::VectorToPbRepeated(entry_out.chunks, response->mutable_chunks());
+
+  response->mutable_inode()->clear_shard_boundaries();
 }
 
 void MDSServiceImpl::Fallocate(google::protobuf::RpcController* controller, const pb::mds::FallocateRequest* request,

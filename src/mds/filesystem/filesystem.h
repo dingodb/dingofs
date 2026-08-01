@@ -259,14 +259,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
     std::vector<Ino> old_ancestors;
     std::vector<Ino> new_ancestors;
   };
-  struct RenameResult {
-    uint64_t old_parent_version{0};
-    uint64_t new_parent_version{0};
-    Ino child_ino{0};
-    Ino deleted_ino{0};
-    uint64_t child_version{0};
-    uint64_t deleted_version{0};
-  };
+  using RenameResult = mds::RenameResult;
   Status Rename(Context& ctx, const RenameParam& param, RenameResult& out);
 
   Status CommitRename(Context& ctx, const RenameParam& param, RenameResult& out);

@@ -21,9 +21,18 @@
 #include "mds/common/context.h"
 #include "mds/common/runnable.h"
 #include "mds/common/status.h"
+#include "mds/common/type.h"
 
 namespace dingofs {
 namespace mds {
+
+// deleted_inode.ino() == 0 means no entry was overwritten.
+struct RenameResult {
+  AttrEntry old_parent_inode;
+  AttrEntry new_parent_inode;
+  AttrEntry child_inode;
+  AttrEntry deleted_inode;
+};
 
 class FileSystem;
 using FileSystemSPtr = std::shared_ptr<FileSystem>;
@@ -58,12 +67,7 @@ class RenameTask : public TaskRunnable {
   }
 
   Status GetStatus() { return status_; }
-  uint64_t GetOldParentVersion() const { return old_parent_version_; }
-  uint64_t GetNewParentVersion() const { return new_parent_version_; }
-  Ino GetChildIno() const { return child_ino_; }
-  Ino GetDeletedIno() const { return deleted_ino_; }
-  uint64_t GetChildVersion() const { return child_version_; }
-  uint64_t GetDeletedVersion() const { return deleted_version_; }
+  RenameResult& GetResult() { return result_; }
 
  private:
   // not delete at here
@@ -73,12 +77,7 @@ class RenameTask : public TaskRunnable {
 
   BthreadCondPtr cond_{nullptr};
   Status status_;
-  uint64_t old_parent_version_;
-  uint64_t new_parent_version_;
-  Ino child_ino_{0};
-  Ino deleted_ino_{0};
-  uint64_t child_version_{0};
-  uint64_t deleted_version_{0};
+  RenameResult result_;
 
   RenameCbFunc cb_;
   FileSystemSPtr fs_;
@@ -102,16 +101,8 @@ class Renamer {
   bool Init();
   bool Destroy();
 
-  struct Result {
-    uint64_t old_parent_version{0};
-    uint64_t new_parent_version{0};
-    Ino child_ino{0};
-    Ino deleted_ino{0};
-    uint64_t child_version{0};
-    uint64_t deleted_version{0};
-  };
   template <typename T>
-  Status Execute(FileSystemSPtr fs, Context& ctx, const T& param, Result& out);
+  Status Execute(FileSystemSPtr fs, Context& ctx, const T& param, RenameResult& out);
 
  private:
   bool Execute(TaskRunnablePtr task);
@@ -120,7 +111,7 @@ class Renamer {
 };
 
 template <typename T>
-Status Renamer::Execute(FileSystemSPtr fs, Context& ctx, const T& param, Result& out) {
+Status Renamer::Execute(FileSystemSPtr fs, Context& ctx, const T& param, RenameResult& out) {
   auto task = std::make_shared<RenameTask<T> >(fs, &ctx, param, nullptr);
   if (!Execute(task)) {
     return Status(pb::error::EINTERNAL, "commit task fail");
@@ -128,12 +119,7 @@ Status Renamer::Execute(FileSystemSPtr fs, Context& ctx, const T& param, Result&
 
   task->Wait();
 
-  out.old_parent_version = task->GetOldParentVersion();
-  out.new_parent_version = task->GetNewParentVersion();
-  out.child_ino = task->GetChildIno();
-  out.deleted_ino = task->GetDeletedIno();
-  out.child_version = task->GetChildVersion();
-  out.deleted_version = task->GetDeletedVersion();
+  out = std::move(task->GetResult());
 
   return task->GetStatus();
 }

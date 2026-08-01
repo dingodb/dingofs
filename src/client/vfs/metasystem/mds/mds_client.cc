@@ -1301,8 +1301,7 @@ Status MDSClient::ListXAttr(ContextSPtr& ctx, Ino ino,
 
 Status MDSClient::Rename(ContextSPtr& ctx, Ino old_parent,
                          const std::string& old_name, Ino new_parent,
-                         const std::string& new_name,
-                         std::vector<Ino>& effected_inos) {
+                         const std::string& new_name, RenameResult& result) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this, new_parent](bool& is_primary_mds) -> MDSMeta {
@@ -1342,33 +1341,34 @@ Status MDSClient::Rename(ContextSPtr& ctx, Ino old_parent,
     return status;
   }
 
+  const auto& child_inode = response.child_inode();
+  const auto& deleted_inode = response.deleted_inode();
+
   if (request.context().is_bypass_cache()) {
-    parent_memo_.UpsertVersionAndRenameRefCount(new_parent,
-                                                response.new_parent_version());
+    parent_memo_.UpsertVersionAndRenameRefCount(
+        new_parent, response.new_parent_inode().version());
 
   } else {
-    parent_memo_.UpsertVersion(new_parent, response.new_parent_version());
+    parent_memo_.UpsertVersion(new_parent,
+                               response.new_parent_inode().version());
   }
   if (old_parent != new_parent) {
-    parent_memo_.UpsertVersionAndRenameRefCount(old_parent,
-                                                response.old_parent_version());
+    parent_memo_.UpsertVersionAndRenameRefCount(
+        old_parent, response.old_parent_inode().version());
 
-    if (response.child_ino() != 0)
-      parent_memo_.Upsert(response.child_ino(), new_parent);
+    if (child_inode.ino() != 0)
+      parent_memo_.Upsert(child_inode.ino(), new_parent);
   }
 
-  if (response.child_ino() != 0)
-    parent_memo_.UpsertVersion(response.child_ino(), response.child_version());
-  if (response.deleted_ino() != 0)
-    parent_memo_.UpsertVersion(response.deleted_ino(),
-                               response.deleted_version());
+  if (child_inode.ino() != 0)
+    parent_memo_.UpsertVersion(child_inode.ino(), child_inode.version());
+  if (deleted_inode.ino() != 0)
+    parent_memo_.UpsertVersion(deleted_inode.ino(), deleted_inode.version());
 
-  // update effected inodes
-  effected_inos.push_back(old_parent);
-  if (new_parent != old_parent) effected_inos.push_back(new_parent);
-  if (response.child_ino() != 0) effected_inos.push_back(response.child_ino());
-  if (response.deleted_ino() != 0)
-    effected_inos.push_back(response.deleted_ino());
+  result.old_parent_attr.Swap(response.mutable_old_parent_inode());
+  result.new_parent_attr.Swap(response.mutable_new_parent_inode());
+  result.child_attr.Swap(response.mutable_child_inode());
+  result.deleted_attr.Swap(response.mutable_deleted_inode());
 
   return Status::OK();
 }

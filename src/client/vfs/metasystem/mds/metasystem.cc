@@ -1700,9 +1700,9 @@ Status MDSMetaSystem::Rename(ContextSPtr ctx, Ino old_parent,
                              const std::string& new_name) {
   AssertStop();
 
-  std::vector<Ino> effected_inos;
+  MDSClient::RenameResult result;
   auto status = mds_client_.Rename(ctx, old_parent, old_name, new_parent,
-                                   new_name, effected_inos);
+                                   new_name, result);
   if (!status.ok()) {
     if (status.Errno() == pb::error::ENOT_EMPTY) {
       return Status::NotEmpty("dist dir not empty");
@@ -1711,9 +1711,10 @@ Status MDSMetaSystem::Rename(ContextSPtr ctx, Ino old_parent,
     return status;
   }
 
-  for (const auto& ino : effected_inos) {
-    DeleteInodeFromCache(ino);
-  }
+  PutInodeToCache(result.old_parent_attr);
+  if (new_parent != old_parent) PutInodeToCache(result.new_parent_attr);
+  PutInodeToCache(result.child_attr);
+  PutInodeToCache(result.deleted_attr);
 
   return Status::OK();
 }

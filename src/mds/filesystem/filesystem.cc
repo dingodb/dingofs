@@ -2671,13 +2671,11 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, RenameResult& 
 
   if (!status.ok()) return status;
 
-  out.old_parent_version = old_parent_attr_with_mutation.Version();
-  out.new_parent_version = is_same_parent ? out.old_parent_version : new_parent_attr_with_mutation.Version();
+  out.old_parent_inode = old_parent_attr_with_mutation.ToCompleteAttr();
+  out.new_parent_inode = is_same_parent ? out.old_parent_inode : new_parent_attr_with_mutation.ToCompleteAttr();
 
-  out.child_ino = old_attr.ino();
-  out.child_version = old_attr.version();
-  out.deleted_ino = is_exist_new_dentry ? prev_new_attr.ino() : 0;
-  out.deleted_version = is_exist_new_dentry ? prev_new_attr.version() : 0;
+  out.child_inode = old_attr;
+  if (is_exist_new_dentry) out.deleted_inode = prev_new_attr;
 
   std::string reason = fmt::format("rename.{}.{}.{}->{}.{}", request_id, old_parent, old_name, new_parent, new_name);
 
@@ -2685,7 +2683,7 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, RenameResult& 
 
   if (IsMonoPartition()) {
     // old parent dentry/inode
-    DeleteDentryFromPartition(old_parent, old_name, out.old_parent_version);
+    DeleteDentryFromPartition(old_parent, old_name, out.old_parent_inode.version());
     UpsertInodeCache(old_parent_attr_with_mutation, reason);
 
     // new parent dentry/inode
@@ -2820,19 +2818,11 @@ Status FileSystem::CommitRename(Context& ctx, const RenameParam& param, RenameRe
   }
 
   auto& trace = ctx.GetTrace();
-  Renamer::Result result;
   trace.RecordElapsedTime("prepare");
 
-  auto status = renamer_.Execute<RenameParam>(GetSelfPtr(), ctx, param, result);
+  auto status = renamer_.Execute<RenameParam>(GetSelfPtr(), ctx, param, out);
   trace.RecordElapsedTime("resume");
   if (!status.ok()) return status;
-
-  out.old_parent_version = result.old_parent_version;
-  out.new_parent_version = result.new_parent_version;
-  out.child_ino = result.child_ino;
-  out.deleted_ino = result.deleted_ino;
-  out.child_version = result.child_version;
-  out.deleted_version = result.deleted_version;
 
   trace.RecordElapsedTime("post_handle");
 
