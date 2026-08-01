@@ -44,6 +44,7 @@
 #include "fmt/core.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
+#include "inode_cache.h"
 #include "json/value.h"
 #include "json/writer.h"
 #include "mds/common/helper.h"
@@ -321,7 +322,7 @@ bool MDSMetaSystem::Load(ContextSPtr, const Json::Value& value) {
     return false;
   }
 
-  if (!dir_iterator_manager_.Load(mds_client_, value)) {
+  if (!dir_iterator_manager_.Load(mds_client_, inode_cache_, value)) {
     return false;
   }
 
@@ -588,9 +589,11 @@ Status MDSMetaSystem::Create(ContextSPtr ctx, Ino parent,
                                    session_id, attr_entry, parent_attr_entry);
   if (!status.ok()) return status;
 
-  InodeSPtr inode = PutInodeToCache(attr_entry);
   PutInodeToCache(parent_attr_entry);
+  InodeSPtr inode = PutInodeToCache(attr_entry);
   *attr = inode->ToAttr();
+
+  dir_iterator_manager_.InsertEntry(parent, name, attr->ino);
 
   if (FLAGS_vfs_tiny_file_data_enable) {
     tiny_file_data_cache_.Create(attr_entry.ino());
@@ -648,9 +651,11 @@ Status MDSMetaSystem::MkNod(ContextSPtr ctx, Ino parent,
     if (!status.ok()) return status;
   }
 
-  auto inode = PutInodeToCache(attr_entry);
   PutInodeToCache(parent_attr_entry);
+  auto inode = PutInodeToCache(attr_entry);
   *attr = inode->ToAttr();
+
+  dir_iterator_manager_.InsertEntry(parent, name, attr->ino);
 
   modify_time_memo_.UpdateKernelMtime(attr->ino, attr->mtime);
 
@@ -1225,9 +1230,13 @@ Status MDSMetaSystem::MkDir(ContextSPtr ctx, Ino parent,
     if (!status.ok()) return status;
   }
 
-  auto inode = PutInodeToCache(attr_entry);
   PutInodeToCache(parent_attr_entry);
+  auto inode = PutInodeToCache(attr_entry);
   *attr = inode->ToAttr();
+
+  dir_iterator_manager_.InsertEntry(parent, name, attr->ino);
+
+  modify_time_memo_.UpdateKernelMtime(attr->ino, attr->mtime);
 
   return Status::OK();
 }
@@ -1249,6 +1258,8 @@ Status MDSMetaSystem::RmDir(ContextSPtr ctx, Ino parent,
   DeleteInodeFromCache(ino);
   PutInodeToCache(parent_attr_entry);
 
+  dir_iterator_manager_.DeleteEntry(parent, name);
+
   return Status::OK();
 }
 
@@ -1256,7 +1267,7 @@ Status MDSMetaSystem::OpenDir(ContextSPtr, Ino ino, uint64_t fh,
                               bool& need_cache) {
   AssertStop();
 
-  auto dir_iterator = DirIterator::New(mds_client_, ino, fh);
+  auto dir_iterator = DirIterator::New(mds_client_, inode_cache_, ino, fh);
 
   need_cache = false;
   dir_iterator_manager_.PutWithFunc(
@@ -1296,11 +1307,10 @@ Status MDSMetaSystem::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh,
     }
 
     if (with_attr) {
-      // entry.attr carries raw hashed uid/gid from the upstream RPC. Route it
-      // through PutInodeToCache so the Inode is created/updated, then
-      // overwrite entry.attr from inode->ToAttr(). ToAttr() now emits hashed
-      // ids as-is; the VFS layer performs the local-host translation.
-      auto inode = PutInodeToCache(Helper::ToAttr(entry.attr));
+      InodeSPtr inode;
+      status = GetInode(entry.ino, "readdir", inode);
+      if (!status.ok()) return status;
+
       entry.attr = inode->ToAttr();
 
       bool is_amend = false;
@@ -1315,6 +1325,7 @@ Status MDSMetaSystem::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh,
       break;
     }
 
+    dir_iterator->MarkEmitted(offset);
     modify_time_memo_.UpdateKernelMtime(entry.attr.ino, entry.attr.mtime);
     ++count;
   }
@@ -1335,6 +1346,7 @@ Status MDSMetaSystem::ReleaseDir(ContextSPtr, Ino ino, uint64_t fh) {
   }
 
   dir_iterator_manager_.Delete(ino, fh);
+
   return Status::OK();
 }
 
@@ -1351,9 +1363,11 @@ Status MDSMetaSystem::Link(ContextSPtr ctx, Ino ino, Ino new_parent,
     return status;
   }
 
-  auto inode = PutInodeToCache(attr_entry);
   PutInodeToCache(parent_attr_entry);
+  auto inode = PutInodeToCache(attr_entry);
   *attr = inode->ToAttr();
+
+  dir_iterator_manager_.InsertEntry(new_parent, new_name, attr->ino);
 
   modify_time_memo_.UpdateKernelMtime(attr->ino, attr->mtime);
 
@@ -1391,11 +1405,15 @@ Status MDSMetaSystem::Unlink(ContextSPtr ctx, Ino parent,
     }
   }
 
-  PutInodeToCache(attr_entry);
   PutInodeToCache(parent_attr_entry);
+
   if (mds::IsDeleted(attr_entry)) {
     DeleteInodeFromCache(attr_entry.ino());
+  } else {
+    PutInodeToCache(attr_entry);
   }
+
+  dir_iterator_manager_.DeleteEntry(parent, name);
 
   return Status::OK();
 }
@@ -1416,9 +1434,11 @@ Status MDSMetaSystem::Symlink(ContextSPtr ctx, Ino parent,
     return status;
   }
 
-  auto inode = PutInodeToCache(attr_entry);
   PutInodeToCache(parent_attr_entry);
+  auto inode = PutInodeToCache(attr_entry);
   *attr = inode->ToAttr();
+
+  dir_iterator_manager_.InsertEntry(parent, name, attr->ino);
 
   modify_time_memo_.UpdateKernelMtime(attr->ino, attr->mtime);
 
@@ -1682,6 +1702,7 @@ Status MDSMetaSystem::ListXattr(ContextSPtr ctx, Ino ino,
 Status MDSMetaSystem::FetchInode(ContextSPtr& ctx, Ino ino,
                                  const std::string& reason, InodeSPtr& inode) {
   AttrEntry attr_entry;
+  ctx->reason = reason;
   auto status = mds_client_.GetAttr(ctx, ino, attr_entry);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
@@ -1690,9 +1711,38 @@ Status MDSMetaSystem::FetchInode(ContextSPtr& ctx, Ino ino,
     return status;
   }
 
+  LOG_DEBUG << fmt::format("[meta.fs.{}] fetch inode success, reason({}).", ino,
+                           reason);
+
   inode = PutInodeToCache(attr_entry);
 
   return Status::OK();
+}
+
+InodeSPtr MDSMetaSystem::PutInodeToCache(const AttrEntry& attr_entry) {
+  return inode_cache_.Put(attr_entry.ino(), attr_entry);
+}
+
+InodeSPtr MDSMetaSystem::GetInode(FileSessionSPtr& file_session) {
+  InodeSPtr inode = file_session->GetInode();
+  if (inode != nullptr) return inode;
+
+  inode = inode_cache_.Get(file_session->GetIno());
+  if (inode != nullptr) return inode;
+
+  ContextSPtr ctx = std::make_shared<Context>("");
+  FetchInode(ctx, file_session->GetIno(), "GetInode", inode);
+
+  return inode;
+}
+
+Status MDSMetaSystem::GetInode(Ino ino, const std::string& reason,
+                               InodeSPtr& inode) {
+  inode = inode_cache_.Get(ino);
+  if (inode != nullptr) return Status::OK();
+
+  ContextSPtr ctx = std::make_shared<Context>("");
+  return FetchInode(ctx, ino, reason, inode);
 }
 
 Status MDSMetaSystem::Rename(ContextSPtr ctx, Ino old_parent,
@@ -1715,6 +1765,12 @@ Status MDSMetaSystem::Rename(ContextSPtr ctx, Ino old_parent,
   if (new_parent != old_parent) PutInodeToCache(result.new_parent_attr);
   PutInodeToCache(result.child_attr);
   PutInodeToCache(result.deleted_attr);
+
+  // in-flight readdir snapshots still hold the old binding, drop it before
+  // readdirplus feeds a stale dentry back to the kernel
+  dir_iterator_manager_.DeleteEntry(old_parent, old_name);
+  dir_iterator_manager_.InsertEntry(new_parent, new_name,
+                                    result.child_attr.ino());
 
   return Status::OK();
 }
@@ -1970,6 +2026,8 @@ Status MDSMetaSystem::CorrectAttr(ContextSPtr ctx, uint64_t time_ns, Attr& attr,
 }
 
 bool MDSMetaSystem::CorrectAttrLength(Attr& attr, const std::string& caller) {
+  if (mds::IsDir(attr.ino)) return false;
+
   auto file_session = file_session_map_.GetSession(attr.ino);
   if (file_session != nullptr) {
     auto chunk_set = file_session->GetChunkSet();

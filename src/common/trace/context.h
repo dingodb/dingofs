@@ -45,6 +45,8 @@ struct Context {
   // was explicitly populated by the FUSE entry point (fuse_req_ctx->uid).
   uint32_t uid{0};
 
+  std::string reason;  // reason for the request, used for log and trace
+
   std::weak_ptr<SpanScope> trace_span;
 
   const std::string& SessionID() const { return session_id; }  // session id
