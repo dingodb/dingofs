@@ -73,6 +73,40 @@ using vfs::StrMode;
 
 static auto& g_rw_metric = VFSRWMetric::GetInstance();
 
+static std::string DescribeSetAttr(int set) {
+  const uint32_t value = static_cast<uint32_t>(set);
+  constexpr uint32_t kKnownSetAttr =
+      kSetAttrMode | kSetAttrUid | kSetAttrGid | kSetAttrSize | kSetAttrAtime |
+      kSetAttrMtime | kSetAttrAtimeNow | kSetAttrMtimeNow | kSetAttrCtime |
+      kSetAttrFlags | kSetAttrNlink;
+
+  std::string description;
+  auto append = [&description, value](uint32_t flag, const char* name) {
+    if ((value & flag) == 0) return;
+    if (!description.empty()) description += "|";
+    description += name;
+  };
+
+  append(kSetAttrMode, "mode");
+  append(kSetAttrUid, "uid");
+  append(kSetAttrGid, "gid");
+  append(kSetAttrSize, "size");
+  append(kSetAttrAtime, "atime");
+  append(kSetAttrMtime, "mtime");
+  append(kSetAttrAtimeNow, "atime_now");
+  append(kSetAttrMtimeNow, "mtime_now");
+  append(kSetAttrCtime, "ctime");
+  append(kSetAttrFlags, "flags");
+  append(kSetAttrNlink, "nlink");
+
+  const uint32_t unknown = value & ~kKnownSetAttr;
+  if (unknown != 0) {
+    if (!description.empty()) description += "|";
+    description += fmt::format("unknown(0x{:X})", unknown);
+  }
+  return description.empty() ? "none" : description;
+}
+
 static Status InitLog() {
   const std::string log_dir = Logger::LogDir();
   bool succ = dingofs::client::InitAccessLog(log_dir) &&
@@ -525,9 +559,9 @@ Status VFSWrapper::SetAttr(const Context& ctx, Ino ino, int set,
 
   Status s;
   AccessLogGuard log([&]() {
-    return absl::StrFormat("[%s] setattr (%llu,0x%X): %s %s",
-                           ctx.ToShortString(), ino, set, s.ToString(),
-                           StrAttr(out_attr));
+    return absl::StrFormat("[%s] setattr (%llu,0x%X[%s]): %s %s",
+                           ctx.ToShortString(), ino, set, DescribeSetAttr(set),
+                           s.ToString(), StrAttr(out_attr));
   });
 
   ClientOpMetricGuard op_metric(

@@ -16,9 +16,12 @@
 
 #include <sys/types.h>
 
+#include <charconv>
+#include <climits>
 #include <cmath>
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "brpc/builtin/common.h"
@@ -39,10 +42,17 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 
+static bool ParseUnsignedPathParam(std::string_view text, uint64_t& value) {
+  if (text.empty()) return false;
+  const auto result =
+      std::from_chars(text.data(), text.data() + text.size(), value);
+  return result.ec == std::errc{} && result.ptr == text.data() + text.size();
+}
+
 static std::string RenderHead(const std::string& title) {
   butil::IOBufBuilder os;
 
-  os << fmt::format(R"(<head>{})", brpc::gridtable_style());
+  os << brpc::gridtable_style();
   os << fmt::format(R"(<script src="/js/sorttable"></script>)");
   os << fmt::format(
       R"(<script language="javascript" type="text/javascript" src="/js/jquery_min"></script>)");
@@ -125,13 +135,16 @@ static std::string RenderTime(uint64_t diff_time_s) {
 
 static void RenderEpochAndStartTime(butil::IOBufBuilder& os) {
   uint64_t now_ms = utils::TimestampMs();
+  const auto elapsed_seconds = [now_ms](uint64_t start_ms) {
+    return now_ms >= start_ms ? (now_ms - start_ms) / 1000 : 0;
+  };
 
   os << R"(<div style="margin:2px;font-size:smaller;text-align:center">)";
   os << fmt::format(
       R"(<p>epoch[{}] uptime[{}] accum_uptime[{}]</p>)",
       ClientState::GetEpoch(),
-      RenderTime((now_ms - ClientState::GetStartTime()) / 1000),
-      RenderTime((now_ms - ClientState::GetFirstStartTime()) / 1000));
+      RenderTime(elapsed_seconds(ClientState::GetStartTime())),
+      RenderTime(elapsed_seconds(ClientState::GetFirstStartTime())));
   os << "</div>";
 }
 
@@ -523,7 +536,7 @@ static void RenderMdsInfo(const Json::Value& json_value,
   os << "<br>";
 }
 
-static void RenderHandlerInfoPage(const Json::Value& json_value,
+static bool RenderHandlerInfoPage(const Json::Value& json_value,
                                   butil::IOBufBuilder& os,
                                   std::string& client_name) {
   os << "<!DOCTYPE html><html>";
@@ -537,7 +550,7 @@ static void RenderHandlerInfoPage(const Json::Value& json_value,
   const Json::Value& handlers = json_value["handlers"];
   if (!handlers.isArray()) {
     LOG(ERROR) << "handlers is not an array.";
-    return;
+    return false;
   }
   if (handlers.empty()) {
     LOG(INFO) << "no handlers to load";
@@ -558,8 +571,8 @@ static void RenderHandlerInfoPage(const Json::Value& json_value,
     uint flags = handler["flags"].asUInt();
     char flags_str[14];
 
-    std::snprintf(flags_str, sizeof(flags_str), "0%o",
-                  static_cast<uint32_t>(flags));
+    std::snprintf(flags_str, sizeof(flags_str), "0%o",  // NOLINT
+                  static_cast<uint32_t>(flags));        // NOLINT
 
     os << "<tr>";
     os << "<td>" << ino << "</td>";
@@ -572,6 +585,7 @@ static void RenderHandlerInfoPage(const Json::Value& json_value,
   os << "</div>";
 
   os << "<br>";
+  return true;
 }
 
 static std::string RenderDirEntries(const Json::Value& entries) {
@@ -605,7 +619,7 @@ static std::string RenderDirEntries(const Json::Value& entries) {
   return result;
 }
 
-static void RenderDirInfoPage(const Json::Value& json_value,
+static bool RenderDirInfoPage(const Json::Value& json_value,
                               butil::IOBufBuilder& os,
                               std::string& client_name) {
   os << "<!DOCTYPE html><html>";
@@ -620,7 +634,7 @@ static void RenderDirInfoPage(const Json::Value& json_value,
   const Json::Value& dir_iterators = json_value["dir_iterators"];
   if (!dir_iterators.isArray()) {
     LOG(ERROR) << "dir_iterators is not an array.";
-    return;
+    return false;
   }
   if (dir_iterators.empty()) {
     LOG(INFO) << "no dir_iterators to load";
@@ -655,9 +669,7 @@ static void RenderDirInfoPage(const Json::Value& json_value,
     const Json::Value& entries = dir_iterator["entries"];
     if (!entries.isArray()) {
       LOG(ERROR) << "entries is not an array.";
-      os << "</td>";
-      os << "</tr>";
-      continue;
+      return false;
     }
     if (entries.empty()) {
       LOG(INFO) << "no entries to load";
@@ -675,6 +687,7 @@ static void RenderDirInfoPage(const Json::Value& json_value,
   os << "</div>";
 
   os << "<br>";
+  return true;
 }
 
 static std::string RenderSessionIdMap(const Json::Value& json_value) {
@@ -729,7 +742,7 @@ static std::string RenderChunkMap(Ino ino, const Json::Value& json_value) {
   return result;
 }
 
-static void RenderFileSessionPage(const Json::Value& json_value,
+static bool RenderFileSessionPage(const Json::Value& json_value,
                                   butil::IOBufBuilder& os,
                                   std::string& client_name) {
   os << "<!DOCTYPE html><html>";
@@ -744,7 +757,7 @@ static void RenderFileSessionPage(const Json::Value& json_value,
   const Json::Value& file_sessions = json_value["file_sessions"];
   if (!file_sessions.isArray()) {
     LOG(ERROR) << "file_sessions is not an array.";
-    return;
+    return false;
   }
 
   os << R"(<div style="margin:12px;font-size:smaller;">)";
@@ -761,6 +774,12 @@ static void RenderFileSessionPage(const Json::Value& json_value,
     uint64_t ino = file_session["ino"].asUInt64();
     uint32_t ref_count = file_session["ref_count"].asUInt();
     const auto& chunk_set_value = file_session["chunk_set"];
+    if (!file_session["session_id_map"].isArray() ||
+        (!chunk_set_value.isNull() &&
+         !chunk_set_value["chunk_map"].isArray())) {
+      LOG(ERROR) << "invalid file session entry.";
+      return false;
+    }
 
     os << "<tr>";
     os << "<td>" << ino << "</td>";
@@ -779,6 +798,7 @@ static void RenderFileSessionPage(const Json::Value& json_value,
   os << "</div>";
 
   os << "<br>";
+  return true;
 }
 
 static void RenderSingleFileSessionPage(Ino ino, const Json::Value& json_value,
@@ -801,7 +821,7 @@ static void RenderSingleChunkPage(Ino ino, uint32_t chunk_index,
   RenderJsonPage("dingofs chunk", header, json_value.toStyledString(), os);
 }
 
-static void RenderParentMemoPage(const Json::Value& json_value,
+static bool RenderParentMemoPage(const Json::Value& json_value,
                                  butil::IOBufBuilder& os,
                                  std::string& client_name) {
   os << "<!DOCTYPE html><html>";
@@ -815,7 +835,7 @@ static void RenderParentMemoPage(const Json::Value& json_value,
   const Json::Value& items = json_value["parent_memo"];
   if (!items.isArray()) {
     LOG(ERROR) << "parent_memo value is not an array.";
-    return;
+    return false;
   }
 
   os << R"(<div style="margin:12px;font-size:smaller;">)";
@@ -842,9 +862,10 @@ static void RenderParentMemoPage(const Json::Value& json_value,
   os << "</div>";
 
   os << "<br>";
+  return true;
 }
 
-static void RenderModifyTimeMemoPage(const Json::Value& json_value,
+static bool RenderModifyTimeMemoPage(const Json::Value& json_value,
                                      butil::IOBufBuilder& os,
                                      std::string& client_name) {
   os << "<!DOCTYPE html><html>";
@@ -858,7 +879,7 @@ static void RenderModifyTimeMemoPage(const Json::Value& json_value,
   const Json::Value& items = json_value["modify_time_memo"];
   if (!items.isArray()) {
     LOG(ERROR) << "modify_time_memo value is not an array.";
-    return;
+    return false;
   }
 
   os << R"(<div style="margin:12px;font-size:smaller;">)";
@@ -867,24 +888,28 @@ static void RenderModifyTimeMemoPage(const Json::Value& json_value,
   os << "<tr>";
   os << "<th>Ino</th>";
   os << "<th>Modify Time</th>";
+  os << "<th>Kernel Mtime</th>";
   os << "</tr>";
 
   for (const auto& item : items) {
-    auto ino = item["ino"].asUInt64();
-    auto modify_time_ns = item["modify_time_ns"].asUInt64();
+    Ino ino = item["ino"].asUInt64();
+    uint64_t modify_time_ns = item["modify_time_ns"].asUInt64();
+    uint64_t kernel_mtime = item["kernel_mtime"].asUInt64();
 
     os << "<tr>";
     os << "<td>" << ino << "</td>";
     os << "<td>" << utils::FormatNsTime(modify_time_ns) << "</td>";
+    os << "<td>" << utils::FormatNsTime(kernel_mtime) << "</td>";
     os << "</tr>";
   }
   os << "</table>\n";
   os << "</div>";
 
   os << "<br>";
+  return true;
 }
 
-static void RenderChunkMemoPage(const Json::Value& json_value,
+static bool RenderChunkMemoPage(const Json::Value& json_value,
                                 butil::IOBufBuilder& os,
                                 std::string& client_name) {
   os << "<!DOCTYPE html><html>";
@@ -898,7 +923,7 @@ static void RenderChunkMemoPage(const Json::Value& json_value,
   const Json::Value& items = json_value["chunk_memo"];
   if (!items.isArray()) {
     LOG(ERROR) << "chunk_memo value is not an array.";
-    return;
+    return false;
   }
 
   os << R"(<div style="margin:12px;font-size:smaller;">)";
@@ -929,9 +954,10 @@ static void RenderChunkMemoPage(const Json::Value& json_value,
   os << "</div>";
 
   os << "<br>";
+  return true;
 }
 
-static void RenderChunkCachePage(const Json::Value& json_value,
+static bool RenderChunkCachePage(const Json::Value& json_value,
                                  butil::IOBufBuilder& os,
                                  std::string& client_name) {
   os << "<!DOCTYPE html><html>";
@@ -945,7 +971,7 @@ static void RenderChunkCachePage(const Json::Value& json_value,
   const Json::Value& chunk_cache_value = json_value["chunk_cache"];
   if (!chunk_cache_value.isArray()) {
     LOG(ERROR) << "chunk_cache value is not an array.";
-    return;
+    return false;
   }
 
   os << R"(<div style="margin:12px;font-size:smaller;">)";
@@ -986,9 +1012,10 @@ static void RenderChunkCachePage(const Json::Value& json_value,
   os << "</div>";
 
   os << "<br>";
+  return true;
 }
 
-static void RenderChunkSetPage(Ino ino, const Json::Value& json_value,
+static bool RenderChunkSetPage(Ino ino, const Json::Value& json_value,
                                butil::IOBufBuilder& os,
                                std::string& client_name) {
   os << "<!DOCTYPE html><html>";
@@ -1001,7 +1028,12 @@ static void RenderChunkSetPage(Ino ino, const Json::Value& json_value,
 
   if (!json_value.isObject()) {
     LOG(ERROR) << "chunk_set value is not an object.";
-    return;
+    return false;
+  }
+  if (!json_value["commit_tasks"].isArray() ||
+      !json_value["chunks"].isArray()) {
+    LOG(ERROR) << "chunk_set arrays are invalid.";
+    return false;
   }
 
   // render write memo table
@@ -1127,9 +1159,10 @@ static void RenderChunkSetPage(Ino ino, const Json::Value& json_value,
   os << "</div>";
 
   os << "<br>";
+  return true;
 }
 
-static void RenderMdsRouterPage(const Json::Value& json_value,
+static bool RenderMdsRouterPage(const Json::Value& json_value,
                                 butil::IOBufBuilder& os,
                                 std::string& client_name) {
   os << "<!DOCTYPE html><html>";
@@ -1143,7 +1176,7 @@ static void RenderMdsRouterPage(const Json::Value& json_value,
   const Json::Value& mds_routers = json_value["mds_routers"];
   if (!mds_routers.isArray()) {
     LOG(ERROR) << "mds_routers is not an array.";
-    return;
+    return false;
   }
 
   os << R"(<div style="margin:12px;font-size:smaller;">)";
@@ -1183,9 +1216,10 @@ static void RenderMdsRouterPage(const Json::Value& json_value,
   os << "</div>";
 
   os << "<br>";
+  return true;
 }
 
-static void RenderInodeCachePage(const Json::Value& json_value,
+static bool RenderInodeCachePage(const Json::Value& json_value,
                                  butil::IOBufBuilder& os,
                                  std::string& client_name) {
   os << "<!DOCTYPE html><html>";
@@ -1199,7 +1233,7 @@ static void RenderInodeCachePage(const Json::Value& json_value,
   const Json::Value& inodes = json_value["inodes"];
   if (!inodes.isArray()) {
     LOG(ERROR) << "inodes is not an array.";
-    return;
+    return false;
   }
 
   os << R"(<div style="margin:12px;font-size:smaller;">)";
@@ -1265,9 +1299,10 @@ static void RenderInodeCachePage(const Json::Value& json_value,
   os << "</div>";
 
   os << "<br>";
+  return true;
 }
 
-static void RenderRPCPage(const Json::Value& json_value,
+static bool RenderRPCPage(const Json::Value& json_value,
                           butil::IOBufBuilder& os, std::string& client_name) {
   os << "<!DOCTYPE html><html>";
 
@@ -1289,7 +1324,7 @@ static void RenderRPCPage(const Json::Value& json_value,
   const Json::Value& channels = json_value["channels"];
   if (!channels.isArray()) {
     LOG(ERROR) << "channels is not an array.";
-    return;
+    return false;
   }
   if (channels.empty()) {
     LOG(INFO) << "no channels to load";
@@ -1319,7 +1354,7 @@ static void RenderRPCPage(const Json::Value& json_value,
   const Json::Value& fallbacks = json_value["fallbacks"];
   if (!fallbacks.isArray()) {
     LOG(ERROR) << "fallbacks is not an array.";
-    return;
+    return false;
   }
   if (fallbacks.empty()) {
     LOG(INFO) << "no fallbacks to load";
@@ -1348,9 +1383,10 @@ static void RenderRPCPage(const Json::Value& json_value,
   os << "</div>";
 
   os << "<br>";
+  return true;
 }
 
-static void RenderBlockCachePage(const Json::Value& json_value,
+static bool RenderBlockCachePage(const Json::Value& json_value,
                                  butil::IOBufBuilder& os,
                                  std::string& client_name) {
   os << "<!DOCTYPE html><html>";
@@ -1363,6 +1399,11 @@ static void RenderBlockCachePage(const Json::Value& json_value,
 
   // local block cache
   const Json::Value& disks = json_value["disks"];
+  const Json::Value& members = json_value["members"];
+  if (!disks.isArray() || !members.isArray()) {
+    LOG(ERROR) << "block cache arrays are invalid.";
+    return false;
+  }
   os << R"(<div style="margin:12px;font-size:smaller;">)";
   os << fmt::format(R"(<h3>Local Block Cache [{}]</h3>)", disks.size());
   os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
@@ -1389,7 +1430,6 @@ static void RenderBlockCachePage(const Json::Value& json_value,
   os << "</div>";
 
   // remote block cache
-  const Json::Value& members = json_value["members"];
   os << R"(<div style="margin:12px;font-size:smaller;">)";
   os << fmt::format(R"(<h3>Remote Block Cache [{}]</h3>)", members.size());
   os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
@@ -1417,9 +1457,10 @@ static void RenderBlockCachePage(const Json::Value& json_value,
 
   // end
   os << "<br>";
+  return true;
 }
 
-static void RenderUidGidMapperPage(const Json::Value& json_value,
+static bool RenderUidGidMapperPage(const Json::Value& json_value,
                                    butil::IOBufBuilder& os,
                                    std::string& client_name) {
   os << "<!DOCTYPE html><html>";
@@ -1433,7 +1474,7 @@ static void RenderUidGidMapperPage(const Json::Value& json_value,
   if (!m.isObject()) {
     LOG(ERROR) << fmt::format("uid_gid_map is not an object.");
     os << "</body></html>";
-    return;
+    return false;
   }
 
   const bool enabled = m["enabled"].asBool();
@@ -1442,6 +1483,11 @@ static void RenderUidGidMapperPage(const Json::Value& json_value,
   const uint64_t uid_count = m["uid_count"].asUInt64();
   const uint64_t gid_count = m["gid_count"].asUInt64();
   const Json::Value& entries = m["entries"];
+  if (!entries.isArray()) {
+    LOG(ERROR) << "uid_gid_map entries is not an array.";
+    os << "</body></html>";
+    return false;
+  }
 
   // Status card.
   os << R"(<div style="margin:12px;font-size:smaller;">)";
@@ -1450,10 +1496,10 @@ static void RenderUidGidMapperPage(const Json::Value& json_value,
   os << "<br>";
   os << fmt::format("salt: {}", salt);
   os << "<br>";
-  os << fmt::format(
-      "last refresh: {}",
-      last_refresh_ms == 0 ? std::string("never")
-                           : utils::FormatMsTime(last_refresh_ms));
+  os << fmt::format("last refresh: {}",
+                    last_refresh_ms == 0
+                        ? std::string("never")
+                        : utils::FormatMsTime(last_refresh_ms));
   os << "<br>";
   os << fmt::format("uid entries: {}", uid_count);
   os << "<br>";
@@ -1475,9 +1521,8 @@ static void RenderUidGidMapperPage(const Json::Value& json_value,
       const auto& m_entry = mappings[i];
       // mappings[0] = winner (black); mappings[1..] = collision losers (red).
       const bool loser = (i > 0);
-      const std::string line = fmt::format("{}, {}",
-                                            m_entry["local_id"].asUInt(),
-                                            m_entry["name"].asString());
+      const std::string line = fmt::format(
+          "{}, {}", m_entry["local_id"].asUInt(), m_entry["name"].asString());
       if (loser) {
         os << fmt::format(R"(<span class="red-text">{}</span>)", line);
       } else {
@@ -1492,6 +1537,7 @@ static void RenderUidGidMapperPage(const Json::Value& json_value,
 
   os << "<br>";
   os << "</body></html>";
+  return true;
 }
 
 void ClientStatServiceImpl::RenderMainPage(const brpc::Server* server,
@@ -1588,14 +1634,18 @@ void ClientStatServiceImpl::default_method(
     if (api_name == "diriterator") {
       // /ClientStatService/diriterator
       options.dir_iterator = true;
-      if (vfs_hub_->GetMetaSystem()->Dump(options, json_value)) {
-        RenderDirInfoPage(json_value, os, client_name);
+      if (vfs_hub_->GetMetaSystem()->Dump(options, json_value) &&
+          !RenderDirInfoPage(json_value, os, client_name)) {
+        cntl->SetFailed("invalid dir iterator dump.");
+        return;
       }
     } else if (api_name == "filesession") {
       // /ClientStatService/filesession
       options.file_session = true;
-      if (vfs_hub_->GetMetaSystem()->Dump(options, json_value)) {
-        RenderFileSessionPage(json_value, os, client_name);
+      if (vfs_hub_->GetMetaSystem()->Dump(options, json_value) &&
+          !RenderFileSessionPage(json_value, os, client_name)) {
+        cntl->SetFailed("invalid file session dump.");
+        return;
       }
 
     } else if (api_name == "handler") {
@@ -1604,76 +1654,104 @@ void ClientStatServiceImpl::default_method(
         cntl->SetFailed("GetHandleManager failed.");
         return;
       }
-      RenderHandlerInfoPage(json_value, os, client_name);
+      if (!RenderHandlerInfoPage(json_value, os, client_name)) {
+        cntl->SetFailed("invalid handler dump.");
+        return;
+      }
 
     } else if (api_name == "parentmemo") {
       // /ClientStatService/parentmemo
       options.parent_memo = true;
-      if (vfs_hub_->GetMetaSystem()->Dump(options, json_value)) {
-        RenderParentMemoPage(json_value, os, client_name);
+      if (vfs_hub_->GetMetaSystem()->Dump(options, json_value) &&
+          !RenderParentMemoPage(json_value, os, client_name)) {
+        cntl->SetFailed("invalid parent memo dump.");
+        return;
       }
 
     } else if (api_name == "modifytimememo") {
       // /ClientStatService/modifytimememo
       options.modify_time_memo = true;
-      if (vfs_hub_->GetMetaSystem()->Dump(options, json_value)) {
-        RenderModifyTimeMemoPage(json_value, os, client_name);
+      if (vfs_hub_->GetMetaSystem()->Dump(options, json_value) &&
+          !RenderModifyTimeMemoPage(json_value, os, client_name)) {
+        cntl->SetFailed("invalid modify time memo dump.");
+        return;
       }
 
     } else if (api_name == "chunkmemo") {
       // /ClientStatService/chunkmemo
       options.chunk_memo = true;
-      if (vfs_hub_->GetMetaSystem()->Dump(options, json_value)) {
-        RenderChunkMemoPage(json_value, os, client_name);
+      if (vfs_hub_->GetMetaSystem()->Dump(options, json_value) &&
+          !RenderChunkMemoPage(json_value, os, client_name)) {
+        cntl->SetFailed("invalid chunk memo dump.");
+        return;
       }
 
     } else if (api_name == "chunkcache") {
       // /ClientStatService/chunkcache
       options.chunk_cache = true;
       options.is_summary = true;
-      if (vfs_hub_->GetMetaSystem()->Dump(options, json_value)) {
-        RenderChunkCachePage(json_value, os, client_name);
+      if (vfs_hub_->GetMetaSystem()->Dump(options, json_value) &&
+          !RenderChunkCachePage(json_value, os, client_name)) {
+        cntl->SetFailed("invalid chunk cache dump.");
+        return;
       }
 
     } else if (api_name == "mdsrouter") {
       // /ClientStatService/mdsrouter
       options.mds_router = true;
-      if (vfs_hub_->GetMetaSystem()->Dump(options, json_value)) {
-        RenderMdsRouterPage(json_value, os, client_name);
+      if (vfs_hub_->GetMetaSystem()->Dump(options, json_value) &&
+          !RenderMdsRouterPage(json_value, os, client_name)) {
+        cntl->SetFailed("invalid mds router dump.");
+        return;
       }
 
     } else if (api_name == "inodecache") {
       // /ClientStatService/inodecache
       options.inode_cache = true;
-      if (vfs_hub_->GetMetaSystem()->Dump(options, json_value)) {
-        RenderInodeCachePage(json_value, os, client_name);
+      if (vfs_hub_->GetMetaSystem()->Dump(options, json_value) &&
+          !RenderInodeCachePage(json_value, os, client_name)) {
+        cntl->SetFailed("invalid inode cache dump.");
+        return;
       }
 
     } else if (api_name == "rpc") {
       // /ClientStatService/rpc
       options.rpc = true;
-      if (vfs_hub_->GetMetaSystem()->Dump(options, json_value)) {
-        RenderRPCPage(json_value, os, client_name);
+      if (vfs_hub_->GetMetaSystem()->Dump(options, json_value) &&
+          !RenderRPCPage(json_value, os, client_name)) {
+        cntl->SetFailed("invalid rpc dump.");
+        return;
       }
     } else if (api_name == "blockcache") {
       // /ClientStatService/blockcache
       auto* blockcache = vfs_hub_->GetBlockStore()->GetBlockCache();
-      if (blockcache != nullptr && blockcache->Dump(json_value)) {
-        RenderBlockCachePage(json_value, os, client_name);
+      if (blockcache != nullptr && blockcache->Dump(json_value) &&
+          !RenderBlockCachePage(json_value, os, client_name)) {
+        cntl->SetFailed("invalid block cache dump.");
+        return;
       }
     } else if (api_name == "uidgidmap") {
       // /ClientStatService/uidgidmap
       vfs_hub_->GetUidGidMapper()->Dump(json_value);
-      RenderUidGidMapperPage(json_value, os, client_name);
+      if (!RenderUidGidMapperPage(json_value, os, client_name)) {
+        cntl->SetFailed("invalid uid/gid mapper dump.");
+        return;
+      }
     } else {
       return cntl->SetFailed("unknown path: " + path);  // NOLINT
     }
 
   } else if (params.size() == 2) {
-    LOG(INFO) << "Dump chunkset for ino: ";
-
     const std::string& api_name = params[0];
-    const Ino ino = strtoull(params[1].c_str(), nullptr, 10);
+    if (api_name != "filesession" && api_name != "chunkset") {
+      return cntl->SetFailed("unknown path: " + path);  // NOLINT
+    }
+
+    uint64_t ino_value = 0;
+    if (!ParseUnsignedPathParam(params[1], ino_value) || ino_value == 0) {
+      return cntl->SetFailed("invalid inode: " + params[1]);  // NOLINT
+    }
+    const Ino ino = ino_value;
 
     DumpOption options;
     Json::Value json_value;
@@ -1693,29 +1771,40 @@ void ClientStatServiceImpl::default_method(
 
       options.ino = ino;
       options.chunk_set = true;
-      if (vfs_hub_->GetMetaSystem()->Dump(options, json_value)) {
-        RenderChunkSetPage(ino, json_value, os, client_name);
+      if (vfs_hub_->GetMetaSystem()->Dump(options, json_value) &&
+          !RenderChunkSetPage(ino, json_value, os, client_name)) {
+        cntl->SetFailed("invalid chunk set dump.");
+        return;
       }
     }
 
   } else if (params.size() == 3) {
     const std::string& api_name = params[0];
-    const Ino ino = strtoull(params[1].c_str(), nullptr, 10);
-    const uint32_t chunk_index = strtoull(params[2].c_str(), nullptr, 10);
+    if (api_name != "chunk") {
+      return cntl->SetFailed("unknown path: " + path);  // NOLINT
+    }
+
+    uint64_t ino_value = 0;
+    uint64_t chunk_index_value = 0;
+    if (!ParseUnsignedPathParam(params[1], ino_value) || ino_value == 0 ||
+        !ParseUnsignedPathParam(params[2], chunk_index_value) ||
+        chunk_index_value > UINT32_MAX) {
+      return cntl->SetFailed("invalid chunk path: " + path);  // NOLINT
+    }
+    const Ino ino = ino_value;
+    const uint32_t chunk_index = chunk_index_value;
 
     DumpOption options;
     Json::Value json_value;
-    if (api_name == "chunk") {
-      // /ClientStatService/chunk/{ino}/{chunk_index}
-      LOG(INFO) << "Dump chunk for ino: " << ino
-                << ", chunk_index: " << chunk_index;
+    // /ClientStatService/chunk/{ino}/{chunk_index}
+    LOG(INFO) << "Dump chunk for ino: " << ino
+              << ", chunk_index: " << chunk_index;
 
-      options.ino = ino;
-      options.chunk_index = chunk_index;
-      options.chunk = true;
-      if (vfs_hub_->GetMetaSystem()->Dump(options, json_value)) {
-        RenderSingleChunkPage(ino, chunk_index, json_value, os, client_name);
-      }
+    options.ino = ino;
+    options.chunk_index = chunk_index;
+    options.chunk = true;
+    if (vfs_hub_->GetMetaSystem()->Dump(options, json_value)) {
+      RenderSingleChunkPage(ino, chunk_index, json_value, os, client_name);
     }
 
   } else {
