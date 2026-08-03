@@ -171,7 +171,7 @@ DEFINE_uint32(vfs_meta_read_dir_batch_size, 1024, "read dir batch size.");
 DEFINE_uint32(vfs_meta_rpc_timeout_ms, 10000, "rpc timeout ms");
 DEFINE_validator(vfs_meta_rpc_timeout_ms, brpc::PassValidate);
 
-DEFINE_int32(vfs_meta_rpc_retry_times, 8, "rpc retry time");
+DEFINE_int32(vfs_meta_rpc_retry_times, 7, "rpc retry time");
 DEFINE_validator(vfs_meta_rpc_retry_times, brpc::PassValidate);
 
 DEFINE_bool(vfs_meta_batch_operation_enable, false,
