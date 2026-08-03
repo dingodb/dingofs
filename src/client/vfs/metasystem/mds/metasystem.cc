@@ -1153,7 +1153,7 @@ Status MDSMetaSystem::Write(ContextSPtr, Ino ino, const char* buf,
 
   if (FLAGS_vfs_tiny_file_data_enable) {
     // tiny file write data
-    auto inode = GetInode(file_session);
+    auto inode = GetInode(file_session, "write");
     if (inode != nullptr && inode->MaybeTinyFile()) {
       auto data_buffer = tiny_file_data_cache_.GetOrCreate(ino);
       data_buffer->Write(buf, offset, size);
@@ -1179,7 +1179,7 @@ Status MDSMetaSystem::Read(ContextSPtr, Ino ino, uint64_t fh, uint64_t offset,
   CHECK(file_session != nullptr)
       << fmt::format("file session is nullptr, ino({}) fh({}).", ino, fh);
 
-  auto inode = GetInode(file_session);
+  auto inode = GetInode(file_session, "read");
   if (!inode->MaybeTinyFile()) {
     return Status::NoData("not tiny file");
   }
@@ -1463,11 +1463,13 @@ Status MDSMetaSystem::GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) {
 
   CHECK(ctx != nullptr) << "context is null";
 
+  std::string reason = "missing";
   auto inode = GetInodeFromCache(ino);
   if (inode != nullptr && !inode->IsAttrFresh()) {
     // attr ttl expired, treat as cache miss to refetch from mds for
     // multi-client consistency
     inode = nullptr;
+    reason = "expired";
   }
 
   if (inode == nullptr) {
@@ -1476,7 +1478,7 @@ Status MDSMetaSystem::GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) {
     // populated/refreshed before inode->ToAttr() emits the hashed-id attr.
     // The VFS layer above (not ToAttr) performs the local-host uid/gid
     // translation.
-    Status status = FetchInode(ctx, ino, "GetAttr", inode);
+    Status status = FetchInode(ctx, ino, reason, inode);
     if (!status.ok()) return status;
   }
 
@@ -1723,7 +1725,8 @@ InodeSPtr MDSMetaSystem::PutInodeToCache(const AttrEntry& attr_entry) {
   return inode_cache_.Put(attr_entry.ino(), attr_entry);
 }
 
-InodeSPtr MDSMetaSystem::GetInode(FileSessionSPtr& file_session) {
+InodeSPtr MDSMetaSystem::GetInode(FileSessionSPtr& file_session,
+                                  const std::string& reason) {
   InodeSPtr inode = file_session->GetInode();
   if (inode != nullptr) return inode;
 
@@ -1731,7 +1734,7 @@ InodeSPtr MDSMetaSystem::GetInode(FileSessionSPtr& file_session) {
   if (inode != nullptr) return inode;
 
   ContextSPtr ctx = std::make_shared<Context>("");
-  FetchInode(ctx, file_session->GetIno(), "GetInode", inode);
+  FetchInode(ctx, file_session->GetIno(), reason, inode);
 
   return inode;
 }
@@ -1933,7 +1936,7 @@ Status MDSMetaSystem::FlushSliceAndFile(ContextSPtr ctx, Ino ino) {
   } while (true);
 
   // flush file length and data
-  return DoFlushFile(ctx, GetInode(file_session), chunk_set, true);
+  return DoFlushFile(ctx, GetInode(file_session, "flush"), chunk_set, true);
 }
 
 void MDSMetaSystem::AsyncFlushFile(ContextSPtr ctx, Ino ino) {
@@ -1958,7 +1961,8 @@ void MDSMetaSystem::AsyncFlushFile(ContextSPtr ctx, Ino ino) {
               LOG_DEBUG << fmt::format("[meta.fs.{}] async flush file.", ino);
 
               auto& chunk_set = file_session->GetChunkSet();
-              self.DoFlushFile(param->ctx, self.GetInode(file_session),
+              self.DoFlushFile(param->ctx,
+                               self.GetInode(file_session, "asyncflush"),
                                chunk_set, false);
               chunk_set->ResetFlush();
             }
@@ -2012,7 +2016,7 @@ Status MDSMetaSystem::CorrectAttr(ContextSPtr ctx, uint64_t time_ns, Attr& attr,
                              caller);
     // correct attr, fetch latest attr from mds
     InodeSPtr inode;
-    Status status = FetchInode(ctx, attr.ino, "CorrectAttr", inode);
+    Status status = FetchInode(ctx, attr.ino, "correctattr." + caller, inode);
     if (!status.ok()) return status;
 
     attr = inode->ToAttr();

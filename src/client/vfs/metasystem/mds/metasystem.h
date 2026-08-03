@@ -212,7 +212,7 @@ class MDSMetaSystem : public vfs::MetaSystem {
   InodeSPtr PutInodeToCache(const AttrEntry& attr_entry);
   void DeleteInodeFromCache(Ino ino) { inode_cache_.Delete(ino); }
   InodeSPtr GetInodeFromCache(Ino ino) { return inode_cache_.Get(ino); }
-  InodeSPtr GetInode(FileSessionSPtr& file_session);
+  InodeSPtr GetInode(FileSessionSPtr& file_session, const std::string& reason);
   Status GetInode(Ino ino, const std::string& reason, InodeSPtr& inode);
 
   // chunk cache

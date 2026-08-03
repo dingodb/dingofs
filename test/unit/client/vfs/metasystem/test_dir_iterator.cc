@@ -18,6 +18,7 @@
 #include <gtest/gtest.h>
 
 #include <memory>
+#include <thread>
 #include <vector>
 
 #include "client/vfs/metasystem/mds/dir_iterator.h"
@@ -213,6 +214,20 @@ TEST_F(DirIteratorTest, GetValue_FetchError_Propagated) {
   EXPECT_TRUE(s.IsInternal());
 }
 
+TEST_F(DirIteratorTest, GetValue_FetchError_CanRetry) {
+  auto entries = MakeEntries(1, 10);
+
+  EXPECT_CALL(*mock_mds_client_, ReadDir)
+      .WillOnce(Return(Status::Internal("mock error")))
+      .WillOnce(DoAll(SetArgReferee<6>(entries), Return(Status::OK())));
+
+  auto dir_iter = DirIterator::New(*mds_client_, *inode_cache_, 1, 100);
+  DirEntry entry;
+  EXPECT_TRUE(dir_iter->GetValue(ctx_, 0, true, entry).IsInternal());
+  ASSERT_TRUE(dir_iter->GetValue(ctx_, 0, true, entry).ok());
+  EXPECT_EQ(entry.ino, 10u);
+}
+
 // --- 7. Reading past end of directory returns NoData ---
 TEST_F(DirIteratorTest, GetValue_PastEnd_ReturnsNoData) {
   auto entries = MakeEntries(2, 1);
@@ -388,6 +403,70 @@ TEST_F(DirIteratorTest, InsertEntry_OverwritesAndKeepsOrder) {
   EXPECT_EQ(entry.ino, 22u);
 }
 
+TEST_F(DirIteratorTest, ConcurrentReaders_ShareCachedFetch) {
+  constexpr size_t kThreadCount = 16;
+  auto entries = MakeEntries(3, 10);
+
+  EXPECT_CALL(*mock_mds_client_, ReadDir(_, Eq(1), Eq(100), "", _, _, _))
+      .Times(1)
+      .WillOnce(DoAll(SetArgReferee<6>(entries), Return(Status::OK())));
+
+  auto dir_iter = DirIterator::New(*mds_client_, *inode_cache_, 1, 100);
+  std::vector<int> succeeded(kThreadCount);
+  std::vector<DirEntry> results(kThreadCount);
+  std::vector<std::thread> threads;
+  threads.reserve(kThreadCount);
+
+  for (size_t i = 0; i < kThreadCount; ++i) {
+    threads.emplace_back([&, i] {
+      std::lock_guard<std::mutex> lock(dir_iter->Mutex());
+      succeeded[i] =
+          dir_iter->GetValue(ctx_, i % entries.size(), true, results[i]).ok();
+    });
+  }
+  for (auto& thread : threads) {
+    thread.join();
+  }
+
+  for (size_t i = 0; i < kThreadCount; ++i) {
+    ASSERT_TRUE(succeeded[i]);
+    EXPECT_EQ(results[i].ino, entries[i % entries.size()].ino);
+    EXPECT_EQ(results[i].name, entries[i % entries.size()].name);
+  }
+}
+
+TEST_F(DirIteratorTest, ConcurrentMutations_PreserveSortedSnapshot) {
+  std::vector<ReadDirEntry> entries = {
+      MakeDirEntry(1, "a"), MakeDirEntry(3, "c"), MakeDirEntry(5, "e"),
+      MakeDirEntry(7, "g"), MakeDirEntry(9, "z")};
+
+  EXPECT_CALL(*mock_mds_client_, ReadDir(_, Eq(1), Eq(100), "", _, _, _))
+      .WillOnce(DoAll(SetArgReferee<6>(entries), Return(Status::OK())));
+
+  auto dir_iter = DirIterator::New(*mds_client_, *inode_cache_, 1, 100);
+  DirEntry entry;
+  ASSERT_TRUE(dir_iter->GetValue(ctx_, 0, true, entry).ok());
+
+  std::vector<std::thread> threads;
+  threads.emplace_back([&] { dir_iter->DeleteEntry("c"); });
+  threads.emplace_back([&] { dir_iter->DeleteEntry("g"); });
+  threads.emplace_back([&] { dir_iter->InsertEntry("b", 2); });
+  threads.emplace_back([&] { dir_iter->InsertEntry("d", 4); });
+  threads.emplace_back([&] { dir_iter->InsertEntry("f", 6); });
+  threads.emplace_back([&] { dir_iter->InsertEntry("h", 8); });
+  for (auto& thread : threads) {
+    thread.join();
+  }
+
+  const std::vector<std::string> expected_names = {"a", "b", "d", "e",
+                                                   "f", "h", "z"};
+  ASSERT_EQ(dir_iter->Size(), expected_names.size());
+  for (size_t i = 0; i < expected_names.size(); ++i) {
+    ASSERT_TRUE(dir_iter->GetValue(ctx_, i, true, entry).ok());
+    EXPECT_EQ(entry.name, expected_names[i]);
+  }
+}
+
 // --- 12. LastFetchTimeNs is set after construction ---
 TEST_F(DirIteratorTest, LastFetchTimeNs_SetAfterConstruction) {
   auto dir_iter = DirIterator::New(*mds_client_, *inode_cache_, 1, 100);
@@ -453,6 +532,38 @@ TEST_F(DirIteratorManagerTest, Size_CountsAllIterators) {
                       [](const DirIteratorManager::DirIteratorSet&) {});
 
   EXPECT_EQ(manager.Size(), 2u);
+}
+
+TEST_F(DirIteratorManagerTest, ConcurrentPutGetDelete_SameDirectory) {
+  constexpr size_t kThreadCount = 16;
+  DirIteratorManager manager;
+  std::vector<std::thread> threads;
+  threads.reserve(kThreadCount);
+
+  for (size_t i = 0; i < kThreadCount; ++i) {
+    threads.emplace_back([&, i] {
+      auto iter = MakeDirIterator(*mds_client_, 1, 100 + i);
+      manager.PutWithFunc(1, 100 + i, iter,
+                          [](const DirIteratorManager::DirIteratorSet&) {});
+    });
+  }
+  for (auto& thread : threads) {
+    thread.join();
+  }
+
+  ASSERT_EQ(manager.Size(), kThreadCount);
+  for (size_t i = 0; i < kThreadCount; ++i) {
+    ASSERT_NE(manager.Get(1, 100 + i), nullptr);
+  }
+
+  threads.clear();
+  for (size_t i = 0; i < kThreadCount; ++i) {
+    threads.emplace_back([&, i] { manager.Delete(1, 100 + i); });
+  }
+  for (auto& thread : threads) {
+    thread.join();
+  }
+  EXPECT_EQ(manager.Size(), 0u);
 }
 
 // --- 16. Bytes aggregates iterator memory ---
