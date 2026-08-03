@@ -1571,10 +1571,9 @@ Status MDSMetaSystem::SetAttr(ContextSPtr ctx, Ino ino, int set,
   if (!status.ok()) return status;
 
   modify_time_memo_.Remember(ino);
+  modify_time_memo_.UpdateKernelMtime(ino, out_attr->mtime);
 
   if (out.shrink_file) chunk_memo_.Forget(ino);
-
-  modify_time_memo_.UpdateKernelMtime(out_attr->ino, out_attr->mtime);
 
   return Status::OK();
 }
