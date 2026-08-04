@@ -47,6 +47,7 @@ namespace vfs {
 using ::testing::_;
 using ::testing::AnyNumber;
 using ::testing::DoAll;
+using ::testing::InSequence;
 using ::testing::Invoke;
 using ::testing::Return;
 using ::testing::SaveArg;
@@ -367,6 +368,107 @@ TEST_F(VFSImplTest, Release_StatsHandle_RemovesHandle) {
 
   Status s = vfs_->Release(ctx_, kStatsIno, fh);
   EXPECT_TRUE(s.ok());
+}
+
+TEST_F(VFSImplTest, Release_WritableHandle_FlushesBeforeMetaClose) {
+  auto writer_table = std::make_unique<WriterTable>(mock_hub_);
+  ON_CALL(*mock_hub_, GetWriterTable())
+      .WillByDefault(Return(writer_table.get()));
+  EXPECT_CALL(*mock_hub_, GetWriterTable()).Times(AnyNumber());
+
+  constexpr Ino kReleaseIno = 401;
+  uint64_t fh = 0;
+  ASSERT_TRUE(vfs_->Open(ctx_, kReleaseIno, O_WRONLY, &fh, nullptr).ok());
+
+  const char data[] = "dirty data";
+  uint64_t written = 0;
+  EXPECT_CALL(*mock_meta_system_, Write(_, kReleaseIno, _, 0, sizeof(data), fh))
+      .WillOnce(Return(Status::OK()));
+  ASSERT_TRUE(
+      vfs_->Write(ctx_, kReleaseIno, data, sizeof(data), 0, fh, &written).ok());
+  ASSERT_EQ(written, sizeof(data));
+
+  {
+    InSequence sequence;
+    EXPECT_CALL(*mock_meta_system_, WriteSlice(_, kReleaseIno, _, 0, _))
+        .WillOnce(Return(Status::OK()));
+    EXPECT_CALL(*mock_meta_system_, Close(_, kReleaseIno, fh))
+        .WillOnce(Return(Status::OK()));
+  }
+
+  Status s = vfs_->Release(ctx_, kReleaseIno, fh);
+  EXPECT_TRUE(s.ok()) << s.ToString();
+  EXPECT_FALSE(handle_manager_->FindHandlerForRelease(fh));
+}
+
+TEST_F(VFSImplTest, Release_SharedWriter_FlushesBeforeClosingEachSession) {
+  auto writer_table = std::make_unique<WriterTable>(mock_hub_);
+  ON_CALL(*mock_hub_, GetWriterTable())
+      .WillByDefault(Return(writer_table.get()));
+  EXPECT_CALL(*mock_hub_, GetWriterTable()).Times(AnyNumber());
+
+  constexpr Ino kReleaseIno = 402;
+  uint64_t first_fh = 0;
+  uint64_t second_fh = 0;
+  ASSERT_TRUE(vfs_->Open(ctx_, kReleaseIno, O_WRONLY, &first_fh, nullptr).ok());
+  ASSERT_TRUE(
+      vfs_->Open(ctx_, kReleaseIno, O_WRONLY, &second_fh, nullptr).ok());
+
+  const char data[] = "shared writer dirty data";
+  uint64_t written = 0;
+  EXPECT_CALL(*mock_meta_system_,
+              Write(_, kReleaseIno, _, 0, sizeof(data), first_fh))
+      .WillOnce(Return(Status::OK()));
+  ASSERT_TRUE(
+      vfs_->Write(ctx_, kReleaseIno, data, sizeof(data), 0, first_fh, &written)
+          .ok());
+
+  {
+    InSequence sequence;
+    EXPECT_CALL(*mock_meta_system_, WriteSlice(_, kReleaseIno, _, 0, _))
+        .WillOnce(Return(Status::OK()));
+    EXPECT_CALL(*mock_meta_system_, Close(_, kReleaseIno, first_fh))
+        .WillOnce(Return(Status::OK()));
+    EXPECT_CALL(*mock_meta_system_, Close(_, kReleaseIno, second_fh))
+        .WillOnce(Return(Status::OK()));
+  }
+
+  EXPECT_TRUE(vfs_->Release(ctx_, kReleaseIno, first_fh).ok());
+  EXPECT_EQ(writer_table->Size(), 1u);
+  EXPECT_TRUE(vfs_->Release(ctx_, kReleaseIno, second_fh).ok());
+  EXPECT_EQ(writer_table->Size(), 0u);
+}
+
+TEST_F(VFSImplTest, Release_FlushFailureStillClosesAndReleasesHandle) {
+  auto writer_table = std::make_unique<WriterTable>(mock_hub_);
+  ON_CALL(*mock_hub_, GetWriterTable())
+      .WillByDefault(Return(writer_table.get()));
+  EXPECT_CALL(*mock_hub_, GetWriterTable()).Times(AnyNumber());
+
+  constexpr Ino kReleaseIno = 403;
+  uint64_t fh = 0;
+  ASSERT_TRUE(vfs_->Open(ctx_, kReleaseIno, O_WRONLY, &fh, nullptr).ok());
+
+  const char data[] = "writeback failure";
+  uint64_t written = 0;
+  EXPECT_CALL(*mock_meta_system_, Write(_, kReleaseIno, _, 0, sizeof(data), fh))
+      .WillOnce(Return(Status::OK()));
+  ASSERT_TRUE(
+      vfs_->Write(ctx_, kReleaseIno, data, sizeof(data), 0, fh, &written).ok());
+
+  {
+    InSequence sequence;
+    EXPECT_CALL(*mock_meta_system_, WriteSlice(_, kReleaseIno, _, 0, _))
+        .WillOnce(Return(Status::Internal("write slice failed")));
+    EXPECT_CALL(*mock_meta_system_, Close(_, kReleaseIno, fh))
+        .WillOnce(Return(Status::OK()));
+  }
+
+  Status s = vfs_->Release(ctx_, kReleaseIno, fh);
+  EXPECT_FALSE(s.ok());
+  EXPECT_NE(s.ToString().find("write slice failed"), std::string::npos);
+  EXPECT_FALSE(handle_manager_->FindHandlerForRelease(fh));
+  EXPECT_EQ(writer_table->Size(), 0u);
 }
 
 // --- 10. Unlink internal file returns EPERM ---

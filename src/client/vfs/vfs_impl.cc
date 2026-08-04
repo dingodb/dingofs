@@ -760,7 +760,6 @@ Status VFSImpl::Release(ContextSPtr ctx, Ino ino, uint64_t fh) {
     return Status::OK();
   }
 
-  Status s;
   auto handle = handle_manager_->FindHandlerForRelease(fh);
   if (!handle) {
     VLOG(1) << "Release ignored, fh not found, ino: " << ino << ", fh: " << fh;
@@ -780,13 +779,28 @@ Status VFSImpl::Release(ContextSPtr ctx, Ino ino, uint64_t fh) {
   if (handle->resources.reader != nullptr) {
     handle->resources.reader->Close();
   }
+
+  // Drain dirty data while the metadata file session is still alive.  The
+  // last writer holder is released below by ReleaseHandler(), which may call
+  // FileWriter::Close() and perform a final flush.  Closing the metadata
+  // session first would make that flush's WriteSlice() fail because its
+  // FileSession had already been removed.
+  Status flush_status;
+  if (handle->resources.writer != nullptr) {
+    flush_status = handle->resources.writer->Flush();
+  }
+
+  Status close_status;
   if (!resources_detached) {
-    s = meta_system_->Close(ctx, ino, fh);
+    close_status = meta_system_->Close(ctx, ino, fh);
   }
 
   handle_manager_->ReleaseHandler(fh);
 
-  return s;
+  // Always complete Close and release the handle, even if flushing fails.
+  // Prefer the data-flush error because it describes a possible writeback
+  // failure; otherwise return the metadata close result.
+  return !flush_status.ok() ? flush_status : close_status;
 }
 
 // TODO: seperate data flush with metadata flush
