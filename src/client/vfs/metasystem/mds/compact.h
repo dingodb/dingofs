@@ -15,7 +15,10 @@
 #ifndef DINGOFS_SRC_CLIENT_VFS_META_MDS_COMPACT_H_
 #define DINGOFS_SRC_CLIENT_VFS_META_MDS_COMPACT_H_
 
+#include <absl/container/flat_hash_map.h>
+
 #include <atomic>
+#include <cstdint>
 #include <string>
 
 #include "client/vfs/compaction/compactor.h"
@@ -109,10 +112,23 @@ class CompactProcessor {
 
   bool IsStopped() { return is_stopped_.load(); }
 
+  uint64_t GetCompactedVersion(Ino ino, uint32_t chunk_index);
+  void UpdateComapctedVersion(Ino ino, uint32_t chunk_index, uint64_t version);
+
+  void CleanExpired(uint64_t expire_time_s);
+
  private:
   std::atomic<bool> is_stopped_{false};
 
   Executor executor_;
+
+  struct Value {
+    uint64_t version;
+    uint64_t last_active_time_s;
+  };
+  utils::RWLock lock_;
+  // key: ino + chunk_index, value: compacted version
+  absl::flat_hash_map<std::string, Value> compacted_version_memo_;
 };
 
 }  // namespace meta

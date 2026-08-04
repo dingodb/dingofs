@@ -203,6 +203,7 @@ class MDSMetaSystem : public vfs::MetaSystem {
   void CleanExpiredInodeCache();
   void CleanExpiredTinyFileDataCache();
   void CleanExpiredDirProfileCache();
+  void CleanExpiredCompactMemo();
 
   bool InitCrontab();
 
