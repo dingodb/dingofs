@@ -96,10 +96,6 @@ Status CompactChunkTask::Compact() {
   std::vector<Slice> old_slices = chunk_->GetCommitedSlice(version);
   if (old_slices.empty()) return Status::OK();
 
-  LOG(INFO) << fmt::format(
-      "[meta.compact.{}.{}.{}] do compact chunk, old_slices({}) version({}).",
-      ino_, chunk_index, Id(), old_slices.size(), version);
-
   std::vector<Slice> new_slices;
   ContextSPtr ctx = std::make_shared<Context>("");
   status = compactor_.Compact(ctx, ino_, chunk_index, old_slices, new_slices);
