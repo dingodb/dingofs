@@ -348,6 +348,13 @@ void ChunkSet::Append(uint32_t index, const std::vector<Slice>& slices) {
     chunk->AppendSlice(slices);
     chunk_map_.emplace(index, chunk);
   }
+
+  // calculate file length with write memo
+  uint64_t chunk_offset = index * chunk_size_;
+  for (const auto& slice : slices) {
+    last_write_slice_length_ =
+        std::max(last_write_slice_length_, chunk_offset + slice.End());
+  }
 }
 
 void ChunkSet::Put(const std::vector<ChunkEntry>& chunks, const char* reason) {

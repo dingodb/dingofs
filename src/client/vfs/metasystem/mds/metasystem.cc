@@ -1788,9 +1788,18 @@ Status MDSMetaSystem::DoFlushFile(ContextSPtr ctx, InodeSPtr inode,
     return Status::Internal("inode is null");
   }
 
-  Ino ino = inode->Ino();
+  const Ino ino = inode->Ino();
+
+  LOG_DEBUG << fmt::format(
+      "[meta.fs.{}] flush file, writeslice({}) write({}) commited({}) "
+      "is_final({}).",
+      ino, chunk_set->GetLastWriteSliceLength(),
+      chunk_set->GetLastWriteLength(), chunk_set->GetLastComitedLength(),
+      is_final);
+
   uint64_t last_write_length = is_final ? chunk_set->GetLastWriteLength()
                                         : chunk_set->GetLastComitedLength();
+
   if (last_write_length == 0) {
     LOG_DEBUG << fmt::format(
         "[meta.fs.{}] flush file skip cause no write data, length({}).", ino,

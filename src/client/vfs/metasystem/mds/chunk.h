@@ -297,6 +297,11 @@ class ChunkSet {
 
   Ino GetIno() const { return ino_; }
 
+  uint64_t GetLastWriteSliceLength() const {
+    utils::ReadLockGuard guard(lock_);
+    return last_write_slice_length_;
+  }
+
   // write memo operations
   void SetLastWriteLength(uint64_t offset, uint64_t size) {
     utils::WriteLockGuard lk(lock_);
@@ -431,9 +436,14 @@ class ChunkSet {
 
   mutable utils::RWLock lock_;
 
+  // record write file length by writeslice operation
+  uint64_t last_write_slice_length_{0};
+
+  // record write file length by write operation
   uint64_t last_write_length_{0};
   uint64_t last_write_time_ns_{0};
 
+  // record commited file length by CommitTask
   uint64_t last_commited_length_{0};
   bool last_commited_length_changed_{false};
 
