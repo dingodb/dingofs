@@ -496,6 +496,12 @@ void MDSMetaSystem::CleanExpiredDirProfileCache() {
   dir_profile_cache_->CleanExpired(utils::Timestamp());
 }
 
+void MDSMetaSystem::CleanExpiredCompactMemo() {
+  uint64_t expired_time_s = utils::Timestamp() - FLAGS_vfs_meta_memo_expired_s;
+
+  compact_processor_.CleanExpired(expired_time_s);
+}
+
 bool MDSMetaSystem::InitCrontab() {
   // add heartbeat crontab
   crontab_configs_.push_back({
@@ -516,6 +522,7 @@ bool MDSMetaSystem::InitCrontab() {
         this->CleanExpiredInodeCache();
         this->CleanExpiredTinyFileDataCache();
         this->CleanExpiredDirProfileCache();
+        this->CleanExpiredCompactMemo();
       },
   });
 

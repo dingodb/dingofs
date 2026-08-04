@@ -302,7 +302,7 @@ class ChunkSet {
     return last_write_slice_length_;
   }
 
-  // write memo operations
+  // write memo operationsm
   void SetLastWriteLength(uint64_t offset, uint64_t size) {
     utils::WriteLockGuard lk(lock_);
     last_write_length_ = std::max(last_write_length_, offset + size);

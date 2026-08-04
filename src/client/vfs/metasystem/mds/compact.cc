@@ -29,6 +29,8 @@ DEFINE_uint32(vfs_compact_worker_max_pending_num, 256,
               "compact worker max pending num");
 DEFINE_bool(vfs_compact_worker_use_pthread, true, "compact worker use pthread");
 
+constexpr size_t kCompactedVersionMemoMaxSize = 1024 * 1024;  // 1M
+
 void CompactChunkTask::Run() {
   if (compact_processor_.IsStopped() || IsDeleted()) {
     LOG(INFO) << fmt::format(
@@ -96,6 +98,14 @@ Status CompactChunkTask::Compact() {
   std::vector<Slice> old_slices = chunk_->GetCommitedSlice(version);
   if (old_slices.empty()) return Status::OK();
 
+  // check version
+  uint64_t compacted_version =
+      compact_processor_.GetCompactedVersion(ino_, chunk_index);
+  if (version <= compacted_version) {
+    return Status::NotFit(
+        fmt::format("stale version, {}<={}", version, compacted_version));
+  }
+
   std::vector<Slice> new_slices;
   ContextSPtr ctx = std::make_shared<Context>("");
   status = compactor_.Compact(ctx, ino_, chunk_index, old_slices, new_slices);
@@ -137,6 +147,9 @@ Status CompactChunkTask::Compact() {
                             param.end_pos, param.end_slice_id, new_slices);
       }
     }
+
+    compact_processor_.UpdateComapctedVersion(ino_, chunk_index,
+                                              chunk_entry.version());
 
     LOG(INFO) << fmt::format(
         "[meta.compact.{}.{}.{}] do compact chunk finish, version({}->{}) "
@@ -187,6 +200,44 @@ Status CompactProcessor::LaunchCompact(Ino ino, InodeSPtr inode,
   }
 
   return Status::OK();
+}
+
+uint64_t CompactProcessor::GetCompactedVersion(Ino ino, uint32_t chunk_index) {
+  utils::ReadLockGuard guard(lock_);
+
+  const std::string key = fmt::format("{}:{}", ino, chunk_index);
+  auto it = compacted_version_memo_.find(key);
+  return (it != compacted_version_memo_.end()) ? it->second.version : 0;
+}
+
+void CompactProcessor::UpdateComapctedVersion(Ino ino, uint32_t chunk_index,
+                                              uint64_t version) {
+  utils::WriteLockGuard guard(lock_);
+
+  const std::string key = fmt::format("{}:{}", ino, chunk_index);
+  auto [it, inserted] = compacted_version_memo_.try_emplace(
+      key, Value{.version = version, .last_active_time_s = utils::Timestamp()});
+  if (!inserted && it->second.version < version) {
+    it->second.version = version;
+    it->second.last_active_time_s = utils::Timestamp();
+  }
+}
+
+void CompactProcessor::CleanExpired(uint64_t expire_time_s) {
+  utils::WriteLockGuard guard(lock_);
+
+  if (compacted_version_memo_.size() < kCompactedVersionMemoMaxSize) return;
+
+  for (auto it = compacted_version_memo_.begin();
+       it != compacted_version_memo_.end();) {
+    if (it->second.last_active_time_s < expire_time_s) {
+      auto tmp = it++;
+      compacted_version_memo_.erase(tmp);
+
+    } else {
+      ++it;
+    }
+  }
 }
 
 }  // namespace meta
