@@ -123,7 +123,12 @@ void HandleManager::ReleaseHandleResources(HandleResources resources) {
   }
 
   if (resources.writer != nullptr) {
-    vfs_hub_->GetWriterTable()->ReleaseWriter(resources.writer);
+    const Ino ino = resources.writer->Ino();
+    Status s = vfs_hub_->GetWriterTable()->ReleaseWriter(resources.writer);
+    if (!s.ok()) {
+      LOG(ERROR) << fmt::format("Release writer failed, ino: {}, status: {}",
+                                ino, s.ToString());
+    }
   }
 }
 
@@ -295,7 +300,10 @@ Status HandleManager::FlushByIno(Ino ino) {
     return Status::OK();  // no writer for this ino → nothing to flush
   }
   Status s = writer->Flush();
-  vfs_hub_->GetWriterTable()->ReleaseWriter(writer);
+  Status release_status = vfs_hub_->GetWriterTable()->ReleaseWriter(writer);
+  if (s.ok() && !release_status.ok()) {
+    s = release_status;
+  }
   if (!s.ok()) {
     LOG(WARNING) << fmt::format("FlushByIno failed, ino: {}, status: {}", ino,
                                 s.ToString());

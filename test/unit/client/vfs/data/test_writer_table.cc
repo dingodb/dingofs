@@ -28,6 +28,7 @@ namespace vfs {
 
 using dingofs::client::vfs::test::VFSTestBase;
 using ::testing::AnyNumber;
+using ::testing::Return;
 
 class WriterTableTest : public VFSTestBase {
  protected:
@@ -172,6 +173,28 @@ TEST_F(WriterTableTest, ReleaseAfterStop_StillEvicts) {
   table_->ReleaseWriter(w);
   EXPECT_EQ(table_->Size(), 0u)
       << "ReleaseWriter after Stop must still return the writer";
+}
+
+// The last holder owns the synchronous Close and must receive its writeback
+// failure. Earlier holder releases have no close work and return OK.
+TEST_F(WriterTableTest, LastRelease_PropagatesCloseFailure) {
+  ON_CALL(*mock_meta_system_, WriteSlice)
+      .WillByDefault(Return(Status::Internal("last release flush error")));
+
+  auto* w1 = table_->AcquireWriter(600);
+  ASSERT_NE(w1, nullptr);
+  auto* w2 = table_->AcquireWriter(600);
+  ASSERT_EQ(w2, w1);
+
+  const char buf[] = "data";
+  uint64_t wsize = 0;
+  ASSERT_TRUE(w1->Write(ctx_, buf, sizeof(buf), 0, &wsize).ok());
+
+  EXPECT_TRUE(table_->ReleaseWriter(w1).ok());
+  Status s = table_->ReleaseWriter(w2);
+  EXPECT_FALSE(s.ok());
+  EXPECT_THAT(s.ToString(), ::testing::HasSubstr("last release flush error"));
+  EXPECT_EQ(table_->Size(), 0u);
 }
 
 }  // namespace vfs

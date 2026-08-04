@@ -44,7 +44,9 @@ class FileWriter {
 
   Status Open();
 
-  void Close();
+  // Drain pending writes and stop the writer. The first close result is
+  // cached, so repeated calls are idempotent and report the same failure.
+  Status Close();
 
   Status Write(ContextSPtr ctx, const char* buf, uint64_t size, uint64_t offset,
                uint64_t* out_wsize);
@@ -87,6 +89,7 @@ class FileWriter {
   mutable std::mutex mutex_;
   std::condition_variable cv_;
   bool closed_{false};
+  Status close_status_;
   int64_t writers_count_{0};
 
   // chunk_index -> chunk

@@ -98,7 +98,13 @@ Status ApplyWriteBufferThrottle(WriteMemPool* bm) {
 
 }  // namespace
 
-FileWriter::~FileWriter() { Close(); }
+FileWriter::~FileWriter() {
+  Status s = Close();
+  if (!s.ok()) {
+    LOG(ERROR) << fmt::format("{} FileWriter destroyed with close error: {}",
+                              uuid_, s.ToString());
+  }
+}
 
 Status FileWriter::Open() {
   VLOG(9) << fmt::format("{} FileWriter opened", uuid_);
@@ -106,11 +112,11 @@ Status FileWriter::Open() {
   return Status::OK();
 }
 
-void FileWriter::Close() {
+Status FileWriter::Close() {
   std::unique_lock<std::mutex> lg(mutex_);
   if (closed_) {
     LOG(INFO) << fmt::format("{} FileWriter already closed", uuid_);
-    return;
+    return close_status_;
   }
 
   closed_ = true;
@@ -135,6 +141,7 @@ void FileWriter::Close() {
     sync.Wait();
 
     if (!s.ok()) {
+      SetStatusIfBroken(s);
       LOG(ERROR) << fmt::format("{} Failed to close file, flush error: {}",
                                 uuid_, s.ToString());
     }
@@ -145,6 +152,11 @@ void FileWriter::Close() {
     chunk_writer->Stop();
     delete chunk_writer;
   }
+
+  // Preserve the first writeback failure, including one observed by an
+  // earlier Flush(), and return it to the lifecycle caller.
+  close_status_ = GetStatus();
+  return close_status_;
 }
 
 void FileWriter::AcquireRef() {

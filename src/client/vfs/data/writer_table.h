@@ -86,7 +86,8 @@ class WriterTable {
   // the map, Close() is called on the writer (so its self-managed
   // periodic flush stops re-arming), and finally ReleaseRef() is invoked
   // (which may delete-this once refs_ reaches 0).
-  void ReleaseWriter(FileWriter* writer);
+  // Returns the final Close() result when this drops the last holder.
+  Status ReleaseWriter(FileWriter* writer);
 
   // Number of live entries (best-effort, for metrics / tests).
   size_t Size() const;

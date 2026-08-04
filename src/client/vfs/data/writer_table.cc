@@ -123,8 +123,8 @@ FileWriter* WriterTable::PeekWriter(uint64_t ino) {
   return it->second.writer;
 }
 
-void WriterTable::ReleaseWriter(FileWriter* writer) {
-  if (writer == nullptr) return;
+Status WriterTable::ReleaseWriter(FileWriter* writer) {
+  if (writer == nullptr) return Status::OK();
 
   uint64_t ino = writer->Ino();
   bool need_close = false;
@@ -152,10 +152,14 @@ void WriterTable::ReleaseWriter(FileWriter* writer) {
   //     would block all other Acquire/Release.
   //   - ReleaseRef may transitively call delete-this; doing it outside
   //     also keeps the table mutex's critical section short.
+  Status close_status;
   if (need_close) {
-    writer->Close();   // flips closed_ so SchedulePeriodicFlush stops arming
+    // Flips closed_ so SchedulePeriodicFlush stops arming. Keep the result
+    // before ReleaseRef(), which may delete the writer.
+    close_status = writer->Close();
   }
   writer->ReleaseRef();   // may delete-this once refs_ reaches 0
+  return close_status;
 }
 
 }  // namespace vfs

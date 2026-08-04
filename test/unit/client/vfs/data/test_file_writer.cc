@@ -346,6 +346,26 @@ TEST_F(FileWriterTest, FlushError_BecomesStickyAndBlocksWrites) {
   w->ReleaseRef();
 }
 
+// Close is the last synchronous writeback boundary. It must return the final
+// flush failure and retain it for idempotent callers instead of only logging.
+TEST_F(FileWriterTest, Close_FlushErrorIsReturnedAndCached) {
+  ON_CALL(*mock_meta_system_, WriteSlice)
+      .WillByDefault(Return(Status::Internal("close flush error")));
+
+  auto* w = MakeOpenWriter();
+  const char buf[] = "data";
+  uint64_t wsize = 0;
+  ASSERT_TRUE(w->Write(ctx_, buf, sizeof(buf), 0, &wsize).ok());
+
+  Status first = w->Close();
+  ASSERT_FALSE(first.ok());
+  EXPECT_THAT(first.ToString(), ::testing::HasSubstr("close flush error"));
+
+  Status second = w->Close();
+  EXPECT_EQ(second.ToString(), first.ToString());
+  w->ReleaseRef();
+}
+
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs
