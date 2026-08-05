@@ -58,6 +58,8 @@ namespace {
 // (usage already past soft_ratio), so the normal write path never touches them.
 bvar::Adder<int64_t> g_throttle_num("vfs_write_throttle_num");
 bvar::Adder<int64_t> g_throttle_timeout_num("vfs_write_throttle_timeout_num");
+bvar::Adder<int64_t> g_close_after_flush_failure_num(
+    "vfs_file_writer_close_after_flush_failure_num");
 
 // Memory-pressure throttle (pool-backed WriteMemPool, usage is hard-capped at
 // 100% so the old `used > total` / `> 2*total` thresholds never fire). Now
@@ -124,20 +126,16 @@ void FileWriter::Close() {
     cv_.wait(lg);
   }
 
-  if (!chunk_writers_.empty()) {
-    uint64_t file_flush_id = file_flush_id_gen.fetch_add(1);
-    auto flush_task =
-        std::make_unique<FileFlushTask>(ino_, file_flush_id, chunk_writers_);
-
-    Status s;
-    Synchronizer sync;
-    flush_task->RunAsync(sync.AsStatusCallBack(s));
-    sync.Wait();
-
-    if (!s.ok()) {
-      LOG(ERROR) << fmt::format("{} Failed to close file, flush error: {}",
-                                uuid_, s.ToString());
-    }
+  Status flush_status = GetStatus();
+  if (flush_status.ok()) {
+    CHECK_EQ(write_generation_, flushed_generation_)
+        << fmt::format("{} Close found unflushed data", uuid_);
+  } else {
+    g_close_after_flush_failure_num << 1;
+    LOG(ERROR) << fmt::format(
+        "{} Close after flush failure, write_generation: {}, "
+        "flushed_generation: {}, status: {}",
+        uuid_, write_generation_, flushed_generation_, flush_status.ToString());
   }
 
   for (auto& pair : chunk_writers_) {
@@ -238,6 +236,9 @@ Status FileWriter::Write(ContextSPtr ctx, const char* buf, uint64_t size,
 
   {
     std::lock_guard<std::mutex> lock(mutex_);
+    if (written_size > 0) {
+      ++write_generation_;
+    }
     writers_count_--;
     if (writers_count_ == 0) {
       cv_.notify_all();
@@ -274,8 +275,13 @@ ChunkWriter* FileWriter::GetOrCreateChunkWriter(int64_t chunk_index) {
   }
 }
 
-void FileWriter::FileFlushTaskDone(uint64_t file_flush_id, StatusCallback cb,
-                                   Status status) {
+void FileWriter::FileFlushTaskDone(uint64_t file_flush_id,
+                                   uint64_t target_generation,
+                                   StatusCallback cb, Status status) {
+  if (!status.ok()) {
+    SetStatusIfBroken(status);
+  }
+
   {
     std::lock_guard<std::mutex> lock(mutex_);
     auto iter = inflight_flush_tasks_.find(file_flush_id);
@@ -285,6 +291,10 @@ void FileWriter::FileFlushTaskDone(uint64_t file_flush_id, StatusCallback cb,
                    << ", file_flush_id: " << file_flush_id
                    << ", flush_task: " << iter->second->ToString()
                    << ", status: " << status.ToString();
+    }
+
+    if (status.ok()) {
+      flushed_generation_ = std::max(flushed_generation_, target_generation);
     }
 
     inflight_flush_tasks_.erase(iter);
@@ -304,10 +314,14 @@ void FileWriter::AsyncFlush(StatusCallback cb) {
 
   FileFlushTask* flush_task{nullptr};
   uint64_t chunk_count = 0;
+  uint64_t target_generation = 0;
+  bool closed = false;
 
   {
     std::lock_guard<std::mutex> lock(mutex_);
+    target_generation = write_generation_;
     if (closed_) {
+      closed = true;
       LOG(INFO) << fmt::format(
           "{} File::AsyncFlush skip becaue file already closed", uuid_);
     } else {
@@ -326,11 +340,19 @@ void FileWriter::AsyncFlush(StatusCallback cb) {
     }
   }
 
+  if (closed) {
+    cb(Status::BadFd("file already closed"));
+    return;
+  }
+
   if (flush_task == nullptr) {
     VLOG(3) << fmt::format(
         "{} File::AsyncFlush end file_flush_id: {}, chunk_count: {} calling "
         "callback directly",
         uuid_, file_flush_id, chunk_count);
+    // chunk_writers_ only grows after a successful write reaches a chunk.
+    // Therefore an empty writer has no generation that needs flushing.
+    DCHECK_EQ(target_generation, 0);
     cb(Status::OK());
     return;
   }
@@ -338,14 +360,14 @@ void FileWriter::AsyncFlush(StatusCallback cb) {
   CHECK_NOTNULL(flush_task);
 
   AcquireRef();
-  flush_task->RunAsync(
-      [this, file_flush_id, rcb = std::move(cb)](Status status) {
-        VLOG(3) << "File::AsyncFlush end ino: " << ino_
-                << ", file_flush_id: " << file_flush_id
-                << ", status: " << status.ToString();
-        FileFlushTaskDone(file_flush_id, rcb, std::move(status));
-        ReleaseRef();
-      });
+  flush_task->RunAsync([this, file_flush_id, target_generation,
+                        rcb = std::move(cb)](Status status) {
+    VLOG(3) << "File::AsyncFlush end ino: " << ino_
+            << ", file_flush_id: " << file_flush_id
+            << ", status: " << status.ToString();
+    FileFlushTaskDone(file_flush_id, target_generation, rcb, std::move(status));
+    ReleaseRef();
+  });
 }
 
 Status FileWriter::Flush() {
@@ -353,9 +375,6 @@ Status FileWriter::Flush() {
   Synchronizer sync;
   AsyncFlush(sync.AsStatusCallBack(s));
   sync.Wait();
-  if (!s.ok()) {
-    SetStatusIfBroken(s);
-  }
   return s;
 }
 

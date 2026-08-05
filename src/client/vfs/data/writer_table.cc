@@ -52,14 +52,16 @@ void WriterTable::Stop() {
 }
 
 Status WriterTable::FlushAll() {
-  // Snapshot live writers (transient AcquireRef on each), flush outside lock.
-  // The transient ref does NOT touch holders — it is an internal hold.
+  // Snapshot live writers and pin each entry with a transient holder. A plain
+  // FileWriter ref would prevent UAF but would still allow the last external
+  // holder to erase the entry and Close() the writer before Flush() starts.
   std::vector<FileWriter*> snap;
   {
     std::lock_guard<std::mutex> lg(mutex_);
     snap.reserve(writers_.size());
     for (auto& [ino, e] : writers_) {
       e.writer->AcquireRef();
+      ++e.holders;
       snap.push_back(e.writer);
     }
   }
@@ -72,9 +74,9 @@ Status WriterTable::FlushAll() {
       LOG(WARNING) << fmt::format("FlushAll: writer flush failed: {}",
                                   s.ToString());
     }
-    // Release the transient ref directly via FileWriter — the snap path
-    // never touched holders, so it must not call ReleaseWriter.
-    w->ReleaseRef();
+    // Drop the transient holder. If all external holders were concurrently
+    // released, this is now the last holder and performs Close after Flush.
+    ReleaseWriter(w);
   }
   return final_status;
 }

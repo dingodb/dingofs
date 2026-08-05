@@ -18,6 +18,7 @@
 #include <gtest/gtest.h>
 
 #include <atomic>
+#include <chrono>
 #include <future>
 #include <thread>
 #include <vector>
@@ -286,22 +287,51 @@ TEST_F(ChunkWriterTest, ConcurrentWrites_NoDeadlock) {
 // 9. Stop() waits for any ongoing flush to finish before returning.
 //    After Stop(), the writer is destroyed cleanly.
 TEST_F(ChunkWriterTest, Stop_WaitsForFlush) {
+  std::mutex mutex;
+  std::condition_variable cv;
+  bool write_slice_entered = false;
+  bool allow_write_slice = false;
+
+  ON_CALL(*mock_meta_system_, WriteSlice)
+      .WillByDefault([&](auto, auto, auto, auto, auto) {
+        std::unique_lock<std::mutex> lock(mutex);
+        write_slice_entered = true;
+        cv.notify_all();
+        cv.wait(lock, [&] { return allow_write_slice; });
+        return Status::OK();
+      });
+
   auto writer = MakeWriter();
 
   const char buf[] = "stop test";
-  writer->Write(ctx_, buf, sizeof(buf), 0);
+  ASSERT_TRUE(writer->Write(ctx_, buf, sizeof(buf), 0).ok());
 
-  // FlushAsync then Stop; Stop should block until flush completes.
   AsyncWaiter waiter;
   waiter.Expect(1);
   writer->FlushAsync([&](Status s) {
     EXPECT_TRUE(s.ok());
     waiter.Done();
   });
-  waiter.Wait();
 
-  // Stop must not crash.
-  writer->Stop();
+  {
+    std::unique_lock<std::mutex> lock(mutex);
+    ASSERT_TRUE(cv.wait_for(lock, std::chrono::seconds(5),
+                            [&] { return write_slice_entered; }));
+  }
+
+  auto stop = std::async(std::launch::async, [&writer] { writer->Stop(); });
+  EXPECT_EQ(stop.wait_for(std::chrono::milliseconds(50)),
+            std::future_status::timeout);
+
+  {
+    std::lock_guard<std::mutex> lock(mutex);
+    allow_write_slice = true;
+  }
+  cv.notify_all();
+
+  waiter.Wait();
+  EXPECT_EQ(stop.wait_for(std::chrono::seconds(5)), std::future_status::ready);
+  stop.get();
 }
 
 // 10. TriggerFlush (called automatically when a slice fills up) does not crash

@@ -103,7 +103,7 @@ class HandleManager {
 
   Status Start();
 
-  void Stop();
+  Status Stop();
 
   // Build a new Handle for (fh, ino, flags). Allocates FileReader
   // unconditionally and acquires a writer from WriterTable for any

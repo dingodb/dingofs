@@ -233,9 +233,48 @@ TEST_F(HandleManagerTest, Stop_ReleasesWriterResources) {
   ASSERT_NE(h, nullptr);
   EXPECT_EQ(writer_table_->Size(), 1u);
 
-  handle_manager_->Stop();
+  const char buf[] = "shutdown flush";
+  uint64_t wsize = 0;
+  ASSERT_TRUE(
+      h->resources.writer->Write(ctx_, buf, sizeof(buf), 0, &wsize).ok());
+
+  int write_slice_calls = 0;
+  ON_CALL(*mock_meta_system_, WriteSlice)
+      .WillByDefault([&](auto, auto, auto, auto, auto) {
+        ++write_slice_calls;
+        EXPECT_EQ(writer_table_->Size(), 1u)
+            << "FlushAll must run before the last holder is released";
+        return Status::OK();
+      });
+
+  EXPECT_TRUE(handle_manager_->Stop().ok());
+  EXPECT_GE(write_slice_calls, 1);
   EXPECT_EQ(writer_table_->Size(), 0u)
       << "Stop must release the writer while executors are still alive";
+}
+
+// Stop must return the shutdown FlushAll failure, but still detach/release
+// resources. FileWriter Close observes the sticky error and must not turn the
+// external writeback failure into a second process-fatal invariant failure.
+TEST_F(HandleManagerTest, Stop_FlushFailureReturnedAndResourcesReleased) {
+  auto* h = handle_manager_->NewHandle(/*fh*/ 62, /*ino*/ 1002, O_WRONLY);
+  ASSERT_NE(h, nullptr);
+
+  const char buf[] = "fail shutdown flush";
+  uint64_t wsize = 0;
+  ASSERT_TRUE(
+      h->resources.writer->Write(ctx_, buf, sizeof(buf), 0, &wsize).ok());
+
+  ON_CALL(*mock_meta_system_, WriteSlice)
+      .WillByDefault(Return(Status::Internal("shutdown flush failed")));
+
+  Status s = handle_manager_->Stop();
+  EXPECT_FALSE(s.ok());
+  EXPECT_THAT(s.ToString(), ::testing::HasSubstr("shutdown flush failed"));
+  EXPECT_EQ(writer_table_->Size(), 0u);
+  auto guard = handle_manager_->FindHandlerForRelease(62);
+  ASSERT_TRUE(guard);
+  EXPECT_EQ(guard->resources.writer, nullptr);
 }
 
 // Stop() detaches resources but keeps the handle identity (fh/ino/flags) so

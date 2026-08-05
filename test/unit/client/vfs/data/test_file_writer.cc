@@ -14,14 +14,20 @@
  * limitations under the License.
  */
 
+#include <gflags/gflags.h>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include <chrono>
 #include <cstdint>
+#include <future>
+#include <mutex>
 #include <thread>
+#include <unordered_set>
 #include <vector>
 
 #include "client/vfs/data/writer/file_writer.h"
+#include "common/options/client.h"
 #include "common/trace/trace_manager.h"
 #include "common/writemempool/write_mem_pool.h"
 #include "test/unit/client/vfs/test_base.h"
@@ -57,6 +63,12 @@ class FileWriterTest : public VFSTestBase {
     CHECK(w->Open().ok());
     return w;
   }
+
+  void FlushCloseAndRelease(FileWriter* w) {
+    ASSERT_TRUE(w->Flush().ok());
+    w->Close();
+    w->ReleaseRef();
+  }
 };
 
 // 1. Write() for a simple in-chunk write succeeds and returns the correct
@@ -70,8 +82,7 @@ TEST_F(FileWriterTest, Write_SingleChunk_CorrectSize) {
   EXPECT_TRUE(s.ok());
   EXPECT_EQ(wsize, sizeof(buf));
 
-  w->Close();
-  w->ReleaseRef();
+  FlushCloseAndRelease(w);
 }
 
 // 2. Write() crossing a chunk boundary creates two chunk writers and writes
@@ -91,8 +102,7 @@ TEST_F(FileWriterTest, Write_CrossingChunkBoundary) {
   EXPECT_TRUE(s.ok());
   EXPECT_EQ(wsize, kWriteSize);
 
-  w->Close();
-  w->ReleaseRef();
+  FlushCloseAndRelease(w);
 }
 
 // 2b. Cross-chunk pool exhaustion is a POSIX short write: chunk0 succeeds,
@@ -119,8 +129,7 @@ TEST_F(FileWriterTest, Write_CrossChunk_PoolExhaustion_ShortWrite) {
   EXPECT_TRUE(s.ok()) << s.ToString();
   EXPECT_EQ(wsize, 4u);
 
-  w->Close();
-  w->ReleaseRef();
+  FlushCloseAndRelease(w);
 }
 
 // 2c. First chunk itself exhausts the pool: zero bytes land, so the write is a
@@ -194,10 +203,9 @@ TEST_F(FileWriterTest, Flush_WriteSliceError_Propagated) {
   w->ReleaseRef();
 }
 
-// 6. Close() waits for all in-flight writes to complete.
-//    This test spawns a write thread and then immediately calls Close()
-//    from the main thread to verify Close doesn't race or deadlock.
-TEST_F(FileWriterTest, Close_WaitsForInflightWrites) {
+// 6. Concurrent writes followed by an explicit Flush and Close are safe.
+// Close itself is tested against an actually in-flight flush below.
+TEST_F(FileWriterTest, ConcurrentWrites_ThenFlushClose) {
   auto* w = MakeOpenWriter();
 
   constexpr int kThreads = 4;
@@ -220,8 +228,50 @@ TEST_F(FileWriterTest, Close_WaitsForInflightWrites) {
     t.join();
   }
 
-  // Close must complete without deadlock.
-  w->Close();
+  // Close only validates/cleans up; the lifecycle owner must flush first.
+  FlushCloseAndRelease(w);
+}
+
+TEST_F(FileWriterTest, Close_WaitsForInflightFlush) {
+  std::mutex mutex;
+  std::condition_variable cv;
+  bool write_slice_entered = false;
+  bool allow_write_slice = false;
+
+  ON_CALL(*mock_meta_system_, WriteSlice)
+      .WillByDefault([&](auto, auto, auto, auto, auto) {
+        std::unique_lock<std::mutex> lock(mutex);
+        write_slice_entered = true;
+        cv.notify_all();
+        cv.wait(lock, [&] { return allow_write_slice; });
+        return Status::OK();
+      });
+
+  auto* w = MakeOpenWriter();
+  const char buf[] = "blocked flush";
+  uint64_t wsize = 0;
+  ASSERT_TRUE(w->Write(ctx_, buf, sizeof(buf), 0, &wsize).ok());
+
+  auto flush = std::async(std::launch::async, [w] { return w->Flush(); });
+  {
+    std::unique_lock<std::mutex> lock(mutex);
+    ASSERT_TRUE(cv.wait_for(lock, std::chrono::seconds(5),
+                            [&] { return write_slice_entered; }));
+  }
+
+  auto close = std::async(std::launch::async, [w] { w->Close(); });
+  EXPECT_EQ(close.wait_for(std::chrono::milliseconds(50)),
+            std::future_status::timeout);
+
+  {
+    std::lock_guard<std::mutex> lock(mutex);
+    allow_write_slice = true;
+  }
+  cv.notify_all();
+
+  ASSERT_TRUE(flush.get().ok());
+  EXPECT_EQ(close.wait_for(std::chrono::seconds(5)), std::future_status::ready);
+  close.get();
   w->ReleaseRef();
 }
 
@@ -342,6 +392,180 @@ TEST_F(FileWriterTest, FlushError_BecomesStickyAndBlocksWrites) {
   Status ws = w->Write(ctx_, buf, sizeof(buf), 4096, &wsize);
   EXPECT_FALSE(ws.ok());
 
+  w->Close();
+  w->ReleaseRef();
+}
+
+// Close is not a persistence operation. If no Flush error explains the state,
+// closing a writer whose latest write generation was never flushed is a
+// lifecycle bug and must fail fast.
+TEST_F(FileWriterTest, Close_UnflushedWrite_CheckFails) {
+  GTEST_FLAG_SET(death_test_style, "threadsafe");
+  auto* w = MakeOpenWriter();
+
+  const char buf[] = "unflushed";
+  uint64_t wsize = 0;
+  ASSERT_TRUE(w->Write(ctx_, buf, sizeof(buf), 0, &wsize).ok());
+
+  EXPECT_DEATH(w->Close(), "Close found unflushed data");
+
+  // EXPECT_DEATH runs in a child; clean up the unchanged parent-side writer.
+  FlushCloseAndRelease(w);
+}
+
+TEST_F(FileWriterTest, Flush_AfterClose_ReturnsBadFd) {
+  auto* w = MakeOpenWriter();
+  w->Close();
+
+  Status s = w->Flush();
+  EXPECT_FALSE(s.ok());
+  EXPECT_EQ(s.ToSysErrNo(), EBADF);
+  w->ReleaseRef();
+}
+
+TEST_F(FileWriterTest, PeriodicFlushErrorBecomesStickyAndBlocksWrites) {
+  gflags::FlagSaver flag_saver;
+  FLAGS_vfs_periodic_flush_interval_ms = 1;
+
+  std::mutex mutex;
+  std::condition_variable cv;
+  bool write_slice_called = false;
+  ON_CALL(*mock_meta_system_, WriteSlice)
+      .WillByDefault([&](auto, auto, auto, auto, auto) {
+        {
+          std::lock_guard<std::mutex> lock(mutex);
+          write_slice_called = true;
+        }
+        cv.notify_all();
+        return Status::Internal("periodic flush failed");
+      });
+
+  auto* w = MakeOpenWriter();
+  const char buf[] = "periodic";
+  uint64_t wsize = 0;
+  ASSERT_TRUE(w->Write(ctx_, buf, sizeof(buf), 0, &wsize).ok());
+
+  {
+    std::unique_lock<std::mutex> lock(mutex);
+    ASSERT_TRUE(cv.wait_for(lock, std::chrono::seconds(5),
+                            [&] { return write_slice_called; }));
+  }
+
+  const auto deadline =
+      std::chrono::steady_clock::now() + std::chrono::seconds(5);
+  while (w->GetStatus().ok() && std::chrono::steady_clock::now() < deadline) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+  ASSERT_FALSE(w->GetStatus().ok());
+
+  wsize = 12345;
+  Status s = w->Write(ctx_, buf, sizeof(buf), 4096, &wsize);
+  EXPECT_FALSE(s.ok());
+  EXPECT_EQ(wsize, 0u);
+
+  w->Close();
+  w->ReleaseRef();
+}
+
+// A successful explicit Flush owns all writeback. Close must not submit a
+// second WriteSlice after metadata lifecycle code is free to close the session.
+TEST_F(FileWriterTest, Close_AfterFlush_DoesNotFlushAgain) {
+  int write_slice_calls = 0;
+  ON_CALL(*mock_meta_system_, WriteSlice)
+      .WillByDefault([&](auto, auto, auto, auto, auto) {
+        ++write_slice_calls;
+        return Status::OK();
+      });
+
+  auto* w = MakeOpenWriter();
+  const char buf[] = "data";
+  uint64_t wsize = 0;
+  ASSERT_TRUE(w->Write(ctx_, buf, sizeof(buf), 0, &wsize).ok());
+  ASSERT_TRUE(w->Flush().ok());
+  const int calls_after_flush = write_slice_calls;
+
+  w->Close();
+  EXPECT_EQ(write_slice_calls, calls_after_flush);
+  w->ReleaseRef();
+}
+
+TEST_F(FileWriterTest, ConcurrentFlushesAdvanceToLatestGeneration) {
+  std::mutex mutex;
+  std::condition_variable cv;
+  bool first_write_slice_entered = false;
+  bool allow_first_write_slice = false;
+  int write_slice_calls = 0;
+
+  ON_CALL(*mock_meta_system_, WriteSlice)
+      .WillByDefault([&](auto, auto, auto, auto, auto) {
+        std::unique_lock<std::mutex> lock(mutex);
+        if (++write_slice_calls == 1) {
+          first_write_slice_entered = true;
+          cv.notify_all();
+          cv.wait(lock, [&] { return allow_first_write_slice; });
+        }
+        return Status::OK();
+      });
+
+  auto* w = MakeOpenWriter();
+  const char first[] = "first";
+  uint64_t wsize = 0;
+  ASSERT_TRUE(w->Write(ctx_, first, sizeof(first), 0, &wsize).ok());
+
+  auto first_flush = std::async(std::launch::async, [w] { return w->Flush(); });
+  {
+    std::unique_lock<std::mutex> lock(mutex);
+    ASSERT_TRUE(cv.wait_for(lock, std::chrono::seconds(5),
+                            [&] { return first_write_slice_entered; }));
+  }
+
+  const char second[] = "second";
+  const uint64_t second_offset = mock_hub_->GetFsInfo().chunk_size;
+  ASSERT_TRUE(
+      w->Write(ctx_, second, sizeof(second), second_offset, &wsize).ok());
+  auto second_flush =
+      std::async(std::launch::async, [w] { return w->Flush(); });
+
+  {
+    std::lock_guard<std::mutex> lock(mutex);
+    allow_first_write_slice = true;
+  }
+  cv.notify_all();
+
+  ASSERT_TRUE(first_flush.get().ok());
+  ASSERT_TRUE(second_flush.get().ok());
+  w->Close();
+  w->ReleaseRef();
+}
+
+TEST_F(FileWriterTest, MultiChunkFlushFailureStillVisitsEveryChunk) {
+  std::mutex mutex;
+  std::unordered_set<uint64_t> visited_chunks;
+  ON_CALL(*mock_meta_system_, WriteSlice)
+      .WillByDefault([&](auto, auto, uint64_t chunk_index, auto, auto) {
+        std::lock_guard<std::mutex> lock(mutex);
+        visited_chunks.insert(chunk_index);
+        return chunk_index == 0 ? Status::Internal("chunk 0 flush failed")
+                                : Status::OK();
+      });
+
+  auto* w = MakeOpenWriter();
+  const uint64_t chunk_size = mock_hub_->GetFsInfo().chunk_size;
+  const char buf[] = "data";
+  uint64_t wsize = 0;
+  ASSERT_TRUE(w->Write(ctx_, buf, sizeof(buf), 0, &wsize).ok());
+  ASSERT_TRUE(w->Write(ctx_, buf, sizeof(buf), chunk_size, &wsize).ok());
+
+  Status s = w->Flush();
+  EXPECT_FALSE(s.ok());
+  EXPECT_FALSE(w->GetStatus().ok());
+  {
+    std::lock_guard<std::mutex> lock(mutex);
+    EXPECT_EQ(visited_chunks, (std::unordered_set<uint64_t>{0, 1}));
+  }
+
+  // The known flush error explains the generation mismatch; Close must clean
+  // up without converting the already-reported I/O failure into a CHECK.
   w->Close();
   w->ReleaseRef();
 }
