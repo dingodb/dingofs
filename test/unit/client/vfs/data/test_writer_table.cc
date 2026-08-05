@@ -14,12 +14,16 @@
  * limitations under the License.
  */
 
-#include "client/vfs/data/writer_table.h"
-
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include <chrono>
+#include <condition_variable>
+#include <future>
+#include <mutex>
+
 #include "client/vfs/data/writer/file_writer.h"
+#include "client/vfs/data/writer_table.h"
 #include "test/unit/client/vfs/test_base.h"
 
 namespace dingofs {
@@ -28,6 +32,7 @@ namespace vfs {
 
 using dingofs::client::vfs::test::VFSTestBase;
 using ::testing::AnyNumber;
+using ::testing::Return;
 
 class WriterTableTest : public VFSTestBase {
  protected:
@@ -111,7 +116,8 @@ TEST_F(WriterTableTest, FlushAll_Empty_OK) {
 }
 
 // FlushAll over multiple live writers must succeed without evicting any —
-// it is read-only with respect to entries (transient AcquireRef snapshot).
+// it is read-only with respect to externally-held entries (transient holder
+// pins are released after each writer's Flush completes).
 TEST_F(WriterTableTest, FlushAll_WithWriters_PreservesEntries) {
   auto* w1 = table_->AcquireWriter(100);
   auto* w2 = table_->AcquireWriter(200);
@@ -124,6 +130,79 @@ TEST_F(WriterTableTest, FlushAll_WithWriters_PreservesEntries) {
 
   table_->ReleaseWriter(w1);
   table_->ReleaseWriter(w2);
+}
+
+// Shutdown writeback must attempt every writer even after one fails, while
+// returning the first observed error to the lifecycle owner.
+TEST_F(WriterTableTest, FlushAll_ErrorDoesNotSkipRemainingWriters) {
+  auto* w1 = table_->AcquireWriter(201);
+  auto* w2 = table_->AcquireWriter(202);
+  ASSERT_NE(w1, nullptr);
+  ASSERT_NE(w2, nullptr);
+
+  const char buf[] = "dirty";
+  uint64_t wsize = 0;
+  ASSERT_TRUE(w1->Write(ctx_, buf, sizeof(buf), 0, &wsize).ok());
+  ASSERT_TRUE(w2->Write(ctx_, buf, sizeof(buf), 0, &wsize).ok());
+
+  int write_slice_calls = 0;
+  ON_CALL(*mock_meta_system_, WriteSlice)
+      .WillByDefault([&](auto, auto, auto, auto, auto) {
+        ++write_slice_calls;
+        return Status::Internal("flush all error");
+      });
+
+  Status s = table_->FlushAll();
+  EXPECT_FALSE(s.ok());
+  EXPECT_EQ(write_slice_calls, 2)
+      << "FlushAll must not stop after the first writer failure";
+
+  table_->ReleaseWriter(w1);
+  table_->ReleaseWriter(w2);
+}
+
+TEST_F(WriterTableTest, FlushAllPinsWriterAgainstLastConcurrentRelease) {
+  auto* w = table_->AcquireWriter(203);
+  ASSERT_NE(w, nullptr);
+
+  const char buf[] = "dirty";
+  uint64_t wsize = 0;
+  ASSERT_TRUE(w->Write(ctx_, buf, sizeof(buf), 0, &wsize).ok());
+
+  std::mutex mutex;
+  std::condition_variable cv;
+  bool write_slice_entered = false;
+  bool allow_write_slice = false;
+  ON_CALL(*mock_meta_system_, WriteSlice)
+      .WillByDefault([&](auto, auto, auto, auto, auto) {
+        std::unique_lock<std::mutex> lock(mutex);
+        write_slice_entered = true;
+        cv.notify_all();
+        cv.wait(lock, [&] { return allow_write_slice; });
+        return Status::OK();
+      });
+
+  auto flush_all =
+      std::async(std::launch::async, [&] { return table_->FlushAll(); });
+  {
+    std::unique_lock<std::mutex> lock(mutex);
+    ASSERT_TRUE(cv.wait_for(lock, std::chrono::seconds(5),
+                            [&] { return write_slice_entered; }));
+  }
+
+  // Drop the only external holder while FlushAll is blocked. Its transient
+  // holder must keep the entry open until the flush finishes.
+  table_->ReleaseWriter(w);
+  EXPECT_EQ(table_->Size(), 1u);
+
+  {
+    std::lock_guard<std::mutex> lock(mutex);
+    allow_write_slice = true;
+  }
+  cv.notify_all();
+
+  ASSERT_TRUE(flush_all.get().ok());
+  EXPECT_EQ(table_->Size(), 0u);
 }
 
 // Peek after Acquire must take an additional holder so the first Release

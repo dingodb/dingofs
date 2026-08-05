@@ -73,8 +73,8 @@ class FileWriter {
 
   ChunkWriter* GetOrCreateChunkWriter(int64_t chunk_index);
 
-  void FileFlushTaskDone(uint64_t file_flush_id, StatusCallback cb,
-                         Status status);
+  void FileFlushTaskDone(uint64_t file_flush_id, uint64_t target_generation,
+                         StatusCallback cb, Status status);
   VFSHub* vfs_hub_;
   const uint64_t ino_;
   const std::string uuid_;
@@ -88,6 +88,11 @@ class FileWriter {
   std::condition_variable cv_;
   bool closed_{false};
   int64_t writers_count_{0};
+  // Generations are a final-close invariant, not an exact account of what an
+  // arbitrary concurrent Flush happened to include. Lifecycle owners must
+  // quiesce writes, complete one final explicit Flush, and only then Close.
+  uint64_t write_generation_{0};
+  uint64_t flushed_generation_{0};
 
   // chunk_index -> chunk
   // chunk is used by file/file_flush_task/chunk_flush_task

@@ -563,6 +563,11 @@ void ChunkWriter::FlushAsync(StatusCallback cb) {
   DoFlushAsync(cb, chunk_flush_id);
 }
 
+Status ChunkWriter::GetErrorStatus() const {
+  std::lock_guard<std::mutex> lg(flush_mutex_);
+  return error_status_;
+}
+
 void ChunkWriter::TriggerFlush() {
   CHECK(!stopped_.load(std::memory_order_relaxed));
   uint64_t chunk_flush_id =

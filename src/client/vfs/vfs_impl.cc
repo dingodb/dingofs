@@ -780,11 +780,10 @@ Status VFSImpl::Release(ContextSPtr ctx, Ino ino, uint64_t fh) {
     handle->resources.reader->Close();
   }
 
-  // Drain dirty data while the metadata file session is still alive.  The
-  // last writer holder is released below by ReleaseHandler(), which may call
-  // FileWriter::Close() and perform a final flush.  Closing the metadata
-  // session first would make that flush's WriteSlice() fail because its
-  // FileSession had already been removed.
+  // Drain dirty data while the metadata file session is still alive. Dropping
+  // the last writer holder below may call FileWriter::Close(), but Close only
+  // validates the final-flush invariant and cleans up resources; it must not
+  // perform persistence I/O after this explicit Flush.
   Status flush_status;
   if (handle->resources.writer != nullptr) {
     flush_status = handle->resources.writer->Flush();
@@ -805,19 +804,21 @@ Status VFSImpl::Release(ContextSPtr ctx, Ino ino, uint64_t fh) {
 
 // TODO: seperate data flush with metadata flush
 Status VFSImpl::Fsync(ContextSPtr ctx, Ino ino, int datasync, uint64_t fh) {
-  Status s;
   auto handle = handle_manager_->FindHandlerGuard(fh);
   VFS_CHECK_HANDLE(handle.get(), ino, fh);
 
   if (handle->resources.writer != nullptr) {
-    s = handle->resources.writer->Flush();
+    Status s = handle->resources.writer->Flush();
+    if (!s.ok()) {
+      return s;
+    }
   }
 
   if (datasync == 0) {
-    s = meta_system_->Flush(ctx, ino, fh);
+    return meta_system_->Flush(ctx, ino, fh);
   }
 
-  return s;
+  return Status::OK();
 }
 
 Status VFSImpl::SetXattr(ContextSPtr ctx, Ino ino, const std::string& name,

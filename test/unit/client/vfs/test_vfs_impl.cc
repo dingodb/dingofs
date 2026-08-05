@@ -471,6 +471,67 @@ TEST_F(VFSImplTest, Release_FlushFailureStillClosesAndReleasesHandle) {
   EXPECT_EQ(writer_table->Size(), 0u);
 }
 
+TEST_F(VFSImplTest, Fsync_DataFlushFailureIsNotOverwrittenByMetaFlush) {
+  auto writer_table = std::make_unique<WriterTable>(mock_hub_);
+  ON_CALL(*mock_hub_, GetWriterTable())
+      .WillByDefault(Return(writer_table.get()));
+  EXPECT_CALL(*mock_hub_, GetWriterTable()).Times(AnyNumber());
+
+  constexpr Ino kFsyncIno = 404;
+  uint64_t fh = 0;
+  ASSERT_TRUE(vfs_->Open(ctx_, kFsyncIno, O_WRONLY, &fh, nullptr).ok());
+
+  const char data[] = "fsync failure";
+  uint64_t written = 0;
+  EXPECT_CALL(*mock_meta_system_, Write(_, kFsyncIno, _, 0, sizeof(data), fh))
+      .WillOnce(Return(Status::OK()));
+  ASSERT_TRUE(
+      vfs_->Write(ctx_, kFsyncIno, data, sizeof(data), 0, fh, &written).ok());
+
+  ON_CALL(*mock_meta_system_, WriteSlice)
+      .WillByDefault(Return(Status::Internal("data flush failed")));
+  EXPECT_CALL(*mock_meta_system_, Flush(_, kFsyncIno, fh)).Times(0);
+
+  Status s = vfs_->Fsync(ctx_, kFsyncIno, /*datasync=*/0, fh);
+  EXPECT_FALSE(s.ok());
+  EXPECT_NE(s.ToString().find("data flush failed"), std::string::npos);
+
+  EXPECT_CALL(*mock_meta_system_, Close(_, kFsyncIno, fh))
+      .WillOnce(Return(Status::OK()));
+  EXPECT_FALSE(vfs_->Release(ctx_, kFsyncIno, fh).ok());
+}
+
+TEST_F(VFSImplTest, Fsync_MetaFlushFailureReturnedAfterDataFlushSuccess) {
+  auto writer_table = std::make_unique<WriterTable>(mock_hub_);
+  ON_CALL(*mock_hub_, GetWriterTable())
+      .WillByDefault(Return(writer_table.get()));
+  EXPECT_CALL(*mock_hub_, GetWriterTable()).Times(AnyNumber());
+
+  constexpr Ino kFsyncIno = 405;
+  uint64_t fh = 0;
+  ASSERT_TRUE(vfs_->Open(ctx_, kFsyncIno, O_WRONLY, &fh, nullptr).ok());
+
+  const char data[] = "fsync metadata";
+  uint64_t written = 0;
+  EXPECT_CALL(*mock_meta_system_, Write(_, kFsyncIno, _, 0, sizeof(data), fh))
+      .WillOnce(Return(Status::OK()));
+  ASSERT_TRUE(
+      vfs_->Write(ctx_, kFsyncIno, data, sizeof(data), 0, fh, &written).ok());
+
+  EXPECT_CALL(*mock_meta_system_, WriteSlice(_, kFsyncIno, _, 0, _))
+      .WillOnce(Return(Status::OK()));
+  EXPECT_CALL(*mock_meta_system_, Flush(_, kFsyncIno, fh))
+      .WillOnce(Return(Status::Internal("metadata flush failed")));
+
+  Status s = vfs_->Fsync(ctx_, kFsyncIno, /*datasync=*/0, fh);
+  EXPECT_FALSE(s.ok());
+  EXPECT_NE(s.ToString().find("metadata flush failed"), std::string::npos);
+
+  EXPECT_CALL(*mock_meta_system_, Close(_, kFsyncIno, fh))
+      .WillOnce(Return(Status::OK()));
+  EXPECT_TRUE(vfs_->Release(ctx_, kFsyncIno, fh).ok());
+}
+
 // --- 10. Unlink internal file returns EPERM ---
 TEST_F(VFSImplTest, Unlink_InternalFile_EPERM) {
   // Unlink ".stats" from root is blocked.

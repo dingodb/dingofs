@@ -45,7 +45,11 @@ std::string Handle::ToString() const {
 }
 
 HandleManager::~HandleManager() {
-  Stop();
+  Status s = Stop();
+  if (!s.ok()) {
+    LOG(ERROR) << fmt::format("HandleManager destructor flush failed: {}",
+                              s.ToString());
+  }
   std::vector<Handle*> handles;
   {
     std::unique_lock<std::mutex> lock(mutex_);
@@ -129,14 +133,15 @@ void HandleManager::ReleaseHandleResources(HandleResources resources) {
 
 Status HandleManager::Start() { return Status::OK(); }
 
-void HandleManager::Stop() {
+Status HandleManager::Stop() {
   std::vector<HandleResources> resources_to_release;
   std::vector<Handle*> stop_refs;
+  bool has_writer = false;
   {
     std::unique_lock<std::mutex> lock(mutex_);
     if (stopped_) {
       LOG(INFO) << "HandleManager already stopped";
-      return;
+      return Status::OK();
     }
 
     stopped_ = true;
@@ -159,14 +164,25 @@ void HandleManager::Stop() {
 
       auto resources = DetachHandleResourcesLocked(handle);
       if (resources.reader != nullptr || resources.writer != nullptr) {
+        has_writer = has_writer || resources.writer != nullptr;
         resources_to_release.push_back(resources);
       }
     }
   }
 
-  // Release resources outside mutex_: FileWriter::Close() can synchronously
-  // wait for callbacks that may call back into
-  // HandleManager::InvalidateByIno().
+  // resources_to_release owns the detached writer holders, so every writer is
+  // still present in WriterTable here. Flush while metadata, BlockStore, and
+  // writer executors are alive, before the loop below can drop the last holder
+  // and close the writer. FlushAll deliberately visits every writer and returns
+  // the first error without stopping early.
+  Status flush_status = Status::OK();
+  if (has_writer) {
+    flush_status = vfs_hub_->GetWriterTable()->FlushAll();
+  }
+
+  // Release resources outside mutex_: dropping the last writer holder may
+  // block while FileWriter::Close() waits for already in-flight tasks and then
+  // destroys nested writer resources.
   for (auto& resources : resources_to_release) {
     ReleaseHandleResources(resources);
   }
@@ -174,6 +190,8 @@ void HandleManager::Stop() {
   for (auto* handle : stop_refs) {
     ReleaseRefHandle(handle);
   }
+
+  return flush_status;
 }
 
 Handle* HandleManager::NewHandle(uint64_t fh, Ino ino, int flags) {

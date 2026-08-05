@@ -144,14 +144,11 @@ class ChunkWriter {
 
   void TryCommitFlushTasks(ContextSPtr ctx);
 
+  Status GetErrorStatus() const;
+
   int64_t WritersCount() const {
     std::lock_guard<std::mutex> lg(writer_mutex_);
     return writers_.size();
-  }
-
-  Status GetErrorStatus() const {
-    std::lock_guard<std::mutex> lg(flush_mutex_);
-    return error_status_;
   }
 
   // This is used to mark the chunk as error when some operation fails,
@@ -187,7 +184,8 @@ class ChunkWriter {
 
   mutable std::mutex flush_mutex_;
   std::deque<FlushTask*> flush_queue_;
-  // guarded by write_flush_mutex_
+  // Guarded by flush_mutex_. Never invoke a completion callback while holding
+  // this mutex; callbacks may enter higher-level writer objects.
   // when this not ok, all write and flush should return error
   Status error_status_;
 };

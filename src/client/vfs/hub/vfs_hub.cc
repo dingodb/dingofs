@@ -435,15 +435,23 @@ Status VFSHubImpl::Stop(bool skip_unmount) {
     compactor_->Stop();
   }
 
+  Status handle_stop_status;
   if (handle_manager_ != nullptr) {
-    handle_manager_->Stop();
+    handle_stop_status = handle_manager_->Stop();
   }
 
-  // HandleManager::Stop releases handle-owned reader/writer resources while
-  // preserving handle identities for handover Dump. Drain residual dirty data
-  // and stop the writer table before tearing down executors/meta/block-store.
+  // A handover must never publish state after dirty data failed to flush. The
+  // old process is already quiesced at this point, so treat this as an
+  // unrecoverable handover failure rather than letting VFSWrapper dump state.
+  if (skip_unmount && !handle_stop_status.ok()) {
+    LOG(FATAL) << fmt::format("Handover writer flush failed: {}",
+                              handle_stop_status.ToString());
+  }
+
+  // HandleManager::Stop has already flushed all writers before releasing its
+  // detached resources. Stop new writer acquires before tearing down
+  // executors/meta/block-store.
   if (writer_table_ != nullptr) {
-    (void)writer_table_->FlushAll();
     writer_table_->Stop();
   }
 
@@ -523,7 +531,7 @@ Status VFSHubImpl::Stop(bool skip_unmount) {
   // Stop() would CHECK-fail (SIGABRT) such a late caller mid-teardown.
   started_.store(false, std::memory_order_relaxed);
 
-  return Status::OK();
+  return handle_stop_status;
 }
 
 }  // namespace vfs
