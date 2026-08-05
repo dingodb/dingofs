@@ -42,14 +42,16 @@ def main():
     start = time.time()
 
     for path in iter_files(args.directory):
+        file_start = time.perf_counter()
         try:
             with open(path, "rb") as f:
                 data = f.read()
+            file_elapsed = time.perf_counter() - file_start
             n = len(data)
             file_count += 1
             total_bytes += n
             if not args.quiet:
-                print(f"{path}\t{n}")
+                print(f"{path}\t{n}\t{file_elapsed * 1000:.3f} ms")
         except OSError as e:
             error_count += 1
             print(f"error reading {path}: {e}", file=sys.stderr)
