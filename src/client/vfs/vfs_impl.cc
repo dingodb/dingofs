@@ -31,6 +31,7 @@
 #include "client/vfs/components/uid_gid_mapper.h"
 #include "client/vfs/components/warmup_manager.h"
 #include "client/vfs/data/reader/file_reader.h"
+#include "client/vfs/data/reader/reader_registry.h"
 #include "client/vfs/data/writer/file_writer.h"
 #include "client/vfs/data_buffer.h"
 #include "client/vfs/handle/handle_manager.h"
@@ -99,12 +100,21 @@ VFSImpl::VFSImpl(const VFSConfig& vfs_conf, const ClientId& client_id)
     : client_id_(client_id),
       mount_root_path_(
           vfs_conf.mount_root_path.empty() ? "/" : vfs_conf.mount_root_path),
-      vfs_hub_(std::make_unique<VFSHubImpl>(vfs_conf, client_id_)) {};
+      vfs_hub_(std::make_unique<VFSHubImpl>(vfs_conf, client_id_)){};
+
+VFSImpl::~VFSImpl() {
+  Status s = StopBrpcServer();
+  if (!s.ok()) {
+    LOG(ERROR) << "stop brpc server during VFS destruction failed: "
+               << s.ToString();
+  }
+}
 
 VFSImpl::VFSImpl(std::unique_ptr<VFSHub> hub)
     : client_id_(), vfs_hub_(std::move(hub)) {
   meta_system_ = vfs_hub_->GetMetaSystem();
   handle_manager_ = vfs_hub_->GetHandleManager();
+  reader_registry_ = vfs_hub_->GetReaderRegistry();
 }
 
 Status VFSImpl::Start(bool skip_mount) {
@@ -113,6 +123,7 @@ Status VFSImpl::Start(bool skip_mount) {
   DINGOFS_RETURN_NOT_OK(vfs_hub_->Start(skip_mount));
   meta_system_ = vfs_hub_->GetMetaSystem();
   handle_manager_ = vfs_hub_->GetHandleManager();
+  reader_registry_ = vfs_hub_->GetReaderRegistry();
 
   DINGOFS_RETURN_NOT_OK(ResolveMountRoot());
 
@@ -161,7 +172,10 @@ Status VFSImpl::ResolveMountRoot() {
   return Status::OK();
 }
 
-Status VFSImpl::Stop(bool skip_unmount) { return vfs_hub_->Stop(skip_unmount); }
+Status VFSImpl::Stop(bool skip_unmount) {
+  DINGOFS_RETURN_NOT_OK(StopBrpcServer());
+  return vfs_hub_->Stop(skip_unmount);
+}
 
 bool VFSImpl::Dump(ContextSPtr ctx, Json::Value& value) {
   CHECK(handle_manager_ != nullptr) << "handle_manager is null";
@@ -334,8 +348,8 @@ Status VFSImpl::SetAttr(ContextSPtr ctx, Ino ino, int set, const Attr& in_attr,
   // buffers in FileReader::requests_ are indexed by (ino, frange) and would
   // otherwise serve stale data after the inode shrinks/grows.
   if (s.ok() && (set & kSetAttrSize)) {
-    handle_manager_->InvalidateByIno(ino, 0,
-                                     std::numeric_limits<int64_t>::max());
+    reader_registry_->InvalidateByIno(ino, 0,
+                                      std::numeric_limits<int64_t>::max());
   }
 
   return s;
@@ -362,8 +376,8 @@ Status VFSImpl::Fallocate(ContextSPtr ctx, Ino ino, int mode, uint64_t offset,
   // buffers in FileReader::requests_ on the same fd would otherwise serve
   // stale bytes for the affected range.
   if (s.ok()) {
-    handle_manager_->InvalidateByIno(ino, static_cast<int64_t>(offset),
-                                     static_cast<int64_t>(length));
+    reader_registry_->InvalidateByIno(ino, static_cast<int64_t>(offset),
+                                      static_cast<int64_t>(length));
   }
 
   return s;
@@ -416,8 +430,8 @@ Status VFSImpl::CopyFileRange(ContextSPtr ctx, Ino src_ino, uint64_t src_off,
 
   // Invalidate any in-flight reader caches for the rewritten dst range.
   if (*bytes_copied > 0) {
-    handle_manager_->InvalidateByIno(dst_ino, static_cast<int64_t>(dst_off),
-                                     static_cast<int64_t>(*bytes_copied));
+    reader_registry_->InvalidateByIno(dst_ino, static_cast<int64_t>(dst_off),
+                                      static_cast<int64_t>(*bytes_copied));
   }
 
   return s;
@@ -723,8 +737,8 @@ Status VFSImpl::Write(ContextSPtr ctx, Ino ino, const char* buf, uint64_t size,
                             *out_wsize, fh);
     // Invalidate read cache for all handles of this inode in the written range,
     // so that no other open file descriptor can serve stale cached data.
-    handle_manager_->InvalidateByIno(ino, static_cast<int64_t>(offset),
-                                     static_cast<int64_t>(*out_wsize));
+    reader_registry_->InvalidateByIno(ino, static_cast<int64_t>(offset),
+                                      static_cast<int64_t>(*out_wsize));
   }
 
   // No status logging here: VFSImpl returns Status without logging per-op
@@ -1160,6 +1174,23 @@ Status VFSImpl::StartBrpcServer() {
         fmt::format("Get local ip failed, please check network configuration");
     LOG(ERROR) << error_msg;
     return Status::Unknown(error_msg);
+  }
+
+  return Status::OK();
+}
+
+Status VFSImpl::StopBrpcServer() {
+  const brpc::Server::Status status = brpc_server_.status();
+  if (status == brpc::Server::UNINITIALIZED || status == brpc::Server::READY) {
+    return Status::OK();
+  }
+
+  if (status == brpc::Server::RUNNING && brpc_server_.Stop(0) != 0) {
+    return Status::Internal("stop brpc server failed");
+  }
+
+  if (brpc_server_.Join() != 0) {
+    return Status::Internal("join brpc server failed");
   }
 
   return Status::OK();

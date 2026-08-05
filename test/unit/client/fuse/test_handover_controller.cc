@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include "client/fuse/upgrade/handover_controller.h"
-
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
@@ -23,6 +21,7 @@
 #include <chrono>
 #include <future>
 
+#include "client/fuse/upgrade/handover_controller.h"
 #include "client/fuse/upgrade/handover_peer.h"
 #include "client/fuse/upgrade/handover_session.h"
 #include "client/fuse/upgrade/state_store.h"
@@ -177,14 +176,13 @@ TEST_F(HandoverControllerTest, DrainTimeout_DoesNotJoinBlockedStatfsWakeup) {
   std::atomic<bool> wakeup_entered_once{false};
 
   HandoverOptions options = Options();
-  options.statfs_wakeup_fn =
-      [&](const std::string&, const std::atomic<bool>&) {
-        if (!wakeup_entered_once.exchange(true)) {
-          wakeup_entered.set_value();
-        }
-        release_wakeup_future.wait();
-        wakeup_returned.set_value();
-      };
+  options.statfs_wakeup_fn = [&](const std::string&, const std::atomic<bool>&) {
+    if (!wakeup_entered_once.exchange(true)) {
+      wakeup_entered.set_value();
+    }
+    release_wakeup_future.wait();
+    wakeup_returned.set_value();
+  };
 
   {
     InSequence seq;
@@ -221,8 +219,9 @@ TEST_F(HandoverControllerTest, DrainTimeout_DoesNotJoinBlockedStatfsWakeup) {
   EXPECT_EQ(State(), FuseUpgradeState::kFuseNormal);
 }
 
-// M1: a SIGHUP before the checkpoint is registered must NOT pause IO (no drain).
-// It aborts immediately (telling the new to back off) and keeps serving.
+// M1: a SIGHUP before the checkpoint is registered must NOT pause IO (no
+// drain). It aborts immediately (telling the new to back off) and keeps
+// serving.
 TEST_F(HandoverControllerTest, NoCheckpoint_AbortsWithoutDraining) {
   Latch done;
 

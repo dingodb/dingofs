@@ -29,6 +29,7 @@
 
 #include "client/vfs/common/async_util.h"
 #include "client/vfs/common/helper.h"
+#include "client/vfs/data/reader/reader_registry.h"
 #include "client/vfs/hub/vfs_hub.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/callback.h"
@@ -436,7 +437,7 @@ void ChunkWriter::TryCommitFlushTasks(ContextSPtr ctx) {
             uuid, commit_ctx->commit_seq, commit_ctx->flush_tasks.size(),
             commit_ctx->commit_slices.size(), commit.ToString());
 
-        auto* manager = hub_->GetHandleManager();
+        auto* reader_registry = hub_->GetReaderRegistry();
         for (const Slice& slice : commit_ctx->commit_slices) {
           VLOG(9) << fmt::format(
               "{} TryCommitFlushTasks invalidate commit_seq: {} committed "
@@ -445,8 +446,8 @@ void ChunkWriter::TryCommitFlushTasks(ContextSPtr ctx) {
           // Shared writer model: a commit batch may aggregate slices from
           // multiple fhs. Invalidate by inode rather than by single fh so
           // every reader on this inode sees a fresh chunk_set.
-          manager->InvalidateByIno(chunk_.ino, chunk_.chunk_start + slice.pos,
-                                   slice.len);
+          reader_registry->InvalidateByIno(
+              chunk_.ino, chunk_.chunk_start + slice.pos, slice.len);
         }
       }
     }  // end if commit_slices not empty

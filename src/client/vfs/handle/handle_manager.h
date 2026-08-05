@@ -123,15 +123,9 @@ class HandleManager {
 
   void ReleaseHandler(uint64_t fh);
 
-  void Invalidate(uint64_t fh, int64_t offset, int64_t size);
-
   // Flush dirty data for the given inode. After WriterTable adoption this
   // is O(1): a single PeekWriter lookup + Flush.
   Status FlushByIno(Ino ino);
-
-  // Invalidate read cache for all handles of the given inode in the given
-  // range (per-inode).
-  void InvalidateByIno(Ino ino, int64_t offset, int64_t size);
 
   void Summary(Json::Value& value);
   bool Dump(Json::Value& value);

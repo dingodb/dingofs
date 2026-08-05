@@ -16,9 +16,11 @@
 
 #include "client/vfs/vfs_wrapper.h"
 
+#include <bvar/bvar.h>
 #include <fcntl.h>
 #include <unistd.h>
 
+#include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -72,6 +74,16 @@ using vfs::StrAttr;
 using vfs::StrMode;
 
 static auto& g_rw_metric = VFSRWMetric::GetInstance();
+static bvar::Adder<int64_t> g_active_public_operations(
+    "vfs_active_public_operations");
+static bvar::Adder<uint64_t> g_rejected_public_operations(
+    "vfs_rejected_public_operations_total");
+
+#define VFS_WRAPPER_OPERATION_GUARD()                              \
+  auto operation = TryAcquireOperation();                          \
+  if (!operation.has_value()) {                                    \
+    return Status::Stop("VFS is not accepting public operations"); \
+  }
 
 static std::string DescribeSetAttr(int set) {
   const uint32_t value = static_cast<uint32_t>(set);
@@ -282,14 +294,71 @@ static Status NormalizeMountRootPath(const std::string& in, std::string& out) {
   return Status::OK();
 }
 
+VFSWrapper::OperationLease::~OperationLease() {
+  if (owner_ != nullptr) owner_->ReleaseOperation();
+}
+
+std::optional<VFSWrapper::OperationLease> VFSWrapper::TryAcquireOperation() {
+  {
+    std::lock_guard<std::mutex> lock(lifecycle_mutex_);
+    if (lifecycle_state_ != LifecycleState::kRunning) {
+      g_rejected_public_operations << 1;
+      return std::nullopt;
+    }
+
+    ++active_public_operations_;
+  }
+
+  g_active_public_operations << 1;
+  return OperationLease(this);
+}
+
+void VFSWrapper::ReleaseOperation() {
+  g_active_public_operations << -1;
+
+  std::lock_guard<std::mutex> lock(lifecycle_mutex_);
+  CHECK_GT(active_public_operations_, 0);
+  --active_public_operations_;
+  if (active_public_operations_ == 0 &&
+      lifecycle_state_ == LifecycleState::kQuiescing) {
+    lifecycle_cv_.notify_all();
+  }
+}
+
+Status VFSWrapper::FinishStartFailure(const Status& status) {
+  if (vfs_ != nullptr) {
+    Status cleanup_status = vfs_->Stop(/*skip_unmount=*/false);
+    if (!cleanup_status.ok()) {
+      LOG(ERROR) << "cleanup after VFS start failure failed: "
+                 << cleanup_status.ToString();
+    }
+  }
+
+  {
+    std::lock_guard<std::mutex> lock(lifecycle_mutex_);
+    stop_status_ = status;
+    lifecycle_state_ = LifecycleState::kStopped;
+  }
+  lifecycle_cv_.notify_all();
+  return status;
+}
+
 Status VFSWrapper::Start(const DingofsConfig& config, int upgrade_from_pid) {
   LOG(INFO) << "vfs start";
 
+  {
+    std::lock_guard<std::mutex> lock(lifecycle_mutex_);
+    if (lifecycle_state_ != LifecycleState::kCreated) {
+      return Status::InvalidParam("VFS can only be started once");
+    }
+    lifecycle_state_ = LifecycleState::kStarting;
+  }
+
   if (config.fs_name.empty()) {
-    return Status::InvalidParam("fs_name is empty");
+    return FinishStartFailure(Status::InvalidParam("fs_name is empty"));
   }
   if (config.mount_point.empty()) {
-    return Status::InvalidParam("mount_point is empty");
+    return FinishStartFailure(Status::InvalidParam("mount_point is empty"));
   }
 
   // Propagate mds_addrs to the cache layer's own MDS client so that
@@ -303,22 +372,21 @@ Status VFSWrapper::Start(const DingofsConfig& config, int upgrade_from_pid) {
   vfs_conf.metasystem_type = ParseMetaSystemType(config.metasystem_type);
   vfs_conf.storage_info = config.storage_info;
 
-  DINGOFS_RETURN_NOT_OK(
-      NormalizeMountRootPath(config.subdir, vfs_conf.mount_root_path));
+  Status s = NormalizeMountRootPath(config.subdir, vfs_conf.mount_root_path);
+  if (!s.ok()) return FinishStartFailure(s);
   LOG(INFO) << "vfs mount_root_path: " << vfs_conf.mount_root_path;
 
   if (vfs_conf.metasystem_type != MetaSystemType::MDS &&
       vfs_conf.metasystem_type != MetaSystemType::LOCAL &&
       vfs_conf.metasystem_type != MetaSystemType::MEMORY) {
-    return Status::InvalidParam(
-        "unsupported metasystem_type " +
-        MetaSystemTypeToString(vfs_conf.metasystem_type));
+    return FinishStartFailure(
+        Status::InvalidParam("unsupported metasystem_type " +
+                             MetaSystemTypeToString(vfs_conf.metasystem_type)));
   }
 
   LOG(INFO) << "use vfs type: "
             << MetaSystemTypeToString(vfs_conf.metasystem_type);
 
-  Status s;
   AccessLogGuard log(
       [&]() { return absl::StrFormat("start: %s", s.ToString()); });
 
@@ -326,7 +394,8 @@ Status VFSWrapper::Start(const DingofsConfig& config, int upgrade_from_pid) {
     FLAGS_log_dir = "/tmp";
   }
 
-  DINGOFS_RETURN_NOT_OK(InitLog());
+  s = InitLog();
+  if (!s.ok()) return FinishStartFailure(s);
 
   if (FLAGS_vfs_bthread_worker_num > 0) {
     bthread_setconcurrency(FLAGS_vfs_bthread_worker_num);
@@ -341,11 +410,13 @@ Status VFSWrapper::Start(const DingofsConfig& config, int upgrade_from_pid) {
 
   Json::Value root;
   if (is_upgrade && !LoadStateFile(upgrade_from_pid, root)) {
-    return Status::InvalidParam("load vfs state fail");
+    return FinishStartFailure(Status::InvalidParam("load vfs state fail"));
   }
 
   const std::string hostname = dingofs::Helper::GetHostName();
-  if (hostname.empty()) return Status::Internal("get hostname fail");
+  if (hostname.empty()) {
+    return FinishStartFailure(Status::Internal("get hostname fail"));
+  }
 
   vfs::ClientId client_id(utils::GenerateUUID(), hostname,
                           FLAGS_vfs_dummy_server_port, vfs_conf.mount_point);
@@ -355,11 +426,12 @@ Status VFSWrapper::Start(const DingofsConfig& config, int upgrade_from_pid) {
   LOG(INFO) << "client id: " << client_id.Description();
 
   vfs_ = std::make_unique<vfs::VFSImpl>(vfs_conf, client_id);
-  DINGOFS_RETURN_NOT_OK(vfs_->Start(/*skip_mount=*/is_upgrade));
+  s = vfs_->Start(/*skip_mount=*/is_upgrade);
+  if (!s.ok()) return FinishStartFailure(s);
 
   if (is_upgrade) {
     if (!Load(root)) {
-      return Status::InvalidParam("load vfs state fail");
+      return FinishStartFailure(Status::InvalidParam("load vfs state fail"));
     }
     // Remove the old process's state file now that we've consumed it.
     const std::string state_path =
@@ -370,14 +442,64 @@ Status VFSWrapper::Start(const DingofsConfig& config, int upgrade_from_pid) {
   uid_ = dingofs::Helper::GetOriginalUid();
   gid_ = dingofs::Helper::GetOriginalGid();
 
-  started_.store(true);
+  attr_timeout_ = vfs_->GetAttrTimeout(FileType::kFile);
+  entry_timeout_ = vfs_->GetEntryTimeout(FileType::kFile);
+  fs_id_ = vfs_->GetFsId();
+  max_name_length_ = vfs_->GetMaxNameLength();
+  immutable_values_published_.store(true, std::memory_order_release);
+
+  {
+    std::lock_guard<std::mutex> lock(lifecycle_mutex_);
+    lifecycle_state_ = LifecycleState::kRunning;
+    stop_status_ = Status::OK();
+  }
+  lifecycle_cv_.notify_all();
   return Status::OK();
 }
 
 Status VFSWrapper::Stop(bool handover) {
-  if (!started_.load()) {
-    LOG(INFO) << "vfs not started, no need to stop.";
-    return Status::OK();
+  {
+    std::unique_lock<std::mutex> lock(lifecycle_mutex_);
+    while (lifecycle_state_ == LifecycleState::kStarting) {
+      if (lifecycle_cv_.wait_for(lock, std::chrono::seconds(30)) ==
+          std::cv_status::timeout) {
+        LOG(ERROR) << "VFS Stop still waiting for Start to finish";
+      }
+    }
+
+    if (lifecycle_state_ == LifecycleState::kCreated) {
+      lifecycle_state_ = LifecycleState::kStopped;
+      stop_status_ = Status::OK();
+      return stop_status_;
+    }
+
+    if (lifecycle_state_ == LifecycleState::kStopped) {
+      return stop_status_;
+    }
+
+    if (lifecycle_state_ == LifecycleState::kQuiescing) {
+      const bool same_stop_mode = stop_handover_ == handover;
+      lifecycle_cv_.wait(lock, [this]() {
+        return lifecycle_state_ == LifecycleState::kStopped;
+      });
+      if (!same_stop_mode) {
+        return Status::InvalidParam(
+            "concurrent VFS Stop requested with conflicting handover mode");
+      }
+      return stop_status_;
+    }
+
+    CHECK(lifecycle_state_ == LifecycleState::kRunning);
+    lifecycle_state_ = LifecycleState::kQuiescing;
+    stop_handover_ = handover;
+    while (active_public_operations_ != 0) {
+      if (lifecycle_cv_.wait_for(lock, std::chrono::seconds(30)) ==
+          std::cv_status::timeout) {
+        LOG(ERROR) << fmt::format(
+            "VFS Stop still waiting for {} public operation(s) to drain",
+            active_public_operations_);
+      }
+    }
   }
 
   LOG(INFO) << fmt::format("stopping vfs, handover({}).", handover);
@@ -387,25 +509,22 @@ Status VFSWrapper::Stop(bool handover) {
       [&]() { return absl::StrFormat("stop: %s", s.ToString()); });
   s = vfs_->Stop(/*skip_unmount=*/handover);
 
-  // The VFS teardown has run; mark stopped so a second Stop() (e.g. the
-  // post-exit FuseOpDestroy after a successful handover gate) is a no-op and
-  // does not stop/dump twice.
-  started_.store(false);
-
   LOG(INFO) << fmt::format("stopped vfs, handover({}).", handover);
 
   // Handover teardown: dump after vfs_->Stop() so the persisted state reflects
   // the same stop -> dump order used by normal teardown. This is currently past
   // the clean rollback point; callers treat a non-OK return here as an
   // unrecoverable handover fault after the pre-teardown flush has succeeded.
-  if (handover && !s.ok()) {
-    return s;
+  if (handover && s.ok() && !Dump()) {
+    s = Status::InvalidParam("dump vfs state fail");
   }
 
-  if (handover && !Dump()) {
-    return Status::InvalidParam("dump vfs state fail");
+  {
+    std::lock_guard<std::mutex> lock(lifecycle_mutex_);
+    stop_status_ = s;
+    lifecycle_state_ = LifecycleState::kStopped;
   }
-
+  lifecycle_cv_.notify_all();
   return s;
 }
 
@@ -460,32 +579,42 @@ bool VFSWrapper::Load(const Json::Value& value) {
 }
 
 Status VFSWrapper::GetInfo(std::string* info) {
+  VFS_WRAPPER_OPERATION_GUARD();
   CHECK(vfs_ != nullptr) << "vfs_ is nullptr";
   return vfs_->GetInfo(info);
 }
 
 double VFSWrapper::GetAttrTimeout(FileType type) {
-  return vfs_->GetAttrTimeout(type);
+  (void)type;
+  CHECK(immutable_values_published_.load(std::memory_order_acquire))
+      << "GetAttrTimeout called before VFS Start completed";
+  return attr_timeout_;
 }
 
 double VFSWrapper::GetEntryTimeout(FileType type) {
-  return vfs_->GetEntryTimeout(type);
+  (void)type;
+  CHECK(immutable_values_published_.load(std::memory_order_acquire))
+      << "GetEntryTimeout called before VFS Start completed";
+  return entry_timeout_;
 }
 
 uint64_t VFSWrapper::GetFsId() {
-  uint64_t fs_id = vfs_->GetFsId();
-  VLOG(6) << "fs_id: " << fs_id;
-  return fs_id;
+  CHECK(immutable_values_published_.load(std::memory_order_acquire))
+      << "GetFsId called before VFS Start completed";
+  VLOG(6) << "fs_id: " << fs_id_;
+  return fs_id_;
 }
 
 uint64_t VFSWrapper::GetMaxNameLength() {
-  uint64_t max_name_length = vfs_->GetMaxNameLength();
-  VLOG(6) << "max name length: " << max_name_length;
-  return max_name_length;
+  CHECK(immutable_values_published_.load(std::memory_order_acquire))
+      << "GetMaxNameLength called before VFS Start completed";
+  VLOG(6) << "max name length: " << max_name_length_;
+  return max_name_length_;
 }
 
 Status VFSWrapper::Lookup(const Context& ctx, Ino parent,
                           const std::string& name, Attr* attr) {
+  VFS_WRAPPER_OPERATION_GUARD();
   VLOG(2) << "VFSLookup parent: " << parent << " name: " << name;
 
   auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::Lookup");
@@ -522,6 +651,7 @@ Status VFSWrapper::Lookup(const Context& ctx, Ino parent,
 }
 
 Status VFSWrapper::GetAttr(const Context& ctx, Ino ino, Attr* attr) {
+  VFS_WRAPPER_OPERATION_GUARD();
   VLOG(2) << "VFSGetAttr ino: " << ino;
 
   auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::GetAttr");
@@ -553,6 +683,7 @@ Status VFSWrapper::GetAttr(const Context& ctx, Ino ino, Attr* attr) {
 
 Status VFSWrapper::SetAttr(const Context& ctx, Ino ino, int set,
                            const Attr& in_attr, Attr* out_attr) {
+  VFS_WRAPPER_OPERATION_GUARD();
   VLOG(2) << "VFSSetAttr ino: " << ino << " set: " << set;
 
   auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::SetAttr");
@@ -576,6 +707,7 @@ Status VFSWrapper::SetAttr(const Context& ctx, Ino ino, int set,
 
 Status VFSWrapper::Fallocate(const Context& ctx, Ino ino, int mode,
                              uint64_t offset, uint64_t length) {
+  VFS_WRAPPER_OPERATION_GUARD();
   VLOG(2) << fmt::format(
       "VFSFallocate ino: {} mode: 0x{:X} offset: {} length: {}", ino, mode,
       offset, length);
@@ -604,6 +736,7 @@ Status VFSWrapper::CopyFileRange(const Context& ctx, Ino src_ino,
                                  uint64_t dst_off, uint64_t dst_fh,
                                  uint64_t len, uint32_t flags,
                                  uint64_t* bytes_copied) {
+  VFS_WRAPPER_OPERATION_GUARD();
   VLOG(2) << fmt::format(
       "VFSCopyFileRange src_ino: {} src_off: {} src_fh: {} dst_ino: {} "
       "dst_off: {} dst_fh: {} len: {} flags: 0x{:x}",
@@ -634,6 +767,7 @@ Status VFSWrapper::CopyFileRange(const Context& ctx, Ino src_ino,
 }
 
 Status VFSWrapper::ReadLink(const Context& ctx, Ino ino, std::string* link) {
+  VFS_WRAPPER_OPERATION_GUARD();
   VLOG(2) << "VFSReadLink ino: " << ino;
 
   auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::ReadLink");
@@ -657,6 +791,7 @@ Status VFSWrapper::ReadLink(const Context& ctx, Ino ino, std::string* link) {
 Status VFSWrapper::MkNod(const Context& ctx, Ino parent,
                          const std::string& name, uint32_t mode, uint64_t dev,
                          Attr* attr) {
+  VFS_WRAPPER_OPERATION_GUARD();
   VLOG(2) << "VFSMknod parent: " << parent << " name: " << name
           << " uid: " << ctx.uid << " gid: " << ctx.gid << " mode: " << mode
           << " dev: " << dev;
@@ -688,6 +823,7 @@ Status VFSWrapper::MkNod(const Context& ctx, Ino parent,
 
 Status VFSWrapper::Unlink(const Context& ctx, Ino parent,
                           const std::string& name) {
+  VFS_WRAPPER_OPERATION_GUARD();
   VLOG(2) << "VFSUnlink parent: " << parent << " name: " << name;
 
   auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::Unlink");
@@ -718,6 +854,7 @@ Status VFSWrapper::Unlink(const Context& ctx, Ino parent,
 Status VFSWrapper::Symlink(const Context& ctx, Ino parent,
                            const std::string& name, const std::string& link,
                            Attr* attr) {
+  VFS_WRAPPER_OPERATION_GUARD();
   VLOG(2) << "VFSSymlink parent: " << parent << " name: " << name
           << " uid: " << ctx.uid << " gid: " << ctx.gid << " link: " << link;
 
@@ -748,6 +885,7 @@ Status VFSWrapper::Symlink(const Context& ctx, Ino parent,
 Status VFSWrapper::Rename(const Context& ctx, Ino old_parent,
                           const std::string& old_name, Ino new_parent,
                           const std::string& new_name) {
+  VFS_WRAPPER_OPERATION_GUARD();
   VLOG(2) << "VFSRename old_parent: " << old_parent << " old_name: " << old_name
           << " new_parent: " << new_parent << " new_name: " << new_name;
 
@@ -781,6 +919,7 @@ Status VFSWrapper::Rename(const Context& ctx, Ino old_parent,
 
 Status VFSWrapper::Link(const Context& ctx, Ino ino, Ino new_parent,
                         const std::string& new_name, Attr* attr) {
+  VFS_WRAPPER_OPERATION_GUARD();
   VLOG(2) << "VFSLink ino: " << ino << " new_parent: " << new_parent
           << " new_name: " << new_name;
 
@@ -814,6 +953,7 @@ Status VFSWrapper::Link(const Context& ctx, Ino ino, Ino new_parent,
 
 Status VFSWrapper::Open(const Context& ctx, Ino ino, int flags, uint64_t* fh,
                         bool* keep_cache) {
+  VFS_WRAPPER_OPERATION_GUARD();
   VLOG(2) << "VFSOpen ino: " << ino << " octal flags: " << std::oct << flags;
   CHECK(fh != nullptr) << "fh is nullptr";
   CHECK(keep_cache != nullptr) << "keep_cache is nullptr";
@@ -844,6 +984,7 @@ Status VFSWrapper::Open(const Context& ctx, Ino ino, int flags, uint64_t* fh,
 Status VFSWrapper::Create(const Context& ctx, Ino parent,
                           const std::string& name, uint32_t mode, int flags,
                           uint64_t* fh, Attr* attr) {
+  VFS_WRAPPER_OPERATION_GUARD();
   VLOG(2) << "VFSCreate parent: " << parent << " name: " << name
           << " uid: " << ctx.uid << " gid: " << ctx.gid << " mode: " << mode
           << " octal flags: " << std::oct << flags;
@@ -876,6 +1017,7 @@ Status VFSWrapper::Create(const Context& ctx, Ino parent,
 Status VFSWrapper::Read(const Context& ctx, Ino ino, DataBuffer* data_buffer,
                         uint64_t size, uint64_t offset, uint64_t fh,
                         uint64_t* out_rsize) {
+  VFS_WRAPPER_OPERATION_GUARD();
   auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::Read");
   std::string session_id = dingofs::SpanScope::GetSessionID(span);
 
@@ -910,6 +1052,7 @@ Status VFSWrapper::Read(const Context& ctx, Ino ino, DataBuffer* data_buffer,
 Status VFSWrapper::Write(const Context& ctx, Ino ino, const char* buf,
                          uint64_t size, uint64_t offset, uint64_t fh,
                          uint64_t* out_wsize) {
+  VFS_WRAPPER_OPERATION_GUARD();
   VLOG(2) << "VFSWrite ino: " << ino
           << ", buf: " << dingofs::Helper::Char2Addr(buf) << ", size: " << size
           << " offset: " << offset << " fh: " << fh;
@@ -936,6 +1079,7 @@ Status VFSWrapper::Write(const Context& ctx, Ino ino, const char* buf,
 }
 
 Status VFSWrapper::Flush(const Context& ctx, Ino ino, uint64_t fh) {
+  VFS_WRAPPER_OPERATION_GUARD();
   VLOG(2) << "VFSFlush ino: " << ino << " fh: " << fh;
 
   auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::Flush");
@@ -960,6 +1104,7 @@ Status VFSWrapper::Flush(const Context& ctx, Ino ino, uint64_t fh) {
 }
 
 Status VFSWrapper::Release(const Context& ctx, Ino ino, uint64_t fh) {
+  VFS_WRAPPER_OPERATION_GUARD();
   VLOG(2) << "VFSRelease ino: " << ino << " fh: " << fh;
 
   auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::Release");
@@ -985,6 +1130,7 @@ Status VFSWrapper::Release(const Context& ctx, Ino ino, uint64_t fh) {
 
 Status VFSWrapper::Fsync(const Context& ctx, Ino ino, int datasync,
                          uint64_t fh) {
+  VFS_WRAPPER_OPERATION_GUARD();
   VLOG(2) << "VFSFsync ino: " << ino << " datasync: " << datasync
           << " fh: " << fh;
 
@@ -1010,6 +1156,7 @@ Status VFSWrapper::Fsync(const Context& ctx, Ino ino, int datasync,
 Status VFSWrapper::SetXattr(const Context& ctx, Ino ino,
                             const std::string& name, const std::string& value,
                             int flags) {
+  VFS_WRAPPER_OPERATION_GUARD();
   VLOG(2) << "VFSSetXattr ino: " << ino << " name: " << name
           << " value: " << value << " octal flags: " << std::oct << flags;
 
@@ -1039,6 +1186,7 @@ Status VFSWrapper::SetXattr(const Context& ctx, Ino ino,
 
 Status VFSWrapper::GetXattr(const Context& ctx, Ino ino,
                             const std::string& name, std::string* value) {
+  VFS_WRAPPER_OPERATION_GUARD();
   VLOG(2) << "VFSGetXattr ino: " << ino << " name: " << name;
 
   auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::GetXattr");
@@ -1072,6 +1220,7 @@ Status VFSWrapper::GetXattr(const Context& ctx, Ino ino,
 
 Status VFSWrapper::RemoveXattr(const Context& ctx, Ino ino,
                                const std::string& name) {
+  VFS_WRAPPER_OPERATION_GUARD();
   VLOG(2) << "VFSRemoveXattr ino: " << ino << " name: " << name;
 
   auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::RemoveXattr");
@@ -1100,6 +1249,7 @@ Status VFSWrapper::RemoveXattr(const Context& ctx, Ino ino,
 
 Status VFSWrapper::ListXattr(const Context& ctx, Ino ino,
                              std::vector<std::string>* xattrs) {
+  VFS_WRAPPER_OPERATION_GUARD();
   VLOG(2) << "VFSListXattr ino: " << ino;
 
   auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::ListXattr");
@@ -1122,6 +1272,7 @@ Status VFSWrapper::ListXattr(const Context& ctx, Ino ino,
 
 Status VFSWrapper::MkDir(const Context& ctx, Ino parent,
                          const std::string& name, uint32_t mode, Attr* attr) {
+  VFS_WRAPPER_OPERATION_GUARD();
   VLOG(2) << "VFSMkDir parent ino: " << parent << " name: " << name
           << " uid: " << ctx.uid << " gid: " << ctx.gid << " mode: " << mode;
 
@@ -1152,6 +1303,7 @@ Status VFSWrapper::MkDir(const Context& ctx, Ino parent,
 
 Status VFSWrapper::OpenDir(const Context& ctx, Ino ino, uint64_t* fh,
                            bool& need_cache) {
+  VFS_WRAPPER_OPERATION_GUARD();
   VLOG(2) << "VFSOpendir ino: " << ino;
 
   auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::OpenDir");
@@ -1176,6 +1328,7 @@ Status VFSWrapper::OpenDir(const Context& ctx, Ino ino, uint64_t* fh,
 Status VFSWrapper::ReadDir(const Context& ctx, Ino ino, uint64_t fh,
                            uint64_t offset, bool with_attr,
                            ReadDirHandler handler) {
+  VFS_WRAPPER_OPERATION_GUARD();
   VLOG(2) << "VFSReaddir ino: " << ino << " fh: " << fh << " offset: " << offset
           << " with_attr: " << (with_attr ? "true" : "false");
 
@@ -1193,13 +1346,15 @@ Status VFSWrapper::ReadDir(const Context& ctx, Ino ino, uint64_t fh,
       {&client_op_metric_->opReadDir, &client_op_metric_->opAll});
 
   auto span_ctx = dingofs::SpanScope::GetContext(span);
-  s = vfs_->ReadDir(span_ctx, ino, fh, offset, with_attr, handler, count);
+  s = vfs_->ReadDir(span_ctx, ino, fh, offset, with_attr, std::move(handler),
+                    count);
   if (!s.ok()) op_metric.FailOp();
 
   return s;
 }
 
 Status VFSWrapper::ReleaseDir(const Context& ctx, Ino ino, uint64_t fh) {
+  VFS_WRAPPER_OPERATION_GUARD();
   VLOG(2) << "VFSReleaseDir ino: " << ino << " fh: " << fh;
 
   auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::ReleaseDir");
@@ -1222,6 +1377,7 @@ Status VFSWrapper::ReleaseDir(const Context& ctx, Ino ino, uint64_t fh) {
 
 Status VFSWrapper::RmDir(const Context& ctx, Ino parent,
                          const std::string& name) {
+  VFS_WRAPPER_OPERATION_GUARD();
   VLOG(2) << "VFSRmdir parent: " << parent << " name: " << name;
 
   auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::RmDir");
@@ -1250,6 +1406,7 @@ Status VFSWrapper::RmDir(const Context& ctx, Ino parent,
 }
 
 Status VFSWrapper::StatFs(const Context& ctx, Ino ino, FsStat* fs_stat) {
+  VFS_WRAPPER_OPERATION_GUARD();
   VLOG(2) << "VFSStatFs ino: " << ino;
 
   auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::StatFs");
@@ -1273,6 +1430,7 @@ Status VFSWrapper::StatFs(const Context& ctx, Ino ino, FsStat* fs_stat) {
 Status VFSWrapper::Ioctl(const Context& ctx, Ino ino, unsigned int cmd,
                          unsigned flags, const void* in_buf, size_t in_bufsz,
                          char* out_buf, size_t out_bufsz) {
+  VFS_WRAPPER_OPERATION_GUARD();
   VLOG(2) << "VFSIoctl ino: " << ino << " cmd: " << cmd << " flags: " << flags
           << " in_bufsz: " << in_bufsz << " out_bufsz: " << out_bufsz;
 
@@ -1291,6 +1449,8 @@ Status VFSWrapper::Ioctl(const Context& ctx, Ino ino, unsigned int cmd,
 
   return s;
 }
+
+#undef VFS_WRAPPER_OPERATION_GUARD
 
 }  // namespace client
 }  // namespace dingofs

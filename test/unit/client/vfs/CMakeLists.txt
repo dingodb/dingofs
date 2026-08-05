@@ -20,7 +20,10 @@ add_subdirectory(handle)
 add_subdirectory(service)
 add_subdirectory(metasystem)
 
-add_library(test_vfs_impl test_vfs_impl.cc)
+add_library(test_vfs_impl
+  test_vfs_impl.cc
+  test_vfs_wrapper_lifecycle.cc
+)
 target_link_libraries(test_vfs_impl
   vfs_lib
   ${TEST_DEPS_WITHOUT_MAIN}

@@ -41,7 +41,7 @@ class VFSImpl : public VFS {
  public:
   VFSImpl(const VFSConfig& vfs_conf, const ClientId& client_id);
 
-  ~VFSImpl() override = default;
+  ~VFSImpl() override;
 
   Status Start(bool skip_mount) override;
 
@@ -158,6 +158,8 @@ class VFSImpl : public VFS {
 
   Status StartBrpcServer();
 
+  Status StopBrpcServer();
+
   // Resolve `mount_root_path_` to a real directory inode by walking the
   // filesystem. Must be called after `vfs_hub_->Start()` so that
   // `meta_system_` is available. On success, sets `mount_root_ino_`.
@@ -208,11 +210,14 @@ class VFSImpl : public VFS {
   std::unique_ptr<VFSHub> vfs_hub_;
   MetaWrapper* meta_system_{nullptr};
   HandleManager* handle_manager_{nullptr};
+  ReaderRegistry* reader_registry_{nullptr};
 
-  brpc::Server brpc_server_;
+  // Services are non-owned by brpc_server_. Declare the server last so it is
+  // destroyed first and drains callbacks before either the services or hub.
   InodeBlocksServiceImpl inode_blocks_service_;
   CompactServiceImpl compact_service_;
   ClientStatServiceImpl client_stat_service_;
+  brpc::Server brpc_server_;
 };
 
 }  // namespace vfs

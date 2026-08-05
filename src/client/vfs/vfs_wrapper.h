@@ -18,9 +18,13 @@
 #define DINGOFS_CLIENT_VFS_VFS_WRAPPER_H_
 
 #include <atomic>
+#include <condition_variable>
 #include <cstdint>
 #include <memory>
+#include <mutex>
+#include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "client/vfs/vfs.h"
@@ -151,6 +155,9 @@ class VFSWrapper {
 
   Status OpenDir(const Context& ctx, Ino ino, uint64_t* fh, bool& need_cache);
 
+  // The handler is invoked synchronously and must not re-enter a public method
+  // on this VFSWrapper. This contract is intentionally not enforced with C++
+  // thread_local state because callers may execute on migratable bthreads.
   Status ReadDir(const Context& ctx, Ino ino, uint64_t fh, uint64_t offset,
                  bool with_attr, ReadDirHandler handler);
 
@@ -165,17 +172,62 @@ class VFSWrapper {
                size_t out_bufsz);
 
  private:
+  friend class VFSWrapperLifecycleTest;
+
+  enum class LifecycleState {
+    kCreated,
+    kStarting,
+    kRunning,
+    kQuiescing,
+    kStopped,
+  };
+
+  class OperationLease {
+   public:
+    OperationLease(const OperationLease&) = delete;
+    OperationLease& operator=(const OperationLease&) = delete;
+
+    OperationLease(OperationLease&& other) noexcept
+        : owner_(std::exchange(other.owner_, nullptr)) {}
+
+    ~OperationLease();
+
+   private:
+    friend class VFSWrapper;
+    explicit OperationLease(VFSWrapper* owner) : owner_(owner) {}
+
+    VFSWrapper* owner_;
+  };
+
+  std::optional<OperationLease> TryAcquireOperation();
+
+  void ReleaseOperation();
+
+  Status FinishStartFailure(const Status& status);
+
   bool Dump();
 
   bool Load(const Json::Value& value);
 
-  std::atomic<bool> started_{false};
+  mutable std::mutex lifecycle_mutex_;
+  std::condition_variable lifecycle_cv_;
+  LifecycleState lifecycle_state_{LifecycleState::kCreated};
+  uint64_t active_public_operations_{0};
+  Status stop_status_;
+  bool stop_handover_{false};
+  std::atomic<bool> immutable_values_published_{false};
+
   std::unique_ptr<vfs::VFS> vfs_;
 
   std::unique_ptr<metrics::client::ClientOpMetric> client_op_metric_;
 
   uint32_t uid_{0};
   uint32_t gid_{0};
+
+  double attr_timeout_{0.0};
+  double entry_timeout_{0.0};
+  uint64_t fs_id_{0};
+  uint64_t max_name_length_{0};
 };
 
 }  // namespace client

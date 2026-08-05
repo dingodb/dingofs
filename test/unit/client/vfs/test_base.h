@@ -24,6 +24,8 @@
 #include <memory>
 
 #include "client/vfs/components/file_suffix_watcher.h"
+#include "client/vfs/data/reader/reader_registry.h"
+#include "client/vfs/data/writer_table.h"
 #include "client/vfs/handle/handle_manager.h"
 #include "client/vfs/metasystem/meta_wrapper.h"
 #include "common/options/client.h"
@@ -84,7 +86,10 @@ class VFSTestBase : public ::testing::Test {
     mock_compactor_ = cp.get();
     compactor_uptr_ = std::move(cp);
 
-    // --- 5. HandleManager ---
+    // --- 5. ReaderRegistry + WriterTable + HandleManager ---
+    reader_registry_ = std::make_unique<ReaderRegistry>();
+    writer_table_ = std::make_unique<WriterTable>(mock_hub_);
+    CHECK(writer_table_->Start().ok());
     handle_manager_ = std::make_unique<HandleManager>(mock_hub_);
     CHECK(handle_manager_->Start().ok());
 
@@ -107,6 +112,10 @@ class VFSTestBase : public ::testing::Test {
         .WillByDefault(Return(meta_wrapper_.get()));
     ON_CALL(*mock_hub_, GetHandleManager())
         .WillByDefault(Return(handle_manager_.get()));
+    ON_CALL(*mock_hub_, GetReaderRegistry())
+        .WillByDefault(Return(reader_registry_.get()));
+    ON_CALL(*mock_hub_, GetWriterTable())
+        .WillByDefault(Return(writer_table_.get()));
     ON_CALL(*mock_hub_, GetBlockStore())
         .WillByDefault(Return(mock_block_store_));
     ON_CALL(*mock_hub_, GetReadMemPool())
@@ -133,6 +142,8 @@ class VFSTestBase : public ::testing::Test {
 
     EXPECT_CALL(*mock_hub_, GetMetaSystem()).Times(AnyNumber());
     EXPECT_CALL(*mock_hub_, GetHandleManager()).Times(AnyNumber());
+    EXPECT_CALL(*mock_hub_, GetReaderRegistry()).Times(AnyNumber());
+    EXPECT_CALL(*mock_hub_, GetWriterTable()).Times(AnyNumber());
     EXPECT_CALL(*mock_hub_, GetBlockStore()).Times(AnyNumber());
     EXPECT_CALL(*mock_hub_, GetReadMemPool()).Times(AnyNumber());
     EXPECT_CALL(*mock_hub_, GetWriteMemPool()).Times(AnyNumber());
@@ -204,6 +215,7 @@ class VFSTestBase : public ::testing::Test {
 
   ~VFSTestBase() override {
     handle_manager_->Stop();
+    writer_table_->Stop();
     write_background_executor_->Stop();
     flush_executor_->Stop();
     read_executor_->Stop();
@@ -223,6 +235,8 @@ class VFSTestBase : public ::testing::Test {
   std::unique_ptr<MockCompactor> compactor_uptr_;
   std::unique_ptr<MetaWrapper> meta_wrapper_;
   std::unique_ptr<HandleManager> handle_manager_;
+  std::unique_ptr<ReaderRegistry> reader_registry_;
+  std::unique_ptr<WriterTable> writer_table_;
   std::unique_ptr<ReadMemPool> read_mem_pool_;
   std::unique_ptr<WriteMemPool> write_buf_mgr_;
   std::unique_ptr<FileSuffixWatcher> file_suffix_watcher_;

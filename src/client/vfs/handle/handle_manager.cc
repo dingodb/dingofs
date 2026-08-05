@@ -25,6 +25,7 @@
 #include <vector>
 
 #include "client/vfs/data/reader/file_reader.h"
+#include "client/vfs/data/reader/reader_registry.h"
 #include "client/vfs/data/writer/file_writer.h"
 #include "client/vfs/data/writer_table.h"
 #include "client/vfs/hub/vfs_hub.h"
@@ -122,6 +123,7 @@ HandleResources HandleManager::DetachHandleResourcesLocked(Handle* h) {
 
 void HandleManager::ReleaseHandleResources(HandleResources resources) {
   if (resources.reader != nullptr) {
+    vfs_hub_->GetReaderRegistry()->Unregister(resources.reader);
     resources.reader->Close();
     resources.reader->ReleaseRef();
   }
@@ -136,7 +138,6 @@ Status HandleManager::Start() { return Status::OK(); }
 Status HandleManager::Stop() {
   std::vector<HandleResources> resources_to_release;
   std::vector<Handle*> stop_refs;
-  bool has_writer = false;
   {
     std::unique_lock<std::mutex> lock(mutex_);
     if (stopped_) {
@@ -164,7 +165,6 @@ Status HandleManager::Stop() {
 
       auto resources = DetachHandleResourcesLocked(handle);
       if (resources.reader != nullptr || resources.writer != nullptr) {
-        has_writer = has_writer || resources.writer != nullptr;
         resources_to_release.push_back(resources);
       }
     }
@@ -175,10 +175,7 @@ Status HandleManager::Stop() {
   // writer executors are alive, before the loop below can drop the last holder
   // and close the writer. FlushAll deliberately visits every writer and returns
   // the first error without stopping early.
-  Status flush_status = Status::OK();
-  if (has_writer) {
-    flush_status = vfs_hub_->GetWriterTable()->FlushAll();
-  }
+  Status flush_status = vfs_hub_->GetWriterTable()->FlushAll();
 
   // Release resources outside mutex_: dropping the last writer holder may
   // block while FileWriter::Close() waits for already in-flight tasks and then
@@ -205,7 +202,6 @@ Handle* HandleManager::NewHandle(uint64_t fh, Ino ino, int flags) {
   handle->resources.reader->AcquireRef();
   CHECK(handle->resources.reader->Open().ok())
       << "FileReader::Open is currently infallible";
-
   // Writer only for writable opens. Borrowed from WriterTable.
   if ((flags & O_ACCMODE) != O_RDONLY) {
     handle->resources.writer = vfs_hub_->GetWriterTable()->AcquireWriter(ino);
@@ -218,6 +214,11 @@ Handle* HandleManager::NewHandle(uint64_t fh, Ino ino, int flags) {
       return nullptr;
     }
   }
+
+  // Publish the reader in the per-inode index only after all Handle resources
+  // have been acquired successfully. AddHandle failure is cleaned up through
+  // DestroyHandle, which unregisters it via ReleaseHandleResources.
+  vfs_hub_->GetReaderRegistry()->Register(handle->resources.reader);
 
   if (!AddHandle(handle)) {
     DestroyHandle(handle);
@@ -285,27 +286,6 @@ HandleGuard HandleManager::FindHandlerForRelease(uint64_t fh) {
   return HandleGuard(this, it->second);
 }
 
-void HandleManager::Invalidate(uint64_t fh, int64_t offset, int64_t size) {
-  std::lock_guard<std::mutex> lock(mutex_);
-  if (stopped_) {
-    LOG(WARNING) << "HandleManager already stopped";
-    return;
-  }
-
-  auto it = handles_.find(fh);
-  if (it == handles_.end()) {
-    LOG(WARNING) << "Invalidate failed, fh not found:" << fh;
-    return;
-  }
-
-  auto* handle = it->second;
-  if (handle->resources.reader != nullptr) {
-    handle->resources.reader->Invalidate(offset, size);
-  } else {
-    LOG(WARNING) << "Invalidate failed, reader is nullptr, fh:" << fh;
-  }
-}
-
 Status HandleManager::FlushByIno(Ino ino) {
   // O(1) hash lookup via WriterTable.
   auto* writer = vfs_hub_->GetWriterTable()->PeekWriter(ino);
@@ -319,27 +299,6 @@ Status HandleManager::FlushByIno(Ino ino) {
                                 s.ToString());
   }
   return s;
-}
-
-void HandleManager::InvalidateByIno(Ino ino, int64_t offset, int64_t size) {
-  std::vector<Handle*> handles_to_invalidate;
-  {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (stopped_) {
-      return;
-    }
-    for (auto& [fh, handle] : handles_) {
-      if (handle->ino == ino && handle->resources.reader != nullptr) {
-        AcquireRefHandle(handle);
-        handles_to_invalidate.push_back(handle);
-      }
-    }
-  }
-
-  for (auto* handle : handles_to_invalidate) {
-    handle->resources.reader->Invalidate(offset, size);
-    ReleaseRefHandle(handle);
-  }
 }
 
 void HandleManager::Summary(Json::Value& value) {
