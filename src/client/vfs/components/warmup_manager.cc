@@ -161,6 +161,13 @@ void WarmupManager::ProcessIntimeWarmup(WarmupTask* task) {
   auto inode = task->GetKey();
   LOG(INFO) << "Intime warmup started for inode: " << task->GetKey();
 
+  Status status = WalkFile(task, inode);
+  if (!status.ok()) {
+    LOG(ERROR) << "Failed to collect blocks for intime warmup, inode=" << inode
+               << ", status=" << status.ToString();
+    return;
+  }
+
   WarmupFile(inode, task, [inode, task, span](Status s) {
     SpanScope::End(span);
     LOG(INFO) << "Finish intime warmup file: " << inode

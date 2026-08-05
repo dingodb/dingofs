@@ -909,7 +909,7 @@ void MDSMetaSystem::WarmupSmallFiles(const std::vector<Ino>& inoes) {
 
   for (Ino ino : inoes) {
     LOG_DEBUG << fmt::format("[meta.fs] submit warmup task, ino({}).", ino);
-    // warmup_manager_->SubmitTask(WarmupTaskContext(ino));
+    warmup_manager_->SubmitTask(WarmupTaskContext(ino));
   }
 }
 
