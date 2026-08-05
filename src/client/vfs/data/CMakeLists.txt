@@ -23,6 +23,7 @@ add_library(vfs_data
     reader/chunk_req_reader.cc
     reader/chunk_req.cc
     reader/file_reader.cc
+    reader/reader_registry.cc
     reader/read_request.cc
     reader/readahead_policy.cc
     writer/file_writer.cc

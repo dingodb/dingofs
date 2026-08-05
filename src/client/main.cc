@@ -244,7 +244,12 @@ int main(int argc, char* argv[]) {
   FsContext fs_context{
       .mount_option = &mount_option,
       .fuse_server = fuse_server,
+      .vfs = nullptr,
   };
+
+  // fs_context is declared before the session cleanup below, so reverse
+  // destruction order guarantees DestroySession() has joined every FUSE
+  // worker before fs_context.vfs is destroyed.
 
   // create fuse session
   if (fuse_server->CreateSession(&fs_context) == 1) return EXIT_FAILURE;

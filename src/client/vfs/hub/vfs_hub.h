@@ -47,6 +47,7 @@ namespace client {
 namespace vfs {
 
 class WriterTable;  // forward decl; full include lives in vfs_hub.cc
+class ReaderRegistry;
 
 class VFSHub {
  public:
@@ -63,6 +64,8 @@ class VFSHub {
   virtual MetaWrapper* GetMetaSystem() = 0;
 
   virtual HandleManager* GetHandleManager() = 0;
+
+  virtual ReaderRegistry* GetReaderRegistry() = 0;
 
   virtual WriterTable* GetWriterTable() = 0;
 
@@ -121,6 +124,11 @@ class VFSHubImpl : public VFSHub {
   HandleManager* GetHandleManager() override {
     CHECK_NOTNULL(handle_manager_);
     return handle_manager_.get();
+  }
+
+  ReaderRegistry* GetReaderRegistry() override {
+    CHECK_NOTNULL(reader_registry_);
+    return reader_registry_.get();
   }
 
   WriterTable* GetWriterTable() override;  // out-of-line (see vfs_hub.cc)
@@ -232,7 +240,20 @@ class VFSHubImpl : public VFSHub {
   std::unique_ptr<TraceManager> trace_manager_;
   std::unique_ptr<Compactor> compactor_;
   std::unique_ptr<MetaWrapper> meta_wrapper_;
+
+  // Destruction order is load-bearing. C++ destroys members in reverse
+  // declaration order, so keep these declarations in this order:
+  //
+  //   declared:  WriterTable -> ReaderRegistry -> HandleManager
+  //   destroyed: HandleManager -> ReaderRegistry -> WriterTable
+  //
+  // HandleManager::~HandleManager() may call Stop(), which flushes writers,
+  // invalidates and unregisters readers, and releases writer holders. Both
+  // ReaderRegistry and WriterTable must therefore remain alive until
+  // HandleManager has been destroyed, including partial-Start/error paths
+  // where the normal explicit Stop() sequence may not have completed.
   std::unique_ptr<WriterTable> writer_table_;
+  std::unique_ptr<ReaderRegistry> reader_registry_;
   std::unique_ptr<HandleManager> handle_manager_;
   std::unique_ptr<blockaccess::BlockAccesser> block_accesser_;
   std::unique_ptr<BlockStore> block_store_;

@@ -60,6 +60,8 @@ class FileReader {
   // caller should ensure ReleaseRef called outside of lock
   void ReleaseRef();
 
+  Ino GetIno() const { return ino_; }
+
  private:
   friend class FileReaderTestPeer;
 

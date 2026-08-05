@@ -52,6 +52,9 @@ class HandleManagerTest : public VFSTestBase {
   }
 
   void TearDown() override {
+    // HandleManager::Stop unconditionally calls FlushAll; keep the fixture's
+    // WriterTable alive until the manager has finished stopping.
+    handle_manager_->Stop();
     if (writer_table_) {
       writer_table_->Stop();
       writer_table_.reset();
@@ -122,9 +125,12 @@ TEST_F(HandleManagerTest, TwoFhsOnSameInoHaveDistinctReaders) {
   ASSERT_NE(h2->resources.reader, nullptr);
   EXPECT_NE(h1->resources.reader, h2->resources.reader)
       << "per-fh reader: each fh must own a distinct FileReader instance";
+  EXPECT_EQ(reader_registry_->Size(), 2u);
 
   handle_manager_->ReleaseHandler(10);
+  EXPECT_EQ(reader_registry_->Size(), 1u);
   handle_manager_->ReleaseHandler(11);
+  EXPECT_EQ(reader_registry_->Size(), 0u);
 }
 
 // Mixed-mode opens: O_RDONLY + O_WRONLY on the same inode produce exactly
@@ -322,6 +328,18 @@ TEST_F(HandleManagerTest, NewHandle_AfterStop_RejectedNoLeak) {
   EXPECT_EQ(h, nullptr) << "NewHandle must fail once HandleManager is stopped";
   EXPECT_EQ(writer_table_->Size(), 0u)
       << "rejected NewHandle must not leak the acquired writer";
+  EXPECT_EQ(reader_registry_->Size(), 0u)
+      << "rejected NewHandle must unregister its reader";
+}
+
+// A writer acquisition failure happens before the reader is published in the
+// registry, so the partially constructed Handle must leave no stale entry.
+TEST_F(HandleManagerTest, NewHandle_WriterAcquireFailure_NoReaderRegistryLeak) {
+  writer_table_->Stop();
+
+  auto* h = handle_manager_->NewHandle(/*fh*/ 530, /*ino*/ 9030, O_WRONLY);
+  EXPECT_EQ(h, nullptr);
+  EXPECT_EQ(reader_registry_->Size(), 0u);
 }
 
 // A late FUSE_RELEASE after Stop() already detached resources must be

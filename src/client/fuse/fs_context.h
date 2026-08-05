@@ -17,8 +17,11 @@
 #ifndef DINGOFS_SRC_CLIENT_FUSE_FS_CONTEXT_H_
 #define DINGOFS_SRC_CLIENT_FUSE_FS_CONTEXT_H_
 
+#include <memory>
+
 #include "client/fuse/fuse_common.h"
 #include "client/fuse/fuse_server.h"
+#include "client/vfs/vfs_wrapper.h"
 
 namespace dingofs {
 namespace client {
@@ -27,6 +30,10 @@ namespace fuse {
 struct FsContext {
   struct MountOption* mount_option;
   FuseServer* fuse_server;
+  // Own the VFS until after fuse_session_loop has stopped and all workers have
+  // been joined. FUSE destroy callbacks may run inline on a worker, so they
+  // must Stop this object but never delete it.
+  std::unique_ptr<VFSWrapper> vfs;
 };
 
 }  // namespace fuse

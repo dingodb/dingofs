@@ -29,6 +29,7 @@
 #include "client/vfs/compaction/compactor_impl.h"
 #include "client/vfs/components/prefetch_manager.h"
 #include "client/vfs/components/warmup_manager.h"
+#include "client/vfs/data/reader/reader_registry.h"
 #include "client/vfs/data/writer_table.h"
 #include "client/vfs/metasystem/local/metasystem.h"
 #include "client/vfs/metasystem/mds/metasystem.h"
@@ -263,6 +264,10 @@ Status VFSHubImpl::Start(bool skip_mount) {
     CHECK(writer_table_ != nullptr) << "writer table is nullptr.";
     DINGOFS_RETURN_NOT_OK(writer_table_->Start());
   }
+
+  // ReaderRegistry is a non-owning index. It must exist before handles can
+  // register readers and outlive HandleManager teardown.
+  reader_registry_ = std::make_unique<ReaderRegistry>();
 
   // handle manager
   {

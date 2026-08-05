@@ -32,6 +32,7 @@
 #include "common/blockaccess/accesser_common.h"
 #include "common/const.h"
 #include "common/file_size.h"
+#include "common/options/client.h"
 #include "common/status.h"
 #include "common/trace/trace_manager.h"
 #include "common/writemempool/write_mem_pool.h"
@@ -39,6 +40,7 @@
 #include "test/unit/client/vfs/mock/mock_vfs_hub.h"
 #include "test/unit/client/vfs/test_base.h"
 #include "test/unit/client/vfs/test_common.h"
+#include "utils/scoped_cleanup.h"
 
 namespace dingofs {
 namespace client {
@@ -103,6 +105,18 @@ class VFSImplTest : public test::VFSTestBase {
     vfs_.reset(new VFSImpl(std::move(hub_uptr_)));
   }
 
+  void TearDown() override {
+    // HandleManager keeps a non-owning pointer to the hub now owned by vfs_.
+    // Stop it while that hub is still alive; the VFSTestBase destructor's
+    // later Stop is idempotent and will not dereference the destroyed hub.
+    // Some tests temporarily redirect GetWriterTable() to a function-local
+    // table; restore the fixture-owned table after those locals are gone.
+    ON_CALL(*mock_hub_, GetWriterTable())
+        .WillByDefault(Return(writer_table_.get()));
+    handle_manager_->Stop();
+    vfs_.reset();
+  }
+
   std::unique_ptr<VFSImpl> vfs_;
   std::unique_ptr<TraceManager> trace_manager_;
 
@@ -112,7 +126,31 @@ class VFSImplTest : public test::VFSTestBase {
     vfs_->mount_root_path_ = path;
     vfs_->mount_root_ino_ = ino;
   }
+
+  Status StartBrpcServer() { return vfs_->StartBrpcServer(); }
+
+  brpc::Server::Status BrpcServerStatus() const {
+    return vfs_->brpc_server_.status();
+  }
 };
+
+TEST_F(VFSImplTest, StopDrainsBrpcServerBeforeHub) {
+  const uint32_t previous_port = FLAGS_vfs_dummy_server_port;
+  FLAGS_vfs_dummy_server_port = 0;
+  auto restore_port =
+      MakeScopedCleanup([&]() { FLAGS_vfs_dummy_server_port = previous_port; });
+
+  ASSERT_TRUE(StartBrpcServer().ok());
+  ASSERT_EQ(BrpcServerStatus(), brpc::Server::RUNNING);
+
+  EXPECT_CALL(*mock_hub_, Stop(false)).WillOnce(Invoke([&](bool) {
+    EXPECT_EQ(BrpcServerStatus(), brpc::Server::READY);
+    return Status::OK();
+  }));
+
+  EXPECT_TRUE(vfs_->Stop(false).ok());
+  EXPECT_EQ(BrpcServerStatus(), brpc::Server::READY);
+}
 
 // --- 1. GetFsId ---
 TEST_F(VFSImplTest, GetFsId_ReturnsFromFsInfo) {

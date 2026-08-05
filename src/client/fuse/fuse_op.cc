@@ -392,7 +392,9 @@ void FuseOpInit(void* userdata, struct fuse_conn_info* conn) {
             << ", fs name: " << config.fs_name
             << ", meta_url: " << mount_option->meta_url;
 
-  g_vfs = new dingofs::client::VFSWrapper();
+  CHECK(fs_context->vfs == nullptr) << "VFS already initialized";
+  fs_context->vfs = std::make_unique<dingofs::client::VFSWrapper>();
+  g_vfs = fs_context->vfs.get();
   int upgrade_from_pid = 0;
   if (UpgradeStateStore::GetInstance().GetFuseState() ==
       FuseUpgradeState::kFuseUpgradeNew) {
@@ -437,7 +439,6 @@ void FuseOpDestroy(void* userdata) {
     const bool handover = (UpgradeStateStore::GetInstance().GetFuseState() ==
                            FuseUpgradeState::kFuseUpgradeOld);
     g_vfs->Stop(handover);
-    delete g_vfs;
   }
 }
 
