@@ -7,7 +7,7 @@ if [[ ! -d "$mydir" ]]; then mydir="$PWD"; fi
 DEFINE_string fs_name '' 'fs name'
 DEFINE_string mds_addr '' 'mds address'
 DEFINE_string parameters 'mds_deploy_parameters.local' 'deploy parameters file'
-
+DEFINE_boolean use_local_datastore false 'use local datastore'
 
 # parse the command-line
 FLAGS "$@" || exit 1
@@ -58,9 +58,20 @@ fi
 
 echo "fs ${FLAGS_fs_name} not exist, create it"
 
-
 # create fs
-output=`$MDS_CLIENT_BIN_PATH --cmd=createfs --mds_addr=${FLAGS_mds_addr} --fs_name=${FLAGS_fs_name} --fs_partition_type=parent_hash --s3_endpoint=${S3_ENDPOINT} --s3_ak=${S3_AK} --s3_sk=${S3_SK} --s3_bucketname=${S3_BUCKETNAME}`
+output=""
+if [ ${FLAGS_use_local_datastore} = 0 ]; then
+  local_storage_path=${LOCAL_DATASTORE_PATH}/${FLAGS_fs_name}
+  mkdir -p ${local_storage_path}
+  
+  output=`$MDS_CLIENT_BIN_PATH --cmd=createfs --mds_addr=${FLAGS_mds_addr} --fs_name=${FLAGS_fs_name} --fs_partition_type=parent_hash --storage_path=${LOCAL_DATASTORE_PATH}`
+
+else
+  output=`$MDS_CLIENT_BIN_PATH --cmd=createfs --mds_addr=${FLAGS_mds_addr} --fs_name=${FLAGS_fs_name} --fs_partition_type=parent_hash --s3_endpoint=${S3_ENDPOINT} --s3_ak=${S3_AK} --s3_sk=${S3_SK} --s3_bucketname=${S3_BUCKETNAME}`
+
+fi
+
+
 is_fail=`echo $output | grep "rpc fail" | wc -l`
 if [ $is_fail -eq 1 ]; then
   echo "create fs fail, $output"

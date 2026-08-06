@@ -14,7 +14,7 @@ DEFINE_boolean upgrade true 'upgrade client'
 DEFINE_boolean loop false 'loop restart client'
 DEFINE_boolean clean_log false 'clean log'
 DEFINE_integer port 11000 'dummy server port'
-
+DEFINE_boolean use_cache false 'use cache'
 
 # parse the command-line
 FLAGS "$@" || exit 1
@@ -148,14 +148,37 @@ function start() {
         dummy_port=$(($RANDOM%20000 + 10000))
     fi
 
-    ${CLIENT_BIN_PATH} ${FLAGS_meta} ${mountpoint_dir} \
-    --fuse_subdir=/ \
-    --log_dir=${log_dir} \
-    --log_level=DEBUG \
-    --log_v=20 \
-    --vfs_dummy_server_port=${dummy_port} \
-    --cache_store=none \
-    --daemonize=true 2>&1 > $log_dir/out
+    if [ ${FLAGS_use_cache} == 0 ]; then
+        echo "start client with cache"
+
+        ${CLIENT_BIN_PATH} ${FLAGS_meta} ${mountpoint_dir} \
+        --fuse_subdir=/ \
+        --log_dir=${log_dir} \
+        --log_level=DEBUG \
+        --log_v=20 \
+        --vfs_dummy_server_port=${dummy_port} \
+        --cache_store=none \
+        --fill_group_cache=False \
+        --cache_group=cache_test \
+        --enable_stage=True \
+        --enable_cache=True \
+        --vfs_block_store_access_log_enable=True \
+        --daemonize=true 2>&1 > $log_dir/out
+
+    else
+        echo "start client without cache"
+
+        ${CLIENT_BIN_PATH} ${FLAGS_meta} ${mountpoint_dir} \
+        --fuse_subdir=/ \
+        --log_dir=${log_dir} \
+        --log_level=DEBUG \
+        --log_v=20 \
+        --vfs_dummy_server_port=${dummy_port} \
+        --cache_store=none \
+        --daemonize=true 2>&1 > $log_dir/out
+    fi
+
+
 }
 
 if [ ${FLAGS_stop} = 0 ]; then

@@ -1266,6 +1266,9 @@ Status UpdateAttrOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_pa
                                      extra_param_.block_size, result_.effected_chunks);
       if (!status.ok()) return status;
     }
+
+    attr.set_mtime(std::max(attr.mtime(), GetTime()));
+    attr.set_ctime(std::max(attr.ctime(), GetTime()));
   }
 
   if (to_set_ & kSetAttrAtime) {
@@ -1554,6 +1557,9 @@ Status FallocateOperation::SetZero(TxnUPtr& txn, AttrEntry& attr, uint64_t offse
     attr.set_length(end_offset);
   }
 
+  attr.set_ctime(std::max(attr.ctime(), GetTime()));
+  attr.set_mtime(std::max(attr.mtime(), GetTime()));
+
   return Status::OK();
 }
 
@@ -1700,7 +1706,7 @@ Status FlushFileOperation::Run(TxnUPtr& txn) {
     attr.set_length(param_.length);
   }
   attr.set_mtime(std::max(attr.mtime(), GetTime()));
-  // attr.set_ctime(std::max(attr.ctime(), GetTime()));
+  attr.set_ctime(std::max(attr.ctime(), GetTime()));
   attr.set_version(attr.version() + 1);
 
   txn->Put(key, MetaCodec::EncodeInodeValue(attr));
