@@ -25,6 +25,7 @@
 #include <variant>
 
 #include "common/blockaccess/accesser.h"
+#include "common/blockaccess/rados/osd_map_refresher.h"
 #include "common/blockaccess/rados/rados_common.h"
 
 namespace dingofs {
@@ -98,6 +99,7 @@ class RadosAccesser : public Accesser {
   const RadosOptions options_;
 
   rados_t cluster_{nullptr};
+  std::unique_ptr<OsdMapRefresher> map_refresher_;
 };
 
 }  // namespace blockaccess

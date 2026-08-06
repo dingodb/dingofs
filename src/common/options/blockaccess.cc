@@ -23,6 +23,13 @@ namespace blockaccess {
 
 // rados option
 DEFINE_int32(rados_op_timeout, 120, "rados operation timeout in seconds");
+DEFINE_bool(rados_map_refresh_enable, true,
+            "enable background refresh of the latest RADOS OSDMap");
+DEFINE_uint32(rados_map_refresh_interval_s, 60,
+              "background RADOS OSDMap refresh interval in seconds");
+DEFINE_uint32(rados_map_refresh_jitter_pct, 20,
+              "random jitter percentage for the RADOS OSDMap refresh "
+              "interval (clamped to 50)");
 
 // aws option
 DEFINE_string(s3_region, "us-east-1", "aws s3 region");
