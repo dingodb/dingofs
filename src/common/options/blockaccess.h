@@ -23,6 +23,9 @@ namespace dingofs {
 namespace blockaccess {
 
 DECLARE_int32(rados_op_timeout);
+DECLARE_bool(rados_map_refresh_enable);
+DECLARE_uint32(rados_map_refresh_interval_s);
+DECLARE_uint32(rados_map_refresh_jitter_pct);
 
 // aws option
 DECLARE_string(s3_region);

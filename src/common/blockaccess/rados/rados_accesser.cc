@@ -21,6 +21,8 @@
 #include <glog/logging.h>
 #include <rados/librados.h>
 
+#include <algorithm>
+#include <chrono>
 #include <cstddef>
 #include <cstring>
 #include <functional>
@@ -178,15 +180,38 @@ bool RadosAccesser::Init() {
     return false;
   }
 
+  auto refresh_options = OsdMapRefresher::Options{
+      .enabled = FLAGS_rados_map_refresh_enable,
+      .interval = std::chrono::seconds(
+          std::max(FLAGS_rados_map_refresh_interval_s, 10U)),
+      .jitter_pct = std::min(FLAGS_rados_map_refresh_jitter_pct, 50U),
+  };
+  map_refresher_ = std::make_unique<OsdMapRefresher>(
+      refresh_options,
+      [cluster = cluster_]() { return rados_wait_for_latest_osdmap(cluster); });
+  if (!map_refresher_->Start()) {
+    LOG(ERROR) << "Failed to start RADOS OSDMap refresher";
+    map_refresher_.reset();
+    rados_shutdown(cluster_);
+    cluster_ = nullptr;
+    return false;
+  }
+
   LOG(INFO) << "Succss init RadosAccesser cluster: " << cluster_
             << ", mon_host: " << options_.mon_host << options_.cluster_name
-            << ", user: " << options_.user_name << ", key: " << options_.key
-            << ", pool: " << options_.pool_name;
+            << ", user: " << options_.user_name
+            << ", pool: " << options_.pool_name
+            << ", map_refresh_enabled: " << FLAGS_rados_map_refresh_enable;
 
   return true;
 }
 
 bool RadosAccesser::Destroy() {
+  if (map_refresher_ != nullptr) {
+    map_refresher_->Stop();
+    map_refresher_.reset();
+  }
+
   if (cluster_ != nullptr) {
     VLOG(1) << "Waiting all aio to finish before destroy rados cluster: "
             << cluster_;
