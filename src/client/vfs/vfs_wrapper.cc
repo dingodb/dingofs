@@ -1215,6 +1215,9 @@ Status VFSWrapper::GetXattr(const Context& ctx, Ino ino,
 
   if (value->empty()) s = Status::NoData("no data");
 
+  LOG_DEBUG << "value size: " << value->size() << " value:" << *value
+            << " s: " << s.ToString();
+
   return s;
 }
 

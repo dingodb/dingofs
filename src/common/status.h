@@ -17,6 +17,8 @@
 #ifndef DINGOFS_COMMON_STATUS_H_
 #define DINGOFS_COMMON_STATUS_H_
 
+#include <absl/container/inlined_vector.h>
+
 #include <cerrno>
 #include <cstdint>
 #include <memory>
@@ -252,7 +254,8 @@ inline Status& Status::operator=(Status&& rhs) noexcept {
   if (this != &rhs) {
     code_ = rhs.code_;
     errno_ = rhs.errno_;
-    state_ = std::move(rhs.state_);
+    // state_ = std::move(rhs.state_);
+    state_ = (rhs.state_ == nullptr) ? nullptr : CopyState(rhs.state_.get());
   }
   return *this;
 }
