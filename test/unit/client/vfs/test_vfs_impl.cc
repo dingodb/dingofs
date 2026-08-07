@@ -899,6 +899,486 @@ TEST_F(VFSImplUidGidTest, UidGid_Passthrough_NullMapper) {
   EXPECT_EQ(out.uid, kLocalUid);
 }
 
+// ===========================================================================
+// ReadDir synthesized entries: "."/".." for every directory, plus
+// ".stats"/".trash" at the FUSE-visible root. Synthesized entries share one
+// positional cookie space with real dentries (stream position p has cookie
+// p+1). See docs/adr/0001-readdir-synthesized-entries.md.
+// ===========================================================================
+namespace {
+
+struct ReadDirRecord {
+  std::string name;
+  Ino ino;
+  Attr attr;
+  uint64_t cookie;
+};
+
+// Collect every (entry, cookie) the handler sees until the stream ends.
+std::vector<ReadDirRecord> CollectReadDir(VFSImpl* vfs, ContextSPtr ctx,
+                                          Ino ino, uint64_t offset,
+                                          bool with_attr, uint32_t& count,
+                                          Status& status) {
+  std::vector<ReadDirRecord> out;
+  status = vfs->ReadDir(
+      ctx, ino, /*fh=*/1, offset, with_attr,
+      [&](const DirEntry& e, uint64_t off) {
+        out.push_back(ReadDirRecord{e.name, e.ino, e.attr, off});
+        return true;
+      },
+      count);
+  return out;
+}
+
+// Serves `entries` as the meta layer's real-dentry stream (0-based
+// positions), honoring the delegate offset. Matches the tail of
+// MockMetaSystem::ReadDir's signature for use with Invoke.
+Status ServeRealEntries(const std::vector<DirEntry>& entries, uint64_t offset,
+                        ReadDirHandler& handler, uint32_t& count) {
+  for (uint64_t i = offset; i < entries.size(); ++i) {
+    if (!handler(entries[i], i + 1)) return Status::OK();
+    ++count;
+  }
+  return Status::OK();
+}
+
+}  // namespace
+
+// Case 1: a normal directory at offset 0 yields [".", "..", ...reals] with
+// contiguous cookies, and the meta delegate sees a 0-based offset.
+TEST_F(VFSImplTest, ReadDir_SynthesizesDotAndDotDot) {
+  const Ino kDir = 100, kParent = 50;
+  Attr dir_attr = test::MakeDirAttr(kDir);
+  dir_attr.parents = {kParent};
+  ON_CALL(*mock_meta_system_, GetAttr(_, kDir, _))
+      .WillByDefault(DoAll(SetArgPointee<2>(dir_attr), Return(Status::OK())));
+  EXPECT_CALL(*mock_meta_system_, GetAttr(_, _, _)).Times(AnyNumber());
+
+  std::vector<DirEntry> reals = {DirEntry{101, "a", Attr{}},
+                                 DirEntry{102, "b", Attr{}}};
+  uint64_t delegate_offset = UINT64_MAX;
+  EXPECT_CALL(*mock_meta_system_, ReadDir(_, kDir, _, _, false, _, _))
+      .WillOnce(Invoke([&](ContextSPtr, Ino, uint64_t, uint64_t off, bool,
+                           ReadDirHandler h, uint32_t& count) {
+        delegate_offset = off;
+        return ServeRealEntries(reals, off, h, count);
+      }));
+
+  uint32_t count = 0;
+  Status s;
+  auto got = CollectReadDir(vfs_.get(), ctx_, kDir, /*offset=*/0,
+                            /*with_attr=*/false, count, s);
+  ASSERT_TRUE(s.ok()) << s.ToString();
+  ASSERT_EQ(got.size(), 4u);
+  EXPECT_EQ(got[0].name, ".");
+  EXPECT_EQ(got[0].ino, kDir);
+  EXPECT_EQ(got[0].cookie, 1u);
+  EXPECT_EQ(got[1].name, "..");
+  EXPECT_EQ(got[1].ino, kParent);
+  EXPECT_EQ(got[1].cookie, 2u);
+  EXPECT_EQ(got[2].name, "a");
+  EXPECT_EQ(got[2].cookie, 3u);
+  EXPECT_EQ(got[3].name, "b");
+  EXPECT_EQ(got[3].cookie, 4u);
+  EXPECT_EQ(count, 4u);  // synthesized entries included
+  EXPECT_EQ(delegate_offset, 0u);
+}
+
+// Case 2: resuming mid-stream from arbitrary kernel cookies lands on the
+// right entry, and the meta delegate offset is shifted by the synthesized
+// prefix length.
+TEST_F(VFSImplTest, ReadDir_MidStreamOffsets) {
+  const Ino kDir = 100, kParent = 50;
+  Attr dir_attr = test::MakeDirAttr(kDir);
+  dir_attr.parents = {kParent};
+  ON_CALL(*mock_meta_system_, GetAttr(_, kDir, _))
+      .WillByDefault(DoAll(SetArgPointee<2>(dir_attr), Return(Status::OK())));
+  EXPECT_CALL(*mock_meta_system_, GetAttr(_, _, _)).Times(AnyNumber());
+
+  std::vector<DirEntry> reals = {DirEntry{101, "a", Attr{}},
+                                 DirEntry{102, "b", Attr{}}};
+  std::vector<uint64_t> delegate_offsets;
+  ON_CALL(*mock_meta_system_, ReadDir(_, kDir, _, _, false, _, _))
+      .WillByDefault(Invoke([&](ContextSPtr, Ino, uint64_t, uint64_t off, bool,
+                                ReadDirHandler h, uint32_t& count) {
+        delegate_offsets.push_back(off);
+        return ServeRealEntries(reals, off, h, count);
+      }));
+  EXPECT_CALL(*mock_meta_system_, ReadDir(_, _, _, _, _, _, _))
+      .Times(AnyNumber());
+
+  // offset=1: resume at ".."
+  {
+    uint32_t count = 0;
+    Status s;
+    auto got = CollectReadDir(vfs_.get(), ctx_, kDir, 1, false, count, s);
+    ASSERT_TRUE(s.ok()) << s.ToString();
+    ASSERT_EQ(got.size(), 3u);
+    EXPECT_EQ(got[0].name, "..");
+    EXPECT_EQ(got[0].cookie, 2u);
+    EXPECT_EQ(got[1].name, "a");
+    EXPECT_EQ(got[2].name, "b");
+  }
+  // offset=2: resume at the first real dentry
+  {
+    uint32_t count = 0;
+    Status s;
+    auto got = CollectReadDir(vfs_.get(), ctx_, kDir, 2, false, count, s);
+    ASSERT_TRUE(s.ok()) << s.ToString();
+    ASSERT_EQ(got.size(), 2u);
+    EXPECT_EQ(got[0].name, "a");
+    EXPECT_EQ(got[0].cookie, 3u);
+    EXPECT_EQ(got[1].name, "b");
+    EXPECT_EQ(got[1].cookie, 4u);
+  }
+  // offset=3: resume inside the real stream
+  {
+    uint32_t count = 0;
+    Status s;
+    auto got = CollectReadDir(vfs_.get(), ctx_, kDir, 3, false, count, s);
+    ASSERT_TRUE(s.ok()) << s.ToString();
+    ASSERT_EQ(got.size(), 1u);
+    EXPECT_EQ(got[0].name, "b");
+    EXPECT_EQ(got[0].cookie, 4u);
+  }
+
+  EXPECT_EQ(delegate_offsets, (std::vector<uint64_t>{0, 0, 1}));
+}
+
+// Case 3: readdirplus populates "." with the directory's attr and ".." with
+// the parent's attr.
+TEST_F(VFSImplTest, ReadDir_WithAttr_PopulatesDotAttrs) {
+  const Ino kDir = 100, kParent = 50;
+  Attr dir_attr = test::MakeDirAttr(kDir);
+  dir_attr.parents = {kParent};
+  dir_attr.uid = 7;
+  Attr parent_attr = test::MakeDirAttr(kParent);
+  parent_attr.uid = 8;
+
+  ON_CALL(*mock_meta_system_, GetAttr(_, _, _))
+      .WillByDefault(Invoke([&](ContextSPtr, Ino ino, Attr* attr) {
+        if (ino == kDir) {
+          *attr = dir_attr;
+          return Status::OK();
+        }
+        if (ino == kParent) {
+          *attr = parent_attr;
+          return Status::OK();
+        }
+        return Status::NotExist("no such ino");
+      }));
+  EXPECT_CALL(*mock_meta_system_, GetAttr(_, _, _)).Times(AnyNumber());
+
+  std::vector<DirEntry> reals = {DirEntry{201, "x", test::MakeFileAttr(201)}};
+  ON_CALL(*mock_meta_system_, ReadDir(_, kDir, _, _, true, _, _))
+      .WillByDefault(Invoke([&](ContextSPtr, Ino, uint64_t, uint64_t off, bool,
+                                ReadDirHandler h, uint32_t& count) {
+        return ServeRealEntries(reals, off, h, count);
+      }));
+  EXPECT_CALL(*mock_meta_system_, ReadDir(_, _, _, _, _, _, _))
+      .Times(AnyNumber());
+
+  uint32_t count = 0;
+  Status s;
+  auto got =
+      CollectReadDir(vfs_.get(), ctx_, kDir, 0, /*with_attr=*/true, count, s);
+  ASSERT_TRUE(s.ok()) << s.ToString();
+  ASSERT_EQ(got.size(), 3u);
+  EXPECT_EQ(got[0].name, ".");
+  EXPECT_EQ(got[0].attr.ino, kDir);
+  EXPECT_EQ(got[0].attr.uid, 7u);
+  EXPECT_EQ(got[1].name, "..");
+  EXPECT_EQ(got[1].attr.ino, kParent);
+  EXPECT_EQ(got[1].attr.uid, 8u);
+}
+
+// Case 4a: the FUSE root with trash disabled yields [".", "..", ".stats"];
+// ".." of the root self-loops to kRootIno.
+TEST_F(VFSImplTest, ReadDir_Root_TrashHidden) {
+  Attr root_attr = test::MakeDirAttr(kRootIno);  // parents empty
+  ON_CALL(*mock_meta_system_, GetAttr(_, kRootIno, _))
+      .WillByDefault(DoAll(SetArgPointee<2>(root_attr), Return(Status::OK())));
+  EXPECT_CALL(*mock_meta_system_, GetAttr(_, _, _)).Times(AnyNumber());
+
+  std::vector<DirEntry> reals = {DirEntry{101, "a", Attr{}}};
+  ON_CALL(*mock_meta_system_, ReadDir(_, kRootIno, _, _, false, _, _))
+      .WillByDefault(Invoke([&](ContextSPtr, Ino, uint64_t, uint64_t off, bool,
+                                ReadDirHandler h, uint32_t& count) {
+        return ServeRealEntries(reals, off, h, count);
+      }));
+  EXPECT_CALL(*mock_meta_system_, ReadDir(_, _, _, _, _, _, _))
+      .Times(AnyNumber());
+
+  uint32_t count = 0;
+  Status s;
+  auto got = CollectReadDir(vfs_.get(), ctx_, kRootIno, 0, false, count, s);
+  ASSERT_TRUE(s.ok()) << s.ToString();
+  ASSERT_EQ(got.size(), 4u);
+  EXPECT_EQ(got[0].name, ".");
+  EXPECT_EQ(got[0].ino, kRootIno);
+  EXPECT_EQ(got[1].name, "..");
+  EXPECT_EQ(got[1].ino, kRootIno);  // root self-loop
+  EXPECT_EQ(got[2].name, kStatsName);
+  EXPECT_EQ(got[2].ino, kStatsIno);
+  EXPECT_EQ(got[2].cookie, 3u);
+  EXPECT_EQ(got[3].name, "a");
+  EXPECT_EQ(got[3].cookie, 4u);
+}
+
+// Case 4b: with trash enabled the root stream is [".", "..", ".stats",
+// ".trash", ...reals].
+TEST_F(VFSImplTest, ReadDir_Root_TrashVisible) {
+  auto fs_info = test::MakeTestFsInfo();
+  fs_info.trash_days = 7;
+  ON_CALL(*mock_hub_, GetFsInfo()).WillByDefault(Return(fs_info));
+
+  Attr root_attr = test::MakeDirAttr(kRootIno);
+  ON_CALL(*mock_meta_system_, GetAttr(_, kRootIno, _))
+      .WillByDefault(DoAll(SetArgPointee<2>(root_attr), Return(Status::OK())));
+  EXPECT_CALL(*mock_meta_system_, GetAttr(_, _, _)).Times(AnyNumber());
+
+  std::vector<DirEntry> reals = {DirEntry{101, "a", Attr{}}};
+  ON_CALL(*mock_meta_system_, ReadDir(_, kRootIno, _, _, false, _, _))
+      .WillByDefault(Invoke([&](ContextSPtr, Ino, uint64_t, uint64_t off, bool,
+                                ReadDirHandler h, uint32_t& count) {
+        return ServeRealEntries(reals, off, h, count);
+      }));
+  EXPECT_CALL(*mock_meta_system_, ReadDir(_, _, _, _, _, _, _))
+      .Times(AnyNumber());
+
+  uint32_t count = 0;
+  Status s;
+  auto got = CollectReadDir(vfs_.get(), ctx_, kRootIno, 0, false, count, s);
+  ASSERT_TRUE(s.ok()) << s.ToString();
+  ASSERT_EQ(got.size(), 5u);
+  EXPECT_EQ(got[0].name, ".");
+  EXPECT_EQ(got[1].name, "..");
+  EXPECT_EQ(got[2].name, kStatsName);
+  EXPECT_EQ(got[3].name, kTrashDirName);
+  EXPECT_EQ(got[3].ino, kTrashIno);
+  EXPECT_EQ(got[3].cookie, 4u);
+  EXPECT_EQ(got[4].name, "a");
+  EXPECT_EQ(got[4].cookie, 5u);
+}
+
+// Case 4c: resuming a root stream past ".." (positions 2/3 are
+// ".stats"/".trash") needs no directory attr — GetAttr must not be called.
+TEST_F(VFSImplTest, ReadDir_RootContinuation_SkipsGetAttr) {
+  EXPECT_CALL(*mock_meta_system_, GetAttr(_, _, _)).Times(0);
+
+  std::vector<DirEntry> reals = {DirEntry{101, "a", Attr{}}};
+  ON_CALL(*mock_meta_system_, ReadDir(_, kRootIno, _, _, false, _, _))
+      .WillByDefault(Invoke([&](ContextSPtr, Ino, uint64_t, uint64_t off, bool,
+                                ReadDirHandler h, uint32_t& count) {
+        return ServeRealEntries(reals, off, h, count);
+      }));
+  EXPECT_CALL(*mock_meta_system_, ReadDir(_, _, _, _, _, _, _))
+      .Times(AnyNumber());
+
+  uint32_t count = 0;
+  Status s;
+  auto got =
+      CollectReadDir(vfs_.get(), ctx_, kRootIno, /*offset=*/2, false, count, s);
+  ASSERT_TRUE(s.ok()) << s.ToString();
+  ASSERT_EQ(got.size(), 2u);
+  EXPECT_EQ(got[0].name, kStatsName);
+  EXPECT_EQ(got[0].cookie, 3u);
+  EXPECT_EQ(got[1].name, "a");
+  EXPECT_EQ(got[1].cookie, 4u);
+}
+
+// Case 5: a handler returning false (full kernel page) stops the stream
+// immediately; the meta delegate is not entered when the stop happens inside
+// the synthesized prefix.
+TEST_F(VFSImplTest, ReadDir_HandlerStopsEarly) {
+  const Ino kDir = 100;
+  Attr dir_attr = test::MakeDirAttr(kDir);
+  dir_attr.parents = {50};
+  ON_CALL(*mock_meta_system_, GetAttr(_, kDir, _))
+      .WillByDefault(DoAll(SetArgPointee<2>(dir_attr), Return(Status::OK())));
+  EXPECT_CALL(*mock_meta_system_, GetAttr(_, _, _)).Times(AnyNumber());
+
+  EXPECT_CALL(*mock_meta_system_, ReadDir(_, _, _, _, _, _, _)).Times(0);
+
+  std::vector<std::string> seen;
+  uint32_t count = 0;
+  Status s = vfs_->ReadDir(
+      ctx_, kDir, /*fh=*/1, /*offset=*/0, /*with_attr=*/false,
+      [&](const DirEntry& e, uint64_t) {
+        seen.push_back(e.name);
+        return e.name != "..";  // stop after ".." is offered... refuse it
+      },
+      count);
+  ASSERT_TRUE(s.ok()) << s.ToString();
+  // "." consumed, ".." refused -> stream stops before any real dentry.
+  EXPECT_EQ(seen, (std::vector<std::string>{".", ".."}));
+  EXPECT_EQ(count, 1u);
+}
+
+// Case 6: a directory deleted while held open reads as empty and never
+// reaches the meta delegate.
+TEST_F(VFSImplTest, ReadDir_DeletedDir_ReadsEmpty) {
+  const Ino kDir = 100;
+  ON_CALL(*mock_meta_system_, GetAttr(_, kDir, _))
+      .WillByDefault(Return(Status::NotExist("dir deleted")));
+  EXPECT_CALL(*mock_meta_system_, GetAttr(_, _, _)).Times(AnyNumber());
+
+  EXPECT_CALL(*mock_meta_system_, ReadDir(_, _, _, _, _, _, _)).Times(0);
+
+  uint32_t count = 0;
+  Status s;
+  auto got = CollectReadDir(vfs_.get(), ctx_, kDir, 0, false, count, s);
+  EXPECT_TRUE(s.ok()) << s.ToString();
+  EXPECT_TRUE(got.empty());
+  EXPECT_EQ(count, 0u);
+}
+
+// Case 7: subdir mount — readdir of the FUSE-visible root reports "."/".."
+// as kRootIno, the meta delegate sees the translated mount-root ino, and a
+// direct child of the mount root reports ".." as kRootIno (reverse of
+// TranslateIno).
+TEST_F(VFSImplTest, ReadDir_SubdirMount_DotDotMapping) {
+  const Ino kMountRoot = 999, kChild = 100;
+  SetMountRoot("/sub", kMountRoot);
+
+  Attr mount_root_attr = test::MakeDirAttr(kMountRoot);
+  mount_root_attr.parents = {88};  // real parent outside the mount namespace
+  Attr child_attr = test::MakeDirAttr(kChild);
+  child_attr.parents = {kMountRoot};
+
+  ON_CALL(*mock_meta_system_, GetAttr(_, _, _))
+      .WillByDefault(Invoke([&](ContextSPtr, Ino ino, Attr* attr) {
+        if (ino == kMountRoot) {
+          *attr = mount_root_attr;
+          return Status::OK();
+        }
+        if (ino == kChild) {
+          *attr = child_attr;
+          return Status::OK();
+        }
+        return Status::NotExist("no such ino");
+      }));
+  EXPECT_CALL(*mock_meta_system_, GetAttr(_, _, _)).Times(AnyNumber());
+
+  Ino delegate_ino = 0;
+  ON_CALL(*mock_meta_system_, ReadDir(_, _, _, _, _, _, _))
+      .WillByDefault(Invoke([&](ContextSPtr, Ino ino, uint64_t, uint64_t, bool,
+                                ReadDirHandler, uint32_t&) {
+        delegate_ino = ino;
+        return Status::OK();
+      }));
+  EXPECT_CALL(*mock_meta_system_, ReadDir(_, _, _, _, _, _, _))
+      .Times(AnyNumber());
+
+  // readdir(kRootIno): "."/".." both report kRootIno; meta sees kMountRoot.
+  {
+    uint32_t count = 0;
+    Status s;
+    auto got = CollectReadDir(vfs_.get(), ctx_, kRootIno, 0, false, count, s);
+    ASSERT_TRUE(s.ok()) << s.ToString();
+    ASSERT_GE(got.size(), 2u);
+    EXPECT_EQ(got[0].ino, kRootIno);
+    EXPECT_EQ(got[1].ino, kRootIno);  // mount root self-loop
+    EXPECT_EQ(delegate_ino, kMountRoot);
+  }
+  // readdir(child of mount root): ".." is rewritten to kRootIno.
+  {
+    uint32_t count = 0;
+    Status s;
+    auto got = CollectReadDir(vfs_.get(), ctx_, kChild, 0, false, count, s);
+    ASSERT_TRUE(s.ok()) << s.ToString();
+    ASSERT_EQ(got.size(), 2u);
+    EXPECT_EQ(got[1].name, "..");
+    EXPECT_EQ(got[1].ino, kRootIno);
+  }
+}
+
+// Case 8: an empty directory yields exactly [".", ".."].
+TEST_F(VFSImplTest, ReadDir_EmptyDir) {
+  const Ino kDir = 100;
+  Attr dir_attr = test::MakeDirAttr(kDir);
+  dir_attr.parents = {50};
+  ON_CALL(*mock_meta_system_, GetAttr(_, kDir, _))
+      .WillByDefault(DoAll(SetArgPointee<2>(dir_attr), Return(Status::OK())));
+  EXPECT_CALL(*mock_meta_system_, GetAttr(_, _, _)).Times(AnyNumber());
+
+  std::vector<DirEntry> no_reals;
+  ON_CALL(*mock_meta_system_, ReadDir(_, kDir, _, _, false, _, _))
+      .WillByDefault(Invoke([&](ContextSPtr, Ino, uint64_t, uint64_t off, bool,
+                                ReadDirHandler h, uint32_t& count) {
+        return ServeRealEntries(no_reals, off, h, count);
+      }));
+  EXPECT_CALL(*mock_meta_system_, ReadDir(_, _, _, _, _, _, _))
+      .Times(AnyNumber());
+
+  uint32_t count = 0;
+  Status s;
+  auto got = CollectReadDir(vfs_.get(), ctx_, kDir, 0, false, count, s);
+  ASSERT_TRUE(s.ok()) << s.ToString();
+  ASSERT_EQ(got.size(), 2u);
+  EXPECT_EQ(got[0].name, ".");
+  EXPECT_EQ(got[1].name, "..");
+  EXPECT_EQ(count, 2u);
+}
+
+// Case 9: with uid/gid mapping enabled, synthesized entries carry GetAttr's
+// already-localized ids (single translation, NOT re-translated by the real
+// -entry wrapper), while real entries are translated exactly once.
+TEST_F(VFSImplUidGidTest, ReadDir_UidGid_SynthNotDoubleTranslated) {
+  EnableMapper();
+  const uint32_t hashed =
+      mapper_->LocalIdToHashedId(UidGidMapper::Kind::kUid, kLocalUid);
+  ASSERT_NE(hashed, kLocalUid);
+
+  const Ino kDir = 100, kParent = 50;
+  Attr dir_attr = test::MakeDirAttr(kDir);
+  dir_attr.parents = {kParent};
+  dir_attr.uid = hashed;  // backend stores hashed ids
+  Attr parent_attr = test::MakeDirAttr(kParent);
+  parent_attr.uid = hashed;
+
+  ON_CALL(*mock_meta_system_, GetAttr(_, _, _))
+      .WillByDefault(Invoke([&](ContextSPtr, Ino ino, Attr* attr) {
+        if (ino == kDir) {
+          *attr = dir_attr;
+          return Status::OK();
+        }
+        if (ino == kParent) {
+          *attr = parent_attr;
+          return Status::OK();
+        }
+        return Status::NotExist("no such ino");
+      }));
+  EXPECT_CALL(*mock_meta_system_, GetAttr(_, _, _)).Times(AnyNumber());
+
+  Attr real_attr = test::MakeFileAttr(201);
+  real_attr.uid = hashed;
+  std::vector<DirEntry> reals = {DirEntry{201, "x", real_attr}};
+  ON_CALL(*mock_meta_system_, ReadDir(_, kDir, _, _, true, _, _))
+      .WillByDefault(Invoke([&](ContextSPtr, Ino, uint64_t, uint64_t off, bool,
+                                ReadDirHandler h, uint32_t& count) {
+        return ServeRealEntries(reals, off, h, count);
+      }));
+  EXPECT_CALL(*mock_meta_system_, ReadDir(_, _, _, _, _, _, _))
+      .Times(AnyNumber());
+
+  uint32_t count = 0;
+  Status s;
+  auto got =
+      CollectReadDir(vfs_.get(), ctx_, kDir, 0, /*with_attr=*/true, count, s);
+  ASSERT_TRUE(s.ok()) << s.ToString();
+  ASSERT_EQ(got.size(), 3u);
+  // All three entries surface the same local uid. If synthesized entries were
+  // pushed through the real-entry wrapper, "."/".." would be translated
+  // twice and diverge from kLocalUid.
+  EXPECT_EQ(got[0].name, ".");
+  EXPECT_EQ(got[0].attr.uid, kLocalUid);
+  EXPECT_EQ(got[1].name, "..");
+  EXPECT_EQ(got[1].attr.uid, kLocalUid);
+  EXPECT_EQ(got[2].name, "x");
+  EXPECT_EQ(got[2].attr.uid, kLocalUid);
+}
+
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs

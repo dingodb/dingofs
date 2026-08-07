@@ -195,6 +195,19 @@ class VFSImpl : public VFS {
 
   bool IsSubdirMount() const { return mount_root_ino_ != kRootIno; }
 
+  // Number of synthesized entries at the head of `ino`'s readdir stream:
+  // "."/".." for every directory, plus ".stats"/".trash" for the
+  // FUSE-visible root. Synthesized entries share one cookie space with real
+  // dentries (stream position p has cookie p+1); see
+  // docs/adr/0001-readdir-synthesized-entries.md.
+  uint64_t SynthesizedDirEntryCount(Ino ino) const;
+
+  // Kernel-space ino to report for the ".." entry of directory `ino`, given
+  // its already-fetched attr. Covers the mount-root self-loop, the
+  // synthesized ".trash" dir, and the mount_root_ino_ -> kRootIno rewrite
+  // (the reverse of TranslateIno).
+  Ino ResolveDotDotIno(Ino ino, const Attr& dir_attr) const;
+
   // True when the filesystem has trash enabled (`trash_days > 0`). Pinned to
   // the mount-time fs_info; runtime `updatefs --trash_days` requires remount.
   bool IsTrashVisible() const { return vfs_hub_->GetFsInfo().trash_days > 0; }
