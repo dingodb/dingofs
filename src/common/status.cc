@@ -51,134 +51,129 @@ Status::Status(Code code, int32_t p_errno, const StringSlice& msg,
 }
 
 std::string Status::ToString() const {
-  if (state_ == nullptr) {
-    return "OK";
-  } else {
-    char tmp[30];
-    std::string type;
-    switch (code_) {
-      case kOk:
-        type = "OK";
-        break;
-      case kInternal:
-        type = "Internal";
-        break;
-      case kUnknown:
-        type = "Unknown";
-        break;
-      case kExist:
-        type = "Exist";
-        break;
-      case kNotExist:
-        type = "NotExist";
-        break;
-      case kNoSpace:
-        type = "NoSpace";
-        break;
-      case kBadFd:
-        type = "BadFd";
-        break;
-      case kInvalidParam:
-        type = "InvalidParam";
-        break;
-      case kNoPermission:
-        type = "NoPermission";
-        break;
-      case kNotEmpty:
-        type = "NotEmpty";
-        break;
-      case kNoFlush:
-        type = "NoFlush";
-        break;
-      case kNotSupport:
-        type = "NotSupport";
-        break;
-      case kNameTooLong:
-        type = "NameTooLong";
-        break;
-      case kMountPointExist:
-        type = "MountPointExist";
-        break;
-      case kMountFailed:
-        type = "MountFailed";
-        break;
-      case kOutOfRange:
-        type = "OutOfRange";
-        break;
-      case kNoData:
-        type = "NoData";
-        break;
-      case kIoError:
-        type = "IoError";
-        break;
-      case kStale:
-        type = "Stale";
-        break;
-      case kNoSys:
-        type = "NoSys";
-        break;
-      case kNoPermitted:
-        type = "NoPermitted";
-        break;
-      case kNetError:
-        type = "NetError";
-        break;
-      case kNotFound:
-        type = "NotFound";
-        break;
-      case kNotDirectory:
-        type = "NotDirectory";
-        break;
-      case kFileTooLarge:
-        type = "FileTooLarge";
-        break;
-      case kEndOfFile:
-        type = "EndOfFile";
-        break;
-      case kAbort:
-        type = "Abort";
-        break;
-      case kCacheDown:
-        type = "CacheDown";
-        break;
-      case kCacheUnhealthy:
-        type = "CacheUnhealthy";
-        break;
-      case kCacheFull:
-        type = "CacheFull";
-        break;
-      case kStop:
-        type = "Stop";
-        break;
-      case kNotFit:
-        type = "NotFit";
-        break;
-      case kTimeout:
-        type = "Timeout";
-        break;
-      case kOutOfMemory:
-        type = "OutOfMemory";
-        break;
-      case kDeleted:
-        type = "Deleted";
-        break;
-      default:
-        type = std::to_string(static_cast<int>(code_));
-        LOG(ERROR) << fmt::format("Unknown code({}):", type);
-    }
-
-    std::string result(type);
-    if (errno_ != kNone) {
-      result.append(fmt::format(" (errno:{}) ", errno_));
-    }
-
-    if (state_ != nullptr) {
-      result.append(": ");
-      result.append(state_.get());
-    }
-
-    return result;
+  std::string type;
+  switch (code_) {
+    case kOk:
+      type = "OK";
+      break;
+    case kInternal:
+      type = "Internal";
+      break;
+    case kUnknown:
+      type = "Unknown";
+      break;
+    case kExist:
+      type = "Exist";
+      break;
+    case kNotExist:
+      type = "NotExist";
+      break;
+    case kNoSpace:
+      type = "NoSpace";
+      break;
+    case kBadFd:
+      type = "BadFd";
+      break;
+    case kInvalidParam:
+      type = "InvalidParam";
+      break;
+    case kNoPermission:
+      type = "NoPermission";
+      break;
+    case kNotEmpty:
+      type = "NotEmpty";
+      break;
+    case kNoFlush:
+      type = "NoFlush";
+      break;
+    case kNotSupport:
+      type = "NotSupport";
+      break;
+    case kNameTooLong:
+      type = "NameTooLong";
+      break;
+    case kMountPointExist:
+      type = "MountPointExist";
+      break;
+    case kMountFailed:
+      type = "MountFailed";
+      break;
+    case kOutOfRange:
+      type = "OutOfRange";
+      break;
+    case kNoData:
+      type = "NoData";
+      break;
+    case kIoError:
+      type = "IoError";
+      break;
+    case kStale:
+      type = "Stale";
+      break;
+    case kNoSys:
+      type = "NoSys";
+      break;
+    case kNoPermitted:
+      type = "NoPermitted";
+      break;
+    case kNetError:
+      type = "NetError";
+      break;
+    case kNotFound:
+      type = "NotFound";
+      break;
+    case kNotDirectory:
+      type = "NotDirectory";
+      break;
+    case kFileTooLarge:
+      type = "FileTooLarge";
+      break;
+    case kEndOfFile:
+      type = "EndOfFile";
+      break;
+    case kAbort:
+      type = "Abort";
+      break;
+    case kCacheDown:
+      type = "CacheDown";
+      break;
+    case kCacheUnhealthy:
+      type = "CacheUnhealthy";
+      break;
+    case kCacheFull:
+      type = "CacheFull";
+      break;
+    case kStop:
+      type = "Stop";
+      break;
+    case kNotFit:
+      type = "NotFit";
+      break;
+    case kTimeout:
+      type = "Timeout";
+      break;
+    case kOutOfMemory:
+      type = "OutOfMemory";
+      break;
+    case kDeleted:
+      type = "Deleted";
+      break;
+    default:
+      type = std::to_string(static_cast<int>(code_));
+      LOG(ERROR) << fmt::format("Unknown code({}):", type);
   }
+
+  std::string result(type);
+  if (errno_ != kNone) {
+    result.append(fmt::format(" (errno:{}) ", errno_));
+  }
+
+  if (state_ != nullptr) {
+    result.append(": ");
+    result.append(state_.get());
+  }
+
+  return result;
 }
 
 }  // namespace dingofs
