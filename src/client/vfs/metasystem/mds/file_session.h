@@ -68,6 +68,8 @@ class FileSession {
   void AddSession(uint64_t fh, const std::string& session_id, uint32_t flags);
   uint32_t DeleteSession(uint64_t fh);
 
+  void InvalidateReadCache(bool just_readonly);
+
   size_t Size();
   size_t Bytes();
 
@@ -80,6 +82,8 @@ class FileSession {
 
   uint32_t IncRef() { return ref_count_.fetch_add(1) + 1; }
   uint32_t DecRef() { return ref_count_.fetch_sub(1) - 1; }
+
+  bool IsAllReadOnly();
 
   Ino ino_;
 

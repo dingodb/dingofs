@@ -1341,7 +1341,9 @@ Status UpsertChunkOperation::Run(TxnUPtr& txn) {
   const uint32_t fs_id = fs_info_.fs_id();
   const uint64_t now_ms = utils::TimestampMs();
 
+  const std::string inode_key = MetaCodec::EncodeInodeKey(fs_id, ino_);
   std::set<std::string> keys;
+  keys.insert(inode_key);
   for (const auto& delta_slices : delta_slices_) {
     keys.insert(MetaCodec::EncodeChunkKey(fs_id, ino_, delta_slices.chunk_index()));
   }
@@ -1350,7 +1352,16 @@ Status UpsertChunkOperation::Run(TxnUPtr& txn) {
   auto status = txn->BatchGet(std::vector<std::string>(keys.begin(), keys.end()), kvs);
   if (!status.ok()) return status;
 
-  int64_t length = 0;
+  // inode
+  auto value = FindValue(kvs, inode_key);
+  AttrEntry attr;
+  if (!value.empty()) attr = MetaCodec::DecodeInodeValue(value);
+  if (attr.ino() != ino_) {
+    return Status(pb::error::ENOT_FOUND, fmt::format("not found inode({})", ino_));
+  }
+
+  bool has_update_chunk = false;
+  uint64_t length = 0;
   result_.effected_chunks.clear();
   for (const auto& delta_slices : delta_slices_) {
     ChunkEntry chunk;
@@ -1372,6 +1383,11 @@ Status UpsertChunkOperation::Run(TxnUPtr& txn) {
       chunk.set_chunk_size(fs_info_.chunk_size());
       chunk.set_block_size(fs_info_.block_size());
       *chunk.mutable_slices() = delta_slices.slices();
+
+      const uint64_t chunk_pos = chunk.index() * chunk.chunk_size();
+      for (const auto& slice : delta_slices.slices()) {
+        length = std::max(length, chunk_pos + slice.pos() + slice.len());
+      }
 
     } else {
       // exist chunk, update slice
@@ -1398,7 +1414,7 @@ Status UpsertChunkOperation::Run(TxnUPtr& txn) {
 
         has_update = true;
         *chunk.add_slices() = slice;
-        length = std::max(length, static_cast<int64_t>(chunk_pos + slice.pos() + slice.len()));
+        length = std::max(length, chunk_pos + slice.pos() + slice.len());
       }
     }
 
@@ -1418,12 +1434,22 @@ Status UpsertChunkOperation::Run(TxnUPtr& txn) {
       LOG_DEBUG << fmt::format("[operation.{}.{}] update chunk, version({}), value({}).", fs_id, ino_, chunk.version(),
                                chunk.ShortDebugString());
       txn->Put(key, MetaCodec::EncodeChunkValue(chunk));
+      has_update_chunk = true;
     }
 
     result_.effected_chunks.push_back(std::move(chunk));
   }
 
-  result_.length = length;
+  // update inode length if needed
+  if (has_update_chunk) {
+    if (length > attr.length()) attr.set_length(length);
+    attr.set_mtime(std::max(attr.mtime(), GetTime()));
+    attr.set_ctime(std::max(attr.ctime(), GetTime()));
+    attr.set_version(attr.version() + 1);
+    txn->Put(inode_key, MetaCodec::EncodeInodeValue(attr));
+  }
+
+  result_.attr = attr;
 
   return Status::OK();
 }

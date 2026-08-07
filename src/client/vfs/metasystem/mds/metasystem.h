@@ -208,8 +208,7 @@ class MDSMetaSystem : public vfs::MetaSystem {
   bool InitCrontab();
 
   // inode cache
-  Status FetchInode(ContextSPtr& ctx, Ino ino, const std::string& reason,
-                    InodeSPtr& inode);
+  Status FetchInode(ContextSPtr& ctx, Ino ino, InodeSPtr& inode);
   InodeSPtr PutInodeToCache(const AttrEntry& attr_entry);
   void DeleteInodeFromCache(Ino ino) { inode_cache_.Delete(ino); }
   InodeSPtr GetInodeFromCache(Ino ino) { return inode_cache_.Get(ino); }
@@ -217,8 +216,7 @@ class MDSMetaSystem : public vfs::MetaSystem {
   Status GetInode(Ino ino, const std::string& reason, InodeSPtr& inode);
 
   // chunk cache
-  Status DoFlushFile(ContextSPtr ctx, InodeSPtr inode, ChunkSetSPtr& chunk_set,
-                     bool is_final);
+  Status DoFlushFile(ContextSPtr ctx, InodeSPtr inode, ChunkSetSPtr& chunk_set);
   void LaunchWriteSlice(ContextSPtr& ctx, ChunkSetSPtr chunk_set,
                         CommitTaskSPtr task);
   // async flush batch slices of single file
@@ -227,14 +225,13 @@ class MDSMetaSystem : public vfs::MetaSystem {
 
   // flush slices and file
   Status FlushSliceAndFile(ContextSPtr ctx, Ino ino);
-  // async flush of single slice
-  void AsyncFlushFile(ContextSPtr ctx, Ino ino);
   // flush slices of all files (called internally by Stop)
   void FlushAllFile();
 
   Status CorrectAttr(ContextSPtr ctx, uint64_t time_ns, Attr& attr,
                      bool& is_amend, const std::string& caller);
   bool CorrectAttrLength(Attr& attr, const std::string& caller);
+  void InvalidateFileSessionReadCache(Ino ino);
 
   bool IsPrefetchTinyFileData(Ino ino);
   Status DoOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,

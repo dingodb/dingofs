@@ -376,6 +376,10 @@ void ChunkSet::InvalidateReadCache() {
   for (auto& [index, chunk] : chunk_map_) {
     chunk->SetNotCompleted();
   }
+
+  LOG_DEBUG << fmt::format(
+      "[meta.chunkset.{}] invalidate read cache, chunk_num({}).", ino_,
+      chunk_map_.size());
 }
 
 uint64_t ChunkSet::GetVersion(uint32_t index) {
@@ -501,10 +505,6 @@ void ChunkSet::FinishCommitTask(uint64_t task_id,
       task_id);
 
   auto& task = task_it->second;
-  if (last_commited_length_ < task->GetLength()) {
-    last_commited_length_ = task->GetLength();
-    last_commited_length_changed_ = true;
-  }
 
   // delete finished task
   for (auto& chunk_index : task->GetChunkIndexs()) {

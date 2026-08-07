@@ -1305,7 +1305,6 @@ Status FileSystem::FlushFile(Context& ctx, Ino ino, const FlushFileParam& param,
   FlushFileOperation::ExtraParam extra_param(param.data);
   extra_param.length = param.length;
   extra_param.chunk_size = fs_info_->GetChunkSize();
-  extra_param.is_final = param.is_final;
 
   if (param.length > inode->Length() && inode->Nlink() > 0) {
     // check quota
@@ -2830,7 +2829,7 @@ Status FileSystem::CommitRename(Context& ctx, const RenameParam& param, RenameRe
 }
 
 Status FileSystem::WriteSlice(Context& ctx, Ino ino, const std::vector<DeltaSliceEntry>& delta_slices,
-                              std::vector<ChunkEntry>& out_chunks) {
+                              EntryWithChunkOut& entry_out) {
   if (!CanServe(ctx)) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
@@ -2854,18 +2853,24 @@ Status FileSystem::WriteSlice(Context& ctx, Ino ino, const std::vector<DeltaSlic
   if (!status.ok()) return status;
 
   auto& result = operation.GetResult();
+  auto& attr = result.attr;
   auto& effected_chunks = result.effected_chunks;
 
+  // print log
   for (auto& chunk : effected_chunks) {
     LOG_DEBUG << fmt::format("[fs.{}.{}.{}.{}][{}us] writeslice finish, chunk({},{}).", fs_id_, ino, ctx.RequestId(),
                              trace.GetReqTypeInt(), duration.ElapsedUs(), chunk.index(), chunk.version());
   }
 
+  entry_out.attr = attr;
+
+  // update inode cache
+  std::string reason = fmt::format("writeslice.{}.{}", ctx.RequestId(), ino);
+  UpsertInodeCache(attr, reason);
+
   auto query_curr_version_fn = [&delta_slices](uint32_t index) -> uint64_t {
     for (const auto& slice : delta_slices) {
-      if (slice.chunk_index() == index) {
-        return slice.curr_version();
-      }
+      if (slice.chunk_index() == index) return slice.curr_version();
     }
 
     return 0;
@@ -2880,11 +2885,11 @@ Status FileSystem::WriteSlice(Context& ctx, Ino ino, const std::vector<DeltaSlic
       simple_chunk.set_index(chunk.index());
       simple_chunk.set_version(chunk.version());
       simple_chunk.set_just_descriptor(true);
-      out_chunks.push_back(simple_chunk);
+      entry_out.chunks.push_back(simple_chunk);
 
     } else {
       // return full chunk info
-      out_chunks.push_back(chunk);
+      entry_out.chunks.push_back(chunk);
     }
 
     chunk_cache_.PutIf(ino, std::move(chunk));

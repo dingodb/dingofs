@@ -287,7 +287,6 @@ class ChunkSet {
   ChunkSet(Ino ino, uint32_t chunk_size)
       : ino_(ino),
         chunk_size_(chunk_size),
-        last_flush_ms_(utils::TimestampMs()),
         last_active_s_(utils::Timestamp()) {}
   ~ChunkSet() = default;
 
@@ -321,23 +320,11 @@ class ChunkSet {
     utils::ReadLockGuard guard(lock_);
     return last_write_time_ns_;
   }
-  uint64_t GetLastComitedLength() const {
-    utils::ReadLockGuard guard(lock_);
-    return last_commited_length_;
-  }
-  void ResetLastComitedLength() {
-    utils::WriteLockGuard guard(lock_);
-    last_commited_length_ = 0;
-  }
 
   // chunk operations
   void Append(uint32_t index, const std::vector<Slice>& slices);
   void Put(const std::vector<ChunkEntry>& chunks, const char* reason);
 
-  // Mark every cached chunk not-completed so the next ReadSlice re-fetches
-  // fresh slices from the MDS. Used after operations that change committed
-  // slice lists out-of-band (truncate-down / fallocate hole/zero), where the
-  // cached commited_slices_ would otherwise keep serving the pre-op data.
   void InvalidateReadCache();
 
   size_t GetChunkSize() const {
@@ -386,35 +373,6 @@ class ChunkSet {
 
   uint64_t GetLastActiveTimeS() const;
 
-  bool IsFlushing() const {
-    utils::ReadLockGuard guard(lock_);
-    return flushing_;
-  }
-
-  bool TryFlush() {
-    utils::WriteLockGuard guard(lock_);
-
-    if (flushing_) return false;
-    if (!last_commited_length_changed_) return false;
-
-    uint64_t now_ms = utils::TimestampMs();
-    if ((last_flush_ms_ + FLAGS_vfs_meta_flush_chunk_interval_ms) > now_ms) {
-      return false;
-    }
-
-    flushing_ = true;
-    last_flush_ms_ = now_ms;
-    last_commited_length_changed_ = false;
-
-    return true;
-  }
-
-  void ResetFlush() {
-    utils::WriteLockGuard guard(lock_);
-    flushing_ = false;
-    last_flush_ms_ = utils::TimestampMs();
-  }
-
   size_t Size() const { return GetChunkSize(); }
   size_t Bytes() const;
 
@@ -443,10 +401,6 @@ class ChunkSet {
   uint64_t last_write_length_{0};
   uint64_t last_write_time_ns_{0};
 
-  // record commited file length by CommitTask
-  uint64_t last_commited_length_{0};
-  bool last_commited_length_changed_{false};
-
   // chunk index -> chunk
   absl::flat_hash_map<uint32_t, ChunkSPtr> chunk_map_;
 
@@ -456,10 +410,6 @@ class ChunkSet {
   absl::flat_hash_set<uint32_t> committing_chunk_index_set_;
 
   std::atomic<uint64_t> last_commit_ms_{0};
-
-  // flush
-  bool flushing_{false};
-  uint64_t last_flush_ms_{0};
 
   uint64_t last_active_s_{0};
 };

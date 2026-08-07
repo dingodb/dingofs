@@ -138,8 +138,7 @@ class MDSClient {
   };
   virtual Status ReadDir(ContextSPtr& ctx, Ino ino, uint64_t fh,
                          const std::string& last_name, uint32_t limit,
-                         bool with_attr,
-                         std::vector<ReadDirEntry>& entries);
+                         bool with_attr, std::vector<ReadDirEntry>& entries);
 
   Status Open(ContextSPtr& ctx, Ino ino, int flags,
               const std::string& session_id, bool prefetch_chunk,
@@ -150,7 +149,7 @@ class MDSClient {
   Status Release(ContextSPtr& ctx, Ino ino, const std::string& session_id);
 
   Status FlushFile(ContextSPtr& ctx, Ino ino, uint64_t length,
-                   std::string&& data, AttrEntry& attr_entry, bool is_final,
+                   std::string&& data, AttrEntry& attr_entry,
                    bool& shrink_file);
 
   Status Link(ContextSPtr& ctx, Ino ino, Ino new_parent,
@@ -202,9 +201,13 @@ class MDSClient {
                    const std::vector<ChunkDescriptor>& chunk_descriptors,
                    std::vector<mds::ChunkEntry>& chunks);
 
+  struct WriteSliceResult {
+    AttrEntry attr;
+    std::vector<mds::ChunkEntry> chunks;
+  };
   Status WriteSlice(ContextSPtr& ctx, Ino ino,
                     const std::vector<mds::DeltaSliceEntry>& delta_slices,
-                    std::vector<mds::ChunkEntry>& out_chunks);
+                    WriteSliceResult& result);
 
   struct CompactChunkParam {
     uint64_t version{0};
