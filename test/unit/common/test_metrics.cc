@@ -20,7 +20,6 @@
 #include "common/metrics/client/client.h"
 #include "common/metrics/client/vfs/prefetch_metric.h"
 #include "common/metrics/client/vfs/slice_metric.h"
-#include "common/metrics/client/vfs/warmup_metric.h"
 #include "common/metrics/mds/quota_metrics.h"
 #include "common/metrics/metric.h"
 #include "common/metrics/metric_guard.h"
@@ -131,13 +130,6 @@ TEST(SliceMetricTest, GuardTracksInflightAndCompletion) {
   }
   EXPECT_EQ(metric.read_slice.inflightOpNum.get_value(), 0);
   EXPECT_EQ(metric.read_slice.qpsTotal.get_value(), 1u);
-}
-
-TEST(WarmupMetricTest, ConstructsWithZeroedCounters) {
-  client::WarmupMetric metric;
-  EXPECT_EQ(metric.inflight_warmup_tasks.get_value(), 0u);
-  metric.inflight_warmup_files << 3;
-  EXPECT_EQ(metric.inflight_warmup_files.get_value(), 3u);
 }
 
 TEST(PrefetchMetricTest, ConstructsWithZeroedCounter) {

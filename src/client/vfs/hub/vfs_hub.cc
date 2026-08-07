@@ -478,12 +478,13 @@ Status VFSHubImpl::Stop(bool skip_unmount) {
   }
 
   if (warmup_manager_ != nullptr) {
-    // Detach from meta system before stopping so any in-flight Open hook
-    // observes nullptr instead of a half-stopped manager.
+    // VFSWrapper has already rejected new public operations and drained all
+    // existing operations before VFSHub::Stop, so no Open trigger can race
+    // with this detach.
     if (meta_wrapper_ != nullptr) {
       meta_wrapper_->SetWarmupManager(nullptr);
     }
-    warmup_manager_->Stop();
+    CHECK(warmup_manager_->Stop().ok());
   }
 
   if (prefetch_manager_ != nullptr) {
