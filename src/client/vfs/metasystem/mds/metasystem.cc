@@ -1630,7 +1630,8 @@ Status MDSMetaSystem::GetXattr(ContextSPtr ctx, Ino ino,
   auto inode = GetInodeFromCache(ino);
   if (inode != nullptr) {
     *value = inode->GetXAttr(name);
-    // ctx->hit_cache = true;
+    if (value->empty()) return Status::NoData("not found xattr");
+
     return Status::OK();
   }
 
