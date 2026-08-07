@@ -100,7 +100,7 @@ VFSImpl::VFSImpl(const VFSConfig& vfs_conf, const ClientId& client_id)
     : client_id_(client_id),
       mount_root_path_(
           vfs_conf.mount_root_path.empty() ? "/" : vfs_conf.mount_root_path),
-      vfs_hub_(std::make_unique<VFSHubImpl>(vfs_conf, client_id_)){};
+      vfs_hub_(std::make_unique<VFSHubImpl>(vfs_conf, client_id_)) {}
 
 VFSImpl::~VFSImpl() {
   Status s = StopBrpcServer();
@@ -905,34 +905,113 @@ Status VFSImpl::OpenDir(ContextSPtr ctx, Ino ino, uint64_t* fh,
   return meta_system_->OpenDir(ctx, TranslateIno(ino), *fh, need_cache);
 }
 
+uint64_t VFSImpl::SynthesizedDirEntryCount(Ino ino) const {
+  uint64_t n = 2;  // "." and ".."
+  if (BAIDU_UNLIKELY(ino == kRootIno)) {
+    ++n;                        // .stats
+    if (IsTrashVisible()) ++n;  // .trash
+  }
+  return n;
+}
+
+Ino VFSImpl::ResolveDotDotIno(Ino ino, const Attr& dir_attr) const {
+  // The FUSE-visible root has no parent in this namespace: self-loop, the
+  // POSIX convention for a filesystem root (also covers subdir mounts).
+  if (ino == kRootIno) return kRootIno;
+  // ".trash" is synthesized directly under the root; its attr has no parents.
+  if (BAIDU_UNLIKELY(ino == kTrashIno)) return kRootIno;
+  // Defensive: a parentless non-root dir self-loops rather than reporting a
+  // dangling ino.
+  if (dir_attr.parents.empty()) return ino;
+  // Reverse of TranslateIno: the real mount-root inode is known to the
+  // kernel as kRootIno.
+  Ino parent = dir_attr.parents.front();
+  return (BAIDU_UNLIKELY(parent == mount_root_ino_)) ? kRootIno : parent;
+}
+
 Status VFSImpl::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh, uint64_t offset,
                         bool with_attr, ReadDirHandler handler,
                         uint32_t& count) {
-  // root dir(add .stats file and .trash)
-  if (BAIDU_UNLIKELY(ino == kRootIno) && offset == 0) {
-    DirEntry stats_entry{kStatsIno, kStatsName,
-                         GenerateVirtualInodeAttr(kStatsIno)};
-    handler(stats_entry, 1);
+  const uint64_t synth_count = SynthesizedDirEntryCount(ino);
 
-    if (IsTrashVisible()) {
-      DirEntry trash_entry{kTrashIno, kTrashDirName, GenerateTrashDirAttr()};
-      handler(trash_entry, 2);
+  if (BAIDU_UNLIKELY(offset < synth_count)) {
+    // Positions 0/1 ("."/"..") need the directory's own attr: "."'s attr
+    // and ".."'s target both come from it. GetAttr applies
+    // RewriteRootAttr/TranslateAttrToLocal internally, so synthesized
+    // entries must go through the raw handler below — passing them through
+    // the uid/gid wrapper would translate them twice. The root-only
+    // ".stats"/".trash" positions need no attr fetch at all.
+    if (offset < 2) {
+      Attr dir_attr;
+      Status s = GetAttr(ctx, ino, &dir_attr);
+      if (!s.ok()) {
+        // A directory deleted while still held open reads as empty: skip
+        // the synthesized entries and the real-dentry stream alike (an
+        // rmdir-able directory has no children anyway).
+        if (s.IsNotExist() || s.IsNotFound()) return Status::OK();
+        LOG(ERROR) << fmt::format("readdir getattr fail, ino({}) status({}).",
+                                  ino, s.ToString());
+        return s;
+      }
+
+      // position 0: "." — a full kernel page (handler returns false) stops
+      // the stream immediately; the next readdir resumes at the unconsumed
+      // position.
+      if (offset == 0) {
+        DirEntry dot{ino, ".", dir_attr};
+        if (!handler(dot, 1)) return Status::OK();
+        ++count;
+      }
+
+      // position 1: ".."
+      DirEntry dotdot{ResolveDotDotIno(ino, dir_attr), "..", Attr{}};
+      if (with_attr) {
+        if (dotdot.ino == ino) {
+          dotdot.attr = dir_attr;  // self-loop: reuse, no extra RPC
+        } else {
+          s = GetAttr(ctx, dotdot.ino, &dotdot.attr);
+          if (!s.ok()) {
+            LOG(ERROR) << fmt::format(
+                "readdir getattr parent fail, ino({}) parent({}) status({}).",
+                ino, dotdot.ino, s.ToString());
+            return s;
+          }
+        }
+      }
+      if (!handler(dotdot, 2)) return Status::OK();
+      ++count;
+    }
+
+    // root-only positions 2/3: ".stats" then ".trash"
+    if (BAIDU_UNLIKELY(ino == kRootIno)) {
+      if (offset <= 2) {
+        DirEntry stats{kStatsIno, kStatsName,
+                       GenerateVirtualInodeAttr(kStatsIno)};
+        if (!handler(stats, 3)) return Status::OK();
+        ++count;
+      }
+      if (IsTrashVisible() && offset <= 3) {
+        DirEntry trash{kTrashIno, kTrashDirName, GenerateTrashDirAttr()};
+        if (!handler(trash, 4)) return Status::OK();
+        ++count;
+      }
     }
   }
 
+  // Real dentries. The meta stream's handler offset restarts at the delegate
+  // offset, so shift it back into the unified cookie space here. uid/gid
+  // translation applies to real entries only (see the note above).
   auto* mapper = vfs_hub_->GetUidGidMapper();
-  ReadDirHandler wrapped =
-      (with_attr && mapper != nullptr)
-          ? ReadDirHandler(
-                [this, &handler](const DirEntry& entry, uint64_t off) {
-                  DirEntry e = entry;
-                  TranslateAttrToLocal(&e.attr);
-                  return handler(e, off);
-                })
-          : handler;
+  ReadDirHandler real_handler = [this, &handler, synth_count, with_attr,
+                                 mapper](const DirEntry& entry, uint64_t off) {
+    DirEntry e = entry;
+    if (with_attr && mapper != nullptr) TranslateAttrToLocal(&e.attr);
+    return handler(e, off + synth_count);
+  };
 
-  return meta_system_->ReadDir(ctx, TranslateIno(ino), fh, offset, with_attr,
-                               wrapped, count);
+  const uint64_t real_offset = offset > synth_count ? offset - synth_count : 0;
+  return meta_system_->ReadDir(ctx, TranslateIno(ino), fh, real_offset,
+                               with_attr, real_handler, count);
 }
 
 Status VFSImpl::ReleaseDir(ContextSPtr ctx, Ino ino, uint64_t fh) {
