@@ -27,7 +27,7 @@
 #include "client/vfs/components/prefetch_utils.h"
 #include "client/vfs/hub/vfs_hub.h"
 #include "common/status.h"
-#include "utils/executor/bthread/bthread_executor.h"
+#include "utils/executor/thread/executor_impl.h"
 
 namespace dingofs {
 namespace client {
@@ -61,7 +61,7 @@ Status PrefetchManager::Start(uint32_t threads) {
                                              &PrefetchManager::HandlePrefetch,
                                              this));
 
-  prefetch_executor_ = std::make_unique<BthreadExecutor>(threads);
+  prefetch_executor_ = std::make_unique<ExecutorImpl>("vfs_prefetch", threads);
   auto ok = prefetch_executor_->Start();
   if (!ok) {
     LOG(ERROR) << "Start prefetch manager executor failed.";

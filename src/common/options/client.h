@@ -103,6 +103,7 @@ DECLARE_uint32(vfs_prefetch_threads);
 
 // vfs warmup
 DECLARE_int32(vfs_warmup_threads);
+DECLARE_uint64(vfs_warmup_max_inflight_blocks);
 DECLARE_bool(vfs_intime_warmup_enable);
 DECLARE_int64(vfs_warmup_mtime_restart_interval_secs);
 DECLARE_int64(vfs_warmup_trigger_restart_interval_secs);

@@ -23,6 +23,12 @@
 namespace dingofs {
 namespace client {
 
+namespace {
+
+bool ValidatePositiveUint64(const char*, uint64_t value) { return value > 0; }
+
+}  // namespace
+
 DEFINE_int32(vfs_bthread_worker_num, 0, "bthread worker num");
 
 // access log
@@ -118,6 +124,9 @@ DEFINE_uint32(vfs_prefetch_threads, 8, "number of prefetch threads");
 
 // warmup
 DEFINE_int32(vfs_warmup_threads, 4, "number of warmup threads");
+DEFINE_uint64(vfs_warmup_max_inflight_blocks, 512,
+              "maximum warmup prefetch blocks awaiting callbacks");
+DEFINE_validator(vfs_warmup_max_inflight_blocks, ValidatePositiveUint64);
 
 // vfs handle
 // read_cleanup runs only low-frequency reader-side housekeeping (async

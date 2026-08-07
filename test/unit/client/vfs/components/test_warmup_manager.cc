@@ -18,7 +18,10 @@
 #include <gtest/gtest.h>
 
 #include <chrono>
+#include <condition_variable>
+#include <future>
 #include <memory>
+#include <mutex>
 #include <thread>
 
 #include "client/vfs/components/context.h"
@@ -111,6 +114,154 @@ TEST_F(WarmupManagerTest, Stop_ClearsAllTasks) {
 
   // Stop should drain and clear all tasks without hanging.
   ASSERT_TRUE(mgr_->Stop().ok());
+}
+
+TEST_F(WarmupManagerTest, StopWaitsForInflightPrefetchCallback) {
+  constexpr Ino kTaskKey = 4001;
+  std::promise<void> prefetch_started;
+  StatusCallback pending_callback;
+  std::mutex callback_mutex;
+
+  ON_CALL(*mock_meta_system_, GetAttr)
+      .WillByDefault([](ContextSPtr, Ino ino, Attr* attr) {
+        *attr = test::MakeFileAttr(ino, 4096);
+        return Status::OK();
+      });
+  ON_CALL(*mock_meta_system_, ReadSlice)
+      .WillByDefault([](ContextSPtr, Ino, uint64_t, uint64_t,
+                        std::vector<Slice>* slices, uint64_t& version) {
+        *slices = {test::MakeSlice(1, 0, 4096)};
+        version = 1;
+        return Status::OK();
+      });
+  ON_CALL(*mock_block_store_, PrefetchAsync)
+      .WillByDefault([&](ContextSPtr, PrefetchReq, StatusCallback cb) {
+        {
+          std::lock_guard<std::mutex> lock(callback_mutex);
+          pending_callback = std::move(cb);
+        }
+        prefetch_started.set_value();
+      });
+
+  ASSERT_TRUE(mgr_->Start(2).ok());
+  ASSERT_TRUE(mgr_->SubmitTask(WarmupTaskContext(kTaskKey)).ok());
+  ASSERT_EQ(prefetch_started.get_future().wait_for(std::chrono::seconds(5)),
+            std::future_status::ready);
+
+  auto stop = std::async(std::launch::async, [this] { return mgr_->Stop(); });
+  EXPECT_EQ(stop.wait_for(std::chrono::milliseconds(50)),
+            std::future_status::timeout);
+
+  StatusCallback callback;
+  {
+    std::lock_guard<std::mutex> lock(callback_mutex);
+    callback = std::move(pending_callback);
+  }
+  ASSERT_TRUE(static_cast<bool>(callback));
+  callback(Status::OK());
+
+  ASSERT_EQ(stop.wait_for(std::chrono::seconds(5)), std::future_status::ready);
+  EXPECT_TRUE(stop.get().ok());
+}
+
+TEST_F(WarmupManagerTest, SubmitRejectedAfterStop) {
+  ASSERT_TRUE(mgr_->Start(2).ok());
+  ASSERT_TRUE(mgr_->Stop().ok());
+  EXPECT_TRUE(mgr_->SubmitTask(WarmupTaskContext(5001)).IsStop());
+}
+
+TEST_F(WarmupManagerTest, FinishedTaskKeyIsDeduplicated) {
+  constexpr Ino kTaskKey = 6001;
+  EXPECT_CALL(*mock_meta_system_, GetAttr(testing::_, kTaskKey, testing::_))
+      .Times(1)
+      .WillOnce([](ContextSPtr, Ino ino, Attr* attr) {
+        *attr = test::MakeFileAttr(ino, 4096);
+        return Status::OK();
+      });
+  ON_CALL(*mock_meta_system_, ReadSlice)
+      .WillByDefault([](ContextSPtr, Ino, uint64_t, uint64_t,
+                        std::vector<Slice>* slices, uint64_t& version) {
+        *slices = {test::MakeSlice(1, 0, 4096)};
+        version = 1;
+        return Status::OK();
+      });
+
+  ASSERT_TRUE(mgr_->Start(2).ok());
+  ASSERT_TRUE(mgr_->SubmitTask(WarmupTaskContext(kTaskKey)).ok());
+
+  const auto deadline =
+      std::chrono::steady_clock::now() + std::chrono::seconds(5);
+  while (mgr_->GetWarmupTaskStatus(kTaskKey) != "1/1/0" &&
+         std::chrono::steady_clock::now() < deadline) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+  ASSERT_EQ(mgr_->GetWarmupTaskStatus(kTaskKey), "1/1/0");
+
+  // The retained finished key must reject a duplicate without resolving the
+  // inode a second time. SubmitTask reports enqueue success; dedup is decided
+  // by the single-writer event handler.
+  ASSERT_TRUE(mgr_->SubmitTask(WarmupTaskContext(kTaskKey)).ok());
+  ASSERT_TRUE(mgr_->Stop().ok());
+}
+
+TEST_F(WarmupManagerTest, BlockCreditLimitsAndResumesDispatch) {
+  constexpr Ino kTaskKey = 7001;
+  const uint64_t previous_max_inflight =
+      FLAGS_vfs_warmup_max_inflight_blocks;
+  struct FlagRestore {
+    uint64_t value;
+    ~FlagRestore() { FLAGS_vfs_warmup_max_inflight_blocks = value; }
+  } restore{previous_max_inflight};
+  FLAGS_vfs_warmup_max_inflight_blocks = 2;
+
+  ON_CALL(*mock_meta_system_, GetAttr)
+      .WillByDefault([](ContextSPtr, Ino ino, Attr* attr) {
+        *attr = test::MakeFileAttr(ino, 12 * 1024 * 1024);
+        return Status::OK();
+      });
+  ON_CALL(*mock_meta_system_, ReadSlice)
+      .WillByDefault([](ContextSPtr, Ino, uint64_t, uint64_t,
+                        std::vector<Slice>* slices, uint64_t& version) {
+        *slices = {test::MakeSlice(1, 0, 12 * 1024 * 1024)};
+        version = 1;
+        return Status::OK();
+      });
+
+  std::mutex callbacks_mutex;
+  std::condition_variable callbacks_cv;
+  std::vector<StatusCallback> callbacks;
+  ON_CALL(*mock_block_store_, PrefetchAsync)
+      .WillByDefault([&](ContextSPtr, PrefetchReq, StatusCallback cb) {
+        {
+          std::lock_guard<std::mutex> lock(callbacks_mutex);
+          callbacks.push_back(std::move(cb));
+        }
+        callbacks_cv.notify_all();
+      });
+
+  auto wait_for_callbacks = [&](size_t count,
+                                std::chrono::milliseconds timeout) {
+    std::unique_lock<std::mutex> lock(callbacks_mutex);
+    return callbacks_cv.wait_for(
+        lock, timeout, [&] { return callbacks.size() >= count; });
+  };
+  auto get_callback = [&](size_t index) {
+    std::lock_guard<std::mutex> lock(callbacks_mutex);
+    return callbacks.at(index);
+  };
+
+  ASSERT_TRUE(mgr_->Start(2).ok());
+  ASSERT_TRUE(mgr_->SubmitTask(WarmupTaskContext(kTaskKey)).ok());
+  ASSERT_TRUE(wait_for_callbacks(2, std::chrono::seconds(5)));
+  EXPECT_FALSE(wait_for_callbacks(3, std::chrono::milliseconds(50)));
+
+  get_callback(0)(Status::OK());
+  ASSERT_TRUE(wait_for_callbacks(3, std::chrono::seconds(5)));
+  get_callback(1)(Status::OK());
+  get_callback(2)(Status::OK());
+
+  ASSERT_TRUE(mgr_->Stop().ok());
+  EXPECT_EQ(mgr_->GetWarmupTaskStatus(kTaskKey), "3/3/0");
 }
 
 }  // namespace vfs

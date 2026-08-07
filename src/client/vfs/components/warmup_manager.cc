@@ -1,392 +1,566 @@
-// Copyright (c) 2025 dingodb.com, Inc. All Rights Reserved
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/*
+ * Copyright (c) 2026 dingodb.com, Inc. All Rights Reserved
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
-#include "warmup_manager.h"
+#include "client/vfs/components/warmup_manager.h"
 
-#include <bthread/countdown_event.h>
-#include <bthread/execution_queue.h>
 #include <fmt/format.h>
 #include <glog/logging.h>
 
-#include <chrono>
-#include <cstdint>
-#include <ctime>
-#include <thread>
+#include <algorithm>
+#include <type_traits>
 
-#include "butil/memory/scope_guard.h"
 #include "client/vfs/components/prefetch_utils.h"
 #include "client/vfs/hub/vfs_hub.h"
 #include "client/vfs/vfs_fh.h"
-#include "client/vfs/vfs_meta.h"
-#include "common/status.h"
-#include "utils/concurrent/concurrent.h"
-#include "utils/executor/bthread/bthread_executor.h"
-#include "utils/executor/executor.h"
+#include "common/options/client.h"
+#include "utils/executor/thread/executor_impl.h"
 #include "utils/string_util.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
 
-Status WarmupManager::Start(const uint32_t& threads) {
-  CHECK_GT(threads, 0);
-  CHECK_NOTNULL(metrics_);
+namespace {
 
-  bthread::ExecutionQueueOptions queue_options;
-  queue_options.use_pthread = true;
-  int rc = bthread::execution_queue_start(
-      &task_queue_id_, &queue_options, &WarmupManager::HandleWarmupTask, this);
-  if (rc != 0) {
-    LOG(ERROR) << "Start execution queue failed: rc = " << rc;
-    return Status::Internal("start execution queue failed.");
+constexpr auto kFinishedStatusTtl = std::chrono::minutes(10);
+constexpr auto kDrainLogInterval = std::chrono::seconds(60);
+
+}  // namespace
+
+Status WarmupEventSink::EnqueueSubmit(WarmupTaskContext context) {
+  std::lock_guard<std::mutex> lock(submit_admission_mutex_);
+  if (!accepting_submits_ || !open_.load(std::memory_order_acquire)) {
+    return Status::Stop("warmup manager is stopping");
+  }
+  return EnqueueNormal(WarmupEvent(SubmitEvent(context)));
+}
+
+Status WarmupEventSink::EnqueueNormal(WarmupEvent event) {
+  return Enqueue(std::move(event), &bthread::TASK_OPTIONS_NORMAL);
+}
+
+Status WarmupEventSink::EnqueueUrgent(WarmupEvent event) {
+  return Enqueue(std::move(event), &bthread::TASK_OPTIONS_URGENT);
+}
+
+Status WarmupEventSink::Enqueue(WarmupEvent event,
+                                const bthread::TaskOptions* options) {
+  if (!open_.load(std::memory_order_acquire)) {
+    return Status::Stop("warmup event sink is closed");
   }
 
-  warmup_executor_ = std::make_unique<BthreadExecutor>(threads);
+  // Increment the depth gauge before, not after, the enqueue call: the
+  // handler thread can dequeue the event and decrement the gauge the moment
+  // it lands in the queue, so a post-enqueue increment could run after its
+  // own decrement and drive the gauge negative. Roll the increment back if
+  // the enqueue fails.
+  metrics_->event_queue_depth << 1;
+  pending_events_.fetch_add(1, std::memory_order_acq_rel);
+  int rc =
+      bthread::execution_queue_execute(queue_id_, std::move(event), options);
+  if (rc != 0) {
+    metrics_->event_queue_depth << -1;
+    pending_events_.fetch_sub(1, std::memory_order_release);
+    return Status::Internal(fmt::format("enqueue warmup event failed: {}", rc));
+  }
+  return Status::OK();
+}
 
-  auto ok = warmup_executor_->Start();
-  if (!ok) {
-    LOG(ERROR) << "Start warmup manager executor failed.";
-    return Status::Internal("Start warmup manager executor failed.");
+void WarmupEventSink::CloseSubmitAdmission() {
+  std::lock_guard<std::mutex> lock(submit_admission_mutex_);
+  accepting_submits_ = false;
+}
+
+void WarmupEventSink::CloseAfterDrain() {
+  std::lock_guard<std::mutex> lock(submit_admission_mutex_);
+  accepting_submits_ = false;
+  open_.store(false, std::memory_order_release);
+}
+
+void WarmupEventSink::MarkEventProcessed() {
+  CHECK_GT(pending_events_.load(std::memory_order_relaxed), 0);
+  pending_events_.fetch_sub(1, std::memory_order_release);
+}
+
+uint64_t WarmupEventSink::PendingEvents() const {
+  return pending_events_.load(std::memory_order_acquire);
+}
+
+WarmupManager::~WarmupManager() {
+  if (running_.load(std::memory_order_acquire)) {
+    CHECK(Stop().ok());
+  }
+}
+
+Status WarmupManager::Start(const uint32_t& threads) {
+  CHECK_GT(threads, 0);
+
+  bthread::ExecutionQueueOptions options;
+  options.use_pthread = true;
+  int rc = bthread::execution_queue_start(
+      &event_queue_id_, &options, &WarmupManager::HandleWarmupEvent, this);
+  if (rc != 0) {
+    return Status::Internal(fmt::format("start warmup event queue: {}", rc));
+  }
+
+  event_sink_ =
+      std::make_shared<WarmupEventSink>(event_queue_id_, metrics_.get());
+  warmup_executor_ = std::make_unique<ExecutorImpl>("warmup_resolve", threads);
+  if (!warmup_executor_->Start()) {
+    event_sink_->CloseAfterDrain();
+    bthread::execution_queue_stop(event_queue_id_);
+    bthread::execution_queue_join(event_queue_id_);
+    return Status::Internal("start warmup executor failed");
+  }
+  prefetch_dispatch_executor_ =
+      std::make_unique<ExecutorImpl>("warmup_prefetch_dispatch", threads);
+  if (!prefetch_dispatch_executor_->Start()) {
+    warmup_executor_->Stop();
+    event_sink_->CloseAfterDrain();
+    bthread::execution_queue_stop(event_queue_id_);
+    bthread::execution_queue_join(event_queue_id_);
+    return Status::Internal("start warmup prefetch dispatch executor failed");
   }
 
   block_store_ = vfs_hub_->GetBlockStore();
-
-  running_.store(true, std::memory_order_relaxed);
-  LOG(INFO) << fmt::format("WarmupManager started with {} threads.", threads);
-
+  running_.store(true, std::memory_order_release);
   return Status::OK();
 }
 
 Status WarmupManager::Stop() {
-  if (!running_.exchange(false)) {
+  if (!running_.exchange(false, std::memory_order_acq_rel)) {
     return Status::OK();
   }
 
-  if (bthread::execution_queue_stop(task_queue_id_) != 0) {
-    LOG(ERROR) << "Stop execution queue failed.";
-    return Status::Internal("stop execution queue failed.");
-  } else if (bthread::execution_queue_join(task_queue_id_) != 0) {
-    LOG(ERROR) << "Join execution queue failed.";
-    return Status::Internal("join execution queue failed.");
+  event_sink_->CloseSubmitAdmission();
+  while (!WaitForDrain(kDrainLogInterval)) {
+    LOG(ERROR) << fmt::format(
+        "Warmup is still draining after {} seconds: pending={}, active={}",
+        std::chrono::duration_cast<std::chrono::seconds>(kDrainLogInterval)
+            .count(),
+        event_sink_->PendingEvents(), active_task_count_.load());
   }
 
-  auto ok = warmup_executor_->Stop();
-  if (!ok) {
-    LOG(ERROR) << "Stop warmup executor failed.";
-    return Status::Internal("Stop warmup executor failed.");
-  }
+  // A drained manager cannot retain any single-writer scheduling state.
+  CHECK(active_tasks_.empty());
+  CHECK(dispatch_waiters_.empty());
+  CHECK_EQ(inflight_blocks_, 0);
+  CHECK(!dispatch_event_scheduled_);
+  CHECK_EQ(active_task_count_.load(std::memory_order_acquire), 0);
+  CHECK_EQ(event_sink_->PendingEvents(), 0);
 
-  LOG(INFO) << "WarmupManager stopped.";
+  event_sink_->CloseAfterDrain();
+  CHECK(prefetch_dispatch_executor_->Stop());
+  CHECK(warmup_executor_->Stop());
+  CHECK_EQ(0, bthread::execution_queue_stop(event_queue_id_));
+  CHECK_EQ(0, bthread::execution_queue_join(event_queue_id_));
   return Status::OK();
 }
 
-void WarmupManager::SubmitTask(const WarmupTaskContext& context) {
-  CHECK_EQ(0, bthread::execution_queue_execute(task_queue_id_, context));
+Status WarmupManager::SubmitTask(const WarmupTaskContext& context) {
+  if (event_sink_ == nullptr) {
+    return Status::Stop("warmup manager is not started");
+  }
+  return event_sink_->EnqueueSubmit(context);
 }
 
 std::string WarmupManager::GetWarmupTaskStatus(const Ino& task_key) {
-  utils::ReadLockGuard lck(task_rwlock_);
-  std::string result;
-  auto iter = warmup_tasks_.find(task_key);
-  if (iter != warmup_tasks_.end()) {
-    // task already running
-    const auto& task = iter->second;
-    result = fmt::format("{}/{}/{}", task->GetTotal(), task->GetFinished(),
-                         task->GetErrors());
-  } else {
-    // task is finished and removed from warmup task queue
-    result = "0/0/0";
+  std::unique_lock<std::shared_mutex> lock(status_mutex_);
+  const auto now = std::chrono::steady_clock::now();
+  CleanupExpiredFinishedStatusLocked(now);
+  auto active = active_status_.find(task_key);
+  if (active != active_status_.end()) {
+    return fmt::format("{}/{}/{}", active->second.total,
+                       active->second.finished, active->second.errors);
   }
 
-  return result;
-};
+  auto finished = finished_status_.find(task_key);
+  if (finished != finished_status_.end()) {
+    if (finished->second.expire_at > now) {
+      return fmt::format("{}/{}/{}", finished->second.status.total,
+                         finished->second.status.finished,
+                         finished->second.status.errors);
+    }
+  }
+  return "0/0/0";
+}
 
-int WarmupManager::HandleWarmupTask(
-    void* meta, bthread::TaskIterator<WarmupTaskContext>& iter) {
+int WarmupManager::HandleWarmupEvent(void* meta,
+                                     bthread::TaskIterator<WarmupEvent>& iter) {
   if (iter.is_queue_stopped()) {
-    LOG(INFO) << "WarmupManager Execution queue stopped.";
     return 0;
   }
 
   auto* self = static_cast<WarmupManager*>(meta);
-  for (; iter; iter++) {
-    WarmupTaskContext& context = *iter;
-    if (self->NewWarmupTask(context)) {
-      // Run in thread pool
-      self->AsyncWarmupTask(context);
-    }
+  for (; iter; ++iter) {
+    self->metrics_->event_queue_depth << -1;
+    self->HandleEvent(std::move(*iter));
+    self->event_sink_->MarkEventProcessed();
+    self->MaybeNotifyDrained();
   }
-
   return 0;
 }
 
-void WarmupManager::AsyncWarmupTask(const WarmupTaskContext& context) {
-  auto* self = this;
-  auto* task = self->GetWarmupTask(context.task_key);
-  CHECK_NOTNULL(task);
-  warmup_executor_->Execute([self, task]() { self->DoWarmupTask(task); });
+void WarmupManager::HandleEvent(WarmupEvent event) {
+  std::visit(
+      [this](auto&& value) {
+        using T = std::decay_t<decltype(value)>;
+        if constexpr (std::is_same_v<T, SubmitEvent>) {
+          HandleSubmit(std::forward<decltype(value)>(value));
+        } else if constexpr (std::is_same_v<T, ResolveDoneEvent>) {
+          HandleResolveDone(std::forward<decltype(value)>(value));
+        } else if constexpr (std::is_same_v<T, BlockDoneEvent>) {
+          HandleBlockDone(std::forward<decltype(value)>(value));
+        } else {
+          HandleDispatchBlocks(std::forward<decltype(value)>(value));
+        }
+      },
+      std::move(event));
 }
 
-void WarmupManager::DoWarmupTask(WarmupTask* task) {
-  BRPC_SCOPE_EXIT {
-    // wait 1s, otherwise dingo tool won't have time to obtain the finish status
-    std::this_thread::sleep_for(std::chrono::seconds(1));
-    RemoveWarmupTask(task->GetKey());
-  };
+void WarmupManager::HandleSubmit(SubmitEvent event) {
+  const Ino key = event.context.task_key;
+  VLOG(1) << fmt::format("Warmup task submit key: {}", key);
 
-  if (task->GetType() == WarmupType::kWarmupIntime) {
-    ProcessIntimeWarmup(task);
-  } else if (task->GetType() == WarmupType::kWarmupManual) {
-    ProcessManualWarmup(task);
-  } else {
-    LOG(ERROR) << fmt::format("Warmup task[{}], has invalid warmup type.",
-                              task->GetKey());
-  }
-}
-
-void WarmupManager::ProcessIntimeWarmup(WarmupTask* task) {
-  auto span = vfs_hub_->GetTraceManager()->StartSpan(
-      "WarmupManager::ProcessIntimeWarmup");
-  auto inode = task->GetKey();
-  LOG(INFO) << "Intime warmup started for inode: " << task->GetKey();
-
-  Status status = WalkFile(task, inode);
-  if (!status.ok()) {
-    LOG(ERROR) << "Failed to collect blocks for intime warmup, inode=" << inode
-               << ", status=" << status.ToString();
+  if (active_tasks_.find(key) != active_tasks_.end()) {
+    VLOG(1) << fmt::format(
+        "Warmup task already active, skip duplicate submit, key: {}", key);
     return;
   }
 
-  WarmupFile(inode, task, [inode, task, span](Status s) {
-    SpanScope::End(span);
-    LOG(INFO) << "Finish intime warmup file: " << inode
-              << ", with status: " << s.ToString();
+  {
+    std::unique_lock<std::shared_mutex> lock(status_mutex_);
+    CleanupExpiredFinishedStatusLocked(std::chrono::steady_clock::now());
+    if (finished_status_.find(key) != finished_status_.end()) {
+      VLOG(1) << fmt::format(
+          "Warmup task already finished, skip duplicate submit, key: {}", key);
+      return;
+    }
+  }
+
+  auto task = std::make_shared<WarmupTask>(std::move(event.context));
+  active_tasks_.emplace(key, task);
+  active_task_count_.fetch_add(1, std::memory_order_relaxed);
+  metrics_->inflight_warmup_tasks << 1;
+  PublishActiveStatus(*task);
+
+  WarmupTaskContext context = task->context;
+  auto sink = event_sink_;
+  metrics_->resolve_queued_tasks << 1;
+  bool accepted = warmup_executor_->Execute([this, context, key, sink] {
+    metrics_->resolve_queued_tasks << -1;
+    metrics_->resolve_running_tasks << 1;
+    const auto resolve_start = std::chrono::steady_clock::now();
+    ResolveResult result = ResolveTask(context);
+    metrics_->resolve_latency
+        << std::chrono::duration_cast<std::chrono::microseconds>(
+               std::chrono::steady_clock::now() - resolve_start)
+               .count();
+    metrics_->resolve_running_tasks << -1;
+    Status status = sink->EnqueueUrgent(
+        WarmupEvent(ResolveDoneEvent{key, std::move(result)}));
+    CHECK(status.ok()) << status.ToString();
+  });
+  if (!accepted) {
+    metrics_->resolve_queued_tasks << -1;
+    FinishTask(task, Status::Stop("warmup executor rejected task"));
+  }
+}
+
+void WarmupManager::HandleResolveDone(ResolveDoneEvent event) {
+  auto it = active_tasks_.find(event.task_key);
+  // Without cancellation, every accepted Resolve owns an active task until
+  // this event is handled. A missing task is a lifecycle invariant violation.
+  CHECK(it != active_tasks_.end());
+  auto task = it->second;
+
+  task->errors += event.result.errors;
+  if (!event.result.status.ok() && task->first_error.ok()) {
+    task->first_error = event.result.status;
+  }
+  task->blocks = std::move(event.result.blocks);
+  task->total = task->blocks.size();
+  PublishActiveStatus(*task);
+
+  // Manual tasks can resolve several roots. Preserve the first error, but
+  // still prefetch blocks successfully resolved from the remaining roots.
+  if (!task->HasMoreBlocks()) {
+    FinishTask(task, event.result.status);
+    return;
+  }
+
+  dispatch_waiters_.push_back(task);
+  metrics_->dispatch_waiting_tasks << 1;
+  ScheduleDispatchBlocks();
+}
+
+void WarmupManager::ScheduleDispatchBlocks() {
+  if (dispatch_event_scheduled_ || dispatch_waiters_.empty() ||
+      inflight_blocks_ >= FLAGS_vfs_warmup_max_inflight_blocks) {
+    return;
+  }
+  dispatch_event_scheduled_ = true;
+  Status status =
+      event_sink_->EnqueueUrgent(WarmupEvent(DispatchBlocksEvent{}));
+  CHECK(status.ok()) << status.ToString();
+}
+
+void WarmupManager::HandleDispatchBlocks(DispatchBlocksEvent) {
+  dispatch_event_scheduled_ = false;
+  TryDispatchBlocks();
+}
+
+void WarmupManager::TryDispatchBlocks() {
+  const uint64_t max_inflight = FLAGS_vfs_warmup_max_inflight_blocks;
+  if (inflight_blocks_ >= max_inflight) {
+    return;
+  }
+
+  uint64_t budget = max_inflight - inflight_blocks_;
+  while (budget-- > 0 && !dispatch_waiters_.empty()) {
+    auto task = dispatch_waiters_.front();
+    dispatch_waiters_.pop_front();
+    metrics_->dispatch_waiting_tasks << -1;
+    CHECK(task->HasMoreBlocks());
+    PrefetchBlock block = task->blocks[task->next_block++];
+
+    ++inflight_blocks_;
+    ++task->outstanding;
+    metrics_->inflight_warmup_blocks << 1;
+
+    auto sink = event_sink_;
+    const Ino key = task->key;
+    bool accepted = prefetch_dispatch_executor_->Execute(
+        [this, sink, key, block = block]() mutable {
+          PrefetchReq req;
+          req.handle = BlockHandle(vfs_hub_->GetFsInfo().id, block.key);
+          auto span = vfs_hub_->GetTraceManager()->StartSpan(
+              "WarmupManager::DispatchBlock");
+          block_store_->PrefetchAsync(
+              SpanScope::GetContext(span), req,
+              [sink, key, span](Status status) {
+                SpanScope::End(span);
+                Status enqueue_status = sink->EnqueueUrgent(
+                    WarmupEvent(BlockDoneEvent{key, std::move(status)}));
+                CHECK(enqueue_status.ok()) << enqueue_status.ToString();
+              });
+        });
+    CHECK(accepted);
+
+    if (task->HasMoreBlocks()) {
+      dispatch_waiters_.push_back(task);
+      metrics_->dispatch_waiting_tasks << 1;
+    }
+  }
+}
+
+void WarmupManager::HandleBlockDone(BlockDoneEvent event) {
+  auto it = active_tasks_.find(event.task_key);
+  CHECK(it != active_tasks_.end());
+  auto task = it->second;
+  CHECK_GT(inflight_blocks_, 0);
+  CHECK_GT(task->outstanding, 0);
+  --inflight_blocks_;
+  --task->outstanding;
+  metrics_->inflight_warmup_blocks << -1;
+
+  if (event.status.ok() || event.status.IsExist()) {
+    ++task->finished;
+    metrics_->blocks_succeeded_total << 1;
+  } else {
+    ++task->errors;
+    metrics_->blocks_failed_total << 1;
+    if (task->first_error.ok()) {
+      task->first_error = event.status;
+    }
+  }
+  PublishActiveStatus(*task);
+  MaybeFinishTask(task);
+  ScheduleDispatchBlocks();
+}
+
+void WarmupManager::MaybeFinishTask(const std::shared_ptr<WarmupTask>& task) {
+  if (!task->HasMoreBlocks() && task->outstanding == 0) {
+    FinishTask(task, task->first_error);
+  }
+}
+
+void WarmupManager::FinishTask(const std::shared_ptr<WarmupTask>& task,
+                               const Status& status) {
+  if (!status.ok() && task->first_error.ok()) {
+    task->first_error = status;
+    if (task->errors == 0) {
+      ++task->errors;
+    }
+  }
+
+  metrics_->task_latency
+      << std::chrono::duration_cast<std::chrono::microseconds>(
+             std::chrono::steady_clock::now() - task->registered_at)
+             .count();
+
+  {
+    std::unique_lock<std::shared_mutex> lock(status_mutex_);
+    const auto now = std::chrono::steady_clock::now();
+    CleanupExpiredFinishedStatusLocked(now);
+    active_status_.erase(task->key);
+    FinishedWarmupRecord record;
+    record.status =
+        WarmupStatusSnapshot{task->total, task->finished, task->errors};
+    record.expire_at = now + kFinishedStatusTtl;
+    finished_status_[task->key] = record;
+    finished_status_expiry_.push_back({record.expire_at, task->key});
+  }
+  active_tasks_.erase(task->key);
+  active_task_count_.fetch_sub(1, std::memory_order_acq_rel);
+  metrics_->inflight_warmup_tasks << -1;
+}
+
+void WarmupManager::PublishActiveStatus(const WarmupTask& task) {
+  std::unique_lock<std::shared_mutex> lock(status_mutex_);
+  active_status_[task.key] =
+      WarmupStatusSnapshot{task.total, task.finished, task.errors};
+}
+
+void WarmupManager::CleanupExpiredFinishedStatusLocked(
+    std::chrono::steady_clock::time_point now) {
+  while (!finished_status_expiry_.empty() &&
+         finished_status_expiry_.front().expire_at <= now) {
+    const auto expiry = finished_status_expiry_.front();
+    finished_status_expiry_.pop_front();
+
+    auto it = finished_status_.find(expiry.task_key);
+    if (it != finished_status_.end() &&
+        it->second.expire_at == expiry.expire_at) {
+      finished_status_.erase(it);
+    }
+  }
+}
+
+void WarmupManager::MaybeNotifyDrained() {
+  if (!running_.load(std::memory_order_acquire) && event_sink_ != nullptr &&
+      event_sink_->PendingEvents() == 0 &&
+      active_task_count_.load(std::memory_order_acquire) == 0) {
+    std::lock_guard<std::mutex> lock(drain_mutex_);
+    drain_cv_.notify_all();
+  }
+}
+
+bool WarmupManager::WaitForDrain(std::chrono::milliseconds timeout) {
+  std::unique_lock<std::mutex> lock(drain_mutex_);
+  return drain_cv_.wait_for(lock, timeout, [this] {
+    return event_sink_->PendingEvents() == 0 &&
+           active_task_count_.load(std::memory_order_acquire) == 0;
   });
 }
 
-void WarmupManager::ProcessManualWarmup(WarmupTask* task) {
-  auto span = vfs_hub_->GetTraceManager()->StartSpan(
-      "WarmupManager::ProcessManualWarmup");
-  VLOG(3) << "Process manual warmup task, key: " << task->GetKey()
-          << ", inodes: " << task->GetTaskInodes();
-  std::vector<std::string> warmup_inodes;
-  utils::SplitString(task->GetTaskInodes(), ",", &warmup_inodes);
+ResolveResult WarmupManager::ResolveTask(const WarmupTaskContext& context) {
+  ResolveResult result;
+  if (context.type == WarmupType::kWarmupIntime) {
+    result.status = WalkFile(context, context.task_key, &result.blocks);
+    result.errors = result.status.ok() ? 0 : 1;
+    return result;
+  }
 
-  for (const auto& inode_str : warmup_inodes) {
+  if (context.type != WarmupType::kWarmupManual) {
+    result.status = Status::InvalidParam("invalid warmup type");
+    result.errors = 1;
+    return result;
+  }
+
+  std::vector<std::string> inodes;
+  utils::SplitString(context.task_inodes, ",", &inodes);
+  for (const auto& value : inodes) {
     Ino ino;
-    bool ok = utils::StringToUll(inode_str, &ino);
-    if (!ok) {
-      LOG(ERROR) << "Process manual warmup task failed, invalid inode: "
-                 << inode_str;
+    if (!utils::StringToUll(value, &ino)) {
+      ++result.errors;
+      if (result.status.ok()) {
+        result.status = Status::InvalidParam("invalid warmup inode");
+      }
       continue;
     }
-
-    CHECK_NOTNULL(task);
-    WalkFile(task, ino);
+    Status status = WalkFile(context, ino, &result.blocks);
+    if (!status.ok()) {
+      ++result.errors;
+      if (result.status.ok()) {
+        result.status = status;
+      }
+    }
   }
-
-  if (task->GetFileCount() == 0) {
-    LOG(INFO) << fmt::format(
-        "Process manual warmup task: {} finished with no file.",
-        task->GetKey());
-    return;
-  }
-  LOG(INFO) << fmt::format(
-      "Start process manual warmup task: {}, scaned {} files.", task->GetKey(),
-      task->GetFileCount());
-
-  WarmupFiles(task);
-
-  LOG(INFO) << fmt::format(
-      "Finish process manual warmup task: {}, total: {}, finished: {}, "
-      "errors: {}.",
-      task->GetKey(), task->GetTotal(), task->GetFinished(), task->GetErrors());
+  return result;
 }
 
-void WarmupManager::WarmupFiles(WarmupTask* task) {
-  for (const auto& inode : task->GetFileInodes()) {
-    LOG(INFO) << "Start warmup file: " << inode;
-
-    WarmupFile(inode, task, [inode, task](Status s) {
-      LOG(INFO) << "Finish warmup file: " << inode
-                << ", with status: " << s.ToString();
-    });
-  }
-}
-
-Status WarmupManager::WalkFile(WarmupTask* task, Ino ino) {
+Status WarmupManager::WalkFile(const WarmupTaskContext&, Ino ino,
+                               std::vector<PrefetchBlock>* blocks) {
   auto span = vfs_hub_->GetTraceManager()->StartSpan("WarmupManager::WalkFile");
-
   Attr attr;
-  Status s = vfs_hub_->GetMetaSystem()->GetAttr(SpanScope::GetContext(span),
-                                                ino, &attr);
-  if (!s.ok()) {
-    LOG(ERROR) << "Failed to get attr for ino: " << ino
-               << ", status: " << s.ToString();
-    return s;
+  Status status = vfs_hub_->GetMetaSystem()->GetAttr(
+      SpanScope::GetContext(span), ino, &attr);
+  if (!status.ok()) {
+    return status;
   }
-
-  std::vector<Ino> parentDir;
 
   if (attr.type == FileType::kFile) {
-    // Calculate file blocks
-    auto file_blocks = FileRange2BlockKey(SpanScope::GetContext(span), vfs_hub_,
-                                          ino, 0, attr.length);
-    task->SetFileBlocks(ino, file_blocks);
-
+    auto values = FileRange2BlockKey(SpanScope::GetContext(span), vfs_hub_, ino,
+                                     0, attr.length);
+    blocks->insert(blocks->end(), values.begin(), values.end());
     return Status::OK();
-  } else if (attr.type == FileType::kDirectory) {
-    parentDir.push_back(ino);
-  } else {
-    LOG(ERROR) << "Warmup task file ino: " << ino
-               << " is symlink, skip warmup.";
-    return Status::NotSupport("Unsupported file type");
+  }
+  if (attr.type != FileType::kDirectory) {
+    return Status::NotSupport("unsupported warmup file type");
   }
 
-  Status openStatus;
-
-  while (!parentDir.empty()) {
-    std::vector<Ino> childDir;
-    auto dirIt = parentDir.begin();
-    while (dirIt != parentDir.end()) {
-      uint64_t fh = vfs::FhGenerator::GenFh();
+  std::vector<Ino> directories{ino};
+  while (!directories.empty()) {
+    std::vector<Ino> children;
+    for (Ino directory : directories) {
+      uint64_t fh = FhGenerator::GenFh();
       bool need_cache = false;
-      openStatus = vfs_hub_->GetMetaSystem()->OpenDir(
-          SpanScope::GetContext(span), *dirIt, fh, need_cache);
-      if (!openStatus.ok()) {
-        LOG(ERROR) << "Failed to open dir: " << *dirIt
-                   << ", status: " << openStatus.ToString();
-        ++dirIt;
+      status = vfs_hub_->GetMetaSystem()->OpenDir(SpanScope::GetContext(span),
+                                                  directory, fh, need_cache);
+      if (!status.ok()) {
         continue;
       }
-
       uint32_t count = 0;
-      vfs_hub_->GetMetaSystem()->ReadDir(
-          SpanScope::GetContext(span), *dirIt, fh, 0, true,
-          [task, &childDir, &span, this](const DirEntry& entry,
-                                         uint64_t offset) {
-            (void)offset;
-            Ino inoTmp = entry.ino;
-            Attr attr = entry.attr;
+      Status read_status = vfs_hub_->GetMetaSystem()->ReadDir(
+          SpanScope::GetContext(span), directory, fh, 0, true,
+          [this, blocks, &children, &span](const DirEntry& entry, uint64_t) {
             if (entry.attr.type == FileType::kFile) {
-              // Calculate file blocks
-              auto file_blocks =
+              auto values =
                   FileRange2BlockKey(SpanScope::GetContext(span), vfs_hub_,
-                                     entry.ino, 0, attr.length);
-              task->SetFileBlocks(entry.ino, file_blocks);
+                                     entry.ino, 0, entry.attr.length);
+              blocks->insert(blocks->end(), values.begin(), values.end());
             } else if (entry.attr.type == FileType::kDirectory) {
-              childDir.push_back(entry.ino);
-            } else {
-              LOG(WARNING) << "name:" << entry.name << " ino:" << entry.ino
-                           << " attr.type:" << entry.attr.type
-                           << " not support.";
+              children.push_back(entry.ino);
             }
-            return true;  // Continue reading
+            return true;
           },
           count);
-      vfs_hub_->GetMetaSystem()->ReleaseDir(SpanScope::GetContext(span), *dirIt,
-                                            fh);
-
-      dirIt++;
+      Status release_status = vfs_hub_->GetMetaSystem()->ReleaseDir(
+          SpanScope::GetContext(span), directory, fh);
+      if (!read_status.ok()) {
+        return read_status;
+      }
+      if (!release_status.ok()) {
+        return release_status;
+      }
     }
-    parentDir = std::move(childDir);
+    directories = std::move(children);
   }
-
   return Status::OK();
-}
-
-void WarmupManager::WarmupFile(Ino ino, WarmupTask* task, AsyncWarmupCb cb) {
-  auto span =
-      vfs_hub_->GetTraceManager()->StartSpan("WarmupManager::WarmupFile");
-  IncFileMetric(1);
-  BRPC_SCOPE_EXIT { DecFileMetric(1); };
-
-  // Get file blocks for this file
-  auto file_blocks = task->GetFileBlocks(ino);
-
-  IncBlockMetric(file_blocks.size());
-
-  VLOG(6) << fmt::format("Download file: {} started, blocks: {}.", ino,
-                         file_blocks.size());
-
-  Status donwload_status = Status::OK();
-  bthread::CountdownEvent countdown(file_blocks.size());
-
-  for (const auto& block : file_blocks) {
-    VLOG(6) << fmt::format("Download block {}, len {}", block.key.Filename(),
-                           block.len);
-    PrefetchReq req;
-    req.handle = BlockHandle(vfs_hub_->GetFsInfo().id, block.key);
-
-    block_store_->PrefetchAsync(
-        SpanScope::GetContext(span), req,
-        [this, task, req, &countdown, &donwload_status](Status status) {
-          VLOG(6) << fmt::format("Download block {} finished, status: {}.",
-                                 req.handle.Filename(), status.ToString());
-          BRPC_SCOPE_EXIT {
-            DecBlockMetric(1);
-            countdown.signal();
-          };
-
-          if (!status.ok() && !status.IsExist()) {
-            donwload_status = status;
-            task->IncErrors();
-          } else {
-            task->IncFinished();
-          }
-        });
-  }
-
-  countdown.wait();
-  cb(donwload_status);
-}
-
-bool WarmupManager::NewWarmupTask(const WarmupTaskContext& context) {
-  utils::WriteLockGuard lck(task_rwlock_);
-  auto [_, ok] = warmup_tasks_.emplace(context.task_key,
-                                       std::make_unique<WarmupTask>(context));
-  if (ok) {
-    LOG(INFO) << "New warmup task, key: " << context.task_key;
-    IncTaskMetric(1);
-    return true;
-  } else {
-    LOG(INFO) << "Warmup task already exist, skip it, key: "
-              << context.task_key;
-    return false;
-  }
-}
-
-WarmupTask* WarmupManager::GetWarmupTask(const Ino& task_key) {
-  utils::ReadLockGuard lck(task_rwlock_);
-  auto iter = warmup_tasks_.find(task_key);
-  if (iter != warmup_tasks_.end()) {
-    return iter->second.get();
-  }
-  return nullptr;
-}
-
-void WarmupManager::RemoveWarmupTask(const Ino& task_key) {
-  LOG(INFO) << "Remove warmup task, key: " << task_key;
-  utils::WriteLockGuard lck(task_rwlock_);
-  warmup_tasks_.erase(task_key);
-  DecTaskMetric(1);
-}
-
-void WarmupManager::ClearWarmupTask() {
-  utils::WriteLockGuard lck(task_rwlock_);
-  warmup_tasks_.clear();
-  ResetMetrics();
 }
 
 }  // namespace vfs
