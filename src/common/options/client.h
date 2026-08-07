@@ -52,6 +52,7 @@ DECLARE_bool(fuse_enable_splice_read);
 DECLARE_bool(fuse_enable_splice_write);
 DECLARE_bool(fuse_enable_auto_inval_data);
 DECLARE_bool(fuse_enable_parallel_dirops);
+DECLARE_bool(fuse_enable_handle_killpriv_v2);
 DECLARE_int32(fuse_max_readahead_kb);
 DECLARE_int32(fuse_max_background);
 

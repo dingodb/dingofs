@@ -233,6 +233,11 @@ DEFINE_bool(
     "enable parallel lookup and readdir requests in the same directory");
 DEFINE_validator(fuse_enable_parallel_dirops, brpc::PassValidate);
 
+DEFINE_bool(fuse_enable_handle_killpriv_v2, true,
+            "filesystem handles killing suid/sgid/cap on write/truncate/open, "
+            "avoids kernel getxattr(security.capability) before every write");
+DEFINE_validator(fuse_enable_handle_killpriv_v2, brpc::PassValidate);
+
 DEFINE_int32(fuse_max_readahead_kb, 131072,
              "maximum number of bytes that the kernel will read ahead");
 DEFINE_int32(fuse_max_background, 128,
