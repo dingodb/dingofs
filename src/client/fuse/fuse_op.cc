@@ -86,6 +86,16 @@ void InitFuseConnInfo(struct fuse_conn_info* conn) {
         << "[enabled] FUSE_CAP_PARALLEL_DIROPS";
   }
 
+#ifdef FUSE_CAP_HANDLE_KILLPRIV_V2
+  // Tell the kernel that the filesystem is responsible for clearing
+  // suid/sgid/security.capability on write/truncate/open(O_TRUNC), so the
+  // kernel stops issuing getxattr(security.capability) before every write.
+  if (FLAGS_fuse_enable_handle_killpriv_v2) {
+    LOG_IF(INFO, fuse_set_feature_flag(conn, FUSE_CAP_HANDLE_KILLPRIV_V2))
+        << "[enabled] FUSE_CAP_HANDLE_KILLPRIV_V2";
+  }
+#endif
+
   // LOG_IF(INFO, fuse_set_feature_flag(conn, FUSE_CAP_WRITEBACK_CACHE))
   //     << "[enabled] FUSE_CAP_WRITEBACK_CACHE";
 
