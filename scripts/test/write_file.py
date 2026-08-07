@@ -25,6 +25,17 @@ def write_file(file_path):
           time.sleep(sleep_time)
           index += 1
 
+def write_file_2(file_path):
+    """写文件"""
+    with open(file_path, 'a', encoding='utf-8') as f:
+        index = 0
+        while True:
+          print(f"Writing {index}...")
+          f.write(f"hello world {index}" + '\n')
+          sleep_time = random.uniform(0.1, 3.1)  # 模拟写文件的时间
+          time.sleep(sleep_time)
+          index += 1
+
 def main():
     print("start test......")
 

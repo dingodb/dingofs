@@ -1064,7 +1064,6 @@ Status MDSMetaSystem::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
     auto chunk = chunk_set->Get(index);
     if (chunk != nullptr && chunk->IsCompleted()) {
       *slices = chunk->GetAllSlice(version);
-      // ctx->hit_cache = true;
 
       LOG_DEBUG << fmt::format(
           "[meta.fs.{}.{}.{}] readslice, version({}) slices({}).", ino, fh,
@@ -1141,8 +1140,6 @@ Status MDSMetaSystem::WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
   chunk_set->Append(index, slices);
 
   AsyncFlushSlice(ctx, chunk_set, false, false);
-
-  if (chunk_set->TryFlush()) AsyncFlushFile(ctx, ino);
 
   return Status::OK();
 }
@@ -1485,7 +1482,8 @@ Status MDSMetaSystem::GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) {
     // populated/refreshed before inode->ToAttr() emits the hashed-id attr.
     // The VFS layer above (not ToAttr) performs the local-host uid/gid
     // translation.
-    Status status = FetchInode(ctx, ino, reason, inode);
+    ctx->reason = reason;
+    Status status = FetchInode(ctx, ino, inode);
     if (!status.ok()) return status;
   }
 
@@ -1566,7 +1564,6 @@ Status MDSMetaSystem::SetAttr(ContextSPtr ctx, Ino ino, int set,
     if (file_session != nullptr) {
       auto& chunk_set = file_session->GetChunkSet();
       chunk_set->ResetLastWriteLength();
-      chunk_set->ResetLastComitedLength();
 
       if (!out.effected_chunks.empty())
         chunk_set->Put(out.effected_chunks, "setattr");
@@ -1615,7 +1612,6 @@ Status MDSMetaSystem::Fallocate(ContextSPtr ctx, Ino ino, int mode,
       auto& chunk_set = file_session->GetChunkSet();
       if (out.shrink_file || out.expand_file) {
         chunk_set->ResetLastWriteLength();
-        chunk_set->ResetLastComitedLength();
       }
 
       if (!out.effected_chunks.empty())
@@ -1707,22 +1703,29 @@ Status MDSMetaSystem::ListXattr(ContextSPtr ctx, Ino ino,
   return Status::OK();
 }
 
-Status MDSMetaSystem::FetchInode(ContextSPtr& ctx, Ino ino,
-                                 const std::string& reason, InodeSPtr& inode) {
+Status MDSMetaSystem::FetchInode(ContextSPtr& ctx, Ino ino, InodeSPtr& inode) {
   AttrEntry attr_entry;
-  ctx->reason = reason;
   auto status = mds_client_.GetAttr(ctx, ino, attr_entry);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
-        "[meta.fs.{}] fetch inode fail, reason({}) error({}).", ino, reason,
-        status.ToString());
+        "[meta.fs.{}] fetch inode fail, reason({}) error({}).", ino,
+        ctx->reason, status.ToString());
     return status;
   }
 
   LOG_DEBUG << fmt::format("[meta.fs.{}] fetch inode success, reason({}).", ino,
-                           reason);
+                           ctx->reason);
+
+  InodeSPtr old_inode = GetInodeFromCache(ino);
+  uint64_t old_mtime = old_inode != nullptr ? old_inode->Mtime() : 0;
 
   inode = PutInodeToCache(attr_entry);
+
+  // check whether mtime changed
+  // if changed, update file session's chunk is not completed
+  if (old_mtime != 0 && old_mtime != inode->Mtime()) {
+    InvalidateFileSessionReadCache(ino);
+  }
 
   return Status::OK();
 }
@@ -1740,7 +1743,8 @@ InodeSPtr MDSMetaSystem::GetInode(FileSessionSPtr& file_session,
   if (inode != nullptr) return inode;
 
   ContextSPtr ctx = std::make_shared<Context>("");
-  FetchInode(ctx, file_session->GetIno(), reason, inode);
+  ctx->reason = reason;
+  FetchInode(ctx, file_session->GetIno(), inode);
 
   return inode;
 }
@@ -1751,7 +1755,8 @@ Status MDSMetaSystem::GetInode(Ino ino, const std::string& reason,
   if (inode != nullptr) return Status::OK();
 
   ContextSPtr ctx = std::make_shared<Context>("");
-  return FetchInode(ctx, ino, reason, inode);
+  ctx->reason = reason;
+  return FetchInode(ctx, ino, inode);
 }
 
 Status MDSMetaSystem::Rename(ContextSPtr ctx, Ino old_parent,
@@ -1785,7 +1790,7 @@ Status MDSMetaSystem::Rename(ContextSPtr ctx, Ino old_parent,
 }
 
 Status MDSMetaSystem::DoFlushFile(ContextSPtr ctx, InodeSPtr inode,
-                                  ChunkSetSPtr& chunk_set, bool is_final) {
+                                  ChunkSetSPtr& chunk_set) {
   CHECK(chunk_set != nullptr) << "chunk_set is null.";
 
   if (inode == nullptr) {
@@ -1796,35 +1801,25 @@ Status MDSMetaSystem::DoFlushFile(ContextSPtr ctx, InodeSPtr inode,
   }
 
   const Ino ino = inode->Ino();
+  const uint64_t file_length = inode->Length();
+  const uint64_t last_write_length = chunk_set->GetLastWriteLength();
+  const uint64_t last_write_slice_length = chunk_set->GetLastWriteSliceLength();
+
+  if (last_write_length == 0 || last_write_length <= file_length) {
+    LOG_DEBUG << fmt::format(
+        "[meta.fs.{}] skip flush file, writeslice({}) write({}) "
+        "filelength({}).",
+        ino, last_write_slice_length, last_write_length, file_length);
+    return Status::OK();
+  }
 
   LOG_DEBUG << fmt::format(
-      "[meta.fs.{}] flush file, writeslice({}) write({}) commited({}) "
-      "is_final({}).",
-      ino, chunk_set->GetLastWriteSliceLength(),
-      chunk_set->GetLastWriteLength(), chunk_set->GetLastComitedLength(),
-      is_final);
-
-  uint64_t last_write_length = is_final ? chunk_set->GetLastWriteLength()
-                                        : chunk_set->GetLastComitedLength();
-
-  if (last_write_length == 0) {
-    LOG_DEBUG << fmt::format(
-        "[meta.fs.{}] flush file skip cause no write data, length({}).", ino,
-        inode->Length());
-    return Status::OK();
-  }
-
-  if (last_write_length <= inode->Length()) last_write_length = 0;
-  if (!is_final && last_write_length == 0) {
-    LOG_DEBUG << fmt::format(
-        "[meta.fs.{}] flush file skip cause no length expand, length({}).", ino,
-        inode->Length());
-    return Status::OK();
-  }
+      "[meta.fs.{}] flush file, writeslice({}) write({}) filelength({}).", ino,
+      last_write_slice_length, last_write_length, file_length);
 
   // get tiny file data
   std::string data;
-  if (is_final && FLAGS_vfs_tiny_file_data_enable && inode->MaybeTinyFile()) {
+  if (FLAGS_vfs_tiny_file_data_enable && inode->MaybeTinyFile()) {
     auto data_buffer = tiny_file_data_cache_.GetOrCreate(ino);
     if (data_buffer != nullptr && data_buffer->IsComplete()) {
       data_buffer->Copy(data);
@@ -1833,13 +1828,12 @@ Status MDSMetaSystem::DoFlushFile(ContextSPtr ctx, InodeSPtr inode,
 
   AttrEntry attr_entry;
   bool shrink_file;
-  auto status =
-      mds_client_.FlushFile(ctx, ino, last_write_length, std::move(data),
-                            attr_entry, is_final, shrink_file);
+  auto status = mds_client_.FlushFile(ctx, ino, last_write_length,
+                                      std::move(data), attr_entry, shrink_file);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
-        "[meta.fs.{}] flush file fail, is_final({}) length({}) error({}).", ino,
-        is_final, last_write_length, status.ToString());
+        "[meta.fs.{}] flush file fail, length({}) error({}).", ino,
+        last_write_length, status.ToString());
     return status;
   }
 
@@ -1861,22 +1855,23 @@ void MDSMetaSystem::LaunchWriteSlice(ContextSPtr& ctx, ChunkSetSPtr chunk_set,
   auto operation = std::make_shared<WriteSliceOperation>(
       ctx, ino, task,
       [this, chunk_set, ino](const Status& status, CommitTaskSPtr task,
-                             const std::vector<mds::ChunkEntry>& chunks) {
+                             const MDSClient::WriteSliceResult& result) {
         task->SetDone(status);
 
         if (status.ok()) {
           LOG_DEBUG << fmt::format(
-              "[meta.fs.{}] flush delta slice done, task({}) status({}).", ino,
+              "[meta.fs.{}] writeslice done, task({}) status({}).", ino,
               task->TaskID(), status.ToString());
 
-          chunk_set->FinishCommitTask(task->TaskID(), chunks);
+          PutInodeToCache(result.attr);
 
-          chunk_memo_.Remember(ino, chunks);
+          chunk_set->FinishCommitTask(task->TaskID(), result.chunks);
+
+          chunk_memo_.Remember(ino, result.chunks);
 
         } else {
           LOG(ERROR) << fmt::format(
-              "[meta.fs.{}] flush delta slice fail, task({}) retry({}) "
-              "status({}).",
+              "[meta.fs.{}] writeslice fail, task({}) retry({}) status({}).",
               ino, task->TaskID(), task->Retries(), status.ToString());
         }
       });
@@ -1933,8 +1928,6 @@ Status MDSMetaSystem::FlushSliceAndFile(ContextSPtr ctx, Ino ino) {
 
   auto& chunk_set = file_session->GetChunkSet();
 
-  LOG_DEBUG << fmt::format("[meta.fs.{}] flush all slice.", ino);
-
   do {
     bool has_stage = chunk_set->HasStage();
     bool has_committing = chunk_set->HasCommitting();
@@ -1951,44 +1944,7 @@ Status MDSMetaSystem::FlushSliceAndFile(ContextSPtr ctx, Ino ino) {
   } while (true);
 
   // flush file length and data
-  return DoFlushFile(ctx, GetInode(file_session, "flush"), chunk_set, true);
-}
-
-void MDSMetaSystem::AsyncFlushFile(ContextSPtr ctx, Ino ino) {
-  struct Param {
-    MDSMetaSystem& self;
-    ContextSPtr ctx;
-    Ino ino;
-  };
-
-  Param* param = new Param({.self = *this, .ctx = ctx, .ino = ino});
-
-  bthread_t tid;
-  const bthread_attr_t attr = BTHREAD_ATTR_NORMAL;
-  if (bthread_start_background(
-          &tid, &attr,
-          [](void* arg) -> void* {
-            Param* param = reinterpret_cast<Param*>(arg);
-            auto& self = param->self;
-            Ino ino = param->ino;
-            auto file_session = self.file_session_map_.GetSession(ino);
-            if (file_session != nullptr) {
-              LOG_DEBUG << fmt::format("[meta.fs.{}] async flush file.", ino);
-
-              auto& chunk_set = file_session->GetChunkSet();
-              self.DoFlushFile(param->ctx,
-                               self.GetInode(file_session, "asyncflush"),
-                               chunk_set, false);
-              chunk_set->ResetFlush();
-            }
-
-            delete param;
-            return nullptr;
-          },
-          param) != 0) {
-    delete param;
-    LOG(FATAL) << "[meta.fs] start background thread fail.";
-  }
+  return DoFlushFile(ctx, GetInode(file_session, "flush"), chunk_set);
 }
 
 void MDSMetaSystem::FlushAllFile() {
@@ -2031,7 +1987,8 @@ Status MDSMetaSystem::CorrectAttr(ContextSPtr ctx, uint64_t time_ns, Attr& attr,
                              caller);
     // correct attr, fetch latest attr from mds
     InodeSPtr inode;
-    Status status = FetchInode(ctx, attr.ino, "correctattr." + caller, inode);
+    ctx->reason = "correctattr." + caller;
+    Status status = FetchInode(ctx, attr.ino, inode);
     if (!status.ok()) return status;
 
     attr = inode->ToAttr();
@@ -2066,6 +2023,11 @@ bool MDSMetaSystem::CorrectAttrLength(Attr& attr, const std::string& caller) {
   }
 
   return false;
+}
+
+void MDSMetaSystem::InvalidateFileSessionReadCache(Ino ino) {
+  auto file_session = file_session_map_.GetSession(ino);
+  if (file_session != nullptr) file_session->InvalidateReadCache(true);
 }
 
 Status MDSMetaSystem::Compact(ContextSPtr ctx, Ino ino, uint32_t chunk_index,

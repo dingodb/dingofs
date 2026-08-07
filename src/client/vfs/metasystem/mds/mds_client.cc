@@ -668,8 +668,7 @@ Status MDSClient::RmDir(ContextSPtr& ctx, Ino parent, const std::string& name,
 
 Status MDSClient::ReadDir(ContextSPtr& ctx, Ino ino, uint64_t fh,
                           const std::string& last_name, uint32_t limit,
-                          bool with_attr,
-                          std::vector<ReadDirEntry>& entries) {
+                          bool with_attr, std::vector<ReadDirEntry>& entries) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this, ino](bool& is_primary_mds) -> MDSMeta {
@@ -710,8 +709,7 @@ Status MDSClient::ReadDir(ContextSPtr& ctx, Ino ino, uint64_t fh,
   entries.reserve(response.entries_size());
   for (const auto& entry : response.entries()) {
     parent_memo_.Upsert(entry.ino(), ino, entry.inode().version());
-    entries.push_back(
-        ReadDirEntry{entry.ino(), entry.name(), entry.inode()});
+    entries.push_back(ReadDirEntry{entry.ino(), entry.name(), entry.inode()});
   }
 
   return Status::OK();
@@ -797,7 +795,7 @@ Status MDSClient::Release(ContextSPtr& ctx, Ino ino,
 
 Status MDSClient::FlushFile(ContextSPtr& ctx, Ino ino, uint64_t length,
                             std::string&& data, AttrEntry& attr_entry,
-                            bool is_final, bool& shrink_file) {
+                            bool& shrink_file) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this, ino](bool& is_primary_mds) -> MDSMeta {
@@ -816,7 +814,6 @@ Status MDSClient::FlushFile(ContextSPtr& ctx, Ino ino, uint64_t length,
   request.set_ino(ino);
   request.set_length(length);
   request.mutable_data()->assign(std::move(data));
-  request.set_is_final(is_final);
 
   auto status = SendRequest(SpanScope::GetContext(span, ctx), span, get_mds_fn,
                             "MDSService", "FlushFile", request, response);
@@ -1444,7 +1441,7 @@ Status MDSClient::ReadSlice(
 Status MDSClient::WriteSlice(
     ContextSPtr& ctx, Ino ino,
     const std::vector<mds::DeltaSliceEntry>& delta_slices,
-    std::vector<mds::ChunkEntry>& out_chunks) {
+    WriteSliceResult& result) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
   CHECK(ctx != nullptr) << "context is nullptr.";
 
@@ -1471,7 +1468,8 @@ Status MDSClient::WriteSlice(
     return status;
   }
 
-  out_chunks = mds::Helper::PbRepeatedToVector(response.chunks());
+  result.attr = response.inode();
+  result.chunks = mds::Helper::PbRepeatedToVector(response.chunks());
 
   return Status::OK();
 }

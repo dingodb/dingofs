@@ -55,20 +55,20 @@ void WriteSliceOperation::BatchRun(MDSClient& mds_client,
       "delta_slice_entries({}).",
       ino, delta_slice_entries.size());
 
-  std::vector<mds::ChunkEntry> out_chunks;
   auto ctx = operations[0]->GetContext();
   if (ctx == nullptr) ctx = std::make_shared<Context>("");
-  auto status =
-      mds_client.WriteSlice(ctx, ino, delta_slice_entries, out_chunks);
+
+  MDSClient::WriteSliceResult result;
+  auto status = mds_client.WriteSlice(ctx, ino, delta_slice_entries, result);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
         "[meta.batch_processor.{}] writeslice fail, error({}).", ino,
         status.ToString());
   }
 
-  for (auto& operation : operations) {
-    operation->Done(status, out_chunks);
-  }
+  // only first operation set result, others ignore, because batch operation
+  // belong to same file.
+  operations.front()->Done(status, result);
 }
 
 void WriteSliceOperation::PreHandle(
@@ -337,11 +337,20 @@ void BatchProcessor::ProcessOperation() {
     }
   }
 
-  // print pending operations
+  // do leftover operations
   while (operations_.Dequeue(operation)) {
+    stage_operations.push_back(operation);
+
     LOG_DEBUG << fmt::format(
         "[meta.batch_processor] pending operation type({}) ino({}).",
         operation->OpName(), operation->GetIno());
+  }
+
+  if (!stage_operations.empty()) {
+    auto batch_operation_map = Grouping(stage_operations);
+    for (auto& [_, batch_operation] : batch_operation_map) {
+      LaunchExecuteBatchOperation(std::move(batch_operation));
+    }
   }
 }
 
@@ -396,6 +405,12 @@ void BatchProcessor::ExecuteBatchOperation(MDSClient& mds_client,
                                            BatchOperation& batch_operation) {
   CHECK(!batch_operation.operations.empty()) << fmt::format(
       "[meta.batch_processor] batch_operation.operations is empty.");
+
+  LOG_DEBUG << fmt::format(
+      "[meta.batch_processor.{}] execute batch operation, type({}) "
+      "operations({}).",
+      batch_operation.ino, static_cast<uint32_t>(batch_operation.type),
+      batch_operation.operations.size());
 
   switch (batch_operation.type) {
     case Operation::OpType::kWriteSlice: {

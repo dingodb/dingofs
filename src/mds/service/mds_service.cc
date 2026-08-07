@@ -1502,7 +1502,6 @@ void MDSServiceImpl::DoFlushFile(google::protobuf::RpcController*, const pb::mds
 
   auto* mut_request = const_cast<pb::mds::FlushFileRequest*>(request);
   param.data.swap(*mut_request->mutable_data());  // zero copy
-  param.is_final = request->is_final();
 
   EntryWithFileChangeOut entry_out;
   status = file_system->FlushFile(ctx, request->ino(), param, entry_out);
@@ -2227,15 +2226,16 @@ void MDSServiceImpl::DoWriteSlice(google::protobuf::RpcController*, const pb::md
 
   Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
-  std::vector<ChunkEntry> chunks;
-  status = file_system->WriteSlice(ctx, request->ino(), Helper::PbRepeatedToVector(request->delta_slices()), chunks);
+  EntryWithChunkOut entry_out;
+  status = file_system->WriteSlice(ctx, request->ino(), Helper::PbRepeatedToVector(request->delta_slices()), entry_out);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     SpanScope::SetStatus(span, status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  Helper::VectorToPbRepeated(chunks, response->mutable_chunks());
+  response->mutable_inode()->Swap(&entry_out.attr);
+  Helper::VectorToPbRepeated(entry_out.chunks, response->mutable_chunks());
 }
 
 void MDSServiceImpl::WriteSlice(google::protobuf::RpcController* controller, const pb::mds::WriteSliceRequest* request,

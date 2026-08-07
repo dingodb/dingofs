@@ -930,7 +930,6 @@ class UpsertChunkOperation : public Operation {
 
   struct Result {
     AttrEntry attr;
-    int64_t length{0};
     std::vector<ChunkEntry> effected_chunks;
   };
 
@@ -1217,7 +1216,6 @@ class FlushFileOperation : public Operation {
     const std::string& data;
     uint64_t length;
     uint64_t chunk_size{0};
-    bool is_final{false};
   };
 
   FlushFileOperation(Trace& trace, uint32_t fs_id, Ino ino, ExtraParam& param)

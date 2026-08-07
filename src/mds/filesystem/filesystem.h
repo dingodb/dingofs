@@ -201,7 +201,6 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   struct FlushFileParam {
     uint64_t length{0};
     std::string data;
-    bool is_final{false};
   };
   Status FlushFile(Context& ctx, Ino ino, const FlushFileParam& param, EntryWithFileChangeOut& entry_out);
   using FileSessionParam = pb::mds::HeartbeatRequest::FileSession;
@@ -277,7 +276,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
 
   // slice
   Status WriteSlice(Context& ctx, Ino ino, const std::vector<DeltaSliceEntry>& delta_slices,
-                    std::vector<ChunkEntry>& out_chunks);
+                    EntryWithChunkOut& entry_out);
   Status ReadSlice(Context& ctx, Ino ino, const std::vector<ChunkDescriptor>& chunk_descriptors,
                    std::vector<ChunkEntry>& chunks);
 

@@ -14,9 +14,12 @@
 
 #include "client/vfs/metasystem/mds/file_session.h"
 
+#include <fcntl.h>
+
 #include <cstdint>
 #include <string>
 
+#include "common/helper.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
 #include "json/value.h"
@@ -80,6 +83,22 @@ uint32_t FileSession::DeleteSession(uint64_t fh) {
   session_id_map_.erase(it);
 
   return DecRef();
+}
+
+void FileSession::InvalidateReadCache(bool just_readonly) {
+  utils::WriteLockGuard lk(lock_);
+
+  if (just_readonly && !IsAllReadOnly()) return;
+
+  chunk_set_->InvalidateReadCache();
+}
+
+bool FileSession::IsAllReadOnly() {
+  for (const auto& [_, session_info] : session_id_map_) {
+    if ((session_info.flags & O_ACCMODE) != O_RDONLY) return false;
+  }
+
+  return true;
 }
 
 size_t FileSession::Size() {
