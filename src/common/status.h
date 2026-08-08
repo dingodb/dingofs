@@ -21,7 +21,6 @@
 
 #include <cerrno>
 #include <cstdint>
-#include <memory>
 #include <string>
 #include <utility>
 
@@ -91,18 +90,23 @@ class Status {
   static const int32_t kNone = 0;
 
  public:
+  // Messages up to this many bytes are stored inline with no heap
+  // allocation; longer messages spill to heap storage and are never
+  // truncated.
+  static constexpr size_t kMsgCapacity = 256;
+
   // Create a success status.
-  Status() noexcept : code_(kOk), state_(nullptr) {}
+  Status() noexcept : code_(kOk), errno_(kNone) {}
 
   ~Status() = default;
 
-  Status(const Status& rhs);
+  Status(const Status& rhs) = default;
 
-  Status& operator=(const Status& rhs);
+  Status& operator=(const Status& rhs) = default;
 
-  Status(Status&& rhs) noexcept;
+  Status(Status&& rhs) noexcept = default;
 
-  Status& operator=(Status&& rhs) noexcept;
+  Status& operator=(Status&& rhs) noexcept = default;
 
   bool operator==(const Status& rhs) const { return code_ == rhs.code_; }
 
@@ -223,42 +227,13 @@ class Status {
   Status(Code code, int32_t p_errno, const StringSlice& msg,
          const StringSlice& msg2);
 
-  static std::unique_ptr<const char[]> CopyState(const char* s);
-
   Code code_;
   int32_t errno_;
-  // A nullptr state_ (which is at least the case for OK) means the extra
-  // message is empty.
-  std::unique_ptr<const char[]> state_;
+  // The error message, without a null terminator; use size semantics.
+  // Empty means no extra message (always the case for default-constructed
+  // OK). Inline for up to kMsgCapacity bytes, heap beyond.
+  absl::InlinedVector<char, kMsgCapacity> msg_;
 };
-
-inline Status::Status(const Status& rhs)
-    : code_(rhs.code_), errno_(rhs.errno_) {
-  state_ = (rhs.state_ == nullptr) ? nullptr : CopyState(rhs.state_.get());
-}
-
-inline Status& Status::operator=(const Status& rhs) {
-  if (this != &rhs) {
-    code_ = rhs.code_;
-    errno_ = rhs.errno_;
-    state_ = (rhs.state_ == nullptr) ? nullptr : CopyState(rhs.state_.get());
-  }
-  return *this;
-}
-
-inline Status::Status(Status&& rhs) noexcept : Status() {
-  *this = std::move(rhs);
-}
-
-inline Status& Status::operator=(Status&& rhs) noexcept {
-  if (this != &rhs) {
-    code_ = rhs.code_;
-    errno_ = rhs.errno_;
-    // state_ = std::move(rhs.state_);
-    state_ = (rhs.state_ == nullptr) ? nullptr : CopyState(rhs.state_.get());
-  }
-  return *this;
-}
 
 #undef DECLARE_ERROR_STATUS
 
