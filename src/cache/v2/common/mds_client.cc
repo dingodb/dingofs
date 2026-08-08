@@ -1,0 +1,280 @@
+/*
+ * Copyright (c) 2025 dingodb.com, Inc. All Rights Reserved
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include "cache/v2/common/mds_client.h"
+
+#include <absl/strings/str_split.h>
+#include <brpc/reloadable_flags.h>
+#include <butil/fast_rand.h>
+#include <gflags/gflags.h>
+#include <glog/logging.h>
+#include <sys/types.h>
+
+#include <string>
+#include <unordered_map>
+
+#include "client/vfs/metasystem/mds/mds_discovery.h"
+#include "client/vfs/metasystem/mds/rpc.h"
+#include "common/status.h"
+#include "dingofs/error.pb.h"
+#include "dingofs/mds.pb.h"
+#include "mds/mds/mds_meta.h"
+
+namespace dingofs {
+namespace cache {
+namespace v2 {
+
+static bool NonEmptyString(const char* /*name*/, const std::string& value) {
+  return !value.empty();
+}
+
+DEFINE_string(mds_addrs, "127.0.0.1:7400",
+              "mds addresses used by cache group member management rpcs");
+DEFINE_validator(mds_addrs, NonEmptyString);
+
+DEFINE_int64(cache_mds_rpc_timeout_ms, 3000,
+             "timeout for cache mds rpcs in milliseconds");
+DEFINE_validator(cache_mds_rpc_timeout_ms, brpc::PassValidate);
+
+DEFINE_int32(cache_mds_rpc_retry_times, 1,
+             "retry count for each cache mds rpc attempt");
+DEFINE_validator(cache_mds_rpc_retry_times, brpc::PassValidate);
+
+DEFINE_uint32(cache_mds_request_retry_times, 3,
+              "retry count for the cache mds request wrapper");
+DEFINE_validator(cache_mds_request_retry_times, brpc::PassValidate);
+
+MDSClientImpl::MDSClientImpl()
+    : running_(false), rpc_(FLAGS_mds_addrs, "cache"), mds_discovery_(rpc_) {}
+
+Status MDSClientImpl::Start() {
+  if (running_.exchange(true)) {
+    LOG(WARNING) << "MDSClientImpl is already running";
+    return Status::OK();
+  }
+
+  LOG(INFO) << "MDSClientImpl is starting...";
+
+  auto status = rpc_.Init();
+  if (!status.ok()) {
+    LOG(ERROR) << "Fail to start RPC: " << status.ToString();
+    return status;
+  }
+
+  if (!mds_discovery_.Init()) {
+    LOG(ERROR) << "Fail to start MDSDiscovery";
+    return Status::Internal("init mds discovery failed");
+  }
+
+  LOG(INFO) << "Successfully start MDSClientImpl";
+  return Status::OK();
+}
+
+void MDSClientImpl::Shutdown() {
+  if (!running_.exchange(false)) {
+    LOG(WARNING) << "MDSClientImpl is already down";
+    return;
+  }
+
+  LOG(INFO) << "MDSClientImpl is shutting down...";
+
+  mds_discovery_.Stop();
+  rpc_.Stop();
+
+  LOG(INFO) << "Successfully shutdown MDSClientImpl";
+}
+
+Status MDSClientImpl::GetFSInfo(uint64_t fs_id, pb::mds::FsInfo* fs_info) {
+  pb::mds::GetFsInfoRequest request;
+  pb::mds::GetFsInfoResponse response;
+
+  request.set_fs_id(fs_id);
+  auto status = SendRequest("MDSService", "GetFsInfo", request, response);
+  if (status.ok()) {
+    *fs_info = response.fs_info();
+  }
+  return status;
+}
+
+Status MDSClientImpl::JoinCacheGroup(const std::string& member_id,
+                                     const std::string& ip, uint32_t port,
+                                     const std::string& group_name,
+                                     uint32_t weight) {
+  pb::mds::JoinCacheGroupRequest request;
+  pb::mds::JoinCacheGroupResponse response;
+
+  request.set_member_id(member_id);
+  request.set_ip(ip);
+  request.set_port(port);
+  request.set_group_name(group_name);
+  request.set_weight(weight);
+
+  return SendRequest("MDSService", "JoinCacheGroup", request, response);
+}
+
+Status MDSClientImpl::LeaveCacheGroup(const std::string& member_id,
+                                      const std::string& ip, uint32_t port,
+                                      const std::string& group_name) {
+  pb::mds::LeaveCacheGroupRequest request;
+  pb::mds::LeaveCacheGroupResponse response;
+
+  request.set_member_id(member_id);
+  request.set_ip(ip);
+  request.set_port(port);
+  request.set_group_name(group_name);
+
+  return SendRequest("MDSService", "LeaveCacheGroup", request, response);
+}
+
+Status MDSClientImpl::Heartbeat(const std::string& member_id,
+                                const std::string& ip, uint32_t port) {
+  pb::mds::HeartbeatRequest request;
+  pb::mds::HeartbeatResponse response;
+
+  request.set_role(pb::mds::ROLE_CACHE_MEMBER);
+  auto* member = request.mutable_cache_group_member();
+  member->set_member_id(member_id);
+  member->set_ip(ip);
+  member->set_port(port);
+
+  return SendRequest("MDSService", "Heartbeat", request, response);
+}
+
+Status MDSClientImpl::ListMembers(const std::string& group_name,
+                                  std::vector<CacheGroupMember>* members) {
+  pb::mds::ListMembersRequest request;
+  pb::mds::ListMembersResponse response;
+
+  request.set_group_name(group_name);
+  auto status = SendRequest("MDSService", "ListMembers", request, response);
+  if (!status.ok()) {
+    return status;
+  }
+
+  CacheGroupMember member;
+  const auto& pb_members = response.members();
+  for (const auto& pb_member : pb_members) {
+    member.id = pb_member.member_id();
+    member.ip = pb_member.ip();
+    member.port = pb_member.port();
+    member.weight = pb_member.weight();
+    member.state = ToMemberState(pb_member.state());
+    members->push_back(member);
+  }
+  return Status::OK();
+}
+
+CacheGroupMemberState MDSClientImpl::ToMemberState(
+    pb::mds::CacheGroupMemberState state) {
+  switch (state) {
+    case pb::mds::CacheGroupMemberStateOnline:
+      return CacheGroupMemberState::kOnline;
+    case pb::mds::CacheGroupMemberStateUnstable:
+      return CacheGroupMemberState::kUnstable;
+    case pb::mds::CacheGroupMemberStateOffline:
+      return CacheGroupMemberState::kOffline;
+    case pb::mds::CacheGroupMemberStateUnknown:
+    default:
+      return CacheGroupMemberState::kUnknown;
+  }
+}
+
+mds::MDSMeta MDSClientImpl::GetRandomlyMDS(const mds::MDSMeta& old_mds) {
+  auto mdses = mds_discovery_.GetNormalMDS(true);
+  CHECK(!mdses.empty()) << "No normal mds found";
+
+  std::vector<mds::MDSMeta> candidates;
+  for (const auto& mds : mdses) {
+    if (mds.ID() != old_mds.ID()) {
+      candidates.emplace_back(mds);
+    }
+  }
+
+  if (!candidates.empty()) {
+    return candidates[butil::fast_rand_less_than(candidates.size())];
+  }
+  return old_mds;
+}
+
+bool MDSClientImpl::ShouldRetry(Status status) {
+  static std::unordered_map<int, bool> should_retry_errnos = {
+      {pb::error::EROUTER_EPOCH_CHANGE, true},
+      {pb::error::ENOT_SERVE, true},
+      {pb::error::EINTERNAL, true},
+      {pb::error::ENOT_CAN_CONNECTED, true},
+  };
+  return status.IsNetError() || should_retry_errnos.count(status.Errno()) != 0;
+}
+
+bool MDSClientImpl::ShouldMarkMDSAbnormal(Status status) {
+  return status.IsInternal() || status.IsNetError();
+}
+
+bool MDSClientImpl::ShouldRefreshMDSList(Status status) {
+  static std::unordered_map<int, bool> should_refresh_errnos = {
+      {pb::error::EROUTER_EPOCH_CHANGE, true},
+      {pb::error::ENOT_SERVE, true},
+  };
+
+  return should_refresh_errnos.count(status.Errno()) != 0;
+}
+
+template <typename Request, typename Response>
+Status MDSClientImpl::SendRequest(const std::string& service_name,
+                                  const std::string& api_name, Request& request,
+                                  Response& response) {
+  mds::MDSMeta mds, old_mds;
+  client::vfs::meta::SendRequestOption rpc_option;
+  rpc_option.timeout_ms = FLAGS_cache_mds_rpc_timeout_ms;
+  rpc_option.max_retry = FLAGS_cache_mds_rpc_retry_times;
+
+  for (int retry = 0; retry < FLAGS_cache_mds_request_retry_times; ++retry) {
+    mds = GetRandomlyMDS(old_mds);
+    auto endpoint = client::vfs::meta::StrToEndpoint(mds.Host(), mds.Port());
+
+    auto status = rpc_.SendRequest(endpoint, service_name, api_name, request,
+                                   response, rpc_option);
+    if (status.ok() || !ShouldRetry(status)) {
+      return status;
+    }
+
+    if (ShouldMarkMDSAbnormal(status)) {
+      mds_discovery_.SetAbnormalMDS(mds.ID());
+      LOG(INFO) << fmt::format(
+          "[mds.client] set mds({}/{}:{}) as abnormal, status({}).", mds.ID(),
+          mds.Host(), mds.Port(), status.ToString());
+    }
+
+    if (ShouldRefreshMDSList(status)) {
+      CHECK(mds_discovery_.RefreshFullyMDSList()) << "Fail to refresh mds list";
+    }
+
+    old_mds = mds;
+  }
+
+  return Status::Internal("send rpc request fail");
+}
+
+std::ostream& operator<<(std::ostream& os, const CacheGroupMember& member) {
+  os << "CacheGroupMember{id=" << member.id << " ip=" << member.ip
+     << " port=" << member.port << " weight=" << member.weight
+     << " state=" << CacheGroupMemberStateToString(member.state) << "}";
+  return os;
+}
+
+}  // namespace v2
+}  // namespace cache
+}  // namespace dingofs
