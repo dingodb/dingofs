@@ -152,6 +152,47 @@ TEST(StatusTest, IsXxxPredicatesMatchTheirOwnCodeOnly) {
   EXPECT_FALSE(s.IsEndOfFile());
 }
 
+TEST(StatusTest, MessageAtInlineCapacityBoundariesRoundTrips) {
+  const std::string msg_255(Status::kMsgCapacity - 1, 'x');
+  const std::string msg_256(Status::kMsgCapacity, 'y');
+  const std::string msg_257(Status::kMsgCapacity + 1, 'z');
+
+  EXPECT_EQ(Status::Internal(msg_255).ToString(), "Internal: " + msg_255);
+  EXPECT_EQ(Status::Internal(msg_256).ToString(), "Internal: " + msg_256);
+  EXPECT_EQ(Status::Internal(msg_257).ToString(), "Internal: " + msg_257);
+}
+
+TEST(StatusTest, LongMessageSpillsToHeapAndSurvivesCopyAndMove) {
+  const std::string long_msg(4 * Status::kMsgCapacity, 'a');
+  const std::string msg2(2 * Status::kMsgCapacity, 'b');
+  const std::string expected = "IoError: " + long_msg + ": " + msg2;
+
+  Status original = Status::IoError(long_msg, msg2);
+  EXPECT_EQ(original.ToString(), expected);
+
+  Status copy(original);
+  EXPECT_EQ(copy.ToString(), expected);
+
+  Status moved(std::move(copy));
+  EXPECT_EQ(moved.ToString(), expected);
+
+  Status copy_assigned;
+  copy_assigned = original;
+  EXPECT_EQ(copy_assigned.ToString(), expected);
+
+  Status move_assigned;
+  move_assigned = std::move(copy_assigned);
+  EXPECT_EQ(move_assigned.ToString(), expected);
+
+  // Source must remain intact after being copied from.
+  EXPECT_EQ(original.ToString(), expected);
+}
+
+TEST(StatusTest, EmptyMessageProducesNoSuffix) {
+  EXPECT_EQ(Status::BadFd("").ToString(), "BadFd");
+  EXPECT_EQ(Status::BadFd(EBADF, "").ToString(), "BadFd (errno:9) ");
+}
+
 TEST(StatusTest, DINGOFS_RETURN_NOT_OK_ReturnsOnError) {
   auto fn = []() -> Status {
     DINGOFS_RETURN_NOT_OK(Status::Abort("stop here"));

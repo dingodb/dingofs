@@ -17,160 +17,81 @@
 #include "common/status.h"
 
 #include <cstdio>
+#include <iterator>
 #include <string>
+#include <string_view>
 
+#include "absl/base/optimization.h"
 #include "fmt/core.h"
-#include "glog/logging.h"
+#include "fmt/format.h"
 
 namespace dingofs {
-
-std::unique_ptr<const char[]> Status::CopyState(const char* s) {
-  const size_t cch = std::strlen(s) + 1;  // +1 for the null terminator
-  char* rv = new char[cch];
-  std::strncpy(rv, s, cch);
-  return std::unique_ptr<const char[]>(rv);
-}
 
 Status::Status(Code code, int32_t p_errno, const StringSlice& msg,
                const StringSlice& msg2)
     : code_(code), errno_(p_errno) {
-  const uint32_t len1 = static_cast<uint32_t>(msg.size());
-  const uint32_t len2 = static_cast<uint32_t>(msg2.size());
-  const uint32_t size = len1 + (len2 ? (2 + len2) : 0);
+  const size_t len1 = msg.size();
+  const size_t len2 = msg2.size();
 
-  char* const result = new char[size + 1];  // +1 for null terminator
-  memcpy(result, msg.data(), len1);
-
+  msg_.reserve(len1 + (len2 ? (2 + len2) : 0));
+  msg_.insert(msg_.end(), msg.data(), msg.data() + len1);
   if (len2) {
-    result[len1] = ':';
-    result[len1 + 1] = ' ';
-    memcpy(result + len1 + 2, msg2.data(), len2);
+    msg_.push_back(':');
+    msg_.push_back(' ');
+    msg_.insert(msg_.end(), msg2.data(), msg2.data() + len2);
   }
-  result[size] = '\0';  // null terminator for C style string
-  state_.reset(result);
 }
 
 std::string Status::ToString() const {
-  std::string type;
-  switch (code_) {
-    case kOk:
-      type = "OK";
-      break;
-    case kInternal:
-      type = "Internal";
-      break;
-    case kUnknown:
-      type = "Unknown";
-      break;
-    case kExist:
-      type = "Exist";
-      break;
-    case kNotExist:
-      type = "NotExist";
-      break;
-    case kNoSpace:
-      type = "NoSpace";
-      break;
-    case kBadFd:
-      type = "BadFd";
-      break;
-    case kInvalidParam:
-      type = "InvalidParam";
-      break;
-    case kNoPermission:
-      type = "NoPermission";
-      break;
-    case kNotEmpty:
-      type = "NotEmpty";
-      break;
-    case kNoFlush:
-      type = "NoFlush";
-      break;
-    case kNotSupport:
-      type = "NotSupport";
-      break;
-    case kNameTooLong:
-      type = "NameTooLong";
-      break;
-    case kMountPointExist:
-      type = "MountPointExist";
-      break;
-    case kMountFailed:
-      type = "MountFailed";
-      break;
-    case kOutOfRange:
-      type = "OutOfRange";
-      break;
-    case kNoData:
-      type = "NoData";
-      break;
-    case kIoError:
-      type = "IoError";
-      break;
-    case kStale:
-      type = "Stale";
-      break;
-    case kNoSys:
-      type = "NoSys";
-      break;
-    case kNoPermitted:
-      type = "NoPermitted";
-      break;
-    case kNetError:
-      type = "NetError";
-      break;
-    case kNotFound:
-      type = "NotFound";
-      break;
-    case kNotDirectory:
-      type = "NotDirectory";
-      break;
-    case kFileTooLarge:
-      type = "FileTooLarge";
-      break;
-    case kEndOfFile:
-      type = "EndOfFile";
-      break;
-    case kAbort:
-      type = "Abort";
-      break;
-    case kCacheDown:
-      type = "CacheDown";
-      break;
-    case kCacheUnhealthy:
-      type = "CacheUnhealthy";
-      break;
-    case kCacheFull:
-      type = "CacheFull";
-      break;
-    case kStop:
-      type = "Stop";
-      break;
-    case kNotFit:
-      type = "NotFit";
-      break;
-    case kTimeout:
-      type = "Timeout";
-      break;
-    case kOutOfMemory:
-      type = "OutOfMemory";
-      break;
-    case kDeleted:
-      type = "Deleted";
-      break;
-    default:
-      type = std::to_string(static_cast<int>(code_));
-      LOG(ERROR) << fmt::format("Unknown code({}):", type);
+  // Indexed by Code; must stay in the same order as the enum.
+  static constexpr std::string_view kCodeNames[] = {
+      "OK",           "Internal",        "Unknown",
+      "Exist",        "NotExist",        "NoSpace",
+      "BadFd",        "InvalidParam",    "NoPermission",
+      "NotEmpty",     "NoFlush",         "NotSupport",
+      "NameTooLong",  "MountPointExist", "MountFailed",
+      "OutOfRange",   "NoData",          "IoError",
+      "Stale",        "NoSys",           "NoPermitted",
+      "NetError",     "NotFound",        "NotDirectory",
+      "FileTooLarge", "EndOfFile",       "Abort",
+      "CacheDown",    "CacheUnhealthy",  "CacheFull",
+      "Stop",         "NotFit",          "Timeout",
+      "OutOfMemory",  "Deleted",
+  };
+  static_assert(std::size(kCodeNames) == kDeleted + 1,
+                "kCodeNames must cover every Code value");
+
+  const size_t index = static_cast<size_t>(code_);
+  std::string unknown_name;  // backing storage when code_ is out of range
+  std::string_view type;
+  if (ABSL_PREDICT_TRUE(index < std::size(kCodeNames))) {
+    type = kCodeNames[index];
+  } else {
+    unknown_name = std::to_string(index);
+    type = unknown_name;
   }
 
-  std::string result(type);
-  if (errno_ != kNone) {
-    result.append(fmt::format(" (errno:{}) ", errno_));
+  const bool has_errno = (errno_ != kNone);
+  const bool has_msg = !msg_.empty();
+
+  // fmt::format_int converts on the stack, avoiding the heap-allocated
+  // temporary that fmt::format would produce.
+  fmt::format_int errno_str(errno_);
+
+  // Exact size up front: at most one allocation on every path.
+  std::string result;
+  result.reserve(type.size() + (has_errno ? 10 + errno_str.size() : 0) +
+                 (has_msg ? 2 + msg_.size() : 0));
+  result.append(type);
+  if (has_errno) {
+    result.append(" (errno:");
+    result.append(errno_str.data(), errno_str.size());
+    result.append(") ");
   }
 
-  if (state_ != nullptr) {
+  if (has_msg) {
     result.append(": ");
-    result.append(state_.get());
+    result.append(msg_.data(), msg_.size());
   }
 
   return result;
