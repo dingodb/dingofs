@@ -35,7 +35,6 @@
 #include "client/vfs/metasystem/mds/inode_cache.h"
 #include "client/vfs/metasystem/mds/mds_client.h"
 #include "client/vfs/metasystem/mds/modify_time_memo.h"
-#include "client/vfs/metasystem/mds/tiny_file_data.h"
 #include "client/vfs/metasystem/meta_system.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/status.h"
@@ -125,9 +124,6 @@ class MDSMetaSystem : public vfs::MetaSystem {
   Status Write(ContextSPtr ctx, Ino ino, const char* buf, uint64_t offset,
                uint64_t size, uint64_t fh) override;
 
-  Status Read(ContextSPtr ctx, Ino ino, uint64_t fh, uint64_t offset,
-              uint64_t size, ::dingofs::client::DataBuffer& data_buffer,
-              uint64_t& out_rsize) override;
 
   Status MkDir(ContextSPtr ctx, Ino parent, const std::string& name,
                uint32_t uid, uint32_t gid, uint32_t mode, Attr* attr) override;
@@ -201,7 +197,6 @@ class MDSMetaSystem : public vfs::MetaSystem {
   void CleanExpiredModifyTimeMemo();
   void CleanExpiredChunkMemo();
   void CleanExpiredInodeCache();
-  void CleanExpiredTinyFileDataCache();
   void CleanExpiredDirProfileCache();
   void CleanExpiredCompactMemo();
 
@@ -233,7 +228,6 @@ class MDSMetaSystem : public vfs::MetaSystem {
   bool CorrectAttrLength(Attr& attr, const std::string& caller);
   void InvalidateFileSessionReadCache(Ino ino);
 
-  bool IsPrefetchTinyFileData(Ino ino);
   Status DoOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
                 const std::string& session_id, FileSessionSPtr file_session);
   void AsyncOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
@@ -271,8 +265,6 @@ class MDSMetaSystem : public vfs::MetaSystem {
 
   IdCache id_cache_;
   InodeCache inode_cache_;
-
-  TinyFileDataCache tiny_file_data_cache_;
 
   DirProfileCacheUPtr dir_profile_cache_;
 

@@ -112,8 +112,6 @@ struct EntryWithChunkOut {
 struct EntryOutForOpen {
   AttrEntry attr;
   std::vector<ChunkEntry> chunks;
-  std::string data_out;
-  uint64_t data_version{0};
 };
 
 class FileSystem : public std::enable_shared_from_this<FileSystem> {
@@ -192,7 +190,6 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
     std::string session_id;
     uint32_t flags{0};
     bool is_prefetch_chunk{false};
-    bool is_prefetch_data{false};
     std::map<uint32_t, uint64_t> chunk_version_map;
   };
   Status Open(Context& ctx, Ino ino, const OpenParam& param, EntryOutForOpen& out);
@@ -200,7 +197,6 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
 
   struct FlushFileParam {
     uint64_t length{0};
-    std::string data;
   };
   Status FlushFile(Context& ctx, Ino ino, const FlushFileParam& param, EntryWithFileChangeOut& entry_out);
   using FileSessionParam = pb::mds::HeartbeatRequest::FileSession;

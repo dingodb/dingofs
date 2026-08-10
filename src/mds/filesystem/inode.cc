@@ -49,7 +49,6 @@ void Inode::Put(const AttrEntry& attr) {
   symlink_ = attr.symlink();
   rdev_ = attr.rdev();
   flags_ = attr.flags();
-  maybe_tiny_file_ = attr.maybe_tiny_file();
 
   parents_.clear();
   parents_.insert(parents_.end(), attr.parents().begin(), attr.parents().end());
@@ -163,7 +162,6 @@ Inode::AttrEntry Inode::ToAttrNoLock() {
   attr.set_symlink(symlink_);
   attr.set_rdev(rdev_);
   attr.set_flags(flags_);
-  attr.set_maybe_tiny_file(maybe_tiny_file_);
   for (const auto& parent : parents_) {
     attr.add_parents(parent);
   }

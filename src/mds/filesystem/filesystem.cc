@@ -110,25 +110,8 @@ DEFINE_validator(mds_storage_engine, [](const char*, const std::string& value) -
 
 DECLARE_uint32(mds_txn_max_retry_times);
 
-static SuffixSet g_suffix_set;
-
-DEFINE_string(mds_tiny_file_suffix, "jpg,png,cc,cpp,h,js,md", "tiny file suffix, e.g .jpg,.png");
-DEFINE_validator(mds_tiny_file_suffix, [](const char*, const std::string& value) -> bool {
-  g_suffix_set.Update(value);
-
-  return true;
-});
-
-DECLARE_bool(mds_tiny_file_data_enable);
-
 static bool IsInvalidName(const std::string& name) {
   return name.empty() || name.size() > FLAGS_mds_filesystem_name_max_size;
-}
-
-static bool IsTinyFile(const std::string& name) {
-  if (!FLAGS_mds_tiny_file_data_enable) return false;
-
-  return g_suffix_set.HasSuffix(name);
 }
 
 // Trash mutation gate: an inode is considered "in trash" only when no real
@@ -796,7 +779,6 @@ Status FileSystem::BatchCreate(Context& ctx, Ino parent, const std::vector<MkNod
     attr.set_type(pb::mds::FileType::FILE);
     attr.set_rdev(param.rdev);
     attr.add_parents(param.parent);
-    attr.set_maybe_tiny_file(IsTinyFile(param.name));
     attr.set_version(1);
 
     attrs.push_back(attr);
@@ -916,7 +898,6 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryWithPaOut& 
   attr.set_type(pb::mds::FileType::FILE);
   attr.set_rdev(param.rdev);
   attr.add_parents(parent);
-  attr.set_maybe_tiny_file(IsTinyFile(param.name));
   attr.set_version(1);
 
   // build dentry
@@ -1190,7 +1171,8 @@ Status FileSystem::Open(Context& ctx, Ino ino, const OpenParam& param, EntryOutF
 
   FileSessionSPtr file_session = file_session_manager_.Create(ino, client_id, param.session_id);
 
-  OpenFileOperation operation(trace, flags, *file_session, chunk_size, prefetch_chunks, param.is_prefetch_data);
+  OpenFileOperation operation(trace, flags, *file_session, chunk_size,
+                              prefetch_chunks);
 
   trace.RecordElapsedTime("prepare");
 
@@ -1200,13 +1182,11 @@ Status FileSystem::Open(Context& ctx, Ino ino, const OpenParam& param, EntryOutF
   auto& attr = result.attr;
   int64_t delta_bytes = result.delta_bytes;
   auto& chunks = result.chunks;
-  auto& data = result.data;
-
   LOG_DEBUG << fmt::format(
-      "[fs.{}.{}.{}.{}][{}us] open {} finish, flags({:o}:{}) fetch_chunk({}:{}) fetch_data({}:{}) status({}).", fs_id_,
+      "[fs.{}.{}.{}.{}][{}us] open {} finish, flags({:o}:{}) fetch_chunk({}:{}) status({}).", fs_id_,
       ino, ctx.RequestId(), trace.GetReqTypeInt(), duration.ElapsedUs(), param.session_id, flags,
-      dingofs::Helper::DescOpenFlags(flags), fetch_from, out.chunks.empty() ? chunks.size() : out.chunks.size(),
-      param.is_prefetch_data, out.data_out.size(), status.error_str());
+      dingofs::Helper::DescOpenFlags(flags), fetch_from,
+      out.chunks.empty() ? chunks.size() : out.chunks.size(), status.error_str());
   trace.RecordElapsedTime("resume");
 
   if (!status.ok()) return status;
@@ -1218,8 +1198,6 @@ Status FileSystem::Open(Context& ctx, Ino ino, const OpenParam& param, EntryOutF
   // set output
   out.attr = attr;
   for (auto& chunk : chunks) out.chunks.push_back(chunk);
-  out.data_out.swap(data);
-  out.data_version = result.data_version;
 
   // update quota
   std::string reason = fmt::format("open.{}.{}", request_id, ino);
@@ -1302,7 +1280,7 @@ Status FileSystem::FlushFile(Context& ctx, Ino ino, const FlushFileParam& param,
   // update parent memo
   UpdateParentMemo(ctx.GetAncestors());
 
-  FlushFileOperation::ExtraParam extra_param(param.data);
+  FlushFileOperation::ExtraParam extra_param;
   extra_param.length = param.length;
   extra_param.chunk_size = fs_info_->GetChunkSize();
 

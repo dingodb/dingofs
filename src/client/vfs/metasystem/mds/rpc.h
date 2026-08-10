@@ -272,9 +272,8 @@ inline std::string DescribeOpenResponse(pb::mds::OpenResponse& response) {
 // print FlushFileRequest
 inline std::string DescribeFlushFileRequest(
     pb::mds::FlushFileRequest& request) {
-  return fmt::format("fs_id:{} ino:{} length:{} data:{} data_version:{}",
-                     request.fs_id(), request.ino(), request.length(),
-                     request.data().size(), request.data_version());
+  return fmt::format("fs_id:{} ino:{} length:{}", request.fs_id(),
+                     request.ino(), request.length());
 }
 
 template <typename Request, typename Response>

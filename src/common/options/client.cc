@@ -77,13 +77,6 @@ DEFINE_uint32(vfs_meta_inode_attr_ttl_s, 1,
               "inode attr freshness ttl, refetch from mds after expired");
 DEFINE_validator(vfs_meta_inode_attr_ttl_s, brpc::PassValidate);
 
-DEFINE_uint64(vfs_meta_tiny_file_data_cache_expired_s, 3600,
-              "tiny file data cache expired time");
-DEFINE_validator(vfs_meta_tiny_file_data_cache_expired_s, brpc::PassValidate);
-
-DEFINE_bool(vfs_tiny_file_data_enable, false, "enable vfs meta prefetch data");
-DEFINE_validator(vfs_tiny_file_data_enable, brpc::PassValidate);
-
 DEFINE_uint64(vfs_tiny_file_max_size, 1024 * 1024 * 32,
               "max size of tiny file");
 DEFINE_validator(vfs_tiny_file_max_size, brpc::PassValidate);

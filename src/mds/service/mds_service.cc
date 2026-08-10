@@ -1393,7 +1393,6 @@ void MDSServiceImpl::DoOpen(google::protobuf::RpcController*, const pb::mds::Ope
   param.session_id = request->session_id();
   param.flags = request->flags();
   param.is_prefetch_chunk = request->prefetch_chunk();
-  param.is_prefetch_data = request->prefetch_data();
   // index: version map for chunk validation
   for (const auto& cd : request->chunk_descriptors()) {
     param.chunk_version_map.emplace(cd.index(), cd.version());
@@ -1409,8 +1408,6 @@ void MDSServiceImpl::DoOpen(google::protobuf::RpcController*, const pb::mds::Ope
 
   response->mutable_inode()->Swap(&entry_out.attr);
   Helper::VectorToPbRepeated(entry_out.chunks, response->mutable_chunks());
-  response->set_data(std::move(entry_out.data_out));
-  response->set_data_version(entry_out.data_version);
 
   response->mutable_inode()->clear_shard_boundaries();
 }
@@ -1499,9 +1496,6 @@ void MDSServiceImpl::DoFlushFile(google::protobuf::RpcController*, const pb::mds
   Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
   FileSystem::FlushFileParam param{.length = request->length()};
-
-  auto* mut_request = const_cast<pb::mds::FlushFileRequest*>(request);
-  param.data.swap(*mut_request->mutable_data());  // zero copy
 
   EntryWithFileChangeOut entry_out;
   status = file_system->FlushFile(ctx, request->ino(), param, entry_out);

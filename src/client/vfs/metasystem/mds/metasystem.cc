@@ -209,10 +209,6 @@ bool MDSMetaSystem::GetSummary(Json::Value& value) {
   inode_cache_.Summary(inode_cache_value);
   value.append(inode_cache_value);
 
-  Json::Value tiny_file_data_cache_value = Json::objectValue;
-  tiny_file_data_cache_.Summary(tiny_file_data_cache_value);
-  value.append(tiny_file_data_cache_value);
-
   mds_client_.Summary(value);
 
   return true;
@@ -484,13 +480,6 @@ void MDSMetaSystem::CleanExpiredInodeCache() {
   inode_cache_.CleanExpired(expired_time_s);
 }
 
-void MDSMetaSystem::CleanExpiredTinyFileDataCache() {
-  uint64_t expired_time_s =
-      utils::Timestamp() - FLAGS_vfs_meta_tiny_file_data_cache_expired_s;
-
-  tiny_file_data_cache_.CleanExpired(expired_time_s);
-}
-
 void MDSMetaSystem::CleanExpiredDirProfileCache() {
   if (!FLAGS_vfs_meta_warmup_small_file_enable) return;
   dir_profile_cache_->CleanExpired(utils::Timestamp());
@@ -520,7 +509,6 @@ bool MDSMetaSystem::InitCrontab() {
         this->CleanExpiredModifyTimeMemo();
         this->CleanExpiredChunkMemo();
         this->CleanExpiredInodeCache();
-        this->CleanExpiredTinyFileDataCache();
         this->CleanExpiredDirProfileCache();
         this->CleanExpiredCompactMemo();
       },
@@ -602,10 +590,6 @@ Status MDSMetaSystem::Create(ContextSPtr ctx, Ino parent,
 
   dir_iterator_manager_.InsertEntry(parent, name, attr->ino);
 
-  if (FLAGS_vfs_tiny_file_data_enable) {
-    tiny_file_data_cache_.Create(attr_entry.ino());
-  }
-
   // add file session
   auto file_session =
       file_session_map_.Put(attr_entry.ino(), fh, session_id, flags);
@@ -669,22 +653,6 @@ Status MDSMetaSystem::MkNod(ContextSPtr ctx, Ino parent,
   return Status::OK();
 }
 
-bool MDSMetaSystem::IsPrefetchTinyFileData(Ino ino) {
-  if (!FLAGS_vfs_tiny_file_data_enable) return false;
-
-  auto inode = GetInodeFromCache(ino);
-  if (inode == nullptr) return false;
-  if (!inode->MaybeTinyFile()) return false;
-
-  auto data_buffer = tiny_file_data_cache_.Get(ino);
-  if (data_buffer == nullptr) return true;
-
-  if (data_buffer->IsOutOfRange()) return false;
-  if (!data_buffer->IsComplete()) return true;
-
-  return false;
-}
-
 Status MDSMetaSystem::DoOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
                              const std::string& session_id,
                              FileSessionSPtr file_session) {
@@ -704,23 +672,17 @@ Status MDSMetaSystem::DoOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
     }
   }
 
-  // check whether prefetch tiny file data
-  bool is_prefetch_data = IsPrefetchTinyFileData(ino);
-
   AttrEntry attr_entry;
   std::vector<mds::ChunkEntry> chunks;
-  std::string tiny_file_data;
-  uint64_t data_version = 0;
-  auto status = mds_client_.Open(
-      ctx, ino, flags, session_id, is_prefetch_chunk, chunk_descriptors,
-      is_prefetch_data, attr_entry, chunks, tiny_file_data, data_version);
+  auto status = mds_client_.Open(ctx, ino, flags, session_id,
+                                 is_prefetch_chunk, chunk_descriptors,
+                                 attr_entry, chunks);
 
   LOG_DEBUG << fmt::format(
       "[meta.fs.{}.{}] open file flags({:o}:{}) session_id({}) "
-      "chunks({}:{}) tiny_file_data({}:{}) status({}).",
+      "chunks({}:{}) status({}).",
       ino, fh, flags, dingofs::Helper::DescOpenFlags(flags), session_id,
-      is_prefetch_chunk, chunks.size(), is_prefetch_data, tiny_file_data.size(),
-      status.ToString());
+      is_prefetch_chunk, chunks.size(), status.ToString());
 
   if (!status.ok()) return status;
 
@@ -746,23 +708,6 @@ Status MDSMetaSystem::DoOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
   // update chunk memo
   for (const auto& chunk : chunks) {
     chunk_memo_.Remember(ino, chunk.index(), chunk.version());
-  }
-
-  // update tiny file data cache
-  if (is_prefetch_data) {
-    if (flags & O_TRUNC) {
-      tiny_file_data_cache_.Create(ino);
-
-    } else {
-      auto data_buffer = tiny_file_data_cache_.GetOrCreate(ino);
-      if (attr_entry.length() == 0) {
-        CHECK(tiny_file_data.empty()) << fmt::format(
-            "[meta.fs.{}.{}] tiny file data not empty, data_version({}).", ino,
-            fh, data_version);
-        ++data_version;
-      }
-      data_buffer->Put(tiny_file_data, data_version);
-    }
   }
 
   return Status::OK();
@@ -1155,54 +1100,8 @@ Status MDSMetaSystem::Write(ContextSPtr, Ino ino, const char* buf,
   auto& chunk_set = file_session->GetChunkSet();
   chunk_set->SetLastWriteLength(offset, size);
 
-  if (FLAGS_vfs_tiny_file_data_enable) {
-    // tiny file write data
-    auto inode = GetInode(file_session, "write");
-    if (inode != nullptr && inode->MaybeTinyFile()) {
-      auto data_buffer = tiny_file_data_cache_.GetOrCreate(ino);
-      data_buffer->Write(buf, offset, size);
-    }
-  }
-
   // update last modify time
   modify_time_memo_.Remember(ino);
-
-  return Status::OK();
-}
-
-Status MDSMetaSystem::Read(ContextSPtr, Ino ino, uint64_t fh, uint64_t offset,
-                           uint64_t size,
-                           ::dingofs::client::DataBuffer& data_buffer,
-                           uint64_t& out_rsize) {
-  AssertStop();
-
-  LOG_DEBUG << fmt::format("[meta.fs.{}.{}] read, offset({}) size({}).", ino,
-                           fh, offset, size);
-
-  auto file_session = file_session_map_.GetSession(ino);
-  CHECK(file_session != nullptr)
-      << fmt::format("file session is nullptr, ino({}) fh({}).", ino, fh);
-
-  auto inode = GetInode(file_session, "read");
-  if (!inode->MaybeTinyFile()) {
-    return Status::NoData("not tiny file");
-  }
-
-  auto data = tiny_file_data_cache_.Get(ino);
-  if (data == nullptr) {
-    return Status::NoData("tiny file data not found");
-  }
-  if (data->IsOutOfRange()) {
-    return Status::NoData("tiny file data is out of range");
-  }
-
-  auto* io_buffer = data_buffer.RawIOBuffer();
-
-  if (!data->Read(offset, size, *io_buffer)) {
-    return Status::NoData("tiny file read data fail");
-  }
-
-  out_rsize = io_buffer->Size();
 
   return Status::OK();
 }
@@ -1817,19 +1716,10 @@ Status MDSMetaSystem::DoFlushFile(ContextSPtr ctx, InodeSPtr inode,
       "[meta.fs.{}] flush file, writeslice({}) write({}) filelength({}).", ino,
       last_write_slice_length, last_write_length, file_length);
 
-  // get tiny file data
-  std::string data;
-  if (FLAGS_vfs_tiny_file_data_enable && inode->MaybeTinyFile()) {
-    auto data_buffer = tiny_file_data_cache_.GetOrCreate(ino);
-    if (data_buffer != nullptr && data_buffer->IsComplete()) {
-      data_buffer->Copy(data);
-    }
-  }
-
   AttrEntry attr_entry;
   bool shrink_file;
   auto status = mds_client_.FlushFile(ctx, ino, last_write_length,
-                                      std::move(data), attr_entry, shrink_file);
+                                      attr_entry, shrink_file);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
         "[meta.fs.{}] flush file fail, length({}) error({}).", ino,
