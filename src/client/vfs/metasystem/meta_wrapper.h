@@ -108,6 +108,10 @@ class MetaWrapper {
 
   Status Flush(ContextSPtr ctx, Ino ino, uint64_t fh);
 
+  Status RollbackWriteLength(ContextSPtr ctx, Ino ino, uint64_t fh) {
+    return target_->RollbackWriteLength(ctx, ino, fh);
+  }
+
   Status Close(ContextSPtr ctx, Ino ino, uint64_t fh) {
     return target_->Close(ctx, ino, fh);
   }

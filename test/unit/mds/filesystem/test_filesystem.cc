@@ -1162,6 +1162,74 @@ TEST_F(FileSystemTest, CalcDirStatSameDirHardlink) {
   EXPECT_EQ(st.length(), 7777 * 2);  // length charged once per dentry
 }
 
+// ADR-0003: FlushFile with rollback conditionally shrinks the length back to
+// the flush checkpoint -- only when checkpoint < current length <= the
+// session's last write length. Otherwise it is a no-op (conservative for
+// concurrent writers).
+TEST_F(FileSystemTest, FlushFileRollbackConditionalShrink) {
+  auto fs = Fs();
+  Context ctx;
+
+  FileSystem::MkNodParam p;
+  p.parent = kRootIno;
+  p.name = "rollback_f";
+  p.mode = 0644;
+  p.uid = 1;
+  p.gid = 1;
+  p.rdev = 0;
+  EntryWithPaOut o;
+  ASSERT_TRUE(fs->MkNod(ctx, p, o).ok());
+  Ino f = o.attr.ino();
+
+  // push length to 1000 (checkpoint), then to 5000 (this round's writes).
+  auto flush_to = [&](uint64_t len) {
+    FileSystem::FlushFileParam fp;
+    fp.length = len;
+    EntryWithFileChangeOut fo;
+    ASSERT_TRUE(fs->FlushFile(ctx, f, fp, fo).ok());
+  };
+  flush_to(1000);
+  flush_to(5000);
+
+  // rollback: checkpoint=1000, last write=5000 -> shrink to 1000.
+  {
+    FileSystem::FlushFileParam fp;
+    fp.length = 5000;
+    fp.rollback = true;
+    fp.rollback_to_length = 1000;
+    EntryWithFileChangeOut fo;
+    ASSERT_TRUE(fs->FlushFile(ctx, f, fp, fo).ok());
+    EXPECT_EQ(fo.attr.length(), 1000);
+    EXPECT_TRUE(fo.shrink_file);
+  }
+
+  // repeated rollback is a no-op: current length (1000) == checkpoint.
+  {
+    FileSystem::FlushFileParam fp;
+    fp.length = 5000;
+    fp.rollback = true;
+    fp.rollback_to_length = 1000;
+    EntryWithFileChangeOut fo;
+    ASSERT_TRUE(fs->FlushFile(ctx, f, fp, fo).ok());
+    EXPECT_EQ(fo.attr.length(), 1000);
+    EXPECT_FALSE(fo.shrink_file);
+  }
+
+  // another writer pushed the length beyond this session's last write:
+  // rollback must give up (no shrink).
+  flush_to(9000);
+  {
+    FileSystem::FlushFileParam fp;
+    fp.length = 5000;  // this session's last write
+    fp.rollback = true;
+    fp.rollback_to_length = 1000;
+    EntryWithFileChangeOut fo;
+    ASSERT_TRUE(fs->FlushFile(ctx, f, fp, fo).ok());
+    EXPECT_EQ(fo.attr.length(), 9000);
+    EXPECT_FALSE(fo.shrink_file);
+  }
+}
+
 TEST_F(FileSystemTest, UpdateDirStatOnWrite) {
   auto fs = Fs();
   ASSERT_TRUE(fs->EnableDirStats());

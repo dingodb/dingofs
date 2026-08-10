@@ -311,6 +311,27 @@ class ChunkSet {
     utils::WriteLockGuard lk(lock_);
     last_write_length_ = 0;
   }
+
+  // flush checkpoint (ADR-0003): file length at open, advanced on each
+  // successful data+length flush; rollback target on data-flush failure.
+  // InitFlushCheckpoint only takes effect once per ChunkSet lifetime so a
+  // later open (e.g. a reader) cannot move the writer's rollback target.
+  void InitFlushCheckpoint(uint64_t length) {
+    utils::WriteLockGuard lk(lock_);
+    if (!flush_checkpoint_inited_) {
+      flush_checkpoint_inited_ = true;
+      flush_checkpoint_length_ = length;
+    }
+  }
+  void SetFlushCheckpoint(uint64_t length) {
+    utils::WriteLockGuard lk(lock_);
+    flush_checkpoint_inited_ = true;
+    flush_checkpoint_length_ = length;
+  }
+  uint64_t GetFlushCheckpoint() const {
+    utils::ReadLockGuard guard(lock_);
+    return flush_checkpoint_length_;
+  }
   uint64_t GetLastWriteLength() const {
     utils::ReadLockGuard guard(lock_);
     return last_write_length_;
@@ -400,6 +421,9 @@ class ChunkSet {
   // record write file length by write operation
   uint64_t last_write_length_{0};
   uint64_t last_write_time_ns_{0};
+  // ADR-0003 flush checkpoint, protected by lock_
+  bool flush_checkpoint_inited_{false};
+  uint64_t flush_checkpoint_length_{0};
 
   // chunk index -> chunk
   absl::flat_hash_map<uint32_t, ChunkSPtr> chunk_map_;

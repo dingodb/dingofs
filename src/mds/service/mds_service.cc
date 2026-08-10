@@ -1495,7 +1495,9 @@ void MDSServiceImpl::DoFlushFile(google::protobuf::RpcController*, const pb::mds
 
   Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
-  FileSystem::FlushFileParam param{.length = request->length()};
+  FileSystem::FlushFileParam param{.length = request->length(),
+                                   .rollback = request->rollback(),
+                                   .rollback_to_length = request->rollback_to_length()};
 
   EntryWithFileChangeOut entry_out;
   status = file_system->FlushFile(ctx, request->ino(), param, entry_out);

@@ -68,6 +68,8 @@ class FileSession {
   void AddSession(uint64_t fh, const std::string& session_id, uint32_t flags);
   uint32_t DeleteSession(uint64_t fh);
 
+  bool HasMultipleWriters();
+
   void InvalidateReadCache(bool just_readonly);
 
   size_t Size();

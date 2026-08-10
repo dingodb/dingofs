@@ -104,6 +104,9 @@ class VFSImpl : public VFS {
 
   Status Flush(ContextSPtr ctx, Ino ino, uint64_t fh) override;
 
+  // best-effort length rollback on data-flush failure (ADR-0003)
+  void RollbackWriteLength(ContextSPtr ctx, Ino ino, uint64_t fh);
+
   Status Release(ContextSPtr ctx, Ino ino, uint64_t fh) override;
 
   Status Fsync(ContextSPtr ctx, Ino ino, int datasync, uint64_t fh) override;

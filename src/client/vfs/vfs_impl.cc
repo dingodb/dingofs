@@ -750,12 +750,35 @@ Status VFSImpl::Flush(ContextSPtr ctx, Ino ino, uint64_t fh) {
   // O_RDONLY fh has no writer — nothing to flush at the data layer.
   if (handle->resources.writer != nullptr) {
     s = handle->resources.writer->Flush();
-    if (!s.ok()) return s;
+    if (!s.ok()) {
+      RollbackWriteLength(ctx, ino, fh);
+      return s;
+    }
   }
 
   s = meta_system_->Flush(ctx, ino, fh);
 
   return s;
+}
+
+void VFSImpl::RollbackWriteLength(ContextSPtr ctx, Ino ino, uint64_t fh) {
+  // Data flush failed: this round of writes is abandoned (ADR-0003). Ask the
+  // meta system to conditionally shrink the file length back to the flush
+  // checkpoint. Best-effort: on failure only log; the caller still returns
+  // the original flush error, and a later user-visible failure point
+  // (Flush/Release) will try again since the checkpoint condition still
+  // holds.
+  auto s = meta_system_->RollbackWriteLength(ctx, ino, fh);
+  if (!s.ok()) {
+    LOG(ERROR) << fmt::format(
+        "[vfs.{}] rollback write length fail, fh({}) error({}).", ino, fh,
+        s.ToString());
+    return;
+  }
+
+  // abandoned bytes may have been readable through other fhs of this ino;
+  // drop client-side read cache from 0 (checkpoint unknown here, be safe).
+  reader_registry_->InvalidateByIno(ino, 0, INT64_MAX);
 }
 
 Status VFSImpl::Release(ContextSPtr ctx, Ino ino, uint64_t fh) {
@@ -791,12 +814,11 @@ Status VFSImpl::Release(ContextSPtr ctx, Ino ino, uint64_t fh) {
   Status flush_status;
   if (handle->resources.writer != nullptr) {
     flush_status = handle->resources.writer->Flush();
+    if (!flush_status.ok()) RollbackWriteLength(ctx, ino, fh);
   }
 
-  Status close_status;
-  if (!resources_detached) {
-    close_status = meta_system_->Close(ctx, ino, fh);
-  }
+  Status close_status =
+      !resources_detached ? meta_system_->Close(ctx, ino, fh) : Status::OK();
 
   handle_manager_->ReleaseHandler(fh);
 
