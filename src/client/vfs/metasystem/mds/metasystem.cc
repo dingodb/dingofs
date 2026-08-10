@@ -594,6 +594,7 @@ Status MDSMetaSystem::Create(ContextSPtr ctx, Ino parent,
   auto file_session =
       file_session_map_.Put(attr_entry.ino(), fh, session_id, flags);
   file_session->SetInode(inode);
+  file_session->GetChunkSet()->InitFlushCheckpoint(inode->Length());
 
   modify_time_memo_.UpdateKernelMtime(attr->ino, attr->mtime);
 
@@ -674,9 +675,8 @@ Status MDSMetaSystem::DoOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
 
   AttrEntry attr_entry;
   std::vector<mds::ChunkEntry> chunks;
-  auto status = mds_client_.Open(ctx, ino, flags, session_id,
-                                 is_prefetch_chunk, chunk_descriptors,
-                                 attr_entry, chunks);
+  auto status = mds_client_.Open(ctx, ino, flags, session_id, is_prefetch_chunk,
+                                 chunk_descriptors, attr_entry, chunks);
 
   LOG_DEBUG << fmt::format(
       "[meta.fs.{}.{}] open file flags({:o}:{}) session_id({}) "
@@ -702,6 +702,9 @@ Status MDSMetaSystem::DoOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
   if (flags & O_TRUNC) {
     chunk_memo_.Forget(ino);
     chunk_set->ResetLastWriteLength();
+    chunk_set->SetFlushCheckpoint(0);
+  } else {
+    chunk_set->InitFlushCheckpoint(inode->Length());
   }
   if (!chunks.empty()) chunk_set->Put(chunks, "open");
 
@@ -796,6 +799,10 @@ Status MDSMetaSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
 
   const std::string session_id = utils::GenerateUUID();
   auto file_session = file_session_map_.Put(ino, fh, session_id, flags);
+  if (file_session->HasMultipleWriters()) {
+    LOG(ERROR) << fmt::format("[meta.fs.{}.{}] open file has multiple writers.",
+                              ino, fh);
+  }
 
   auto inode = GetInodeFromCache(ino);
   if (inode != nullptr) {
@@ -808,6 +815,7 @@ Status MDSMetaSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
     file_session->SetInode(inode);
 
     if (!(flags & O_TRUNC)) {
+      file_session->GetChunkSet()->InitFlushCheckpoint(inode->Length());
       // launch async open
       AsyncOpen(ctx, ino, flags, fh, session_id, file_session);
 
@@ -877,6 +885,55 @@ Status MDSMetaSystem::Flush(ContextSPtr ctx, Ino ino, uint64_t fh) {
   }
 
   return FlushSliceAndFile(ctx, ino);
+}
+
+Status MDSMetaSystem::RollbackWriteLength(ContextSPtr ctx, Ino ino,
+                                          uint64_t fh) {
+  AssertStop();
+
+  auto file_session = file_session_map_.GetSession(ino);
+  if (file_session == nullptr) {
+    LOG(WARNING) << fmt::format(
+        "[meta.fs.{}.{}] rollback skipped, no file session.", ino, fh);
+    return Status::OK();
+  }
+
+  auto& chunk_set = file_session->GetChunkSet();
+  const uint64_t checkpoint = chunk_set->GetFlushCheckpoint();
+  const uint64_t last_write_length = chunk_set->GetLastWriteLength();
+
+  // nothing pushed beyond the checkpoint in this session -- nothing to undo.
+  if (last_write_length == 0 || last_write_length <= checkpoint) {
+    LOG_DEBUG << fmt::format(
+        "[meta.fs.{}.{}] rollback skipped, write({}) checkpoint({}).", ino, fh,
+        last_write_length, checkpoint);
+    return Status::OK();
+  }
+
+  LOG(WARNING) << fmt::format(
+      "[meta.fs.{}.{}] rollback write length, write({}) -> checkpoint({}).",
+      ino, fh, last_write_length, checkpoint);
+
+  AttrEntry attr_entry;
+  bool shrink_file = false;
+  auto status = mds_client_.RollbackFileLength(
+      ctx, ino, last_write_length, checkpoint, attr_entry, shrink_file);
+  if (!status.ok()) {
+    LOG(ERROR) << fmt::format(
+        "[meta.fs.{}.{}] rollback write length fail, checkpoint({}) "
+        "error({}).",
+        ino, fh, checkpoint, status.ToString());
+    return status;
+  }
+
+  // discard the write memo so GetAttr no longer inflates the kernel-visible
+  // length with abandoned writes.
+  chunk_set->ResetLastWriteLength();
+  if (shrink_file) chunk_memo_.Forget(ino);
+
+  PutInodeToCache(attr_entry);
+
+  return Status::OK();
 }
 
 void MDSMetaSystem::AsyncClose(ContextSPtr ctx, Ino ino, uint64_t fh,
@@ -1718,14 +1775,17 @@ Status MDSMetaSystem::DoFlushFile(ContextSPtr ctx, InodeSPtr inode,
 
   AttrEntry attr_entry;
   bool shrink_file;
-  auto status = mds_client_.FlushFile(ctx, ino, last_write_length,
-                                      attr_entry, shrink_file);
+  auto status = mds_client_.FlushFile(ctx, ino, last_write_length, attr_entry,
+                                      shrink_file);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
         "[meta.fs.{}] flush file fail, length({}) error({}).", ino,
         last_write_length, status.ToString());
     return status;
   }
+
+  // advance flush checkpoint (ADR-0003): data and length are both durable now.
+  chunk_set->SetFlushCheckpoint(last_write_length);
 
   modify_time_memo_.Remember(ino);
   if (shrink_file) chunk_memo_.Forget(ino);

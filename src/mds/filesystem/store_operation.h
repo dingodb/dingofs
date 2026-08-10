@@ -1211,6 +1211,10 @@ class FlushFileOperation : public Operation {
   struct ExtraParam {
     uint64_t length;
     uint64_t chunk_size{0};
+    // conditional length rollback (ADR-0003): shrink to rollback_to_length iff
+    // rollback_to_length < current length <= length.
+    bool rollback{false};
+    uint64_t rollback_to_length{0};
   };
 
   FlushFileOperation(Trace& trace, uint32_t fs_id, Ino ino, ExtraParam& param)

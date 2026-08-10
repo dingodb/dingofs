@@ -1283,8 +1283,10 @@ Status FileSystem::FlushFile(Context& ctx, Ino ino, const FlushFileParam& param,
   FlushFileOperation::ExtraParam extra_param;
   extra_param.length = param.length;
   extra_param.chunk_size = fs_info_->GetChunkSize();
+  extra_param.rollback = param.rollback;
+  extra_param.rollback_to_length = param.rollback_to_length;
 
-  if (param.length > inode->Length() && inode->Nlink() > 0) {
+  if (!param.rollback && param.length > inode->Length() && inode->Nlink() > 0) {
     // check quota
     if (!quota_manager_.CheckQuota(trace, ino, param.length - inode->Length(), 0)) {
       return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");

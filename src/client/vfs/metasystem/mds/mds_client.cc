@@ -821,6 +821,47 @@ Status MDSClient::FlushFile(ContextSPtr& ctx, Ino ino, uint64_t length,
   return status;
 }
 
+Status MDSClient::RollbackFileLength(ContextSPtr& ctx, Ino ino,
+                                     uint64_t last_write_length,
+                                     uint64_t rollback_to_length,
+                                     AttrEntry& attr_entry,
+                                     bool& shrink_file) {
+  CHECK(fs_id_ != 0) << "fs_id is invalid.";
+
+  auto get_mds_fn = [this, ino](bool& is_primary_mds) -> MDSMeta {
+    return GetMds(ino, is_primary_mds);
+  };
+
+  auto span = trace_manager_.StartChildSpan("MDSClient::RollbackFileLength",
+                                            ctx->GetTraceSpan());
+
+  pb::mds::FlushFileRequest request;
+  pb::mds::FlushFileResponse response;
+
+  SetAncestorInContext(request, ino);
+
+  request.set_fs_id(fs_id_);
+  request.set_ino(ino);
+  request.set_length(last_write_length);
+  request.set_rollback(true);
+  request.set_rollback_to_length(rollback_to_length);
+
+  auto status = SendRequest(SpanScope::GetContext(span, ctx), span, get_mds_fn,
+                            "MDSService", "FlushFile", request, response);
+
+  if (!status.ok()) {
+    SpanScope::SetStatus(span, status);
+    return status;
+  }
+
+  parent_memo_.UpsertVersion(ino, response.inode().version());
+
+  attr_entry.Swap(response.mutable_inode());
+  shrink_file = response.shrink_file();
+
+  return status;
+}
+
 Status MDSClient::Link(ContextSPtr& ctx, Ino ino, Ino new_parent,
                        const std::string& new_name, AttrEntry& attr_entry,
                        AttrEntry& parent_attr_entry) {
