@@ -915,7 +915,7 @@ Status VFSImpl::Ioctl(ContextSPtr ctx, Ino ino, uint32_t uid, unsigned int cmd,
                       char* out_buf, size_t out_bufsz) {
   (void)flags;
   // For internal inode, ioctl is not supported
-  if (BAIDU_UNLIKELY(IsInternalNode(ino))) {
+  if (BAIDU_UNLIKELY(IsInternalIno(ino))) {
     return Status::NotSupport("Ioctl is not supported for internal inode");
   }
 
