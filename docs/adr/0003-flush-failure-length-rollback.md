@@ -2,8 +2,9 @@
 
 数据 flush（`FileWriter::Flush`）失败时，客户端把 MDS 上的 `attr.length` 回退到 Flush 检查点
 （本次 open 会话中最近一次 flush 成功时的长度，从未成功过则为 open 时的长度），即放弃这轮写。
-我们**只回退长度**：不撤销已通过 WriteSlice 提交的 slices、不回滚 overwrite 内容——完整撤销需要
-快照级机制，成本不成比例；被截掉的悬挂 slice 数据留给 compaction 清理。
+我们不删除或物理撤销已通过 WriteSlice 提交的 slices，也不回滚 overwrite 内容——完整撤销需要
+快照级机制，成本不成比例。MDS 在回退长度的同一事务中，为收缩区间追加零 slice，确保文件随后
+重新扩展时不会暴露被截掉的数据；旧物理 slice 留给 compaction/GC 清理。
 
 回退通过**扩展 FlushFile RPC**（rollback 标志 + checkpoint 长度）在 MDS 事务内条件执行：
 仅当 `checkpoint < 当前 attr.length <= 本会话最后写长度` 时收缩。之所以必须条件式且在 MDS
@@ -23,6 +24,9 @@
   风险由条件式回退兜住。
 - 复用 FlushFile 而非新增 RPC：复用现有 shrink 后处理链路（chunk 缓存失效、attr 回传）；
   proto3 默认值 0 作"未启用"哨兵，"截断到 0"由 rollback 标志区分。
+- 收缩范围由 MDS 事务内读取的权威旧长度决定。零 slice 与 inode 长度原子提交，只修改收缩范围内
+  已存在的 chunk（缺失 chunk 本身就是 hole）；事务无法容纳全部更新时整体失败，不做分批补偿。
+- 收缩成功或 RPC 返回提交状态不确定的网络错误时，客户端保守失效 inode、chunk 和 read cache。
 
 ## 术语（写入与长度）
 
@@ -40,7 +44,8 @@ FlushFile 前移；SetAttr/truncate 可收缩。
 
 **长度回退（Length Rollback）**:
 数据 flush（`FileWriter::Flush`）失败时，把 MDS 持久化长度条件式收缩到 Flush 检查点，即放弃
-这轮写。只回退长度，不撤销已提交的 slices、不回滚 overwrite 内容。条件式：仅当
+这轮写。不物理撤销已提交的 slices，也不回滚 overwrite 内容；通过零 slice 保证被收缩的数据不会
+在重新扩展后恢复。条件式：仅当
 `checkpoint < 当前length <= 本会话最后写长度` 时收缩（单写者正确；多写者保守放弃）。仅在
 用户可见失败点（Flush/Release）触发，尽力而为不重试。
 

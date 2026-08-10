@@ -427,39 +427,17 @@ Status DingodbTxn::Scan(const Range& range, uint64_t limit, std::vector<KeyValue
 }
 
 Status DingodbTxn::Scan(const Range& range, ScanHandlerType handler) {
-  Status status;
-  std::vector<KeyValue> kvs;
-  do {
-    kvs.clear();
-    status = Scan(range, FLAGS_mds_scan_batch_size, kvs);
-    if (!status.ok()) {
-      break;
-    }
-
-    bool is_exit = false;
-    for (auto& kv : kvs) {
-      if (!handler(kv.key, kv.value)) {
-        is_exit = true;
-        break;
-      }
-    }
-
-    if (is_exit) break;
-
-  } while (kvs.size() >= FLAGS_mds_scan_batch_size);
-
-  return status;
+  return Scan(range, [&](KeyValue& kv) { return handler(kv.key, kv.value); });
 }
 
 Status DingodbTxn::Scan(const Range& range, std::function<bool(KeyValue&)> handler) {
   Status status;
+  Range page = range;
   std::vector<KeyValue> kvs;
   do {
     kvs.clear();
-    status = Scan(range, FLAGS_mds_scan_batch_size, kvs);
-    if (!status.ok()) {
-      break;
-    }
+    status = Scan(page, FLAGS_mds_scan_batch_size, kvs);
+    if (!status.ok()) break;
 
     bool is_exit = false;
     for (auto& kv : kvs) {
@@ -468,10 +446,13 @@ Status DingodbTxn::Scan(const Range& range, std::function<bool(KeyValue&)> handl
         break;
       }
     }
+    if (is_exit || kvs.size() < FLAGS_mds_scan_batch_size) break;
 
-    if (is_exit) break;
-
-  } while (kvs.size() >= FLAGS_mds_scan_batch_size);
+    // Scan ranges are start-inclusive. Move just past the last key so the next
+    // page does not repeat the same full batch forever.
+    page.start = kvs.back().key;
+    page.start.push_back('\0');
+  } while (page.start < page.end);
 
   return status;
 }

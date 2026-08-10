@@ -347,7 +347,7 @@ Status VFSImpl::SetAttr(ContextSPtr ctx, Ino ino, int set, const Attr& in_attr,
   // Truncate (size change) must invalidate cached read buffers — readahead
   // buffers in FileReader::requests_ are indexed by (ino, frange) and would
   // otherwise serve stale data after the inode shrinks/grows.
-  if (s.ok() && (set & kSetAttrSize)) {
+  if ((s.ok() || s.IsNetError()) && (set & kSetAttrSize)) {
     reader_registry_->InvalidateByIno(ino, 0,
                                       std::numeric_limits<int64_t>::max());
   }
@@ -599,6 +599,10 @@ Status VFSImpl::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t* fh,
   }
 
   Status s = meta_system_->Open(ctx, TranslateIno(ino), flags, gfh, keep_cache);
+  if ((flags & O_TRUNC) && (s.ok() || s.IsNetError())) {
+    reader_registry_->InvalidateByIno(ino, 0,
+                                      std::numeric_limits<int64_t>::max());
+  }
   if (s.ok()) {
     auto* handle = handle_manager_->NewHandle(gfh, ino, flags);
     if (handle == nullptr) {
@@ -773,11 +777,11 @@ void VFSImpl::RollbackWriteLength(ContextSPtr ctx, Ino ino, uint64_t fh) {
     LOG(ERROR) << fmt::format(
         "[vfs.{}] rollback write length fail, fh({}) error({}).", ino, fh,
         s.ToString());
-    return;
+    if (!s.IsNetError()) return;
   }
 
-  // abandoned bytes may have been readable through other fhs of this ino;
-  // drop client-side read cache from 0 (checkpoint unknown here, be safe).
+  // Abandoned bytes may have been readable through other fhs of this ino. A
+  // network error is commit-ambiguous, so invalidate in that case as well.
   reader_registry_->InvalidateByIno(ino, 0, INT64_MAX);
 }
 
