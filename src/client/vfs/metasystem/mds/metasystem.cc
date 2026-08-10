@@ -700,7 +700,7 @@ Status MDSMetaSystem::DoOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
   // update chunk cache
   auto& chunk_set = file_session->GetChunkSet();
   if (flags & O_TRUNC) {
-    chunk_memo_.Forget(ino);
+    InvalidateLengthShrinkCache(ino, false);
     chunk_set->ResetLastWriteLength();
     chunk_set->SetFlushCheckpoint(0);
   } else {
@@ -831,9 +831,14 @@ Status MDSMetaSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
   if (!status.ok()) {
     LOG(ERROR) << fmt::format("[meta.fs.{}.{}] open file fail, error({}).", ino,
                               fh, status.ToString());
+    if (flags & O_TRUNC) {
+      InvalidateLengthShrinkCache(ino, status);
+      if (status.IsNetError()) *keep_cache = false;
+    }
     file_session_map_.Delete(ino, fh);
 
   } else {
+    if (flags & O_TRUNC) *keep_cache = false;
     auto inode = GetInodeFromCache(ino);
     if (inode == nullptr ||
         inode->Mtime() > modify_time_memo_.GetKernelMtime(ino)) {
@@ -918,6 +923,9 @@ Status MDSMetaSystem::RollbackWriteLength(ContextSPtr ctx, Ino ino,
   bool shrink_file = false;
   auto status = mds_client_.RollbackFileLength(
       ctx, ino, last_write_length, checkpoint, attr_entry, shrink_file);
+  // Invalidate even when the response says no shrink: an earlier timed-out
+  // attempt may have committed and the RPC retry then observed the checkpoint.
+  InvalidateLengthShrinkCache(ino, status);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
         "[meta.fs.{}.{}] rollback write length fail, checkpoint({}) "
@@ -929,7 +937,6 @@ Status MDSMetaSystem::RollbackWriteLength(ContextSPtr ctx, Ino ino,
   // discard the write memo so GetAttr no longer inflates the kernel-visible
   // length with abandoned writes.
   chunk_set->ResetLastWriteLength();
-  if (shrink_file) chunk_memo_.Forget(ino);
 
   PutInodeToCache(attr_entry);
 
@@ -1507,6 +1514,10 @@ Status MDSMetaSystem::SetAttr(ContextSPtr ctx, Ino ino, int set,
 
   MDSClient::AttrWithChunkOut out;
   auto status = mds_client_.SetAttr(ctx, ino, attr, set, out);
+  // Invalidate on every successful size setattr (a timed-out attempt may have
+  // committed a shrink while the successful retry reports it as a no-op) and
+  // on commit-ambiguous network errors.
+  if (set & kSetAttrSize) InvalidateLengthShrinkCache(ino, status);
   if (!status.ok()) {
     return status;
   }
@@ -1532,8 +1543,6 @@ Status MDSMetaSystem::SetAttr(ContextSPtr ctx, Ino ino, int set,
 
   modify_time_memo_.Remember(ino);
   modify_time_memo_.UpdateKernelMtime(ino, out_attr->mtime);
-
-  if (out.shrink_file) chunk_memo_.Forget(ino);
 
   return Status::OK();
 }
@@ -1788,7 +1797,7 @@ Status MDSMetaSystem::DoFlushFile(ContextSPtr ctx, InodeSPtr inode,
   chunk_set->SetFlushCheckpoint(last_write_length);
 
   modify_time_memo_.Remember(ino);
-  if (shrink_file) chunk_memo_.Forget(ino);
+  if (shrink_file) InvalidateLengthShrinkCache(ino, false);
 
   PutInodeToCache(attr_entry);
 
@@ -1978,6 +1987,29 @@ bool MDSMetaSystem::CorrectAttrLength(Attr& attr, const std::string& caller) {
 void MDSMetaSystem::InvalidateFileSessionReadCache(Ino ino) {
   auto file_session = file_session_map_.GetSession(ino);
   if (file_session != nullptr) file_session->InvalidateReadCache(true);
+}
+
+void MDSMetaSystem::InvalidateLengthShrinkCache(Ino ino,
+                                                bool invalidate_inode) {
+  chunk_memo_.Forget(ino);
+
+  auto file_session = file_session_map_.GetSession(ino);
+  if (file_session != nullptr) file_session->InvalidateReadCache(false);
+
+  if (invalidate_inode) DeleteInodeFromCache(ino);
+}
+
+// Status-based policy shared by shrink paths: on success invalidate
+// conservatively but keep the inode (caller refreshes it from the RPC attr);
+// on a commit-ambiguous network error also drop the cached inode since the
+// shrink may have committed server-side. Other errors need no invalidation.
+void MDSMetaSystem::InvalidateLengthShrinkCache(Ino ino,
+                                                const Status& status) {
+  if (status.ok()) {
+    InvalidateLengthShrinkCache(ino, /*invalidate_inode=*/false);
+  } else if (status.IsNetError()) {
+    InvalidateLengthShrinkCache(ino, /*invalidate_inode=*/true);
+  }
 }
 
 Status MDSMetaSystem::Compact(ContextSPtr ctx, Ino ino, uint32_t chunk_index,

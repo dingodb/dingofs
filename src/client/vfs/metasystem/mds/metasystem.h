@@ -126,7 +126,6 @@ class MDSMetaSystem : public vfs::MetaSystem {
   Status Write(ContextSPtr ctx, Ino ino, const char* buf, uint64_t offset,
                uint64_t size, uint64_t fh) override;
 
-
   Status MkDir(ContextSPtr ctx, Ino parent, const std::string& name,
                uint32_t uid, uint32_t gid, uint32_t mode, Attr* attr) override;
   Status RmDir(ContextSPtr ctx, Ino parent, const std::string& name) override;
@@ -229,6 +228,8 @@ class MDSMetaSystem : public vfs::MetaSystem {
                      bool& is_amend, const std::string& caller);
   bool CorrectAttrLength(Attr& attr, const std::string& caller);
   void InvalidateFileSessionReadCache(Ino ino);
+  void InvalidateLengthShrinkCache(Ino ino, bool invalidate_inode);
+  void InvalidateLengthShrinkCache(Ino ino, const Status& status);
 
   Status DoOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
                 const std::string& session_id, FileSessionSPtr file_session);

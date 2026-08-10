@@ -1256,7 +1256,7 @@ TEST_F(FallocateRunTest, ZeroRangeWithoutKeepSizeExtendsFile) {
   SeedChunk(ino, MakeSizedChunk(0, {MakeSlice(/*id=*/3000, /*off=*/0,
                                               /*len=*/4096, /*pos=*/0)}));
 
-  // Zero [4096, 12288): tail of chunk 0 then the prefix of chunk 1.
+  // Zero [4096, 12288): tail of existing chunk 0 followed by a sparse hole.
   FallocateOperation op(trace_,
                         MakeParam(ino, FALLOC_FL_ZERO_RANGE,
                                   /*offset=*/4096, /*len=*/kFallocChunkSize,
@@ -1270,7 +1270,7 @@ TEST_F(FallocateRunTest, ZeroRangeWithoutKeepSizeExtendsFile) {
 
   EXPECT_EQ(shared_param.attr.length(), 12288u);
   EXPECT_EQ(op.GetResult().delta_bytes, static_cast<int64_t>(kFallocChunkSize));
-  ASSERT_EQ(op.GetResult().effected_chunks.size(), 2u);
+  ASSERT_EQ(op.GetResult().effected_chunks.size(), 1u);
 
   ChunkEntry chunk0 = GetChunk(ino, 0);
   auto slices0 = SortedSlices(chunk0);
@@ -1280,11 +1280,8 @@ TEST_F(FallocateRunTest, ZeroRangeWithoutKeepSizeExtendsFile) {
   EXPECT_EQ(slices0[1].pos(), 4096u);
   EXPECT_EQ(slices0[1].len(), 4096u);
 
-  ChunkEntry chunk1 = GetChunk(ino, 1);
-  ASSERT_EQ(chunk1.slices_size(), 1);
-  EXPECT_EQ(chunk1.slices(0).id(), 0u);
-  EXPECT_EQ(chunk1.slices(0).pos(), 0u);
-  EXPECT_EQ(chunk1.slices(0).len(), 4096u);
+  // Missing chunks are already holes and must not be materialized.
+  EXPECT_FALSE(ChunkExists(ino, 1));
 }
 
 // FALLOC_FL_ZERO_RANGE without FALLOC_FL_KEEP_SIZE but with the range fully
@@ -1554,6 +1551,14 @@ class UpdateAttrRunTest : public ::testing::Test {
             .ok());
   }
 
+  void SeedInode(const AttrEntry& attr) {
+    ASSERT_TRUE(storage_
+                    ->Put(KVStorage::WriteOption(),
+                          MetaCodec::EncodeInodeKey(attr.fs_id(), attr.ino()),
+                          MetaCodec::EncodeInodeValue(attr))
+                    .ok());
+  }
+
   bool ChunkExists(Ino ino, uint64_t index) {
     std::string value;
     return storage_
@@ -1760,9 +1765,8 @@ TEST_F(UpdateAttrRunTest, AtimeNowAndMtimeNowFlagsAreIgnored) {
 
 // --- size: truncate up / down / same ---------------------------------------
 
-// Truncate up sets the new length, reports a positive delta, and appends NO
-// zero slices (the extended region is sparse). It also leaves the timestamps
-// untouched (size-only setattr does not bump mtime/ctime in this op).
+// Truncate up sets the new length, reports a positive delta, appends no zero
+// slices (the extended region is sparse), and advances mtime/ctime.
 TEST_F(UpdateAttrRunTest, SizeTruncateUpSetsLengthWithoutZeroSlices) {
   const Ino ino = 211;
   auto baseline = MakeFullInode(ino, 4096);
@@ -1780,6 +1784,8 @@ TEST_F(UpdateAttrRunTest, SizeTruncateUpSetsLengthWithoutZeroSlices) {
 
   auto expected = baseline;
   expected.set_length(8192);
+  expected.set_mtime(got.mtime());
+  expected.set_ctime(got.ctime());
   ExpectAttrEq(got, expected);
 }
 
@@ -1809,9 +1815,10 @@ TEST_F(UpdateAttrRunTest, SizeTruncateDownAppendsZeroSlices) {
   EXPECT_EQ(slices[1].pos(), 4096u);
   EXPECT_EQ(slices[1].len(), kFallocChunkSize - 4096);
 
-  // Only length changed; timestamps are left as-is.
   auto expected = baseline;
   expected.set_length(4096);
+  expected.set_mtime(got.mtime());
+  expected.set_ctime(got.ctime());
   ExpectAttrEq(got, expected);
 }
 
@@ -1881,9 +1888,8 @@ TEST_F(UpdateAttrRunTest, TruncateUpdatesSizeAndTimestamps) {
   ExpectAttrEq(got, expected);
 }
 
-// Truncate down over a sparse file: AppendZeroSlices appends to the existing
-// chunks (0 and 2) AND creates the missing middle chunk (1) in a single pass,
-// exercising both branches within one range.
+// Truncate down over a sparse file: AppendZeroSlices appends to existing
+// chunks (0 and 2) but leaves the missing middle chunk (1) as a hole.
 TEST_F(UpdateAttrRunTest, SizeTruncateDownSparseMiddleChunk) {
   const Ino ino = 217;
   const uint64_t length = 3 * kFallocChunkSize;
@@ -1903,15 +1909,92 @@ TEST_F(UpdateAttrRunTest, SizeTruncateDownSparseMiddleChunk) {
 
   EXPECT_EQ(got.length(), 0u);
   EXPECT_EQ(delta, -static_cast<int64_t>(length));
-  ASSERT_EQ(effected, 3u);  // chunks 0, 1, 2 all touched
+  ASSERT_EQ(effected, 2u);  // only existing chunks 0 and 2 are touched
 
-  EXPECT_EQ(SortedSlices(ino, 0).size(), 2u);  // real + zero (append branch)
-  auto mid = SortedSlices(ino, 1);
-  ASSERT_EQ(mid.size(), 1u);  // sparse chunk created fresh (create branch)
-  EXPECT_EQ(mid[0].id(), 0u);
-  EXPECT_EQ(mid[0].pos(), 0u);
-  EXPECT_EQ(mid[0].len(), kFallocChunkSize);
-  EXPECT_EQ(SortedSlices(ino, 2).size(), 2u);  // real + zero (append branch)
+  EXPECT_EQ(SortedSlices(ino, 0).size(), 2u);  // real + zero
+  EXPECT_FALSE(ChunkExists(ino, 1));           // sparse hole stays sparse
+  EXPECT_EQ(SortedSlices(ino, 2).size(), 2u);  // real + zero
+}
+
+TEST_F(UpdateAttrRunTest, FlushRollbackZerosDroppedRangeAtomically) {
+  const Ino ino = 218;
+  const uint64_t old_length = 3 * kFallocChunkSize;
+  SeedInode(MakeFullInode(ino, old_length));
+  SeedChunk(
+      ino, MakeSizedChunk(0, {MakeSlice(/*id=*/4000, 0, kFallocChunkSize, 0)}));
+  // chunk 1 intentionally absent.
+  SeedChunk(
+      ino, MakeSizedChunk(2, {MakeSlice(/*id=*/4002, 0, kFallocChunkSize, 0)}));
+
+  FlushFileOperation::ExtraParam param;
+  param.length = old_length;
+  param.chunk_size = kFallocChunkSize;
+  param.rollback = true;
+  param.rollback_to_length = 4096;
+  FlushFileOperation op(trace_, kFallocFsId, ino, param);
+
+  auto txn = storage_->NewTxn();
+  ASSERT_TRUE(op.Run(txn).ok());
+  ASSERT_TRUE(txn->Commit().ok());
+
+  EXPECT_EQ(op.GetResult().attr.length(), 4096u);
+  EXPECT_EQ(op.GetResult().delta_bytes,
+            -static_cast<int64_t>(old_length - 4096));
+  auto chunk0_slices = SortedSlices(ino, 0);
+  EXPECT_TRUE(std::any_of(chunk0_slices.begin(), chunk0_slices.end(),
+                          [](const SliceEntry& slice) {
+                            return slice.id() == 0 && slice.pos() == 4096;
+                          }));
+  EXPECT_FALSE(ChunkExists(ino, 1));
+  auto chunk2_slices = SortedSlices(ino, 2);
+  EXPECT_TRUE(std::any_of(chunk2_slices.begin(), chunk2_slices.end(),
+                          [](const SliceEntry& slice) {
+                            return slice.id() == 0 && slice.pos() == 0;
+                          }));
+
+  // Re-running after an ambiguous first response sees the checkpoint and is a
+  // no-op; result state must not retain the first attempt's negative delta.
+  auto retry_txn = storage_->NewTxn();
+  ASSERT_TRUE(op.Run(retry_txn).ok());
+  ASSERT_TRUE(retry_txn->Commit().ok());
+  EXPECT_EQ(op.GetResult().delta_bytes, 0);
+  EXPECT_EQ(SortedSlices(ino, 0).size(), chunk0_slices.size());
+  EXPECT_EQ(SortedSlices(ino, 2).size(), chunk2_slices.size());
+}
+
+TEST_F(UpdateAttrRunTest, OpenTruncZerosExistingChunksAndReturnsNoPrefetch) {
+  const Ino ino = 219;
+  const uint64_t old_length = 2 * kFallocChunkSize;
+  auto attr = MakeFullInode(ino, old_length);
+  SeedChunk(
+      ino, MakeSizedChunk(0, {MakeSlice(/*id=*/5000, 0, kFallocChunkSize, 0)}));
+
+  FileSessionEntry session;
+  session.set_fs_id(kFallocFsId);
+  session.set_ino(ino);
+  session.set_session_id("open-trunc-session");
+  std::vector<uint32_t> prefetch_chunks = {0};
+  OpenFileOperation op(trace_, O_TRUNC | O_WRONLY, session, kFallocChunkSize,
+                       prefetch_chunks);
+
+  std::vector<std::string> keys;
+  op.PrefetchKey(keys);
+  EXPECT_TRUE(keys.empty());
+
+  Operation::BatchSharedParam shared_param;
+  shared_param.attr = attr;
+  auto txn = storage_->NewTxn();
+  ASSERT_TRUE(op.RunInBatch(txn, shared_param).ok());
+  ASSERT_TRUE(txn->Commit().ok());
+
+  EXPECT_EQ(shared_param.attr.length(), 0u);
+  EXPECT_EQ(op.GetResult().delta_bytes, -static_cast<int64_t>(old_length));
+  EXPECT_TRUE(op.GetResult().chunks.empty());
+  auto slices = SortedSlices(ino, 0);
+  EXPECT_TRUE(
+      std::any_of(slices.begin(), slices.end(), [](const SliceEntry& slice) {
+        return slice.id() == 0 && slice.pos() == 0;
+      }));
 }
 
 // SetResultAttr copies the mutated shared_param.attr into the result for the
