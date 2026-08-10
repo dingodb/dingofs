@@ -300,7 +300,6 @@ static void RenderSummary(Json::Value& json_value, butil::IOBufBuilder& os) {
       {"inodecache", "show inode cache info at meta."},
       {"rpc", "show rpc info at meta."},
       {"blockcache", "show block cache info at meta."},
-      {"tinyfiledatacache", "show tiny file data cache info."},
       {"uidgidmap", "show uid/gid mapper info at meta."},
   };
 

@@ -1148,22 +1148,20 @@ class FallocateOperation : public Operation {
 
 class OpenFileOperation : public Operation {
  public:
-  OpenFileOperation(Trace& trace, uint32_t flags, const FileSessionEntry& file_session, uint64_t chunk_size,
-                    const std::vector<uint32_t>& prefetch_chunks, bool prefetch_data)
+  OpenFileOperation(Trace& trace, uint32_t flags,
+                    const FileSessionEntry& file_session, uint64_t chunk_size,
+                    const std::vector<uint32_t>& prefetch_chunks)
       : Operation(trace),
         flags_(flags),
         file_session_(file_session),
         chunk_size_(chunk_size),
-        prefetch_chunks_(prefetch_chunks),
-        prefetch_data_(prefetch_data) {};
+        prefetch_chunks_(prefetch_chunks) {};
   ~OpenFileOperation() override = default;
 
   struct Result {
     AttrEntry attr;
     int64_t delta_bytes{0};
     std::vector<ChunkEntry> chunks;
-    std::string data;
-    uint64_t data_version{0};
   };
 
   OpType GetOpType() const override { return OpType::kOpenFile; }
@@ -1185,7 +1183,6 @@ class OpenFileOperation : public Operation {
   uint64_t chunk_size_{0};
 
   const std::vector<uint32_t>& prefetch_chunks_;
-  bool prefetch_data_{false};
 
   Result result_;
 };
@@ -1212,8 +1209,6 @@ class CloseFileOperation : public Operation {
 class FlushFileOperation : public Operation {
  public:
   struct ExtraParam {
-    ExtraParam(const std::string& data) : data(data) {}
-    const std::string& data;
     uint64_t length;
     uint64_t chunk_size{0};
   };
@@ -2226,8 +2221,8 @@ class GetDelFileOperation : public Operation {
 
 class CleanDelFileOperation : public Operation {
  public:
-  CleanDelFileOperation(Trace& trace, uint32_t fs_id, Ino ino, bool maybe_tiny_file)
-      : Operation(trace), fs_id_(fs_id), ino_(ino), maybe_tiny_file_(maybe_tiny_file) {};
+  CleanDelFileOperation(Trace& trace, uint32_t fs_id, Ino ino)
+      : Operation(trace), fs_id_(fs_id), ino_(ino) {};
   ~CleanDelFileOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kCleanDelFile; }
@@ -2240,7 +2235,6 @@ class CleanDelFileOperation : public Operation {
  private:
   const uint32_t fs_id_;
   const Ino ino_;
-  const bool maybe_tiny_file_;
 };
 
 class ScanLockOperation : public Operation {

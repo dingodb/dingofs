@@ -143,14 +143,11 @@ class MDSClient {
   Status Open(ContextSPtr& ctx, Ino ino, int flags,
               const std::string& session_id, bool prefetch_chunk,
               const std::vector<mds::ChunkDescriptor>& chunk_descriptors,
-              bool prefetch_data, AttrEntry& attr_entry,
-              std::vector<mds::ChunkEntry>& chunks, std::string& data,
-              uint64_t& data_version);
+              AttrEntry& attr_entry, std::vector<mds::ChunkEntry>& chunks);
   Status Release(ContextSPtr& ctx, Ino ino, const std::string& session_id);
 
   Status FlushFile(ContextSPtr& ctx, Ino ino, uint64_t length,
-                   std::string&& data, AttrEntry& attr_entry,
-                   bool& shrink_file);
+                   AttrEntry& attr_entry, bool& shrink_file);
 
   Status Link(ContextSPtr& ctx, Ino ino, Ino new_parent,
               const std::string& new_name, AttrEntry& attr_entry,

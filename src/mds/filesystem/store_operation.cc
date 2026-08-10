@@ -62,9 +62,6 @@ DEFINE_validator(mds_txn_max_retry_times, brpc::PassValidate);
 DEFINE_uint32(mds_txn_timeout_ms, 8000, "txn timeout ms.");
 DEFINE_validator(mds_txn_timeout_ms, brpc::PassValidate);
 
-DEFINE_bool(mds_tiny_file_data_enable, false, "enable tiny file data feature.");
-DEFINE_validator(mds_tiny_file_data_enable, brpc::PassValidate);
-
 DEFINE_bool(mds_check_before_create_enable, true, "enable check before create file/dir.");
 DEFINE_validator(mds_check_before_create_enable, brpc::PassValidate);
 
@@ -1632,14 +1629,9 @@ Status FallocateOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_par
 }
 
 void OpenFileOperation::PrefetchKey(std::vector<std::string>& keys) {
-  if (prefetch_chunks_.empty() && !prefetch_data_) return;
-
   for (const auto& chunk_index : prefetch_chunks_) {
-    keys.push_back(MetaCodec::EncodeChunkKey(file_session_.fs_id(), file_session_.ino(), chunk_index));
-  }
-
-  if (FLAGS_mds_tiny_file_data_enable && prefetch_data_) {
-    keys.push_back(MetaCodec::EncodeTinyFileDataKey(file_session_.fs_id(), file_session_.ino()));
+    keys.push_back(MetaCodec::EncodeChunkKey(file_session_.fs_id(),
+                                              file_session_.ino(), chunk_index));
   }
 }
 
@@ -1652,11 +1644,6 @@ Status OpenFileOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_para
   }
 
   if (flags_ & O_TRUNC) {
-    // delete tiny file data
-    if (FLAGS_mds_tiny_file_data_enable && attr.maybe_tiny_file()) {
-      txn->Delete(MetaCodec::EncodeTinyFileDataKey(file_session_.fs_id(), file_session_.ino()));
-    }
-
     result_.delta_bytes = -static_cast<int64_t>(attr.length());
     attr.set_length(0);
 
@@ -1670,20 +1657,9 @@ Status OpenFileOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_para
   txn->Put(MetaCodec::EncodeFileSessionKey(file_session_.fs_id(), file_session_.ino(), file_session_.session_id()),
            MetaCodec::EncodeFileSessionValue(file_session_));
 
-  // prefetch chunks and tiny file data
   for (const auto& kv : prefetch_kvs) {
     if (MetaCodec::IsChunkKey(kv.key)) {
       result_.chunks.push_back(MetaCodec::DecodeChunkValue(kv.value));
-
-    } else if (MetaCodec::IsTinyFileDataKey(kv.key)) {
-      if (attr.length() > 0) {
-        auto& mut_kv = const_cast<KeyValue&>(kv);
-        uint64_t data_version = 0;
-        MetaCodec::DecodeTinyFileDataValue(mut_kv.value, data_version);
-        mut_kv.value.resize(attr.length());
-        result_.data.swap(mut_kv.value);
-        result_.data_version = data_version;
-      }
     }
   }
 
@@ -1700,23 +1676,14 @@ Status FlushFileOperation::Run(TxnUPtr& txn) {
 
   const std::string key = MetaCodec::EncodeInodeKey(fs_id_, ino_);
   std::vector<std::string> keys = {key};
-  if (FLAGS_mds_tiny_file_data_enable) {
-    keys.push_back(MetaCodec::EncodeTinyFileDataKey(fs_id_, ino_));
-  }
   std::vector<KeyValue> kvs;
   auto status = txn->BatchGet(keys, kvs);
   if (!status.ok()) return status;
 
   AttrEntry attr;
-  bool is_updated = true;
-  uint64_t data_version = 0;
   for (auto& kv : kvs) {
     if (kv.key == key) {
       attr = MetaCodec::DecodeInodeValue(kv.value);
-
-    } else if (MetaCodec::IsTinyFileDataKey(kv.key)) {
-      is_updated = (memcmp(param_.data.data(), kv.value.data(), param_.data.size()) != 0);
-      MetaCodec::DecodeTinyFileDataValue(kv.value, data_version);
 
     } else {
       LOG(FATAL) << fmt::format("[operation.{}.{}] invalid key({}).", fs_id_, ino_, Helper::StringToHex(kv.key));
@@ -1736,12 +1703,6 @@ Status FlushFileOperation::Run(TxnUPtr& txn) {
   attr.set_version(attr.version() + 1);
 
   txn->Put(key, MetaCodec::EncodeInodeValue(attr));
-
-  if (attr.maybe_tiny_file() && is_updated) {
-    std::string& mut_data = const_cast<std::string&>(param_.data);
-    txn->Put(MetaCodec::EncodeTinyFileDataKey(fs_id_, ino_),
-             MetaCodec::EncodeTinyFileDataValue(mut_data, ++data_version));
-  }
 
   result_.attr = attr;
 
@@ -3511,7 +3472,6 @@ Status GetDelFileOperation::Run(TxnUPtr& txn) {
 Status CleanDelFileOperation::Run(TxnUPtr& txn) {
   txn->Delete(MetaCodec::EncodeDelFileKey(fs_id_, ino_));
   txn->Delete(MetaCodec::EncodeInodeKey(fs_id_, ino_));
-  if (maybe_tiny_file_) txn->Delete(MetaCodec::EncodeTinyFileDataKey(fs_id_, ino_));
 
   return Status::OK();
 }

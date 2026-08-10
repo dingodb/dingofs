@@ -671,16 +671,6 @@ Status VFSImpl::Read(ContextSPtr ctx, Ino ino, DataBuffer* data_buffer,
     return s;
   }
 
-  if (FLAGS_vfs_tiny_file_data_enable) {
-    // read from meta system
-    s = meta_system_->Read(SpanScope::GetContext(span), ino, fh, offset, size,
-                           *data_buffer, *out_rsize);
-    if (!s.IsNoData()) {
-      SpanScope::SetStatus(span, s);
-      return s;
-    }
-  }
-
   {
     auto flush_span = vfs_hub_->GetTraceManager()->StartChildSpan(
         "VFSImpl::Read.Flush", span);

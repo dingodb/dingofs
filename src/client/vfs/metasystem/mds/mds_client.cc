@@ -719,9 +719,7 @@ Status MDSClient::Open(
     ContextSPtr& ctx, Ino ino, int flags, const std::string& session_id,
     bool prefetch_chunk,
     const std::vector<mds::ChunkDescriptor>& chunk_descriptors,
-    bool prefetch_data, AttrEntry& attr_entry,
-    std::vector<mds::ChunkEntry>& chunks, std::string& data,
-    uint64_t& data_version) {
+    AttrEntry& attr_entry, std::vector<mds::ChunkEntry>& chunks) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
   CHECK(!session_id.empty()) << "session_id is empty.";
 
@@ -740,7 +738,6 @@ Status MDSClient::Open(
   request.set_flags(flags);
   request.set_session_id(session_id);
   request.set_prefetch_chunk(prefetch_chunk);
-  request.set_prefetch_data(prefetch_data);
 
   if (prefetch_chunk) {
     *request.mutable_chunk_descriptors() = {chunk_descriptors.begin(),
@@ -758,11 +755,6 @@ Status MDSClient::Open(
   if (prefetch_chunk) {
     chunks = mds::Helper::PbRepeatedToVector(response.chunks());
   }
-  if (prefetch_data) {
-    data.swap(*response.mutable_data());
-    data_version = response.data_version();
-  }
-
   parent_memo_.UpsertVersion(ino, response.inode().version());
 
   return Status::OK();
@@ -794,8 +786,7 @@ Status MDSClient::Release(ContextSPtr& ctx, Ino ino,
 }
 
 Status MDSClient::FlushFile(ContextSPtr& ctx, Ino ino, uint64_t length,
-                            std::string&& data, AttrEntry& attr_entry,
-                            bool& shrink_file) {
+                            AttrEntry& attr_entry, bool& shrink_file) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this, ino](bool& is_primary_mds) -> MDSMeta {
@@ -813,7 +804,6 @@ Status MDSClient::FlushFile(ContextSPtr& ctx, Ino ino, uint64_t length,
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
   request.set_length(length);
-  request.mutable_data()->assign(std::move(data));
 
   auto status = SendRequest(SpanScope::GetContext(span, ctx), span, get_mds_fn,
                             "MDSService", "FlushFile", request, response);
