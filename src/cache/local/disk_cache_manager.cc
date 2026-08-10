@@ -255,8 +255,9 @@ bool DiskCacheManager::CacheFull() const {
 }
 
 void DiskCacheManager::CheckFreeSpace() {
-  CHECK_RUNNING("Disk cache manager");
-
+  if (!running_.load(std::memory_order_relaxed)) {
+    return;
+  }
   struct iutil::StatFS stat;
   uint64_t want_free_bytes, want_free_files;
   std::string root_dir = GetRootDir();
@@ -353,8 +354,12 @@ void DiskCacheManager::CleanupAllShardsFull(uint64_t want_free_bytes,
 }
 
 void DiskCacheManager::CleanupExpire() {
-  CHECK_RUNNING("Disk cache manager");
-
+  // Background task that may be dequeued after Shutdown() because
+  // TaskThreadPool::Take() returns queued tasks even when the pool is
+  // stopping.  Exit gracefully instead of CHECK-failing.
+  if (!running_.load(std::memory_order_relaxed)) {
+    return;
+  }
   // per-shard scan cap keeps the total budget on par with the pre-shard 1e3
   const uint64_t budget = static_cast<uint64_t>(1e3 / kShardCount) + 1;
 

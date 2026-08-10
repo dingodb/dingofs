@@ -67,14 +67,16 @@ bool StateMachineImpl::Start() {
 }
 
 bool StateMachineImpl::Shutdown() {
-  std::lock_guard<bthread::Mutex> lk(mutex_);
-
-  if (!running_.exchange(false)) {
-    LOG(WARNING) << "StateMachineImpl is already down";
-    return true;
+  {
+    std::lock_guard<bthread::Mutex> lk(mutex_);
+    if (!running_.exchange(false)) {
+      LOG(WARNING) << "StateMachineImpl is already down";
+      return true;
+    }
+    LOG(INFO) << "StateMachineImpl is shutting down...";
   }
-
-  LOG(INFO) << "StateMachineImpl is shutting down...";
+  // mutex_ released here — ProcessEvent can drain any queued StateEvent
+  // without deadlocking against our join.
 
   if (bthread::execution_queue_stop(disk_event_queue_id_) != 0) {
     LOG(ERROR) << "Fail to stop ExecutionQueue";
