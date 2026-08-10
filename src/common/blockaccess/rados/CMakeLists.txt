@@ -13,6 +13,7 @@
 # limitations under the License.
 
 add_library(rados_accesser
+    osd_map_refresher.cc
     rados_accesser.cc
 )
 

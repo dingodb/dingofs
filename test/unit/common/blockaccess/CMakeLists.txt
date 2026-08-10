@@ -16,6 +16,7 @@ add_library(test_blockaccess
     files/test_file_accesser.cc
     test_prefix_block_accesser.cc
     test_block_accesser.cc
+    rados/test_osd_map_refresher.cc
 )
 
 target_link_libraries(test_blockaccess
