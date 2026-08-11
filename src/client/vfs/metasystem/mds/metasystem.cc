@@ -565,6 +565,8 @@ Status MDSMetaSystem::Lookup(ContextSPtr ctx, Ino parent,
   status = CorrectAttr(ctx, ctx->start_time_ns, *attr, is_amend, "lookup");
   if (!status.ok()) return status;
 
+  if (attr->nlink == 0) return Status::NotExist("inode is deleted");
+
   if (!ctx->inner_req) {
     modify_time_memo_.UpdateKernelMtime(attr->ino, attr->mtime);
   }
@@ -1457,12 +1459,16 @@ Status MDSMetaSystem::GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) {
       CorrectAttr(ctx, ctx->start_time_ns, *attr, is_amend, "getattr");
   if (!status.ok()) return status;
 
+  LOG_DEBUG << fmt::format("[meta.fs.{}] get attr length({}) is_amend({}).",
+                           ino, attr->length, is_amend);
+
+  if (attr->nlink == 0 && !file_session_map_.HasSession(ino)) {
+    return Status::NotExist("inode is deleted");
+  }
+
   if (!ctx->inner_req) {
     modify_time_memo_.UpdateKernelMtime(attr->ino, attr->mtime);
   }
-
-  LOG_DEBUG << fmt::format("[meta.fs.{}] get attr length({}) is_amend({}).",
-                           ino, attr->length, is_amend);
 
   return Status::OK();
 }

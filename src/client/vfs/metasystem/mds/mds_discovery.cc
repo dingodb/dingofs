@@ -30,7 +30,7 @@ namespace meta {
 
 static const uint32_t kWaitTimeMs = 100;
 
-bool MDSDiscovery::Init() { return RefreshFullyMDSList(); }
+bool MDSDiscovery::Init() { return RefreshFullyMDSList(true); }
 
 void MDSDiscovery::Stop() {
   stopped_.store(true);
@@ -53,34 +53,6 @@ bool MDSDiscovery::GetMDS(int64_t mds_id, mds::MDSMeta& mds_meta) {
   mds_meta = it->second;
 
   return true;
-}
-
-void MDSDiscovery::PickFirstMDS(mds::MDSMeta& mds_meta) {
-  IncActiveCount();
-  mds::DEFER(DecActiveCount());
-
-  do {
-    if (IsStop()) {
-      LOG(INFO) << "[meta.discovery] stop pick first mds.";
-      return;
-    }
-
-    {
-      utils::ReadLockGuard lk(lock_);
-
-      for (auto& [_, mds] : mdses_) {
-        if (mds.GetState() == mds::MDSMeta::State::kNormal) {
-          mds_meta = mds;
-          return;
-        }
-      }
-    }
-
-    LOG(INFO) << "[meta.discovery] not pick normal mds, try refresh mds list.";
-
-    RefreshFullyMDSList();
-
-  } while (true);
 }
 
 std::vector<mds::MDSMeta> MDSDiscovery::GetAllMDS() {
@@ -114,27 +86,32 @@ std::vector<mds::MDSMeta> MDSDiscovery::GetNormalMDS(bool force) {
   IncActiveCount();
   mds::DEFER(DecActiveCount());
 
-  for (;;) {
-    if (IsStop()) {
-      LOG(INFO) << "[meta.discovery] stop get normal mds.";
-      return {};
-    }
-
-    auto mdses = GetMDSByState(mds::MDSMeta::State::kNormal);
-    if (!force) return mdses;
-    if (!mdses.empty()) return mdses;
-
-    RefreshFullyMDSList();
+  if (IsStop()) {
+    LOG(INFO) << "[meta.discovery] stop get normal mds.";
+    return {};
   }
+
+  auto mdses = GetMDSByState(mds::MDSMeta::State::kNormal);
+  if (!mdses.empty()) return mdses;
+
+  RefreshFullyMDSList(force);
+
+  return GetMDSByState(mds::MDSMeta::State::kNormal);
 }
 
-Status MDSDiscovery::GetMDSList(std::vector<mds::MDSMeta>& mdses) {
+Status MDSDiscovery::GetMDSList(std::vector<mds::MDSMeta>& mdses,
+                                const std::string& reason) {
   pb::mds::GetMDSListRequest request;
   pb::mds::GetMDSListResponse response;
 
   request.mutable_info()->set_request_id(std::to_string(utils::TimestampNs()));
 
+  LOG(INFO) << fmt::format(
+      "[meta.discovery] get mds list, requestid({}) reason({}).",
+      request.info().request_id(), reason);
+
   auto status = rpc_.SendRequest("MDSService", "GetMDSList", request, response);
+
   if (!status.ok()) return status;
 
   mdses.reserve(response.mdses_size());
@@ -154,19 +131,19 @@ void MDSDiscovery::SetAbnormalMDS(int64_t mds_id) {
   }
 }
 
-bool MDSDiscovery::RefreshFullyMDSList() {
+bool MDSDiscovery::RefreshFullyMDSList(bool force) {
   IncActiveCount();
   mds::DEFER(DecActiveCount());
 
   uint64_t retries = 0;
   std::vector<mds::MDSMeta> mdses;
-  for (;;) {
+  do {
     if (IsStop()) {
       LOG(INFO) << "[meta.discovery] stop refresh fully mds list.";
       return false;
     }
 
-    auto status = GetMDSList(mdses);
+    auto status = GetMDSList(mdses, "refresh_fully_mds");
 
     LOG(INFO) << fmt::format(
         "[meta.discovery] get mds list finish, retries({}) error({}).", retries,
@@ -176,7 +153,8 @@ bool MDSDiscovery::RefreshFullyMDSList() {
 
     bthread_usleep(kWaitTimeMs * 1000);
     ++retries;
-  }
+
+  } while (force);
 
   {
     utils::WriteLockGuard lk(lock_);

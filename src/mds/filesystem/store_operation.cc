@@ -1360,6 +1360,7 @@ Status UpsertChunkOperation::Run(TxnUPtr& txn) {
 
   bool has_update_chunk = false;
   uint64_t length = 0;
+  result_.delta_bytes = 0;
   result_.effected_chunks.clear();
   for (const auto& delta_slices : delta_slices_) {
     ChunkEntry chunk;
@@ -1440,7 +1441,10 @@ Status UpsertChunkOperation::Run(TxnUPtr& txn) {
 
   // update inode length if needed
   if (has_update_chunk) {
-    if (length > attr.length()) attr.set_length(length);
+    if (length > attr.length()) {
+      result_.delta_bytes = length - attr.length();
+      attr.set_length(length);
+    }
     attr.set_mtime(std::max(attr.mtime(), GetTime()));
     attr.set_ctime(std::max(attr.ctime(), GetTime()));
     attr.set_version(attr.version() + 1);
