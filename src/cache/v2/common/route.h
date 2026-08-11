@@ -14,36 +14,40 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_CACHE_V2_UTILS_TIME_H_
-#define DINGOFS_CACHE_V2_UTILS_TIME_H_
+#ifndef DINGOFS_CACHE_V2_COMMON_ROUTE_H_
+#define DINGOFS_CACHE_V2_COMMON_ROUTE_H_
 
-#include <chrono>
 #include <cstdint>
+#include <utility>
+
+#include "cache/v2/common/block_handle.h"
+#include "cache/v2/core/net/types.h"
+#include "cache/v2/core/runtime/smp.h"
+#include "cache/v2/utils/hash.h"
 
 namespace dingofs {
 namespace cache {
 namespace v2 {
 
-inline uint64_t TimestampNs() {
-  return std::chrono::duration_cast<std::chrono::nanoseconds>(
-             std::chrono::steady_clock::now().time_since_epoch())
-      .count();
+inline uint64_t RouteHintOf(const BlockHandle& handle) {
+  return Mix64(handle.id);
 }
 
-inline uint32_t TimestampSec() {
-  return static_cast<uint32_t>(TimestampNs() / 1000000000ULL);
+inline uint32_t OwnerIndex(const BlockHandle& handle, uint32_t n) {
+  return ShardOf(RouteHintOf(handle), n);
 }
 
-inline thread_local uint64_t tls_cached_timestamp = 0;
+inline unsigned OwnerShard(const BlockHandle& handle) {
+  return OwnerIndex(handle, ShardCount());
+}
 
-inline void RefreshCachedTimestamp() { tls_cached_timestamp = TimestampNs(); }
-
-inline uint64_t CachedTimestampNs() {
-  return tls_cached_timestamp != 0 ? tls_cached_timestamp : TimestampNs();
+template <typename Fn>
+auto OnOwner(const BlockHandle& handle, Fn fn) {
+  return SubmitTo(OwnerShard(handle), std::move(fn));
 }
 
 }  // namespace v2
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_CACHE_V2_UTILS_TIME_H_
+#endif  // DINGOFS_CACHE_V2_COMMON_ROUTE_H_

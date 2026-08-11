@@ -17,6 +17,7 @@
 #ifndef DINGOFS_CACHE_V2_UTILS_STRING_H_
 #define DINGOFS_CACHE_V2_UTILS_STRING_H_
 
+#include <charconv>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -24,6 +25,21 @@
 namespace dingofs {
 namespace cache {
 namespace v2 {
+
+template <typename T>
+inline bool SplitUint(std::string_view* sv, char sep, T* out) {
+  const size_t end = sep == '\0' ? sv->size() : sv->find(sep);
+  if (end == std::string_view::npos || end == 0) {
+    return false;
+  }
+  const char* first = sv->data();
+  const auto [ptr, ec] = std::from_chars(first, first + end, *out);
+  if (ec != std::errc() || ptr != first + end) {
+    return false;
+  }
+  sv->remove_prefix(end == sv->size() ? end : end + 1);
+  return true;
+}
 
 inline std::vector<std::string> Split(std::string_view value, char sep) {
   std::vector<std::string> items;

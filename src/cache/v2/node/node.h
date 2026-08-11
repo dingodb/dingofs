@@ -17,13 +17,12 @@
 #ifndef DINGOFS_CACHE_V2_NODE_NODE_H_
 #define DINGOFS_CACHE_V2_NODE_NODE_H_
 
-#include "cache/v2/block/block_cache.h"
+#include "cache/v2/block/sharded.h"
 #include "cache/v2/common/mds_client.h"
 #include "cache/v2/core/server/server.h"
 #include "cache/v2/node/heartbeat.h"
 #include "cache/v2/node/membership.h"
 #include "cache/v2/node/service.h"
-#include "cache/v2/object/object.h"
 
 namespace dingofs {
 namespace cache {
@@ -49,12 +48,10 @@ class CacheNode {
 
   bool running_ = false;
   MDSClientUPtr mds_client_;
-  BlockCacheUPtr block_cache_;
+  ShardedLocalCacheUPtr block_cache_;
   ServerUPtr server_;
   GroupMembershipUPtr membership_;
   HeartbeatUPtr heartbeat_;
-  StorageClientUPtr storage_client_;
-  ObjectStorageUPtr storage_;
 };
 
 }  // namespace v2

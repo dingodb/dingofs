@@ -16,7 +16,6 @@
 
 #include "cache/v2/node/service.h"
 
-#include "cache/v2/block/routing.h"
 #include "cache/v2/common/flag_decls.h"
 #include "cache/v2/common/status.h"
 #include "cache/v2/core/memory/buffer.h"
@@ -29,7 +28,7 @@ namespace dingofs {
 namespace cache {
 namespace v2 {
 
-CacheService::CacheService(BlockCache* block_cache)
+CacheService::CacheService(ShardedLocalCache* block_cache)
     : ProtoService(pb::cache::v2::CacheService::descriptor()),
       block_cache_(block_cache) {
   AddMethod("Put", &CacheService::Put);
@@ -42,7 +41,7 @@ CacheService::CacheService(BlockCache* block_cache)
 Future<> CacheService::Put(Controller* cntl,
                            const pb::cache::v2::PutRequest* request,
                            pb::cache::v2::PutResponse* response) {
-  const Status status =
+  Status status =
       CheckAttachment(request->handle(), cntl->request_attachment_size());
   if (!status.ok()) {
     response->set_status(ToErrno(status));
@@ -52,11 +51,10 @@ Future<> CacheService::Put(Controller* cntl,
   const BlockHandle handle = BlockHandle::FromPb(request->handle());
   const BufferView attachment = cntl->request_attachment().view();
   const BufferViews block = {&attachment, 1};
-  const PutResult result = co_await OnOwner(handle, [&, this] {
-    return block_cache_->Put(handle, block, {.stage = request->stage()});
-  });
+  status =
+      co_await block_cache_->Put(handle, block, {.stage = request->stage()});
 
-  response->set_status(ToErrno(result.status));
+  response->set_status(ToErrno(status));
   co_return;
 }
 
@@ -79,13 +77,11 @@ Future<> CacheService::Get(Controller* cntl,
   }
 
   const BlockHandle handle = BlockHandle::FromPb(request->handle());
-  const GetResult result = co_await OnOwner(handle, [&, this] {
-    return block_cache_->Get(handle, aligned.offset, aligned.length,
-                             buffer.data());
-  });
+  status = co_await block_cache_->Get(handle, aligned.offset, aligned.length,
+                                      buffer.data());
 
-  response->set_status(ToErrno(result.status));
-  if (!result.status.ok()) {
+  response->set_status(ToErrno(status));
+  if (!status.ok()) {
     co_return;
   }
 
@@ -96,22 +92,22 @@ Future<> CacheService::Get(Controller* cntl,
     buffer.PopBack(aligned.offset + aligned.length - (offset + length));
   }
   cntl->response_attachment() = std::move(buffer);
+  co_return;
 }
 
 Future<> CacheService::Prefetch(Controller* /*cntl*/,
                                 const pb::cache::v2::PrefetchRequest* request,
                                 pb::cache::v2::PrefetchResponse* response) {
-  const Status status = CheckHandle(request->handle());
+  Status status = CheckHandle(request->handle());
   if (!status.ok()) {
     response->set_status(ToErrno(status));
     co_return;
   }
 
   const BlockHandle handle = BlockHandle::FromPb(request->handle());
-  const PrefetchResult result = co_await OnOwner(
-      handle, [this, handle] { return block_cache_->Prefetch(handle); });
+  status = co_await block_cache_->Prefetch(handle);
 
-  response->set_status(ToErrno(result.status));
+  response->set_status(ToErrno(status));
   co_return;
 }
 

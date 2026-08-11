@@ -28,10 +28,10 @@ namespace cache {
 namespace v2 {
 
 inline void SetThreadName(std::string_view name) {
-  char buf[16];
-  (void)std::snprintf(buf, sizeof(buf), "%.*s", static_cast<int>(name.size()),
+  char buffer[16];
+  (void)std::snprintf(buffer, sizeof(buffer), "%.*s", static_cast<int>(name.size()),
                       name.data());
-  (void)::pthread_setname_np(::pthread_self(), buf);
+  (void)::pthread_setname_np(::pthread_self(), buffer);
 }
 
 inline bool PinThreadToCpu(pthread_t thread, int cpu) {

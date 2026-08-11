@@ -17,13 +17,26 @@
 #ifndef DINGOFS_CACHE_V2_UTILS_GATE_H_
 #define DINGOFS_CACHE_V2_UTILS_GATE_H_
 
+#include <algorithm>
+#include <chrono>
 #include <cstddef>
+#include <cstdint>
 
 #include "cache/v2/core/reactor/coroutine.h"
 
 namespace dingofs {
 namespace cache {
 namespace v2 {
+
+template <typename Pred>
+Future<> SleepWhile(Pred pred, uint64_t ms) {
+  static constexpr uint64_t kStepMs = 100;
+  while (ms > 0 && pred()) {
+    const uint64_t step = std::min(ms, kStepMs);
+    co_await Sleep(std::chrono::milliseconds(step));
+    ms -= step;
+  }
+}
 
 // Tracks in-flight background work so shutdown can wait for it.
 class Gate {

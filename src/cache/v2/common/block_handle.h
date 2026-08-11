@@ -21,6 +21,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <ostream>
 #include <string>
 
 #include "cache/v2/utils/hash.h"
@@ -37,11 +38,11 @@ struct BlockHandle {
 
   bool operator!=(const BlockHandle& o) const { return !(*this == o); }
 
-  static BlockHandle FromPb(const pb::cache::v2::BlockHandle& key) {
-    return {.fs_id = key.fs_id(),
-            .id = key.id(),
-            .index = key.index(),
-            .size = key.size()};
+  static BlockHandle FromPb(const pb::cache::v2::BlockHandle& pb) {
+    return {.fs_id = pb.fs_id(),
+            .id = pb.id(),
+            .index = pb.index(),
+            .size = pb.size()};
   }
 
   void ToPb(pb::cache::v2::BlockHandle* pb) const {
@@ -71,6 +72,12 @@ struct BlockHandleHash {
     return static_cast<size_t>(h.Hash());
   }
 };
+
+inline std::ostream& operator<<(std::ostream& os, const BlockHandle& handle) {
+  os << "BlockHandle{fs_id=" << handle.fs_id << " id=" << handle.id
+     << " index=" << handle.index << " size=" << handle.size << "}";
+  return os;
+}
 
 }  // namespace v2
 }  // namespace cache

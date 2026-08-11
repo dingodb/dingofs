@@ -36,7 +36,7 @@ inline const std::vector<FlagSection> kSections = {
     {"CACHE STORE OPTIONS",
      {"cache_dir", "cache_dir_uuid", "cache_size_mb", "cache_expire_s",
       "cache_cleanup_expire_interval_ms", "cache_eviction", "iodepth",
-      "evict_unlink_batch", "free_space_ratio", "disk_state_check_duration_ms",
+      "free_space_ratio", "disk_state_check_duration_ms",
       "disk_state_probe_timeout_ms", "disk_state_tick_duration_s",
       "disk_state_normal2unstable_error_num",
       "disk_state_unstable2normal_succ_num", "disk_state_unstable2down_s"}},
