@@ -37,6 +37,7 @@ class StorageClient {
   StorageClient(const StorageClient&) = delete;
   StorageClient& operator=(const StorageClient&) = delete;
 
+  void Start();
   void Shutdown();
 
   virtual Status GetOrCreate(uint64_t fs_id,
@@ -47,7 +48,7 @@ class StorageClient {
  private:
   Status Create(uint64_t fs_id);
 
-  std::atomic<bool> running_{true};
+  std::atomic<bool> running_{false};
   MDSClient* mds_client_;
   std::shared_mutex mutex_;
   std::unordered_map<uint64_t, blockaccess::BlockAccesserUPtr> accessers_;

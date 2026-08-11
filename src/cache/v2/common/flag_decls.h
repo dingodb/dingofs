@@ -27,12 +27,11 @@ namespace v2 {
 DECLARE_string(id);
 DECLARE_string(listen_ip);
 DECLARE_uint32(listen_port);
-DECLARE_bool(public_address);
+DECLARE_string(bind_ip);
 DECLARE_bool(rdma);
 DECLARE_string(rdma_device);
 DECLARE_uint32(shards);
 DECLARE_string(cpuset);
-DECLARE_bool(pin_cpu);
 DECLARE_bool(poll_mode);
 DECLARE_uint64(buffer_pool_mb);
 DECLARE_bool(daemonize);
@@ -67,7 +66,7 @@ DECLARE_uint32(upload_stage_max_inflights);
 DECLARE_uint32(upload_stage_max_tries);
 DECLARE_uint32(upload_stage_retry_delay_s);
 
-// block/retriever.cc
+// block/local_cache.cc
 DECLARE_uint32(max_range_size_kb);
 
 // tier/tier_cache.cc
@@ -93,11 +92,14 @@ DECLARE_string(cache_eviction);
 DECLARE_string(cache_dir);
 DECLARE_string(cache_dir_uuid);
 DECLARE_uint32(cache_size_mb);
+DECLARE_uint32(iodepth);
+
+// store/cache_manager.cc
 DECLARE_uint32(cache_expire_s);
 DECLARE_uint32(cache_cleanup_expire_interval_ms);
-DECLARE_uint32(iodepth);
-DECLARE_uint32(evict_unlink_batch);
 DECLARE_double(free_space_ratio);
+
+// store/health.cc
 DECLARE_uint32(disk_state_check_duration_ms);
 DECLARE_uint32(disk_state_probe_timeout_ms);
 DECLARE_uint32(disk_state_tick_duration_s);

@@ -20,13 +20,12 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
+#include <memory>
 #include <utility>
 
-#include "cache/v2/block/local_block_cache.h"
 #include "cache/v2/common/flag_decls.h"
 #include "cache/v2/core/net/brpc/transport.h"
 #include "cache/v2/core/runtime/smp.h"
-#include "cache/v2/store/disk_cache.h"
 
 namespace dingofs {
 namespace cache {
@@ -54,13 +53,10 @@ CacheNode::CacheNode() : CacheNode(std::make_unique<MDSClientImpl>()) {}
 
 CacheNode::CacheNode(MDSClientUPtr mds_client)
     : mds_client_(std::move(mds_client)),
+      block_cache_(std::make_unique<ShardedLocalCache>(mds_client_.get())),
       membership_(std::make_unique<GroupMembership>(mds_client_.get())),
-      heartbeat_(std::make_unique<Heartbeat>(mds_client_.get())),
-      storage_client_(std::make_unique<StorageClient>(mds_client_.get())),
-      storage_(std::make_unique<ObjectStorage>(storage_client_.get())) {
+      heartbeat_(std::make_unique<Heartbeat>(mds_client_.get())) {
   FLAGS_cache_dir_uuid = FLAGS_id;
-  block_cache_ = std::make_unique<LocalBlockCache>(LocalBlockCacheOption{
-      .disks = ParseDiskOptions(FLAGS_cache_dir), .storage = storage_.get()});
 }
 
 CacheNode::~CacheNode() { Shutdown(); }
@@ -112,7 +108,6 @@ void CacheNode::Shutdown() {
 
   heartbeat_->Shutdown();
   membership_->Shutdown();
-  storage_client_->Shutdown();
   server_->Shutdown();
   block_cache_->Shutdown();
 

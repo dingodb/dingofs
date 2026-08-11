@@ -19,7 +19,7 @@
 
 #include <cstdint>
 
-#include "cache/v2/block/block_cache.h"
+#include "cache/v2/block/sharded.h"
 #include "cache/v2/core/server/proto_service.h"
 #include "dingofs/cache.pb.h"
 
@@ -29,7 +29,7 @@ namespace v2 {
 
 class CacheService : public ProtoService {
  public:
-  explicit CacheService(BlockCache* block_cache);
+  explicit CacheService(ShardedLocalCache* block_cache);
 
   Future<> Put(Controller* cntl, const pb::cache::v2::PutRequest* request,
                pb::cache::v2::PutResponse* response);
@@ -46,12 +46,12 @@ class CacheService : public ProtoService {
 
  private:
   static Status CheckHandle(const pb::cache::v2::BlockHandle& handle);
-  static Status CheckRange(const pb::cache::v2::BlockHandle& handle,
-                           uint64_t offset, uint32_t length);
   static Status CheckAttachment(const pb::cache::v2::BlockHandle& handle,
                                 uint32_t attachment_size);
+  static Status CheckRange(const pb::cache::v2::BlockHandle& handle,
+                           uint64_t offset, uint32_t length);
 
-  BlockCache* block_cache_;
+  ShardedLocalCache* block_cache_;
 };
 
 }  // namespace v2

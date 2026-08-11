@@ -32,6 +32,12 @@ StorageClient::StorageClient(MDSClient* mds_client) : mds_client_(mds_client) {}
 
 StorageClient::~StorageClient() { Shutdown(); }
 
+void StorageClient::Start() {
+  LOG(INFO) << "StorageClient is starting...";
+  running_.store(true, std::memory_order_release);
+  LOG(INFO) << "Successfully start StorageClient";
+}
+
 void StorageClient::Shutdown() {
   LOG(INFO) << "StorageClient is shutting down...";
   running_.store(false, std::memory_order_release);
