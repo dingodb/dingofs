@@ -87,6 +87,23 @@ TEST_F(RemoteNodeHealthCheckerTest, StartAndShutdownIdempotent) {
   checker.Shutdown();
 }
 
+TEST_F(RemoteNodeHealthCheckerTest, DestroyWithoutShutdown) {
+  // Repro for the shutdown SIGSEGV (2026-08-03): implicit destruction frees
+  // conn_ and state_machine_ before executor_ is stopped/joined. Periodic
+  // tasks still running or queued in the pool then dereference freed members
+  // via CheckNode() -> state_machine_->Success()/Error().
+  // Expected: ASAN heap-use-after-free on the unpatched code.
+  FLAGS_cache_node_state_check_duration_ms = 1;
+
+  for (int i = 0; i < 200; ++i) {
+    auto checker =
+        std::make_unique<RemoteNodeHealthChecker>("127.0.0.1", 9300);
+    checker->Start();
+    std::this_thread::sleep_for(std::chrono::milliseconds(3));
+    checker.reset();  // intentionally skip Shutdown()
+  }
+}
+
 TEST_F(RemoteNodeHealthCheckerTest, StageIoResultsDriveHealth) {
   RemoteNodeHealthChecker checker("127.0.0.1", 9300);
   checker.Start();

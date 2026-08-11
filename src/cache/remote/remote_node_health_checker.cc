@@ -93,6 +93,8 @@ RemoteNodeHealthChecker::RemoteNodeHealthChecker(const std::string& ip,
           std::make_unique<Configure>())),
       conn_(RemoteNodeConnection::New()) {}
 
+RemoteNodeHealthChecker::~RemoteNodeHealthChecker() { Shutdown(); }
+
 void RemoteNodeHealthChecker::Start() {
   if (running_.load(std::memory_order_relaxed)) {
     LOG(WARNING) << "RemoteNodeHealthChecker already started";
