@@ -766,6 +766,17 @@ Status MemoryMetaSystem::SetAttr(ContextSPtr ctx, Ino ino, int set,
     inode.set_gid(attr.gid);
     update_fields.push_back("gid");
   }
+  if (set & (kSetAttrKillSuid | kSetAttrKillSgid | kSetAttrKillPriv)) {
+    uint32_t mode = inode.mode();
+    if (set & (kSetAttrKillSuid | kSetAttrKillPriv)) {
+      mode &= ~S_ISUID;
+    }
+    if (set & (kSetAttrKillSgid | kSetAttrKillPriv)) {
+      mode &= ~S_ISGID;
+    }
+    inode.set_mode(mode);
+    update_fields.push_back("mode");
+  }
 
   uint64_t now_timestamp = CurrentTimestamp();
 

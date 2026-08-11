@@ -700,7 +700,7 @@ Status MDSMetaSystem::DoOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
   // update chunk cache
   auto& chunk_set = file_session->GetChunkSet();
   if (flags & O_TRUNC) {
-    InvalidateLengthShrinkCache(ino, false);
+    InvalidateLengthShrinkCache(ino, false, "open_trunc");
     chunk_set->ResetLastWriteLength();
     chunk_set->SetFlushCheckpoint(0);
   } else {
@@ -832,7 +832,7 @@ Status MDSMetaSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
     LOG(ERROR) << fmt::format("[meta.fs.{}.{}] open file fail, error({}).", ino,
                               fh, status.ToString());
     if (flags & O_TRUNC) {
-      InvalidateLengthShrinkCache(ino, status);
+      InvalidateLengthShrinkCache(ino, status, "open_trunc");
       if (status.IsNetError()) *keep_cache = false;
     }
     file_session_map_.Delete(ino, fh);
@@ -925,7 +925,7 @@ Status MDSMetaSystem::RollbackWriteLength(ContextSPtr ctx, Ino ino,
       ctx, ino, last_write_length, checkpoint, attr_entry, shrink_file);
   // Invalidate even when the response says no shrink: an earlier timed-out
   // attempt may have committed and the RPC retry then observed the checkpoint.
-  InvalidateLengthShrinkCache(ino, status);
+  InvalidateLengthShrinkCache(ino, status, "rollback_write_length");
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
         "[meta.fs.{}.{}] rollback write length fail, checkpoint({}) "
@@ -1517,7 +1517,8 @@ Status MDSMetaSystem::SetAttr(ContextSPtr ctx, Ino ino, int set,
   // Invalidate on every successful size setattr (a timed-out attempt may have
   // committed a shrink while the successful retry reports it as a no-op) and
   // on commit-ambiguous network errors.
-  if (set & kSetAttrSize) InvalidateLengthShrinkCache(ino, status);
+  if (set & kSetAttrSize)
+    InvalidateLengthShrinkCache(ino, status, "setattr_length");
   if (!status.ok()) {
     return status;
   }
@@ -1797,7 +1798,7 @@ Status MDSMetaSystem::DoFlushFile(ContextSPtr ctx, InodeSPtr inode,
   chunk_set->SetFlushCheckpoint(last_write_length);
 
   modify_time_memo_.Remember(ino);
-  if (shrink_file) InvalidateLengthShrinkCache(ino, false);
+  if (shrink_file) InvalidateLengthShrinkCache(ino, false, "flush_file");
 
   PutInodeToCache(attr_entry);
 
@@ -1989,8 +1990,13 @@ void MDSMetaSystem::InvalidateFileSessionReadCache(Ino ino) {
   if (file_session != nullptr) file_session->InvalidateReadCache(true);
 }
 
-void MDSMetaSystem::InvalidateLengthShrinkCache(Ino ino,
-                                                bool invalidate_inode) {
+void MDSMetaSystem::InvalidateLengthShrinkCache(Ino ino, bool invalidate_inode,
+                                                const std::string& reason) {
+  LOG_DEBUG << fmt::format(
+      "[meta.fs.{}] invalidate length shrink cache, invalidate_inode({}) "
+      "reason({}).",
+      ino, invalidate_inode, reason);
+
   chunk_memo_.Forget(ino);
 
   auto file_session = file_session_map_.GetSession(ino);
@@ -2003,12 +2009,12 @@ void MDSMetaSystem::InvalidateLengthShrinkCache(Ino ino,
 // conservatively but keep the inode (caller refreshes it from the RPC attr);
 // on a commit-ambiguous network error also drop the cached inode since the
 // shrink may have committed server-side. Other errors need no invalidation.
-void MDSMetaSystem::InvalidateLengthShrinkCache(Ino ino,
-                                                const Status& status) {
+void MDSMetaSystem::InvalidateLengthShrinkCache(Ino ino, const Status& status,
+                                                const std::string& reason) {
   if (status.ok()) {
-    InvalidateLengthShrinkCache(ino, /*invalidate_inode=*/false);
+    InvalidateLengthShrinkCache(ino, /*invalidate_inode=*/false, reason);
   } else if (status.IsNetError()) {
-    InvalidateLengthShrinkCache(ino, /*invalidate_inode=*/true);
+    InvalidateLengthShrinkCache(ino, /*invalidate_inode=*/true, reason);
   }
 }
 

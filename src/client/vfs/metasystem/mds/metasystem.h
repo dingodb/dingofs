@@ -228,8 +228,10 @@ class MDSMetaSystem : public vfs::MetaSystem {
                      bool& is_amend, const std::string& caller);
   bool CorrectAttrLength(Attr& attr, const std::string& caller);
   void InvalidateFileSessionReadCache(Ino ino);
-  void InvalidateLengthShrinkCache(Ino ino, bool invalidate_inode);
-  void InvalidateLengthShrinkCache(Ino ino, const Status& status);
+  void InvalidateLengthShrinkCache(Ino ino, bool invalidate_inode,
+                                   const std::string& reason);
+  void InvalidateLengthShrinkCache(Ino ino, const Status& status,
+                                   const std::string& reason);
 
   Status DoOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
                 const std::string& session_id, FileSessionSPtr file_session);

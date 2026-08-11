@@ -46,6 +46,7 @@ struct ClientOpMetric {
   OpMetric opSetAttr;
   OpMetric opGetXattr;
   OpMetric opListXattr;
+  OpMetric opSetXattr;
   OpMetric opRemoveXattr;
   OpMetric opSymlink;
   OpMetric opReadLink;
@@ -76,6 +77,7 @@ struct ClientOpMetric {
         opSetAttr(prefix, "opSetattr"),
         opGetXattr(prefix, "opGetxattr"),
         opListXattr(prefix, "opListxattr"),
+        opSetXattr(prefix, "opSetxattr"),
         opRemoveXattr(prefix, "opRemovexattr"),
         opSymlink(prefix, "opSymlink"),
         opReadLink(prefix, "opReadlink"),

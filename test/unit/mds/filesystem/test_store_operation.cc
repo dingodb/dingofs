@@ -1620,6 +1620,40 @@ TEST_F(UpdateAttrRunTest, UpdateModeOnly) {
   ExpectAttrEq(got, expected);
 }
 
+TEST_F(UpdateAttrRunTest, KillPrivilegeBits) {
+  const Ino ino = 210;
+  auto baseline = MakeFullInode(ino, 100);
+  baseline.set_mode(06755);
+  auto new_vals = MakeNewValues();
+
+  auto got = RunUpdate(ino, kSetAttrKillSuid, new_vals, baseline);
+  auto expected = baseline;
+  expected.set_mode(02755);
+  ExpectAttrEq(got, expected);
+
+  got = RunUpdate(ino, kSetAttrKillSgid, new_vals, baseline);
+  expected.set_mode(04755);
+  ExpectAttrEq(got, expected);
+
+  got = RunUpdate(ino, kSetAttrKillPriv, new_vals, baseline);
+  expected.set_mode(0755);
+  ExpectAttrEq(got, expected);
+}
+
+TEST_F(UpdateAttrRunTest, KillPrivilegeBitsAfterModeUpdate) {
+  const Ino ino = 211;
+  auto baseline = MakeFullInode(ino, 100);
+  auto new_vals = MakeNewValues();
+  new_vals.set_mode(06770);
+
+  auto got =
+      RunUpdate(ino, kSetAttrMode | kSetAttrKillPriv, new_vals, baseline);
+
+  auto expected = baseline;
+  expected.set_mode(0770);
+  ExpectAttrEq(got, expected);
+}
+
 TEST_F(UpdateAttrRunTest, UpdateUidOnly) {
   const Ino ino = 201;
   auto baseline = MakeFullInode(ino, 100);

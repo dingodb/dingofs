@@ -90,7 +90,9 @@ static std::string DescribeSetAttr(int set) {
   constexpr uint32_t kKnownSetAttr =
       kSetAttrMode | kSetAttrUid | kSetAttrGid | kSetAttrSize | kSetAttrAtime |
       kSetAttrMtime | kSetAttrAtimeNow | kSetAttrMtimeNow | kSetAttrCtime |
-      kSetAttrFlags | kSetAttrNlink;
+      kSetAttrKillSuid | kSetAttrKillSgid | kSetAttrFile | kSetAttrKillPriv |
+      kSetAttrOpen | kSetAttrTimesSet | kSetAttrTouch | kSetAttrFlags |
+      kSetAttrNlink;
 
   std::string description;
   auto append = [&description, value](uint32_t flag, const char* name) {
@@ -108,6 +110,13 @@ static std::string DescribeSetAttr(int set) {
   append(kSetAttrAtimeNow, "atime_now");
   append(kSetAttrMtimeNow, "mtime_now");
   append(kSetAttrCtime, "ctime");
+  append(kSetAttrKillSuid, "kill_suid");
+  append(kSetAttrKillSgid, "kill_sgid");
+  append(kSetAttrFile, "file");
+  append(kSetAttrKillPriv, "kill_priv");
+  append(kSetAttrOpen, "open");
+  append(kSetAttrTimesSet, "times_set");
+  append(kSetAttrTouch, "touch");
   append(kSetAttrFlags, "flags");
   append(kSetAttrNlink, "nlink");
 
@@ -698,6 +707,11 @@ Status VFSWrapper::SetAttr(const Context& ctx, Ino ino, int set,
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opSetAttr, &client_op_metric_->opAll});
 
+  if (set & (kSetAttrOpen | kSetAttrTimesSet)) {
+    s = Status::InvalidParam("not supported");
+    return s;
+  }
+
   auto span_ctx = dingofs::SpanScope::GetContext(span);
   s = vfs_->SetAttr(span_ctx, ino, set, in_attr, out_attr);
   if (!s.ok()) op_metric.FailOp();
@@ -1169,7 +1183,7 @@ Status VFSWrapper::SetXattr(const Context& ctx, Ino ino,
   });
 
   ClientOpMetricGuard op_metric(
-      {&client_op_metric_->opSetAttr, &client_op_metric_->opAll},
+      {&client_op_metric_->opSetXattr, &client_op_metric_->opAll},
       !dingofs::IsInternalIno(ino));
 
   if (name.length() > vfs_->GetMaxNameLength()) {

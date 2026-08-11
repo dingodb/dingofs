@@ -32,17 +32,25 @@ static constexpr Ino kRootIno = 1;
 
 // Bitmask flags for the `set` parameter of SetAttr().
 // Combine with bitwise-OR to indicate which Attr fields to update.
-static constexpr uint32_t kSetAttrMode     = 1 << 0;
-static constexpr uint32_t kSetAttrUid      = 1 << 1;
-static constexpr uint32_t kSetAttrGid      = 1 << 2;
-static constexpr uint32_t kSetAttrSize     = 1 << 3;
-static constexpr uint32_t kSetAttrAtime    = 1 << 4;
-static constexpr uint32_t kSetAttrMtime    = 1 << 5;
+static constexpr uint32_t kSetAttrMode = 1 << 0;
+static constexpr uint32_t kSetAttrUid = 1 << 1;
+static constexpr uint32_t kSetAttrGid = 1 << 2;
+static constexpr uint32_t kSetAttrSize = 1 << 3;
+static constexpr uint32_t kSetAttrAtime = 1 << 4;
+static constexpr uint32_t kSetAttrMtime = 1 << 5;
 static constexpr uint32_t kSetAttrAtimeNow = 1 << 7;
 static constexpr uint32_t kSetAttrMtimeNow = 1 << 8;
-static constexpr uint32_t kSetAttrCtime    = 1 << 10;
-static constexpr uint32_t kSetAttrFlags    = 1 << 11;
-static constexpr uint32_t kSetAttrNlink    = 1 << 12;
+static constexpr uint32_t kSetAttrCtime = 1 << 10;
+static constexpr uint32_t kSetAttrKillSuid = 1 << 11;
+static constexpr uint32_t kSetAttrKillSgid = 1 << 12;
+static constexpr uint32_t kSetAttrFile = 1 << 13;
+static constexpr uint32_t kSetAttrKillPriv = 1 << 14;
+static constexpr uint32_t kSetAttrOpen = 1 << 15;
+static constexpr uint32_t kSetAttrTimesSet = 1 << 16;
+static constexpr uint32_t kSetAttrTouch = 1 << 17;
+
+static constexpr uint32_t kSetAttrFlags = 1 << 20;
+static constexpr uint32_t kSetAttrNlink = 1 << 21;
 
 enum FileType : uint8_t {
   kDirectory = 1,
