@@ -45,6 +45,7 @@ namespace cache {
 class RemoteNodeHealthChecker {
  public:
   RemoteNodeHealthChecker(const std::string& ip, uint32_t port);
+  ~RemoteNodeHealthChecker();
   void Start();
   void Shutdown();
 
