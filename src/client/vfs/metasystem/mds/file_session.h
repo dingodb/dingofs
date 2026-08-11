@@ -121,6 +121,7 @@ class FileSessionMap {
   FileSessionSPtr GetSession(Ino ino);
   std::vector<FileSessionSPtr> GetAllSession();
   std::map<Ino, std::vector<std::string>> GetNeedKeepAliveSession();
+  bool HasSession(Ino ino);
 
   size_t Size();
   size_t Bytes();

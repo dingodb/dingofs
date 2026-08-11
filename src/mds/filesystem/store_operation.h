@@ -931,6 +931,7 @@ class UpsertChunkOperation : public Operation {
   struct Result {
     AttrEntry attr;
     std::vector<ChunkEntry> effected_chunks;
+    int64_t delta_bytes{0};
   };
 
   OpType GetOpType() const override { return OpType::kUpsertChunk; }
@@ -1148,8 +1149,7 @@ class FallocateOperation : public Operation {
 
 class OpenFileOperation : public Operation {
  public:
-  OpenFileOperation(Trace& trace, uint32_t flags,
-                    const FileSessionEntry& file_session, uint64_t chunk_size,
+  OpenFileOperation(Trace& trace, uint32_t flags, const FileSessionEntry& file_session, uint64_t chunk_size,
                     const std::vector<uint32_t>& prefetch_chunks)
       : Operation(trace),
         flags_(flags),
@@ -2225,8 +2225,7 @@ class GetDelFileOperation : public Operation {
 
 class CleanDelFileOperation : public Operation {
  public:
-  CleanDelFileOperation(Trace& trace, uint32_t fs_id, Ino ino)
-      : Operation(trace), fs_id_(fs_id), ino_(ino) {};
+  CleanDelFileOperation(Trace& trace, uint32_t fs_id, Ino ino) : Operation(trace), fs_id_(fs_id), ino_(ino) {};
   ~CleanDelFileOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kCleanDelFile; }

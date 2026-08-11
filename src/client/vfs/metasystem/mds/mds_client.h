@@ -264,7 +264,7 @@ class MDSClient {
 
   void ProcessEpochChange();
   void ProcessNotServe();
-  void ProcessNetError(MDSMeta& mds_meta);
+  bool ProcessNetError(MDSMeta& mds_meta);
 
   template <typename Request>
   void SetAncestorInContext(Request& request, Ino ino);
@@ -362,7 +362,9 @@ Status MDSClient::SendRequest(ContextSPtr ctx, SpanScopeSPtr& span,
         continue;
 
       } else if (status.IsNetError()) {
-        ProcessNetError(mds_meta);
+        if (!ProcessNetError(mds_meta)) {
+          return Status::NetError("no normal mds available");
+        }
 
         is_primary_mds =
             (primary_mds_id != 0 && mds_meta.ID() == primary_mds_id);

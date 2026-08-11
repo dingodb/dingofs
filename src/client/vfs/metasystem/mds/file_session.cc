@@ -312,6 +312,20 @@ FileSessionMap::GetNeedKeepAliveSession() {
   return file_session_id_map;
 }
 
+bool FileSessionMap::HasSession(Ino ino) {
+  CHECK(ino != 0) << "ino is zero.";
+
+  bool has_session = false;
+  shard_map_.withRLock(
+      [this, ino, &has_session](Map& map) {
+        auto it = map.find(ino);
+        if (it != map.end()) has_session = true;
+      },
+      ino);
+
+  return has_session;
+}
+
 size_t FileSessionMap::Size() {
   size_t size = 0;
   shard_map_.iterate([&size](Map& map) { size += map.size(); });

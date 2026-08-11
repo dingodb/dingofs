@@ -1721,7 +1721,7 @@ bool MDSClient::UpdateRouter() {
 
   fs_info_.Update(new_fs_info);
 
-  if (!mds_discovery_.RefreshFullyMDSList()) {
+  if (!mds_discovery_.RefreshFullyMDSList(true)) {
     LOG(ERROR) << "[meta.client] refresh mds discovery fail.";
     return false;
   }
@@ -1749,12 +1749,13 @@ void MDSClient::ProcessNotServe() {
   }
 }
 
-void MDSClient::ProcessNetError(MDSMeta& mds_meta) {
+bool MDSClient::ProcessNetError(MDSMeta& mds_meta) {
   // set the current mds as abnormal
   mds_discovery_.SetAbnormalMDS(mds_meta.ID());
 
+  uint64_t old_mds_id = mds_meta.ID();
   // get a normal mds
-  auto mdses = mds_discovery_.GetNormalMDS();
+  auto mdses = mds_discovery_.GetNormalMDS(false);
   for (auto& mds : mdses) {
     if (mds.ID() != mds_meta.ID()) {
       LOG(INFO) << fmt::format(
@@ -1764,6 +1765,8 @@ void MDSClient::ProcessNetError(MDSMeta& mds_meta) {
       break;
     }
   }
+
+  return old_mds_id != mds_meta.ID();
 }
 
 }  // namespace meta

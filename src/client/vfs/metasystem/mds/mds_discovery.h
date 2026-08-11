@@ -38,13 +38,12 @@ class MDSDiscovery {
   void Stop();
 
   bool GetMDS(int64_t mds_id, mds::MDSMeta& mds_meta);
-  void PickFirstMDS(mds::MDSMeta& mds_meta);
   std::vector<mds::MDSMeta> GetAllMDS();
   std::vector<mds::MDSMeta> GetMDSByState(mds::MDSMeta::State state);
-  std::vector<mds::MDSMeta> GetNormalMDS(bool force = true);
+  std::vector<mds::MDSMeta> GetNormalMDS(bool force);
 
   void SetAbnormalMDS(int64_t mds_id);
-  bool RefreshFullyMDSList();
+  bool RefreshFullyMDSList(bool force = true);
 
   size_t Size();
   size_t Bytes();
@@ -65,7 +64,8 @@ class MDSDiscovery {
 
   bool IsStop() { return stopped_.load(std::memory_order_acquire); }
 
-  Status GetMDSList(std::vector<mds::MDSMeta>& mdses);
+  Status GetMDSList(std::vector<mds::MDSMeta>& mdses,
+                    const std::string& reason);
 
   utils::RWLock lock_;
   // mds_id -> MDSMeta

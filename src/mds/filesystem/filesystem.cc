@@ -1171,8 +1171,7 @@ Status FileSystem::Open(Context& ctx, Ino ino, const OpenParam& param, EntryOutF
 
   FileSessionSPtr file_session = file_session_manager_.Create(ino, client_id, param.session_id);
 
-  OpenFileOperation operation(trace, flags, *file_session, chunk_size,
-                              prefetch_chunks);
+  OpenFileOperation operation(trace, flags, *file_session, chunk_size, prefetch_chunks);
 
   trace.RecordElapsedTime("prepare");
 
@@ -1182,11 +1181,10 @@ Status FileSystem::Open(Context& ctx, Ino ino, const OpenParam& param, EntryOutF
   auto& attr = result.attr;
   int64_t delta_bytes = result.delta_bytes;
   auto& chunks = result.chunks;
-  LOG_DEBUG << fmt::format(
-      "[fs.{}.{}.{}.{}][{}us] open {} finish, flags({:o}:{}) fetch_chunk({}:{}) status({}).", fs_id_,
-      ino, ctx.RequestId(), trace.GetReqTypeInt(), duration.ElapsedUs(), param.session_id, flags,
-      dingofs::Helper::DescOpenFlags(flags), fetch_from,
-      out.chunks.empty() ? chunks.size() : out.chunks.size(), status.error_str());
+  LOG_DEBUG << fmt::format("[fs.{}.{}.{}.{}][{}us] open {} finish, flags({:o}:{}) fetch_chunk({}:{}) status({}).",
+                           fs_id_, ino, ctx.RequestId(), trace.GetReqTypeInt(), duration.ElapsedUs(), param.session_id,
+                           flags, dingofs::Helper::DescOpenFlags(flags), fetch_from,
+                           out.chunks.empty() ? chunks.size() : out.chunks.size(), status.error_str());
   trace.RecordElapsedTime("resume");
 
   if (!status.ok()) return status;
@@ -2873,6 +2871,17 @@ Status FileSystem::WriteSlice(Context& ctx, Ino ino, const std::vector<DeltaSlic
     }
 
     chunk_cache_.PutIf(ino, std::move(chunk));
+  }
+
+  // update quota
+  int64_t delta_bytes = result.delta_bytes;
+  if (delta_bytes != 0) {
+    quota_manager_.AsyncUpdateFsUsage(delta_bytes, 0, reason);
+
+    for (const auto& parent : attr.parents()) {
+      quota_manager_.AsyncUpdateDirUsage(parent, delta_bytes, 0, reason);
+      UpdateDirStat(parent, delta_bytes, 0, 0, reason);
+    }
   }
 
   trace.RecordElapsedTime("post_handle");
