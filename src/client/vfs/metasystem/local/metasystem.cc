@@ -1066,6 +1066,16 @@ Status LocalMetaSystem::SetAttr(ContextSPtr, Ino ino, int to_set,
     if (to_set & kSetAttrGid) {
       attr_entry.set_gid(in_attr.gid);
     }
+    if (to_set & (kSetAttrKillSuid | kSetAttrKillSgid | kSetAttrKillPriv)) {
+      uint32_t mode = attr_entry.mode();
+      if (to_set & (kSetAttrKillSuid | kSetAttrKillPriv)) {
+        mode &= ~S_ISUID;
+      }
+      if (to_set & (kSetAttrKillSgid | kSetAttrKillPriv)) {
+        mode &= ~S_ISGID;
+      }
+      attr_entry.set_mode(mode);
+    }
 
     struct timespec now;
     CHECK(clock_gettime(CLOCK_REALTIME, &now) == 0) << "get current time fail.";

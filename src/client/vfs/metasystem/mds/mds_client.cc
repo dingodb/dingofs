@@ -824,8 +824,7 @@ Status MDSClient::FlushFile(ContextSPtr& ctx, Ino ino, uint64_t length,
 Status MDSClient::RollbackFileLength(ContextSPtr& ctx, Ino ino,
                                      uint64_t last_write_length,
                                      uint64_t rollback_to_length,
-                                     AttrEntry& attr_entry,
-                                     bool& shrink_file) {
+                                     AttrEntry& attr_entry, bool& shrink_file) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this, ino](bool& is_primary_mds) -> MDSMeta {
@@ -1177,6 +1176,9 @@ Status MDSClient::SetAttr(ContextSPtr& ctx, Ino ino, const Attr& attr,
     request.set_flags(attr.flags);
     temp_to_set |= kSetAttrFlags;
   }
+
+  temp_to_set |=
+      to_set & (kSetAttrKillSuid | kSetAttrKillSgid | kSetAttrKillPriv);
 
   request.set_to_set(temp_to_set);
 

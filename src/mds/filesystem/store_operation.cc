@@ -1220,12 +1220,22 @@ static Status AppendZeroSlices(TxnUPtr& txn, uint32_t fs_id, Ino ino, uint64_t o
 }
 
 Status UpdateAttrOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) {
-  AttrEntry attr = shared_param.attr;
+  auto& attr = shared_param.attr;
   result_.delta_bytes = 0;
   result_.effected_chunks.clear();
 
   if (to_set_ & kSetAttrMode) {
     attr.set_mode(attr_.mode());
+  }
+  if (to_set_ & (kSetAttrKillSuid | kSetAttrKillSgid | kSetAttrKillPriv)) {
+    uint32_t mode = attr.mode();
+    if (to_set_ & (kSetAttrKillSuid | kSetAttrKillPriv)) {
+      mode &= ~S_ISUID;
+    }
+    if (to_set_ & (kSetAttrKillSgid | kSetAttrKillPriv)) {
+      mode &= ~S_ISGID;
+    }
+    attr.set_mode(mode);
   }
 
   if (to_set_ & kSetAttrUid) {
@@ -1279,7 +1289,6 @@ Status UpdateAttrOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_pa
     attr.set_flags(attr_.flags());
   }
 
-  shared_param.attr = std::move(attr);
   return Status::OK();
 }
 

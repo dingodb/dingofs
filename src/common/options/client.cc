@@ -226,7 +226,15 @@ DEFINE_bool(
     "enable parallel lookup and readdir requests in the same directory");
 DEFINE_validator(fuse_enable_parallel_dirops, brpc::PassValidate);
 
-DEFINE_bool(fuse_enable_handle_killpriv_v2, true,
+// Disabled by default: the KILLPRIV_V2 contract (filesystem clears
+// suid/sgid/security.capability on write/truncate/open(O_TRUNC)) is not
+// implemented, and libfuse does not even forward FUSE_WRITE_KILL_SUIDGID /
+// FUSE_OPEN_KILL_SUIDGID to the write/open callbacks. Enabling it makes the
+// kernel skip its own privilege removal, so suid/sgid bits survive writes by
+// non-owners (pjdfstest chmod/12.t). With v2 off, the kernel clears the bits
+// itself via setattr(FATTR_KILL_SUIDGID), which FuseOpSetAttr translates
+// into a mode update.
+DEFINE_bool(fuse_enable_handle_killpriv_v2, false,
             "filesystem handles killing suid/sgid/cap on write/truncate/open, "
             "avoids kernel getxattr(security.capability) before every write");
 DEFINE_validator(fuse_enable_handle_killpriv_v2, brpc::PassValidate);
