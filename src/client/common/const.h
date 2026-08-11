@@ -26,11 +26,6 @@
 namespace dingofs {
 namespace client {
 
-// module name
-static const std::string kVFSMoudule = "vfs";
-static const std::string kVFSWrapperMoudule = "vfs_wrapper";
-static const std::string kVFSDataMoudule = "vfs_data";
-
 // ioctl related constants
 static const uint8_t kFlagImmutable = (1 << 0);
 static const uint8_t kFlagAppend = (1 << 1);

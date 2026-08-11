@@ -19,6 +19,7 @@
 #include <memory>
 
 #include "common/opentrace/tracer.h"
+#include "common/sync_point.h"
 #include "common/version.h"
 #include "gflags/gflags.h"
 
@@ -40,6 +41,8 @@ TraceManager::TraceManager()
     : tracer_(OpenTeleMetryTracer(
           FLAGS_trace_service_name, FLAGS_otlp_export_endpoint,
           FLAGS_trace_export_thread_num, dingofs::GetGitCommitHash(),
-          dingofs::GetGitVersion())) {}
+          dingofs::GetGitVersion())) {
+  TEST_SYNC_POINT("TraceManager::TraceManager:after_config_capture");
+}
 
 }  // namespace dingofs

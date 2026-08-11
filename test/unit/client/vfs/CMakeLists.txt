@@ -22,7 +22,7 @@ add_subdirectory(metasystem)
 
 add_library(test_vfs_impl
   test_vfs_impl.cc
-  test_vfs_wrapper_lifecycle.cc
+  test_client_session_lifecycle.cc
 )
 target_link_libraries(test_vfs_impl
   vfs_lib

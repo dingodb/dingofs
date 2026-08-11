@@ -39,7 +39,8 @@ namespace vfs {
 
 class VFSImpl : public VFS {
  public:
-  VFSImpl(const VFSConfig& vfs_conf, const ClientId& client_id);
+  VFSImpl(const VFSConfig& vfs_conf, const ClientId& client_id,
+          TraceManager& trace_manager);
 
   ~VFSImpl() override;
 
@@ -50,10 +51,6 @@ class VFSImpl : public VFS {
   bool Dump(ContextSPtr ctx, Json::Value& value) override;
 
   bool Load(ContextSPtr ctx, const Json::Value& value) override;
-
-  double GetAttrTimeout(const FileType& type) override;
-
-  double GetEntryTimeout(const FileType& type) override;
 
   Status Lookup(ContextSPtr ctx, Ino parent, const std::string& name,
                 Attr* attr) override;
@@ -143,25 +140,17 @@ class VFSImpl : public VFS {
                unsigned flags, const void* in_buf, size_t in_bufsz,
                char* out_buf, size_t out_bufsz) override;
 
-  uint64_t GetFsId() override;
-
-  uint64_t GetMaxNameLength() override;
-
-  TraceManager* GetTraceManager() override {
-    return vfs_hub_->GetTraceManager();
-  }
-
   Status GetInfo(std::string* info) override;
 
  private:
   friend class VFSImplTest;
 
   // Test-only constructor: inject a pre-built VFSHub.
-  explicit VFSImpl(std::unique_ptr<VFSHub> hub);
+  VFSImpl(std::unique_ptr<VFSHub> hub, TraceManager& trace_manager);
 
   Status StartBrpcServer();
 
-  Status StopBrpcServer();
+  void StopBrpcServer();
 
   // Resolve `mount_root_path_` to a real directory inode by walking the
   // filesystem. Must be called after `vfs_hub_->Start()` so that
@@ -215,6 +204,7 @@ class VFSImpl : public VFS {
   // the mount-time fs_info; runtime `updatefs --trash_days` requires remount.
   bool IsTrashVisible() const { return vfs_hub_->GetFsInfo().trash_days > 0; }
 
+  TraceManager& trace_manager_;
   const ClientId client_id_;
 
   // Filesystem-internal path mounted as the local mountpoint root.

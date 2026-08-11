@@ -14,8 +14,11 @@
 #include <memory>
 #include <thread>
 
-#include "client/vfs/vfs_wrapper.h"
+#include "client/vfs/client_session.h"
+#include "common/metrics/client/client.h"
 #include "common/options/client.h"
+#include "common/trace/trace_manager.h"
+#include "utils/scoped_cleanup.h"
 
 namespace dingofs {
 namespace client {
@@ -103,42 +106,54 @@ class MockLifecycleVFS : public vfs::VFS {
               (ContextSPtr, Ino, uint32_t, unsigned int, unsigned, const void*,
                size_t, char*, size_t),
               (override));
-  MOCK_METHOD(uint64_t, GetFsId, (), (override));
-  MOCK_METHOD(double, GetAttrTimeout, (const FileType&), (override));
-  MOCK_METHOD(double, GetEntryTimeout, (const FileType&), (override));
-  MOCK_METHOD(uint64_t, GetMaxNameLength, (), (override));
-  MOCK_METHOD(TraceManager*, GetTraceManager, (), (override));
   MOCK_METHOD(Status, GetInfo, (std::string*), (override));
 };
 
 }  // namespace
 
-class VFSWrapperLifecycleTest : public ::testing::Test {
+class ClientSessionLifecycleTest : public ::testing::Test {
  protected:
   void SetUp() override {
     previous_access_logging_ = FLAGS_vfs_access_logging;
+    previous_attr_timeout_ = FLAGS_fuse_attr_cache_timeout_s;
+    previous_entry_timeout_ = FLAGS_fuse_entry_cache_timeout_s;
+    previous_max_name_length_ = FLAGS_vfs_meta_max_name_length;
     FLAGS_vfs_access_logging = false;
+    FLAGS_fuse_attr_cache_timeout_s = 1;
+    FLAGS_fuse_entry_cache_timeout_s = 2;
+    FLAGS_vfs_meta_max_name_length = 255;
+    session_ = std::make_unique<ClientSession>();
+    session_->trace_manager_ = std::make_unique<TraceManager>();
     auto core = std::make_unique<MockLifecycleVFS>();
     core_ = core.get();
-    wrapper_.vfs_ = std::move(core);
-    wrapper_.lifecycle_state_ = VFSWrapper::LifecycleState::kRunning;
-    wrapper_.fs_id_ = 10;
-    wrapper_.max_name_length_ = 255;
-    wrapper_.attr_timeout_ = 1.0;
-    wrapper_.entry_timeout_ = 2.0;
-    wrapper_.immutable_values_published_.store(true, std::memory_order_release);
+    session_->vfs_ = std::move(core);
+    session_->lifecycle_state_ = ClientSession::LifecycleState::kRunning;
   }
 
   void TearDown() override {
     FLAGS_vfs_access_logging = previous_access_logging_;
+    FLAGS_fuse_attr_cache_timeout_s = previous_attr_timeout_;
+    FLAGS_fuse_entry_cache_timeout_s = previous_entry_timeout_;
+    FLAGS_vfs_meta_max_name_length = previous_max_name_length_;
   }
 
-  VFSWrapper wrapper_;
+  void SetTraceStarted(bool started) { session_->trace_started_ = started; }
+
+  bool TraceStarted() const { return session_->trace_started_; }
+
+  void InitializeMetrics() {
+    session_->client_metrics_ =
+        std::make_unique<metrics::client::ClientOpMetric>();
+  }
+  std::unique_ptr<ClientSession> session_;
   MockLifecycleVFS* core_{nullptr};
   bool previous_access_logging_{true};
+  uint32_t previous_attr_timeout_{0};
+  uint32_t previous_entry_timeout_{0};
+  uint32_t previous_max_name_length_{0};
 };
 
-TEST_F(VFSWrapperLifecycleTest, StopWaitsForAdmittedOperation) {
+TEST_F(ClientSessionLifecycleTest, StopWaitsForAdmittedOperation) {
   std::promise<void> entered;
   std::promise<void> release;
   auto release_future = release.get_future();
@@ -156,13 +171,13 @@ TEST_F(VFSWrapperLifecycleTest, StopWaitsForAdmittedOperation) {
 
   std::thread operation([&] {
     std::string info;
-    EXPECT_TRUE(wrapper_.GetInfo(&info).ok());
+    EXPECT_TRUE(session_->GetInfo(&info).ok());
   });
   ASSERT_EQ(entered.get_future().wait_for(std::chrono::seconds(5)),
             std::future_status::ready);
 
   auto stop_future =
-      std::async(std::launch::async, [&] { return wrapper_.Stop(false); });
+      std::async(std::launch::async, [&] { return session_->Stop(false); });
   EXPECT_EQ(stop_future.wait_for(std::chrono::milliseconds(100)),
             std::future_status::timeout);
   EXPECT_FALSE(core_stopped.load());
@@ -173,7 +188,7 @@ TEST_F(VFSWrapperLifecycleTest, StopWaitsForAdmittedOperation) {
   EXPECT_TRUE(core_stopped.load());
 }
 
-TEST_F(VFSWrapperLifecycleTest, ConcurrentStopRunsCoreStopOnce) {
+TEST_F(ClientSessionLifecycleTest, ConcurrentStopRunsCoreStopOnce) {
   std::promise<void> stop_entered;
   std::promise<void> release_stop;
   auto release_future = release_stop.get_future();
@@ -185,11 +200,11 @@ TEST_F(VFSWrapperLifecycleTest, ConcurrentStopRunsCoreStopOnce) {
   }));
 
   auto first =
-      std::async(std::launch::async, [&] { return wrapper_.Stop(false); });
+      std::async(std::launch::async, [&] { return session_->Stop(false); });
   ASSERT_EQ(stop_entered.get_future().wait_for(std::chrono::seconds(5)),
             std::future_status::ready);
   auto second =
-      std::async(std::launch::async, [&] { return wrapper_.Stop(false); });
+      std::async(std::launch::async, [&] { return session_->Stop(false); });
 
   EXPECT_EQ(second.wait_for(std::chrono::milliseconds(100)),
             std::future_status::timeout);
@@ -197,21 +212,76 @@ TEST_F(VFSWrapperLifecycleTest, ConcurrentStopRunsCoreStopOnce) {
   EXPECT_TRUE(first.get().ok());
   EXPECT_TRUE(second.get().ok());
 }
+TEST_F(ClientSessionLifecycleTest, TraceOutlivesCoreStop) {
+  SetTraceStarted(true);
+  EXPECT_CALL(*core_, Stop(false)).WillOnce(Invoke([&](bool) {
+    EXPECT_TRUE(TraceStarted());
+    return Status::OK();
+  }));
 
-TEST_F(VFSWrapperLifecycleTest, StoppedSessionRejectsBeforeCoreAccess) {
+  EXPECT_TRUE(session_->Stop(false).ok());
+  EXPECT_FALSE(TraceStarted());
+}
+
+TEST_F(ClientSessionLifecycleTest, DestructorStopsRunningCore) {
   EXPECT_CALL(*core_, Stop(false)).WillOnce(Return(Status::OK()));
-  ASSERT_TRUE(wrapper_.Stop(false).ok());
+  session_.reset();
+}
+
+TEST(ClientSessionOptionTest, GettersReadFlagsWithoutSuccessfulStart) {
+  const uint32_t previous_attr_timeout = FLAGS_fuse_attr_cache_timeout_s;
+  const uint32_t previous_entry_timeout = FLAGS_fuse_entry_cache_timeout_s;
+  const uint32_t previous_max_name_length = FLAGS_vfs_meta_max_name_length;
+  auto restore_flags = MakeScopedCleanup([&]() {
+    FLAGS_fuse_attr_cache_timeout_s = previous_attr_timeout;
+    FLAGS_fuse_entry_cache_timeout_s = previous_entry_timeout;
+    FLAGS_vfs_meta_max_name_length = previous_max_name_length;
+  });
+
+  FLAGS_fuse_attr_cache_timeout_s = 3;
+  FLAGS_fuse_entry_cache_timeout_s = 4;
+  FLAGS_vfs_meta_max_name_length = 5;
+
+  ClientSession session;
+  EXPECT_DOUBLE_EQ(session.GetAttrTimeout(kFile), 3.0);
+  EXPECT_DOUBLE_EQ(session.GetEntryTimeout(kDirectory), 4.0);
+  EXPECT_EQ(session.GetMaxNameLength(), 5u);
+}
+
+TEST_F(ClientSessionLifecycleTest,
+       RuntimeOptionsAffectGettersAndPathValidation) {
+  InitializeMetrics();
+  FLAGS_fuse_attr_cache_timeout_s = 3;
+  FLAGS_fuse_entry_cache_timeout_s = 4;
+  FLAGS_vfs_meta_max_name_length = 4;
+
+  EXPECT_DOUBLE_EQ(session_->GetAttrTimeout(kFile), 3.0);
+  EXPECT_DOUBLE_EQ(session_->GetEntryTimeout(kDirectory), 4.0);
+  EXPECT_EQ(session_->GetMaxNameLength(), 4u);
+
+  EXPECT_CALL(*core_, Stop(false)).WillOnce(Return(Status::OK()));
+  EXPECT_CALL(*core_, Lookup).Times(0);
+  Attr attr;
+  Status status =
+      session_->Lookup(Context{0, 0, 0, 0}, kRootIno, "12345", &attr);
+
+  EXPECT_TRUE(status.IsNameTooLong());
+  EXPECT_TRUE(session_->Stop(false).ok());
+}
+
+TEST_F(ClientSessionLifecycleTest, StoppedSessionRejectsBeforeCoreAccess) {
+  EXPECT_CALL(*core_, Stop(false)).WillOnce(Return(Status::OK()));
+  ASSERT_TRUE(session_->Stop(false).ok());
 
   EXPECT_CALL(*core_, GetInfo(_)).Times(0);
   std::string info;
-  Status status = wrapper_.GetInfo(&info);
+  Status status = session_->GetInfo(&info);
   EXPECT_TRUE(status.IsStop());
   EXPECT_EQ(status.ToSysErrNo(), EIO);
 
-  EXPECT_EQ(wrapper_.GetFsId(), 10u);
-  EXPECT_EQ(wrapper_.GetMaxNameLength(), 255u);
-  EXPECT_DOUBLE_EQ(wrapper_.GetAttrTimeout(kFile), 1.0);
-  EXPECT_DOUBLE_EQ(wrapper_.GetEntryTimeout(kDirectory), 2.0);
+  EXPECT_EQ(session_->GetMaxNameLength(), 255u);
+  EXPECT_DOUBLE_EQ(session_->GetAttrTimeout(kFile), 1.0);
+  EXPECT_DOUBLE_EQ(session_->GetEntryTimeout(kDirectory), 2.0);
 }
 
 }  // namespace client

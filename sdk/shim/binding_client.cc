@@ -43,7 +43,7 @@ Context BindingClient::MakeContext(uint32_t uid, uint32_t gid) {
   return {uid, gid, pid_, 0};
 }
 
-BindingClient::BindingClient() : vfs_(std::make_unique<VFSWrapper>()) {}
+BindingClient::BindingClient() : vfs_(std::make_unique<ClientSession>()) {}
 
 BindingClient::~BindingClient() = default;
 

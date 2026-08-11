@@ -29,10 +29,10 @@
 #include "client/common/const.h"
 #include "client/fuse/fs_context.h"
 #include "client/fuse/upgrade/state_store.h"
+#include "client/vfs/client_session.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/data_buffer.h"
 #include "client/vfs/vfs_meta.h"
-#include "client/vfs/vfs_wrapper.h"
 #include "common/const.h"
 #include "common/io_buffer.h"
 #include "common/options/client.h"
@@ -40,7 +40,7 @@
 #include "fmt/format.h"
 #include "glog/logging.h"
 
-static dingofs::client::VFSWrapper* g_vfs = nullptr;
+static dingofs::client::ClientSession* g_client_session = nullptr;
 
 USING_FLAG(fuse_enable_direct_io)
 USING_FLAG(fuse_enable_keep_cache)
@@ -132,8 +132,8 @@ void Attr2FuseEntry(const Attr& attr, struct fuse_entry_param* e) {
   e->generation = 0;
   Attr2Stat(attr, &e->attr);
 
-  e->attr_timeout = g_vfs->GetAttrTimeout(attr.type);
-  e->entry_timeout = g_vfs->GetEntryTimeout(attr.type);
+  e->attr_timeout = g_client_session->GetAttrTimeout(attr.type);
+  e->entry_timeout = g_client_session->GetEntryTimeout(attr.type);
 }
 
 Attr Stat2Attr(struct stat* stat) {
@@ -177,7 +177,7 @@ static void ReplyAttr(fuse_req_t req, const Attr& attr) {
   memset(&stat, 0, sizeof(stat));
   Attr2Stat(attr, &stat);
 
-  int ret = fuse_reply_attr(req, &stat, g_vfs->GetAttrTimeout(attr.type));
+  int ret = fuse_reply_attr(req, &stat, g_client_session->GetAttrTimeout(attr.type));
   if (ret != 0) {
     LOG(ERROR) << fmt::format("[fuse] fuse_reply_attr fail, ret({}).", errno);
   }
@@ -351,9 +351,9 @@ static void ReplyStatfs(fuse_req_t req, const FsStat& stat) {
   stbuf.f_bfree = stbuf.f_bavail = free_blocks;
   stbuf.f_files = total_inodes;
   stbuf.f_ffree = stbuf.f_favail = free_inodes;
-  stbuf.f_fsid = g_vfs->GetFsId();
+  stbuf.f_fsid = stat.fs_id;
   stbuf.f_flag = 0;
-  stbuf.f_namemax = g_vfs->GetMaxNameLength();
+  stbuf.f_namemax = g_client_session->GetMaxNameLength();
 
   int ret = fuse_reply_statfs(req, &stbuf);
   if (ret != 0) {
@@ -370,7 +370,7 @@ static Context GenCtx(const fuse_req_t& req) {
 static void PrintReadyInfo(struct MountOption* mount_option) {
   // print config info
   std::string info;
-  auto s = g_vfs->GetInfo(&info);
+  auto s = g_client_session->GetInfo(&info);
   if (s.ok()) {
     LOG(INFO) << "[dingofs] client info: " << info;
   }
@@ -402,15 +402,15 @@ void FuseOpInit(void* userdata, struct fuse_conn_info* conn) {
             << ", fs name: " << config.fs_name
             << ", meta_url: " << mount_option->meta_url;
 
-  CHECK(fs_context->vfs == nullptr) << "VFS already initialized";
-  fs_context->vfs = std::make_unique<dingofs::client::VFSWrapper>();
-  g_vfs = fs_context->vfs.get();
+  CHECK(fs_context->session == nullptr) << "VFS already initialized";
+  fs_context->session = std::make_unique<dingofs::client::ClientSession>();
+  g_client_session = fs_context->session.get();
   int upgrade_from_pid = 0;
   if (UpgradeStateStore::GetInstance().GetFuseState() ==
       FuseUpgradeState::kFuseUpgradeNew) {
     upgrade_from_pid = UpgradeStateStore::GetInstance().GetOldFusePid();
   }
-  Status s = g_vfs->Start(config, upgrade_from_pid);
+  Status s = g_client_session->Start(config, upgrade_from_pid);
   if (!s.ok()) {
     LOG(ERROR) << "start vfs fail, status: " << s.ToString();
     fs_context->fuse_server->Shutdown();
@@ -429,7 +429,7 @@ void FuseOpInit(void* userdata, struct fuse_conn_info* conn) {
   // healthy. See handover-ack-handshake-design.md /
   // dingofs-hotupgrade-constraints.md.
   fs_context->fuse_server->SetHandoverCheckpoint([]() -> Status {
-    Status s = g_vfs->Stop(/*handover=*/true);
+    Status s = g_client_session->Stop(/*handover=*/true);
     if (!s.ok()) {
       LOG(FATAL) << "hot-upgrade: stop/dump failed";
     }
@@ -445,10 +445,10 @@ void FuseOpInit(void* userdata, struct fuse_conn_info* conn) {
 
 void FuseOpDestroy(void* userdata) {
   VLOG(1) << "FuseOpDestroy userdata: " << userdata;
-  if (g_vfs) {
+  if (g_client_session) {
     const bool handover = (UpgradeStateStore::GetInstance().GetFuseState() ==
                            FuseUpgradeState::kFuseUpgradeOld);
-    g_vfs->Stop(handover);
+    g_client_session->Stop(handover);
   }
 }
 
@@ -459,7 +459,7 @@ void FuseOpLookup(fuse_req_t req, fuse_ino_t parent, const char* name) {
                          ctx.ToString(), parent, name);
 
   Attr out_attr;
-  Status s = g_vfs->Lookup(ctx, parent, name, &out_attr);
+  Status s = g_client_session->Lookup(ctx, parent, name, &out_attr);
   s.ok() ? ReplyEntry(req, out_attr) : ReplyError(req, s);
 }
 
@@ -469,7 +469,7 @@ void FuseOpGetAttr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) {
   VLOG(1) << fmt::format("FuseOpGetAttr ctx({}) ino({})", ctx.ToString(), ino);
 
   Attr out_attr;
-  Status s = g_vfs->GetAttr(ctx, ino, &out_attr);
+  Status s = g_client_session->GetAttr(ctx, ino, &out_attr);
   s.ok() ? ReplyAttr(req, out_attr) : ReplyError(req, s);
 }
 
@@ -482,7 +482,7 @@ void FuseOpSetAttr(fuse_req_t req, fuse_ino_t ino, struct stat* attr,
 
   Attr in_attr = Stat2Attr(attr);
   Attr out_attr;
-  Status s = g_vfs->SetAttr(ctx, ino, to_set, in_attr, &out_attr);
+  Status s = g_client_session->SetAttr(ctx, ino, to_set, in_attr, &out_attr);
   s.ok() ? ReplyAttr(req, out_attr) : ReplyError(req, s);
 }
 
@@ -492,7 +492,7 @@ void FuseOpReadLink(fuse_req_t req, fuse_ino_t ino) {
   VLOG(1) << fmt::format("FuseOpReadLink ctx({}) ino({})", ctx.ToString(), ino);
 
   std::string link;
-  Status s = g_vfs->ReadLink(ctx, ino, &link);
+  Status s = g_client_session->ReadLink(ctx, ino, &link);
   s.ok() ? ReplyReadlink(req, link) : ReplyError(req, s);
 }
 
@@ -506,7 +506,7 @@ void FuseOpMkNod(fuse_req_t req, fuse_ino_t parent, const char* name,
 
   // TODO: extract userinfo struct
   Attr out_attr;
-  Status s = g_vfs->MkNod(ctx, parent, name, mode, rdev, &out_attr);
+  Status s = g_client_session->MkNod(ctx, parent, name, mode, rdev, &out_attr);
   s.ok() ? ReplyEntry(req, out_attr) : ReplyError(req, s);
 }
 
@@ -518,7 +518,7 @@ void FuseOpMkDir(fuse_req_t req, fuse_ino_t parent, const char* name,
                          ctx.ToString(), parent, name, mode);
 
   Attr out_attr;
-  Status s = g_vfs->MkDir(ctx, parent, name, mode, &out_attr);
+  Status s = g_client_session->MkDir(ctx, parent, name, mode, &out_attr);
   s.ok() ? ReplyEntry(req, out_attr) : ReplyError(req, s);
 }
 
@@ -528,7 +528,7 @@ void FuseOpUnlink(fuse_req_t req, fuse_ino_t parent, const char* name) {
   VLOG(1) << fmt::format("FuseOpUnlink ctx({}) parent({}) name({})",
                          ctx.ToString(), parent, name);
 
-  Status s = g_vfs->Unlink(ctx, parent, name);
+  Status s = g_client_session->Unlink(ctx, parent, name);
   ReplyError(req, s);
 }
 
@@ -538,7 +538,7 @@ void FuseOpRmDir(fuse_req_t req, fuse_ino_t parent, const char* name) {
   VLOG(1) << fmt::format("FuseOpRmDir ctx({}) parent({}) name({})",
                          ctx.ToString(), parent, name);
 
-  Status s = g_vfs->RmDir(ctx, parent, name);
+  Status s = g_client_session->RmDir(ctx, parent, name);
   ReplyError(req, s);
 }
 
@@ -550,7 +550,7 @@ void FuseOpSymlink(fuse_req_t req, const char* link, fuse_ino_t parent,
                          ctx.ToString(), link, parent, name);
 
   Attr out_attr;
-  Status s = g_vfs->Symlink(ctx, parent, name, link, &out_attr);
+  Status s = g_client_session->Symlink(ctx, parent, name, link, &out_attr);
   s.ok() ? ReplyEntry(req, out_attr) : ReplyError(req, s);
 }
 
@@ -564,7 +564,7 @@ void FuseOpRename(fuse_req_t req, fuse_ino_t parent, const char* name,
       "flags({})",
       ctx.ToString(), parent, name, newparent, newname, flags);
 
-  Status s = g_vfs->Rename(ctx, parent, name, newparent, newname);
+  Status s = g_client_session->Rename(ctx, parent, name, newparent, newname);
   ReplyError(req, s);
 }
 
@@ -576,7 +576,7 @@ void FuseOpLink(fuse_req_t req, fuse_ino_t ino, fuse_ino_t newparent,
                          ctx.ToString(), ino, newparent, newname);
 
   Attr out_attr;
-  Status s = g_vfs->Link(ctx, ino, newparent, newname, &out_attr);
+  Status s = g_client_session->Link(ctx, ino, newparent, newname, &out_attr);
   s.ok() ? ReplyEntry(req, out_attr) : ReplyError(req, s);
 }
 
@@ -588,7 +588,7 @@ void FuseOpOpen(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) {
 
   uint64_t fh = 0;
   bool keep_cache = FLAGS_fuse_enable_keep_cache;
-  Status s = g_vfs->Open(ctx, ino, fi->flags, &fh, &keep_cache);
+  Status s = g_client_session->Open(ctx, ino, fi->flags, &fh, &keep_cache);
   if (!s.ok()) {
     ReplyError(req, s);
 
@@ -646,7 +646,7 @@ void FuseOpRead(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
   }
 
   uint64_t rsize = 0;
-  Status s = g_vfs->Read(ctx, ino, &data_buffer, size, off, fi->fh, &rsize);
+  Status s = g_client_session->Read(ctx, ino, &data_buffer, size, off, fi->fh, &rsize);
   s.ok() ? ReplyData(req, data_buffer) : ReplyError(req, s);
 }
 
@@ -664,7 +664,7 @@ void FuseOpWrite(fuse_req_t req, fuse_ino_t ino, const char* buf, size_t size,
   }
 
   uint64_t wsize = 0;
-  Status s = g_vfs->Write(ctx, ino, buf, size, off, fi->fh, &wsize);
+  Status s = g_client_session->Write(ctx, ino, buf, size, off, fi->fh, &wsize);
   s.ok() ? ReplyWrite(req, wsize) : ReplyError(req, s);
 }
 
@@ -679,7 +679,7 @@ void FuseOpFlush(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) {
     return;
   }
 
-  Status s = g_vfs->Flush(ctx, ino, fi->fh);
+  Status s = g_client_session->Flush(ctx, ino, fi->fh);
   ReplyError(req, s);
 }
 
@@ -689,7 +689,7 @@ void FuseOpRelease(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) {
   VLOG(1) << fmt::format("FuseOpRelease ctx({}) ino({}) fh({})", ctx.ToString(),
                          ino, fi->fh);
 
-  Status s = g_vfs->Release(ctx, ino, fi->fh);
+  Status s = g_client_session->Release(ctx, ino, fi->fh);
   ReplyError(req, s);
 }
 
@@ -706,7 +706,7 @@ void FuseOpFsync(fuse_req_t req, fuse_ino_t ino, int datasync,
     return;
   }
 
-  Status s = g_vfs->Fsync(ctx, ino, datasync, fi->fh);
+  Status s = g_client_session->Fsync(ctx, ino, datasync, fi->fh);
   ReplyError(req, s);
 }
 
@@ -723,7 +723,7 @@ void FuseOpFallocate(fuse_req_t req, fuse_ino_t ino, int mode, off_t offset,
     return;
   }
 
-  Status s = g_vfs->Fallocate(ctx, ino, mode, static_cast<uint64_t>(offset),
+  Status s = g_client_session->Fallocate(ctx, ino, mode, static_cast<uint64_t>(offset),
                               static_cast<uint64_t>(length));
   ReplyError(req, s);
 }
@@ -756,7 +756,7 @@ void FuseOpCopyFileRange(fuse_req_t req, fuse_ino_t ino_in, off_t off_in,
   }
 
   uint64_t bytes_copied = 0;
-  Status s = g_vfs->CopyFileRange(
+  Status s = g_client_session->CopyFileRange(
       ctx, ino_in, static_cast<uint64_t>(off_in), fi_in ? fi_in->fh : 0,
       ino_out, static_cast<uint64_t>(off_out), fi_out ? fi_out->fh : 0,
       static_cast<uint64_t>(len), static_cast<uint32_t>(flags), &bytes_copied);
@@ -774,7 +774,7 @@ void FuseOpOpenDir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) {
 
   uint64_t fh = 0;
   bool need_cache = true;
-  Status s = g_vfs->OpenDir(ctx, ino, &fh, need_cache);
+  Status s = g_client_session->OpenDir(ctx, ino, &fh, need_cache);
   if (!s.ok()) {
     ReplyError(req, s);
 
@@ -808,7 +808,7 @@ void FuseOpReadDir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
   off_t next_off = off;
   size_t writed_size = 0;
   std::string buffer(size, '\0');
-  Status s = g_vfs->ReadDir(
+  Status s = g_client_session->ReadDir(
       ctx, ino, fi->fh, off, false,
       [&](const dingofs::client::vfs::DirEntry& dir_entry, uint64_t) -> bool {
         VLOG(3) << fmt::format("read dir({}) off[{},{}) fh({}) entry({}/{}).",
@@ -867,7 +867,7 @@ void FuseOpReadDirPlus(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
   off_t next_off = off;
   size_t writed_size = 0;
   std::string buffer(size, '\0');
-  Status s = g_vfs->ReadDir(
+  Status s = g_client_session->ReadDir(
       ctx, ino, fi->fh, off, true,
       [ino, off, &next_off, &req, &fi, &buffer, &writed_size](
           const dingofs::client::vfs::DirEntry& dir_entry, uint64_t) -> bool {
@@ -921,7 +921,7 @@ void FuseOpReleaseDir(fuse_req_t req, fuse_ino_t ino,
   VLOG(1) << fmt::format("FuseOpReleaseDir ctx({}) ino:{}, fi->fh:{}",
                          ctx.ToString(), ino, fi->fh);
 
-  Status s = g_vfs->ReleaseDir(ctx, ino, fi->fh);
+  Status s = g_client_session->ReleaseDir(ctx, ino, fi->fh);
   ReplyError(req, s);
 }
 
@@ -935,7 +935,7 @@ void FuseOpSetXattr(fuse_req_t req, fuse_ino_t ino, const char* name,
 
   std::string strname(name);
   std::string strvalue(value, size);
-  Status s = g_vfs->SetXattr(ctx, ino, strname, strvalue, flags);
+  Status s = g_client_session->SetXattr(ctx, ino, strname, strvalue, flags);
   ReplyError(req, s);
 }
 
@@ -947,7 +947,7 @@ void FuseOpGetXattr(fuse_req_t req, fuse_ino_t ino, const char* name,
                          ctx.ToString(), ino, name, size);
 
   std::string value;
-  Status s = g_vfs->GetXattr(ctx, ino, name, &value);
+  Status s = g_client_session->GetXattr(ctx, ino, name, &value);
 
   if (!s.ok()) {
     ReplyError(req, s);
@@ -975,7 +975,7 @@ void FuseOpRemoveXattr(fuse_req_t req, fuse_ino_t ino, const char* name) {
                          ctx.ToString(), ino, name);
 
   std::string strname(name);
-  Status s = g_vfs->RemoveXattr(ctx, ino, strname);
+  Status s = g_client_session->RemoveXattr(ctx, ino, strname);
   ReplyError(req, s);
 }
 
@@ -988,7 +988,7 @@ void FuseOpListXattr(fuse_req_t req, fuse_ino_t ino, size_t size) {
   CHECK_GE(size, 0) << "size is illegal, size: " << size;
 
   std::vector<std::string> names;
-  Status s = g_vfs->ListXattr(ctx, ino, &names);
+  Status s = g_client_session->ListXattr(ctx, ino, &names);
   if (!s.ok()) {
     ReplyError(req, s);
 
@@ -1038,7 +1038,7 @@ void FuseOpCreate(fuse_req_t req, fuse_ino_t parent, const char* name,
 
   uint64_t fh = 0;
   Attr out_attr;
-  Status s = g_vfs->Create(ctx, parent, name, mode, fi->flags, &fh, &out_attr);
+  Status s = g_client_session->Create(ctx, parent, name, mode, fi->flags, &fh, &out_attr);
   if (!s.ok()) {
     ReplyError(req, s);
 
@@ -1080,7 +1080,7 @@ void FuseOpIoctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void* arg,
       ctx.ToString(), ino, cmd, flags, in_bufsz, out_bufsz);
 
   std::string out_buf(out_bufsz, '\0');
-  Status s = g_vfs->Ioctl(ctx, ino, cmd, flags, in_buf, in_bufsz,
+  Status s = g_client_session->Ioctl(ctx, ino, cmd, flags, in_buf, in_bufsz,
                           out_buf.data(), out_bufsz);
   s.ok() ? ReplyIoctl(req, out_buf.data(), out_bufsz) : ReplyError(req, s);
 }
@@ -1094,6 +1094,6 @@ void FuseOpStatFs(fuse_req_t req, fuse_ino_t ino) {
 
   struct statvfs statfs;
   dingofs::client::vfs::FsStat vfs_stat;
-  Status s = g_vfs->StatFs(ctx, ino, &vfs_stat);
+  Status s = g_client_session->StatFs(ctx, ino, &vfs_stat);
   s.ok() ? ReplyStatfs(req, vfs_stat) : ReplyError(req, s);
 }

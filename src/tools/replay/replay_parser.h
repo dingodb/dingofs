@@ -16,7 +16,7 @@
 
 /*
  * Parser for the legacy `fuse_access` spdlog access-log text produced by
- * client/vfs/access_log.h + vfs_wrapper.cc's AccessLogGuard.
+ * client/vfs/access_log.h + client_session.cc's AccessLogGuard.
  *
  * Line shape (spdlog default "%+" pattern):
  *   [YYYY-MM-DD HH:MM:SS.mmm] [fuse_access] [level] [pid:uid:gid] opname
