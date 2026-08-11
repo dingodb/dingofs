@@ -102,7 +102,7 @@ void PrefetchManager::SubmitTask(PrefetchContext context) {
 
 void PrefetchManager::ProcessPrefetch(const PrefetchContext& context) {
   auto span =
-      vfs_hub_->GetTraceManager()->StartSpan("VFSWrapper::ProcessPrefetch");
+      vfs_hub_->GetTraceManager()->StartSpan("PrefetchManager::ProcessPrefetch");
 
   const auto block_size = vfs_hub_->GetFsInfo().block_size;
   // Prefetch include current block

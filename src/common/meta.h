@@ -83,6 +83,8 @@ struct DirEntry {
 };
 
 struct FsStat {
+  // Filesystem identity fetched by the active VFS and returned with StatFs.
+  uint32_t fs_id{0};
   int64_t max_bytes;
   int64_t used_bytes;
   int64_t max_inodes;

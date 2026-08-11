@@ -106,7 +106,8 @@ class VFSHub {
 
 class VFSHubImpl : public VFSHub {
  public:
-  VFSHubImpl(const VFSConfig& vfs_conf, ClientId client_id);
+  VFSHubImpl(const VFSConfig& vfs_conf, ClientId client_id,
+             TraceManager& trace_manager);
 
   ~VFSHubImpl() override;
 
@@ -203,10 +204,7 @@ class VFSHubImpl : public VFSHub {
     return fs_info_;
   }
 
-  TraceManager* GetTraceManager() override {
-    CHECK_NOTNULL(trace_manager_);
-    return trace_manager_.get();
-  }
+  TraceManager* GetTraceManager() override { return &trace_manager_; }
 
   blockaccess::BlockAccessOptions GetBlockAccesserOptions() override {
     CHECK(started_.load(std::memory_order_relaxed)) << "not started";
@@ -231,13 +229,13 @@ class VFSHubImpl : public VFSHub {
 
   blockaccess::BlockAccessOptions blockaccess_options_;
 
+  TraceManager& trace_manager_;
   const ClientId client_id_;
   const VFSConfig vfs_conf_;
 
   FsInfo fs_info_;
   S3Info s3_info_;
 
-  std::unique_ptr<TraceManager> trace_manager_;
   std::unique_ptr<Compactor> compactor_;
   std::unique_ptr<MetaWrapper> meta_wrapper_;
 

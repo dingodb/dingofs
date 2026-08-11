@@ -96,22 +96,19 @@ void VFSImpl::LocalPairToHashed(uint32_t uid, uint32_t gid, uint32_t& out_uid,
   mapper->LocalPairToHashed(uid, gid, out_uid, out_gid);
 }
 
-VFSImpl::VFSImpl(const VFSConfig& vfs_conf, const ClientId& client_id)
-    : client_id_(client_id),
+VFSImpl::VFSImpl(const VFSConfig& vfs_conf, const ClientId& client_id,
+                 TraceManager& trace_manager)
+    : trace_manager_(trace_manager),
+      client_id_(client_id),
       mount_root_path_(
           vfs_conf.mount_root_path.empty() ? "/" : vfs_conf.mount_root_path),
-      vfs_hub_(std::make_unique<VFSHubImpl>(vfs_conf, client_id_)) {}
+      vfs_hub_(
+          std::make_unique<VFSHubImpl>(vfs_conf, client_id_, trace_manager_)) {}
 
-VFSImpl::~VFSImpl() {
-  Status s = StopBrpcServer();
-  if (!s.ok()) {
-    LOG(ERROR) << "stop brpc server during VFS destruction failed: "
-               << s.ToString();
-  }
-}
+VFSImpl::~VFSImpl() { StopBrpcServer(); }
 
-VFSImpl::VFSImpl(std::unique_ptr<VFSHub> hub)
-    : client_id_(), vfs_hub_(std::move(hub)) {
+VFSImpl::VFSImpl(std::unique_ptr<VFSHub> hub, TraceManager& trace_manager)
+    : trace_manager_(trace_manager), client_id_(), vfs_hub_(std::move(hub)) {
   meta_system_ = vfs_hub_->GetMetaSystem();
   handle_manager_ = vfs_hub_->GetHandleManager();
   reader_registry_ = vfs_hub_->GetReaderRegistry();
@@ -126,7 +123,6 @@ Status VFSImpl::Start(bool skip_mount) {
   reader_registry_ = vfs_hub_->GetReaderRegistry();
 
   DINGOFS_RETURN_NOT_OK(ResolveMountRoot());
-
   DINGOFS_RETURN_NOT_OK(StartBrpcServer());
 
   return Status::OK();
@@ -173,7 +169,7 @@ Status VFSImpl::ResolveMountRoot() {
 }
 
 Status VFSImpl::Stop(bool skip_unmount) {
-  DINGOFS_RETURN_NOT_OK(StopBrpcServer());
+  StopBrpcServer();
   return vfs_hub_->Stop(skip_unmount);
 }
 
@@ -225,14 +221,6 @@ bool VFSImpl::Load(ContextSPtr ctx, const Json::Value& value) {
   }
 
   return meta_system_->Load(ctx, value);
-}
-
-double VFSImpl::GetAttrTimeout(const FileType& type) {  // NOLINT
-  return FLAGS_fuse_attr_cache_timeout_s;
-}
-
-double VFSImpl::GetEntryTimeout(const FileType& type) {  // NOLINT
-  return FLAGS_fuse_entry_cache_timeout_s;
 }
 
 static Attr GenerateTrashDirAttr() {
@@ -649,8 +637,8 @@ Status VFSImpl::Read(ContextSPtr ctx, Ino ino, DataBuffer* data_buffer,
   Status s;
   auto handle = handle_manager_->FindHandlerGuard(fh);
   VFS_CHECK_HANDLE(handle.get(), ino, fh);
-  auto span = vfs_hub_->GetTraceManager()->StartChildSpan("VFSImpl::Read",
-                                                          ctx->GetTraceSpan());
+  auto span =
+      trace_manager_.StartChildSpan("VFSImpl::Read", ctx->GetTraceSpan());
   // read .stats file data
   if (BAIDU_UNLIKELY(ino == kStatsIno)) {
     size_t file_size = handle->file_buffer.size;
@@ -676,8 +664,8 @@ Status VFSImpl::Read(ContextSPtr ctx, Ino ino, DataBuffer* data_buffer,
   }
 
   {
-    auto flush_span = vfs_hub_->GetTraceManager()->StartChildSpan(
-        "VFSImpl::Read.Flush", span);
+    auto flush_span =
+        trace_manager_.StartChildSpan("VFSImpl::Read.Flush", span);
     // Flush all writers for this inode across all open file handles.
     // This ensures read-after-write consistency when multiple file descriptors
     // are open for the same inode: data buffered by any writer fd is flushed
@@ -706,8 +694,8 @@ Status VFSImpl::Write(ContextSPtr ctx, Ino ino, const char* buf, uint64_t size,
   auto handle = handle_manager_->FindHandlerGuard(fh);
   VFS_CHECK_HANDLE(handle.get(), ino, fh);
 
-  auto span = vfs_hub_->GetTraceManager()->StartChildSpan("VFSImpl::Write",
-                                                          ctx->GetTraceSpan());
+  auto span =
+      trace_manager_.StartChildSpan("VFSImpl::Write", ctx->GetTraceSpan());
 
   if (handle->resources.writer == nullptr) {
     LOG(ERROR) << "writer is null (read-only fh), ino: " << ino
@@ -737,8 +725,8 @@ Status VFSImpl::Write(ContextSPtr ctx, Ino ino, const char* buf, uint64_t size,
 
   // No status logging here: VFSImpl returns Status without logging per-op
   // outcomes (like the other ops); the uniform status + out_wsize record lives
-  // in VFSWrapper's access log, the pool-pressure locality in SliceWriter, and
-  // the failure rate in the vfs_write_buffer_alloc_fail_num metric.
+  // in ClientSession's access log, the pool-pressure locality in SliceWriter,
+  // and the failure rate in the vfs_write_buffer_alloc_fail_num metric.
   return s;
 }
 
@@ -1050,7 +1038,11 @@ Status VFSImpl::RmDir(ContextSPtr ctx, Ino parent, const std::string& name) {
 }
 
 Status VFSImpl::StatFs(ContextSPtr ctx, Ino ino, FsStat* fs_stat) {
-  return meta_system_->StatFs(ctx, TranslateIno(ino), fs_stat);
+  Status s = meta_system_->StatFs(ctx, TranslateIno(ino), fs_stat);
+  if (!s.ok()) return s;
+
+  fs_stat->fs_id = vfs_hub_->GetFsInfo().id;
+  return Status::OK();
 }
 
 Status VFSImpl::Ioctl(ContextSPtr ctx, Ino ino, uint32_t uid, unsigned int cmd,
@@ -1154,10 +1146,6 @@ Status VFSImpl::Ioctl(ContextSPtr ctx, Ino ino, uint32_t uid, unsigned int cmd,
 
   return Status::OK();
 }
-
-uint64_t VFSImpl::GetFsId() { return 10; }
-
-uint64_t VFSImpl::GetMaxNameLength() { return FLAGS_vfs_meta_max_name_length; }
 
 Status VFSImpl::GetInfo(std::string* info) {
   Json::Value root;
@@ -1274,21 +1262,21 @@ Status VFSImpl::StartBrpcServer() {
   return Status::OK();
 }
 
-Status VFSImpl::StopBrpcServer() {
+void VFSImpl::StopBrpcServer() {
   const brpc::Server::Status status = brpc_server_.status();
+  // UNINITIALIZED has never run; READY is already fully stopped and joined.
+  // Treat both as successful no-ops so teardown remains idempotent.
   if (status == brpc::Server::UNINITIALIZED || status == brpc::Server::READY) {
-    return Status::OK();
+    return;
   }
 
-  if (status == brpc::Server::RUNNING && brpc_server_.Stop(0) != 0) {
-    return Status::Internal("stop brpc server failed");
-  }
+  CHECK(status == brpc::Server::RUNNING || status == brpc::Server::STOPPING)
+      << "unexpected brpc server status: " << static_cast<int>(status);
 
-  if (brpc_server_.Join() != 0) {
-    return Status::Internal("join brpc server failed");
+  if (status == brpc::Server::RUNNING) {
+    CHECK_EQ(0, brpc_server_.Stop(0));
   }
-
-  return Status::OK();
+  CHECK_EQ(0, brpc_server_.Join());
 }
 
 }  // namespace vfs

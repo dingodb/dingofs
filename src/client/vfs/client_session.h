@@ -14,10 +14,9 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_CLIENT_VFS_VFS_WRAPPER_H_
-#define DINGOFS_CLIENT_VFS_VFS_WRAPPER_H_
+#ifndef DINGOFS_CLIENT_VFS_CLIENT_SESSION_H_
+#define DINGOFS_CLIENT_VFS_CLIENT_SESSION_H_
 
-#include <atomic>
 #include <condition_variable>
 #include <cstdint>
 #include <memory>
@@ -29,11 +28,16 @@
 
 #include "client/vfs/vfs.h"
 #include "common/meta.h"
-#include "common/metrics/client/client.h"
 #include "common/status.h"
 #include "json/value.h"
 
 namespace dingofs {
+class TraceManager;
+namespace metrics {
+namespace client {
+struct ClientOpMetric;
+}  // namespace client
+}  // namespace metrics
 namespace client {
 
 struct DingofsConfig {
@@ -62,11 +66,13 @@ struct Context {
   }
 };
 
-class VFSWrapper {
+class ClientSession {
  public:
-  VFSWrapper() = default;
+  ClientSession();
 
-  ~VFSWrapper() = default;
+  // Blocks until admitted operations and Core teardown complete. The owner
+  // must not destroy this object concurrently with another method call.
+  ~ClientSession();
 
   // Normal start: upgrade_from_pid = 0.
   // Graceful-upgrade start (new process taking over): upgrade_from_pid is the
@@ -81,11 +87,12 @@ class VFSWrapper {
 
   Status GetInfo(std::string* info);
 
+  // Valid after a successful Start, including after Stop. Timeout and
+  // max-name getters read the current process-wide gflags on every call.
+
   double GetAttrTimeout(FileType type);
 
   double GetEntryTimeout(FileType type);
-
-  uint64_t GetFsId();
 
   uint64_t GetMaxNameLength();
 
@@ -156,7 +163,7 @@ class VFSWrapper {
   Status OpenDir(const Context& ctx, Ino ino, uint64_t* fh, bool& need_cache);
 
   // The handler is invoked synchronously and must not re-enter a public method
-  // on this VFSWrapper. This contract is intentionally not enforced with C++
+  // on this ClientSession. This contract is intentionally not enforced with C++
   // thread_local state because callers may execute on migratable bthreads.
   Status ReadDir(const Context& ctx, Ino ino, uint64_t fh, uint64_t offset,
                  bool with_attr, ReadDirHandler handler);
@@ -172,7 +179,7 @@ class VFSWrapper {
                size_t out_bufsz);
 
  private:
-  friend class VFSWrapperLifecycleTest;
+  friend class ClientSessionLifecycleTest;
 
   enum class LifecycleState {
     kCreated,
@@ -193,10 +200,10 @@ class VFSWrapper {
     ~OperationLease();
 
    private:
-    friend class VFSWrapper;
-    explicit OperationLease(VFSWrapper* owner) : owner_(owner) {}
+    friend class ClientSession;
+    explicit OperationLease(ClientSession* owner) : owner_(owner) {}
 
-    VFSWrapper* owner_;
+    ClientSession* owner_;
   };
 
   std::optional<OperationLease> TryAcquireOperation();
@@ -215,22 +222,18 @@ class VFSWrapper {
   uint64_t active_public_operations_{0};
   Status stop_status_;
   bool stop_handover_{false};
-  std::atomic<bool> immutable_values_published_{false};
+  bool trace_started_{false};
 
+  // Declared before vfs_ so borrowed tracing outlives every VFS component.
+  std::unique_ptr<TraceManager> trace_manager_;
+  std::unique_ptr<metrics::client::ClientOpMetric> client_metrics_;
   std::unique_ptr<vfs::VFS> vfs_;
-
-  std::unique_ptr<metrics::client::ClientOpMetric> client_op_metric_;
 
   uint32_t uid_{0};
   uint32_t gid_{0};
-
-  double attr_timeout_{0.0};
-  double entry_timeout_{0.0};
-  uint64_t fs_id_{0};
-  uint64_t max_name_length_{0};
 };
 
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_CLIENT_VFS_VFS_WRAPPER_H_
+#endif  // DINGOFS_CLIENT_VFS_CLIENT_SESSION_H_

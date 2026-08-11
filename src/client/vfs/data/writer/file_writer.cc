@@ -214,7 +214,7 @@ Status FileWriter::Write(ContextSPtr ctx, const char* buf, uint64_t size,
       // written_size > 0, else a hard error, decided after the loop). Don't
       // WARN per chunk -- it floods under back-pressure and misreads a
       // successful short write; the outcome is recorded uniformly in
-      // VFSWrapper's access log (status + out_wsize), the pool-pressure
+      // ClientSession's access log (status + out_wsize), the pool-pressure
       // locality in SliceWriter, and the failure rate in the
       // vfs_write_buffer_alloc_fail_num metric.
       VLOG(3) << "stop write at chunk, ino: " << ino_

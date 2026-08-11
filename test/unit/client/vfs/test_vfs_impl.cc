@@ -90,9 +90,8 @@ class FakePasswdSource : public PasswdSource {
 class VFSImplTest : public test::VFSTestBase {
  protected:
   void SetUp() override {
-    trace_manager_ = std::make_unique<TraceManager>();
     ON_CALL(*mock_hub_, GetTraceManager())
-        .WillByDefault(Return(trace_manager_.get()));
+        .WillByDefault(Return(&trace_manager_));
     EXPECT_CALL(*mock_hub_, GetTraceManager()).Times(AnyNumber());
 
     ON_CALL(*mock_hub_, GetBlockAccesserOptions())
@@ -102,7 +101,7 @@ class VFSImplTest : public test::VFSTestBase {
     // hub_uptr_ is consumed here; after this, use vfs_ to access VFSImpl.
     // VFSImplTest is a friend of VFSImpl, so the private constructor is
     // accessible.
-    vfs_.reset(new VFSImpl(std::move(hub_uptr_)));
+    vfs_.reset(new VFSImpl(std::move(hub_uptr_), trace_manager_));
   }
 
   void TearDown() override {
@@ -117,8 +116,8 @@ class VFSImplTest : public test::VFSTestBase {
     vfs_.reset();
   }
 
+  TraceManager trace_manager_;
   std::unique_ptr<VFSImpl> vfs_;
-  std::unique_ptr<TraceManager> trace_manager_;
 
   // Helper accessible from TEST_F-derived subclasses (which are not friends
   // of VFSImpl themselves but inherit from this friend class).
@@ -150,17 +149,6 @@ TEST_F(VFSImplTest, StopDrainsBrpcServerBeforeHub) {
 
   EXPECT_TRUE(vfs_->Stop(false).ok());
   EXPECT_EQ(BrpcServerStatus(), brpc::Server::READY);
-}
-
-// --- 1. GetFsId ---
-TEST_F(VFSImplTest, GetFsId_ReturnsFromFsInfo) {
-  // VFSImpl::GetFsId() is hardcoded to 10.
-  EXPECT_EQ(vfs_->GetFsId(), 10u);
-}
-
-// --- 2. GetMaxNameLength ---
-TEST_F(VFSImplTest, GetMaxNameLength_ReturnsValue) {
-  EXPECT_GT(vfs_->GetMaxNameLength(), 0u);
 }
 
 // --- 3. Lookup delegates to meta ---
@@ -579,11 +567,14 @@ TEST_F(VFSImplTest, Unlink_InternalFile_EPERM) {
 }
 
 // --- 11. StatFs delegates ---
-TEST_F(VFSImplTest, StatFs_DelegatesToMetaSystem) {
+TEST_F(VFSImplTest, StatFs_ReturnsDynamicFilesystemId) {
   FsStat fs_stat;
   fs_stat.max_bytes = 1024 * 1024 * 1024LL;
   fs_stat.used_bytes = 512 * 1024 * 1024LL;
 
+  auto fs_info = test::MakeTestFsInfo();
+  fs_info.id = 314159;
+  ON_CALL(*mock_hub_, GetFsInfo()).WillByDefault(Return(fs_info));
   EXPECT_CALL(*mock_meta_system_, StatFs(_, _, _))
       .WillOnce(DoAll(SetArgPointee<2>(fs_stat), Return(Status::OK())));
 
@@ -591,6 +582,7 @@ TEST_F(VFSImplTest, StatFs_DelegatesToMetaSystem) {
   Status s = vfs_->StatFs(ctx_, kRootIno, &out);
   EXPECT_TRUE(s.ok());
   EXPECT_EQ(out.max_bytes, fs_stat.max_bytes);
+  EXPECT_EQ(out.fs_id, fs_info.id);
 }
 
 // --- 13. GetInfo returns non-empty JSON ---

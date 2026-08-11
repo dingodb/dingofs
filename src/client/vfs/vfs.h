@@ -26,7 +26,6 @@
 #include "client/vfs/vfs_meta.h"
 #include "common/status.h"
 #include "common/trace/context.h"
-#include "common/trace/trace_manager.h"
 #include "common/types.h"
 
 namespace dingofs {
@@ -51,7 +50,8 @@ class VFS {
 
   virtual ~VFS() = default;
 
-  // skip_mount: if true, skip MountFs on MDS (new process inheriting a session)
+  // skip_mount: if true, skip MountFs on MDS (new process inheriting a
+  // session).
   virtual Status Start(bool skip_mount) = 0;
 
   // skip_unmount: if true, skip UnmountFs on MDS (old process handing off)
@@ -157,16 +157,6 @@ class VFS {
   virtual Status Ioctl(ContextSPtr ctx, Ino ino, uint32_t uid, unsigned int cmd,
                        unsigned flags, const void* in_buf, size_t in_bufsz,
                        char* out_buf, size_t out_bufsz) = 0;
-
-  virtual uint64_t GetFsId() = 0;
-
-  virtual double GetAttrTimeout(const FileType& type) = 0;
-
-  virtual double GetEntryTimeout(const FileType& type) = 0;
-
-  virtual uint64_t GetMaxNameLength() = 0;
-
-  virtual TraceManager* GetTraceManager() = 0;
 
   virtual Status GetInfo(std::string* info) = 0;
 };

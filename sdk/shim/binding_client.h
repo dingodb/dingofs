@@ -21,8 +21,8 @@
 #include <string>
 #include <vector>
 
+#include "client/vfs/client_session.h"
 #include "client/vfs/data_buffer.h"
-#include "client/vfs/vfs_wrapper.h"
 #include "common/meta.h"
 #include "common/status.h"
 
@@ -70,8 +70,8 @@ struct OptionInfo {
   std::string description;
 };
 
-// BindingClient wraps VFSWrapper for use from language bindings.
-// It handles gflags/logging setup before delegating to VFSWrapper.
+// BindingClient wraps ClientSession for use from language bindings.
+// It handles gflags/logging setup before delegating to ClientSession.
 class BindingClient {
  public:
   BindingClient();
@@ -160,7 +160,7 @@ class BindingClient {
   Context MakeContext();
   Context MakeContext(uint32_t uid, uint32_t gid);
 
-  std::unique_ptr<VFSWrapper> vfs_;
+  std::unique_ptr<ClientSession> vfs_;
   bool self_inited_glog_ = false;
   int32_t pid_;
 };

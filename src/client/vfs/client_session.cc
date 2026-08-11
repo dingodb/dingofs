@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "client/vfs/vfs_wrapper.h"
+#include "client/vfs/client_session.h"
 
 #include <bvar/bvar.h>
 #include <fcntl.h>
@@ -45,6 +45,7 @@
 #include "common/options/cache.h"
 #include "common/options/client.h"
 #include "common/status.h"
+#include "common/trace/trace_manager.h"
 #include "common/types.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
@@ -79,7 +80,7 @@ static bvar::Adder<int64_t> g_active_public_operations(
 static bvar::Adder<uint64_t> g_rejected_public_operations(
     "vfs_rejected_public_operations_total");
 
-#define VFS_WRAPPER_OPERATION_GUARD()                              \
+#define CLIENT_SESSION_OPERATION_GUARD()                           \
   auto operation = TryAcquireOperation();                          \
   if (!operation.has_value()) {                                    \
     return Status::Stop("VFS is not accepting public operations"); \
@@ -302,12 +303,16 @@ static Status NormalizeMountRootPath(const std::string& in, std::string& out) {
 
   return Status::OK();
 }
+ClientSession::ClientSession() = default;
 
-VFSWrapper::OperationLease::~OperationLease() {
+ClientSession::~ClientSession() { Stop(/*handover=*/false); }
+
+ClientSession::OperationLease::~OperationLease() {
   if (owner_ != nullptr) owner_->ReleaseOperation();
 }
 
-std::optional<VFSWrapper::OperationLease> VFSWrapper::TryAcquireOperation() {
+std::optional<ClientSession::OperationLease>
+ClientSession::TryAcquireOperation() {
   {
     std::lock_guard<std::mutex> lock(lifecycle_mutex_);
     if (lifecycle_state_ != LifecycleState::kRunning) {
@@ -322,7 +327,7 @@ std::optional<VFSWrapper::OperationLease> VFSWrapper::TryAcquireOperation() {
   return OperationLease(this);
 }
 
-void VFSWrapper::ReleaseOperation() {
+void ClientSession::ReleaseOperation() {
   g_active_public_operations << -1;
 
   std::lock_guard<std::mutex> lock(lifecycle_mutex_);
@@ -334,13 +339,17 @@ void VFSWrapper::ReleaseOperation() {
   }
 }
 
-Status VFSWrapper::FinishStartFailure(const Status& status) {
+Status ClientSession::FinishStartFailure(const Status& status) {
   if (vfs_ != nullptr) {
     Status cleanup_status = vfs_->Stop(/*skip_unmount=*/false);
     if (!cleanup_status.ok()) {
       LOG(ERROR) << "cleanup after VFS start failure failed: "
                  << cleanup_status.ToString();
     }
+  }
+  if (trace_started_) {
+    trace_manager_->Stop();
+    trace_started_ = false;
   }
 
   {
@@ -352,7 +361,7 @@ Status VFSWrapper::FinishStartFailure(const Status& status) {
   return status;
 }
 
-Status VFSWrapper::Start(const DingofsConfig& config, int upgrade_from_pid) {
+Status ClientSession::Start(const DingofsConfig& config, int upgrade_from_pid) {
   LOG(INFO) << "vfs start";
 
   {
@@ -413,7 +422,14 @@ Status VFSWrapper::Start(const DingofsConfig& config, int upgrade_from_pid) {
         FLAGS_vfs_bthread_worker_num, bthread_getconcurrency());
   }
 
-  client_op_metric_ = std::make_unique<metrics::client::ClientOpMetric>();
+  trace_manager_ = std::make_unique<TraceManager>();
+  client_metrics_ = std::make_unique<metrics::client::ClientOpMetric>();
+  if (FLAGS_enable_trace) {
+    if (!trace_manager_->Init()) {
+      return FinishStartFailure(Status::Internal("init trace manager fail"));
+    }
+    trace_started_ = true;
+  }
 
   const bool is_upgrade = upgrade_from_pid > 0;
 
@@ -434,7 +450,7 @@ Status VFSWrapper::Start(const DingofsConfig& config, int upgrade_from_pid) {
 
   LOG(INFO) << "client id: " << client_id.Description();
 
-  vfs_ = std::make_unique<vfs::VFSImpl>(vfs_conf, client_id);
+  vfs_ = std::make_unique<vfs::VFSImpl>(vfs_conf, client_id, *trace_manager_);
   s = vfs_->Start(/*skip_mount=*/is_upgrade);
   if (!s.ok()) return FinishStartFailure(s);
 
@@ -451,12 +467,6 @@ Status VFSWrapper::Start(const DingofsConfig& config, int upgrade_from_pid) {
   uid_ = dingofs::Helper::GetOriginalUid();
   gid_ = dingofs::Helper::GetOriginalGid();
 
-  attr_timeout_ = vfs_->GetAttrTimeout(FileType::kFile);
-  entry_timeout_ = vfs_->GetEntryTimeout(FileType::kFile);
-  fs_id_ = vfs_->GetFsId();
-  max_name_length_ = vfs_->GetMaxNameLength();
-  immutable_values_published_.store(true, std::memory_order_release);
-
   {
     std::lock_guard<std::mutex> lock(lifecycle_mutex_);
     lifecycle_state_ = LifecycleState::kRunning;
@@ -466,7 +476,7 @@ Status VFSWrapper::Start(const DingofsConfig& config, int upgrade_from_pid) {
   return Status::OK();
 }
 
-Status VFSWrapper::Stop(bool handover) {
+Status ClientSession::Stop(bool handover) {
   {
     std::unique_lock<std::mutex> lock(lifecycle_mutex_);
     while (lifecycle_state_ == LifecycleState::kStarting) {
@@ -527,6 +537,10 @@ Status VFSWrapper::Stop(bool handover) {
   if (handover && s.ok() && !Dump()) {
     s = Status::InvalidParam("dump vfs state fail");
   }
+  if (trace_started_) {
+    trace_manager_->Stop();
+    trace_started_ = false;
+  }
 
   {
     std::lock_guard<std::mutex> lock(lifecycle_mutex_);
@@ -537,8 +551,8 @@ Status VFSWrapper::Stop(bool handover) {
   return s;
 }
 
-bool VFSWrapper::Dump() {
-  auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::Dump");
+bool ClientSession::Dump() {
+  auto span = trace_manager_->StartSpan("ClientSession::Dump");
 
   Json::Value root;
   if (!vfs_->Dump(dingofs::SpanScope::GetContext(span), root)) {
@@ -564,8 +578,8 @@ bool VFSWrapper::Dump() {
   return true;
 }
 
-bool VFSWrapper::Load(const Json::Value& value) {
-  auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::Load");
+bool ClientSession::Load(const Json::Value& value) {
+  auto span = trace_manager_->StartSpan("ClientSession::Load");
 
   // TODO(hotupgrade): verify value["schema_version"] matches the running
   // binary's expected version; refuse the handover (return false) on mismatch
@@ -587,46 +601,34 @@ bool VFSWrapper::Load(const Json::Value& value) {
   return true;
 }
 
-Status VFSWrapper::GetInfo(std::string* info) {
-  VFS_WRAPPER_OPERATION_GUARD();
+Status ClientSession::GetInfo(std::string* info) {
+  CLIENT_SESSION_OPERATION_GUARD();
   CHECK(vfs_ != nullptr) << "vfs_ is nullptr";
   return vfs_->GetInfo(info);
 }
 
-double VFSWrapper::GetAttrTimeout(FileType type) {
+double ClientSession::GetAttrTimeout(FileType type) {
   (void)type;
-  CHECK(immutable_values_published_.load(std::memory_order_acquire))
-      << "GetAttrTimeout called before VFS Start completed";
-  return attr_timeout_;
+  return static_cast<double>(FLAGS_fuse_attr_cache_timeout_s);
 }
 
-double VFSWrapper::GetEntryTimeout(FileType type) {
+double ClientSession::GetEntryTimeout(FileType type) {
   (void)type;
-  CHECK(immutable_values_published_.load(std::memory_order_acquire))
-      << "GetEntryTimeout called before VFS Start completed";
-  return entry_timeout_;
+  return static_cast<double>(FLAGS_fuse_entry_cache_timeout_s);
 }
 
-uint64_t VFSWrapper::GetFsId() {
-  CHECK(immutable_values_published_.load(std::memory_order_acquire))
-      << "GetFsId called before VFS Start completed";
-  VLOG(6) << "fs_id: " << fs_id_;
-  return fs_id_;
+uint64_t ClientSession::GetMaxNameLength() {
+  const uint64_t max_name_length = FLAGS_vfs_meta_max_name_length;
+  VLOG(6) << "max name length: " << max_name_length;
+  return max_name_length;
 }
 
-uint64_t VFSWrapper::GetMaxNameLength() {
-  CHECK(immutable_values_published_.load(std::memory_order_acquire))
-      << "GetMaxNameLength called before VFS Start completed";
-  VLOG(6) << "max name length: " << max_name_length_;
-  return max_name_length_;
-}
-
-Status VFSWrapper::Lookup(const Context& ctx, Ino parent,
-                          const std::string& name, Attr* attr) {
-  VFS_WRAPPER_OPERATION_GUARD();
+Status ClientSession::Lookup(const Context& ctx, Ino parent,
+                             const std::string& name, Attr* attr) {
+  CLIENT_SESSION_OPERATION_GUARD();
   VLOG(2) << "VFSLookup parent: " << parent << " name: " << name;
 
-  auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::Lookup");
+  auto span = trace_manager_->StartSpan("ClientSession::Lookup");
 
   Status s;
   AccessLogGuard log(
@@ -644,10 +646,10 @@ Status VFSWrapper::Lookup(const Context& ctx, Ino parent,
       !dingofs::IsInternalName(name));
 
   ClientOpMetricGuard op_metric(
-      {&client_op_metric_->opLookup, &client_op_metric_->opAll},
+      {&client_metrics_->opLookup, &client_metrics_->opAll},
       !dingofs::IsInternalName(name));
 
-  if (name.length() > vfs_->GetMaxNameLength()) {
+  if (name.length() > FLAGS_vfs_meta_max_name_length) {
     s = Status::NameTooLong(fmt::format("name({}) too long", name.length()));
     return s;
   }
@@ -659,11 +661,11 @@ Status VFSWrapper::Lookup(const Context& ctx, Ino parent,
   return s;
 }
 
-Status VFSWrapper::GetAttr(const Context& ctx, Ino ino, Attr* attr) {
-  VFS_WRAPPER_OPERATION_GUARD();
+Status ClientSession::GetAttr(const Context& ctx, Ino ino, Attr* attr) {
+  CLIENT_SESSION_OPERATION_GUARD();
   VLOG(2) << "VFSGetAttr ino: " << ino;
 
-  auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::GetAttr");
+  auto span = trace_manager_->StartSpan("ClientSession::GetAttr");
 
   Status s;
   AccessLogGuard log(
@@ -675,7 +677,7 @@ Status VFSWrapper::GetAttr(const Context& ctx, Ino ino, Attr* attr) {
       !dingofs::IsInternalIno(ino));
 
   ClientOpMetricGuard op_metric(
-      {&client_op_metric_->opGetAttr, &client_op_metric_->opAll},
+      {&client_metrics_->opGetAttr, &client_metrics_->opAll},
       !dingofs::IsInternalIno(ino));
 
   auto span_ctx = dingofs::SpanScope::GetContext(span);
@@ -690,12 +692,12 @@ Status VFSWrapper::GetAttr(const Context& ctx, Ino ino, Attr* attr) {
   return s;
 }
 
-Status VFSWrapper::SetAttr(const Context& ctx, Ino ino, int set,
-                           const Attr& in_attr, Attr* out_attr) {
-  VFS_WRAPPER_OPERATION_GUARD();
+Status ClientSession::SetAttr(const Context& ctx, Ino ino, int set,
+                              const Attr& in_attr, Attr* out_attr) {
+  CLIENT_SESSION_OPERATION_GUARD();
   VLOG(2) << "VFSSetAttr ino: " << ino << " set: " << set;
 
-  auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::SetAttr");
+  auto span = trace_manager_->StartSpan("ClientSession::SetAttr");
 
   Status s;
   AccessLogGuard log([&]() {
@@ -705,7 +707,7 @@ Status VFSWrapper::SetAttr(const Context& ctx, Ino ino, int set,
   });
 
   ClientOpMetricGuard op_metric(
-      {&client_op_metric_->opSetAttr, &client_op_metric_->opAll});
+      {&client_metrics_->opSetAttr, &client_metrics_->opAll});
 
   if (set & (kSetAttrOpen | kSetAttrTimesSet)) {
     s = Status::InvalidParam("not supported");
@@ -719,14 +721,14 @@ Status VFSWrapper::SetAttr(const Context& ctx, Ino ino, int set,
   return s;
 }
 
-Status VFSWrapper::Fallocate(const Context& ctx, Ino ino, int mode,
-                             uint64_t offset, uint64_t length) {
-  VFS_WRAPPER_OPERATION_GUARD();
+Status ClientSession::Fallocate(const Context& ctx, Ino ino, int mode,
+                                uint64_t offset, uint64_t length) {
+  CLIENT_SESSION_OPERATION_GUARD();
   VLOG(2) << fmt::format(
       "VFSFallocate ino: {} mode: 0x{:X} offset: {} length: {}", ino, mode,
       offset, length);
 
-  auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::Fallocate");
+  auto span = trace_manager_->StartSpan("ClientSession::Fallocate");
 
   Status s;
   AccessLogGuard log([&]() {
@@ -736,7 +738,7 @@ Status VFSWrapper::Fallocate(const Context& ctx, Ino ino, int mode,
   });
 
   ClientOpMetricGuard op_metric(
-      {&client_op_metric_->opFallocate, &client_op_metric_->opAll});
+      {&client_metrics_->opFallocate, &client_metrics_->opAll});
 
   auto span_ctx = dingofs::SpanScope::GetContext(span);
   s = vfs_->Fallocate(span_ctx, ino, mode, offset, length);
@@ -745,12 +747,12 @@ Status VFSWrapper::Fallocate(const Context& ctx, Ino ino, int mode,
   return s;
 }
 
-Status VFSWrapper::CopyFileRange(const Context& ctx, Ino src_ino,
-                                 uint64_t src_off, uint64_t src_fh, Ino dst_ino,
-                                 uint64_t dst_off, uint64_t dst_fh,
-                                 uint64_t len, uint32_t flags,
-                                 uint64_t* bytes_copied) {
-  VFS_WRAPPER_OPERATION_GUARD();
+Status ClientSession::CopyFileRange(const Context& ctx, Ino src_ino,
+                                    uint64_t src_off, uint64_t src_fh,
+                                    Ino dst_ino, uint64_t dst_off,
+                                    uint64_t dst_fh, uint64_t len,
+                                    uint32_t flags, uint64_t* bytes_copied) {
+  CLIENT_SESSION_OPERATION_GUARD();
   VLOG(2) << fmt::format(
       "VFSCopyFileRange src_ino: {} src_off: {} src_fh: {} dst_ino: {} "
       "dst_off: {} dst_fh: {} len: {} flags: 0x{:x}",
@@ -758,7 +760,7 @@ Status VFSWrapper::CopyFileRange(const Context& ctx, Ino src_ino,
 
   CHECK(bytes_copied != nullptr) << "bytes_copied is nullptr";
 
-  auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::CopyFileRange");
+  auto span = trace_manager_->StartSpan("ClientSession::CopyFileRange");
 
   Status s;
   AccessLogGuard log([&]() {
@@ -770,7 +772,7 @@ Status VFSWrapper::CopyFileRange(const Context& ctx, Ino src_ino,
   });
 
   ClientOpMetricGuard op_metric(
-      {&client_op_metric_->opCopyFileRange, &client_op_metric_->opAll});
+      {&client_metrics_->opCopyFileRange, &client_metrics_->opAll});
 
   auto span_ctx = dingofs::SpanScope::GetContext(span);
   s = vfs_->CopyFileRange(span_ctx, src_ino, src_off, src_fh, dst_ino, dst_off,
@@ -780,11 +782,11 @@ Status VFSWrapper::CopyFileRange(const Context& ctx, Ino src_ino,
   return s;
 }
 
-Status VFSWrapper::ReadLink(const Context& ctx, Ino ino, std::string* link) {
-  VFS_WRAPPER_OPERATION_GUARD();
+Status ClientSession::ReadLink(const Context& ctx, Ino ino, std::string* link) {
+  CLIENT_SESSION_OPERATION_GUARD();
   VLOG(2) << "VFSReadLink ino: " << ino;
 
-  auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::ReadLink");
+  auto span = trace_manager_->StartSpan("ClientSession::ReadLink");
 
   Status s;
   AccessLogGuard log([&]() {
@@ -793,7 +795,7 @@ Status VFSWrapper::ReadLink(const Context& ctx, Ino ino, std::string* link) {
   });
 
   ClientOpMetricGuard op_metric(
-      {&client_op_metric_->opReadLink, &client_op_metric_->opAll});
+      {&client_metrics_->opReadLink, &client_metrics_->opAll});
 
   auto span_ctx = dingofs::SpanScope::GetContext(span);
   s = vfs_->ReadLink(span_ctx, ino, link);
@@ -802,15 +804,15 @@ Status VFSWrapper::ReadLink(const Context& ctx, Ino ino, std::string* link) {
   return s;
 }
 
-Status VFSWrapper::MkNod(const Context& ctx, Ino parent,
-                         const std::string& name, uint32_t mode, uint64_t dev,
-                         Attr* attr) {
-  VFS_WRAPPER_OPERATION_GUARD();
+Status ClientSession::MkNod(const Context& ctx, Ino parent,
+                            const std::string& name, uint32_t mode,
+                            uint64_t dev, Attr* attr) {
+  CLIENT_SESSION_OPERATION_GUARD();
   VLOG(2) << "VFSMknod parent: " << parent << " name: " << name
           << " uid: " << ctx.uid << " gid: " << ctx.gid << " mode: " << mode
           << " dev: " << dev;
 
-  auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::MkNod");
+  auto span = trace_manager_->StartSpan("ClientSession::MkNod");
 
   Status s;
   AccessLogGuard log([&]() {
@@ -820,9 +822,9 @@ Status VFSWrapper::MkNod(const Context& ctx, Ino parent,
   });
 
   ClientOpMetricGuard op_metric(
-      {&client_op_metric_->opMkNod, &client_op_metric_->opAll});
+      {&client_metrics_->opMkNod, &client_metrics_->opAll});
 
-  if (name.length() > vfs_->GetMaxNameLength()) {
+  if (name.length() > FLAGS_vfs_meta_max_name_length) {
     s = Status::NameTooLong(fmt::format("name({}) too long", name.length()));
     return s;
   }
@@ -835,12 +837,12 @@ Status VFSWrapper::MkNod(const Context& ctx, Ino parent,
   return s;
 }
 
-Status VFSWrapper::Unlink(const Context& ctx, Ino parent,
-                          const std::string& name) {
-  VFS_WRAPPER_OPERATION_GUARD();
+Status ClientSession::Unlink(const Context& ctx, Ino parent,
+                             const std::string& name) {
+  CLIENT_SESSION_OPERATION_GUARD();
   VLOG(2) << "VFSUnlink parent: " << parent << " name: " << name;
 
-  auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::Unlink");
+  auto span = trace_manager_->StartSpan("ClientSession::Unlink");
 
   Status s;
   AccessLogGuard log([&]() {
@@ -849,9 +851,9 @@ Status VFSWrapper::Unlink(const Context& ctx, Ino parent,
   });
 
   ClientOpMetricGuard op_metric(
-      {&client_op_metric_->opUnlink, &client_op_metric_->opAll});
+      {&client_metrics_->opUnlink, &client_metrics_->opAll});
 
-  if (name.length() > vfs_->GetMaxNameLength()) {
+  if (name.length() > FLAGS_vfs_meta_max_name_length) {
     s = Status::NameTooLong(fmt::format("name({}) too long", name.length()));
     return s;
   }
@@ -865,14 +867,14 @@ Status VFSWrapper::Unlink(const Context& ctx, Ino parent,
   return s;
 }
 
-Status VFSWrapper::Symlink(const Context& ctx, Ino parent,
-                           const std::string& name, const std::string& link,
-                           Attr* attr) {
-  VFS_WRAPPER_OPERATION_GUARD();
+Status ClientSession::Symlink(const Context& ctx, Ino parent,
+                              const std::string& name, const std::string& link,
+                              Attr* attr) {
+  CLIENT_SESSION_OPERATION_GUARD();
   VLOG(2) << "VFSSymlink parent: " << parent << " name: " << name
           << " uid: " << ctx.uid << " gid: " << ctx.gid << " link: " << link;
 
-  auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::Symlink");
+  auto span = trace_manager_->StartSpan("ClientSession::Symlink");
 
   Status s;
   AccessLogGuard log([&]() {
@@ -882,9 +884,9 @@ Status VFSWrapper::Symlink(const Context& ctx, Ino parent,
   });
 
   ClientOpMetricGuard op_metric(
-      {&client_op_metric_->opSymlink, &client_op_metric_->opAll});
+      {&client_metrics_->opSymlink, &client_metrics_->opAll});
 
-  if (name.length() > vfs_->GetMaxNameLength()) {
+  if (name.length() > FLAGS_vfs_meta_max_name_length) {
     s = Status::NameTooLong(fmt::format("name({}) too long", name.length()));
     return s;
   }
@@ -896,14 +898,14 @@ Status VFSWrapper::Symlink(const Context& ctx, Ino parent,
   return s;
 }
 
-Status VFSWrapper::Rename(const Context& ctx, Ino old_parent,
-                          const std::string& old_name, Ino new_parent,
-                          const std::string& new_name) {
-  VFS_WRAPPER_OPERATION_GUARD();
+Status ClientSession::Rename(const Context& ctx, Ino old_parent,
+                             const std::string& old_name, Ino new_parent,
+                             const std::string& new_name) {
+  CLIENT_SESSION_OPERATION_GUARD();
   VLOG(2) << "VFSRename old_parent: " << old_parent << " old_name: " << old_name
           << " new_parent: " << new_parent << " new_name: " << new_name;
 
-  auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::Rename");
+  auto span = trace_manager_->StartSpan("ClientSession::Rename");
 
   Status s;
   AccessLogGuard log([&]() {
@@ -913,10 +915,11 @@ Status VFSWrapper::Rename(const Context& ctx, Ino old_parent,
   });
 
   ClientOpMetricGuard op_metric(
-      {&client_op_metric_->opRename, &client_op_metric_->opAll});
+      {&client_metrics_->opRename, &client_metrics_->opAll});
 
-  if (old_name.length() > vfs_->GetMaxNameLength() ||
-      new_name.length() > vfs_->GetMaxNameLength()) {
+  const uint64_t max_name_length = FLAGS_vfs_meta_max_name_length;
+  if (old_name.length() > max_name_length ||
+      new_name.length() > max_name_length) {
     s = Status::NameTooLong(fmt::format("name({}|{}) too long",
                                         old_name.length(), new_name.length()));
     return s;
@@ -931,13 +934,13 @@ Status VFSWrapper::Rename(const Context& ctx, Ino old_parent,
   return s;
 }
 
-Status VFSWrapper::Link(const Context& ctx, Ino ino, Ino new_parent,
-                        const std::string& new_name, Attr* attr) {
-  VFS_WRAPPER_OPERATION_GUARD();
+Status ClientSession::Link(const Context& ctx, Ino ino, Ino new_parent,
+                           const std::string& new_name, Attr* attr) {
+  CLIENT_SESSION_OPERATION_GUARD();
   VLOG(2) << "VFSLink ino: " << ino << " new_parent: " << new_parent
           << " new_name: " << new_name;
 
-  auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::Link");
+  auto span = trace_manager_->StartSpan("ClientSession::Link");
 
   Status s;
   AccessLogGuard log([&]() {
@@ -947,9 +950,9 @@ Status VFSWrapper::Link(const Context& ctx, Ino ino, Ino new_parent,
   });
 
   ClientOpMetricGuard op_metric(
-      {&client_op_metric_->opLink, &client_op_metric_->opAll});
+      {&client_metrics_->opLink, &client_metrics_->opAll});
 
-  uint64_t max_name_len = vfs_->GetMaxNameLength();
+  uint64_t max_name_len = FLAGS_vfs_meta_max_name_length;
   if (new_name.length() > max_name_len) {
     LOG(WARNING) << "name too long, name: " << new_name
                  << ", maxNameLength: " << max_name_len;
@@ -965,14 +968,14 @@ Status VFSWrapper::Link(const Context& ctx, Ino ino, Ino new_parent,
   return s;
 }
 
-Status VFSWrapper::Open(const Context& ctx, Ino ino, int flags, uint64_t* fh,
-                        bool* keep_cache) {
-  VFS_WRAPPER_OPERATION_GUARD();
+Status ClientSession::Open(const Context& ctx, Ino ino, int flags, uint64_t* fh,
+                           bool* keep_cache) {
+  CLIENT_SESSION_OPERATION_GUARD();
   VLOG(2) << "VFSOpen ino: " << ino << " octal flags: " << std::oct << flags;
   CHECK(fh != nullptr) << "fh is nullptr";
   CHECK(keep_cache != nullptr) << "keep_cache is nullptr";
 
-  auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::Open");
+  auto span = trace_manager_->StartSpan("ClientSession::Open");
 
   Status s;
   AccessLogGuard log(
@@ -985,7 +988,7 @@ Status VFSWrapper::Open(const Context& ctx, Ino ino, int flags, uint64_t* fh,
       !dingofs::IsInternalIno(ino));
 
   ClientOpMetricGuard op_metric(
-      {&client_op_metric_->opOpen, &client_op_metric_->opAll},
+      {&client_metrics_->opOpen, &client_metrics_->opAll},
       !dingofs::IsInternalIno(ino));
 
   auto span_ctx = dingofs::SpanScope::GetContext(span);
@@ -995,15 +998,15 @@ Status VFSWrapper::Open(const Context& ctx, Ino ino, int flags, uint64_t* fh,
   return s;
 }
 
-Status VFSWrapper::Create(const Context& ctx, Ino parent,
-                          const std::string& name, uint32_t mode, int flags,
-                          uint64_t* fh, Attr* attr) {
-  VFS_WRAPPER_OPERATION_GUARD();
+Status ClientSession::Create(const Context& ctx, Ino parent,
+                             const std::string& name, uint32_t mode, int flags,
+                             uint64_t* fh, Attr* attr) {
+  CLIENT_SESSION_OPERATION_GUARD();
   VLOG(2) << "VFSCreate parent: " << parent << " name: " << name
           << " uid: " << ctx.uid << " gid: " << ctx.gid << " mode: " << mode
           << " octal flags: " << std::oct << flags;
 
-  auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::Create");
+  auto span = trace_manager_->StartSpan("ClientSession::Create");
 
   Status s;
   AccessLogGuard log([&]() {
@@ -1013,9 +1016,9 @@ Status VFSWrapper::Create(const Context& ctx, Ino parent,
   });
 
   ClientOpMetricGuard op_metric(
-      {&client_op_metric_->opCreate, &client_op_metric_->opAll});
+      {&client_metrics_->opCreate, &client_metrics_->opAll});
 
-  if (name.length() > vfs_->GetMaxNameLength()) {
+  if (name.length() > FLAGS_vfs_meta_max_name_length) {
     s = Status::NameTooLong(fmt::format("name({}) too long", name.length()));
     return s;
   }
@@ -1028,11 +1031,11 @@ Status VFSWrapper::Create(const Context& ctx, Ino parent,
   return s;
 }
 
-Status VFSWrapper::Read(const Context& ctx, Ino ino, DataBuffer* data_buffer,
-                        uint64_t size, uint64_t offset, uint64_t fh,
-                        uint64_t* out_rsize) {
-  VFS_WRAPPER_OPERATION_GUARD();
-  auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::Read");
+Status ClientSession::Read(const Context& ctx, Ino ino, DataBuffer* data_buffer,
+                           uint64_t size, uint64_t offset, uint64_t fh,
+                           uint64_t* out_rsize) {
+  CLIENT_SESSION_OPERATION_GUARD();
+  auto span = trace_manager_->StartSpan("ClientSession::Read");
   std::string session_id = dingofs::SpanScope::GetSessionID(span);
 
   VLOG(2) << fmt::format("[{}] VFSRead ino: {}, size: {}, offset: {}, fh: {}",
@@ -1049,7 +1052,7 @@ Status VFSWrapper::Read(const Context& ctx, Ino ino, DataBuffer* data_buffer,
       !dingofs::IsInternalIno(ino));
 
   ClientOpMetricGuard op_metric(
-      {&client_op_metric_->opRead, &client_op_metric_->opAll},
+      {&client_metrics_->opRead, &client_metrics_->opAll},
       !dingofs::IsInternalIno(ino));
   VFSRWMetricGuard guard(&s, &g_rw_metric.read, out_rsize,
                          !dingofs::IsInternalIno(ino));
@@ -1063,15 +1066,15 @@ Status VFSWrapper::Read(const Context& ctx, Ino ino, DataBuffer* data_buffer,
   return s;
 }
 
-Status VFSWrapper::Write(const Context& ctx, Ino ino, const char* buf,
-                         uint64_t size, uint64_t offset, uint64_t fh,
-                         uint64_t* out_wsize) {
-  VFS_WRAPPER_OPERATION_GUARD();
+Status ClientSession::Write(const Context& ctx, Ino ino, const char* buf,
+                            uint64_t size, uint64_t offset, uint64_t fh,
+                            uint64_t* out_wsize) {
+  CLIENT_SESSION_OPERATION_GUARD();
   VLOG(2) << "VFSWrite ino: " << ino
           << ", buf: " << dingofs::Helper::Char2Addr(buf) << ", size: " << size
           << " offset: " << offset << " fh: " << fh;
 
-  auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::Write");
+  auto span = trace_manager_->StartSpan("ClientSession::Write");
 
   Status s;
   AccessLogGuard log([&]() {
@@ -1081,7 +1084,7 @@ Status VFSWrapper::Write(const Context& ctx, Ino ino, const char* buf,
   });
 
   ClientOpMetricGuard op_metric(
-      {&client_op_metric_->opWrite, &client_op_metric_->opAll});
+      {&client_metrics_->opWrite, &client_metrics_->opAll});
 
   VFSRWMetricGuard guard(&s, &g_rw_metric.write, out_wsize);
 
@@ -1092,11 +1095,11 @@ Status VFSWrapper::Write(const Context& ctx, Ino ino, const char* buf,
   return s;
 }
 
-Status VFSWrapper::Flush(const Context& ctx, Ino ino, uint64_t fh) {
-  VFS_WRAPPER_OPERATION_GUARD();
+Status ClientSession::Flush(const Context& ctx, Ino ino, uint64_t fh) {
+  CLIENT_SESSION_OPERATION_GUARD();
   VLOG(2) << "VFSFlush ino: " << ino << " fh: " << fh;
 
-  auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::Flush");
+  auto span = trace_manager_->StartSpan("ClientSession::Flush");
 
   Status s;
   AccessLogGuard log(
@@ -1107,7 +1110,7 @@ Status VFSWrapper::Flush(const Context& ctx, Ino ino, uint64_t fh) {
       !dingofs::IsInternalIno(ino));
 
   ClientOpMetricGuard op_metric(
-      {&client_op_metric_->opFlush, &client_op_metric_->opAll},
+      {&client_metrics_->opFlush, &client_metrics_->opAll},
       !dingofs::IsInternalIno(ino));
 
   auto span_ctx = dingofs::SpanScope::GetContext(span);
@@ -1117,11 +1120,11 @@ Status VFSWrapper::Flush(const Context& ctx, Ino ino, uint64_t fh) {
   return s;
 }
 
-Status VFSWrapper::Release(const Context& ctx, Ino ino, uint64_t fh) {
-  VFS_WRAPPER_OPERATION_GUARD();
+Status ClientSession::Release(const Context& ctx, Ino ino, uint64_t fh) {
+  CLIENT_SESSION_OPERATION_GUARD();
   VLOG(2) << "VFSRelease ino: " << ino << " fh: " << fh;
 
-  auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::Release");
+  auto span = trace_manager_->StartSpan("ClientSession::Release");
 
   Status s;
   AccessLogGuard log(
@@ -1132,7 +1135,7 @@ Status VFSWrapper::Release(const Context& ctx, Ino ino, uint64_t fh) {
       !dingofs::IsInternalIno(ino));
 
   ClientOpMetricGuard op_metric(
-      {&client_op_metric_->opRelease, &client_op_metric_->opAll},
+      {&client_metrics_->opRelease, &client_metrics_->opAll},
       !dingofs::IsInternalIno(ino));
 
   auto span_ctx = dingofs::SpanScope::GetContext(span);
@@ -1142,13 +1145,13 @@ Status VFSWrapper::Release(const Context& ctx, Ino ino, uint64_t fh) {
   return s;
 }
 
-Status VFSWrapper::Fsync(const Context& ctx, Ino ino, int datasync,
-                         uint64_t fh) {
-  VFS_WRAPPER_OPERATION_GUARD();
+Status ClientSession::Fsync(const Context& ctx, Ino ino, int datasync,
+                            uint64_t fh) {
+  CLIENT_SESSION_OPERATION_GUARD();
   VLOG(2) << "VFSFsync ino: " << ino << " datasync: " << datasync
           << " fh: " << fh;
 
-  auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::Fsync");
+  auto span = trace_manager_->StartSpan("ClientSession::Fsync");
 
   Status s;
   AccessLogGuard log([&]() {
@@ -1158,7 +1161,7 @@ Status VFSWrapper::Fsync(const Context& ctx, Ino ino, int datasync,
   });
 
   ClientOpMetricGuard op_metric(
-      {&client_op_metric_->opFsync, &client_op_metric_->opAll});
+      {&client_metrics_->opFsync, &client_metrics_->opAll});
 
   auto span_ctx = dingofs::SpanScope::GetContext(span);
   s = vfs_->Fsync(span_ctx, ino, datasync, fh);
@@ -1167,14 +1170,14 @@ Status VFSWrapper::Fsync(const Context& ctx, Ino ino, int datasync,
   return s;
 }
 
-Status VFSWrapper::SetXattr(const Context& ctx, Ino ino,
-                            const std::string& name, const std::string& value,
-                            int flags) {
-  VFS_WRAPPER_OPERATION_GUARD();
+Status ClientSession::SetXattr(const Context& ctx, Ino ino,
+                               const std::string& name,
+                               const std::string& value, int flags) {
+  CLIENT_SESSION_OPERATION_GUARD();
   VLOG(2) << "VFSSetXattr ino: " << ino << " name: " << name
           << " value: " << value << " octal flags: " << std::oct << flags;
 
-  auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::SetXattr");
+  auto span = trace_manager_->StartSpan("ClientSession::SetXattr");
 
   Status s;
   AccessLogGuard log([&]() {
@@ -1183,10 +1186,10 @@ Status VFSWrapper::SetXattr(const Context& ctx, Ino ino,
   });
 
   ClientOpMetricGuard op_metric(
-      {&client_op_metric_->opSetXattr, &client_op_metric_->opAll},
+      {&client_metrics_->opSetXattr, &client_metrics_->opAll},
       !dingofs::IsInternalIno(ino));
 
-  if (name.length() > vfs_->GetMaxNameLength()) {
+  if (name.length() > FLAGS_vfs_meta_max_name_length) {
     s = Status::NameTooLong(fmt::format("name({}) too long", name.length()));
     return s;
   }
@@ -1198,12 +1201,12 @@ Status VFSWrapper::SetXattr(const Context& ctx, Ino ino,
   return s;
 }
 
-Status VFSWrapper::GetXattr(const Context& ctx, Ino ino,
-                            const std::string& name, std::string* value) {
-  VFS_WRAPPER_OPERATION_GUARD();
+Status ClientSession::GetXattr(const Context& ctx, Ino ino,
+                               const std::string& name, std::string* value) {
+  CLIENT_SESSION_OPERATION_GUARD();
   VLOG(2) << "VFSGetXattr ino: " << ino << " name: " << name;
 
-  auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::GetXattr");
+  auto span = trace_manager_->StartSpan("ClientSession::GetXattr");
 
   Status s;
   AccessLogGuard log(
@@ -1215,10 +1218,10 @@ Status VFSWrapper::GetXattr(const Context& ctx, Ino ino,
       !dingofs::IsInternalIno(ino));
 
   ClientOpMetricGuard op_metric(
-      {&client_op_metric_->opGetXattr, &client_op_metric_->opAll},
+      {&client_metrics_->opGetXattr, &client_metrics_->opAll},
       !dingofs::IsInternalIno(ino));
 
-  if (name.length() > vfs_->GetMaxNameLength()) {
+  if (name.length() > FLAGS_vfs_meta_max_name_length) {
     s = Status::NameTooLong(fmt::format("name({}) too long", name.length()));
     return s;
   }
@@ -1235,12 +1238,12 @@ Status VFSWrapper::GetXattr(const Context& ctx, Ino ino,
   return s;
 }
 
-Status VFSWrapper::RemoveXattr(const Context& ctx, Ino ino,
-                               const std::string& name) {
-  VFS_WRAPPER_OPERATION_GUARD();
+Status ClientSession::RemoveXattr(const Context& ctx, Ino ino,
+                                  const std::string& name) {
+  CLIENT_SESSION_OPERATION_GUARD();
   VLOG(2) << "VFSRemoveXattr ino: " << ino << " name: " << name;
 
-  auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::RemoveXattr");
+  auto span = trace_manager_->StartSpan("ClientSession::RemoveXattr");
 
   Status s;
   AccessLogGuard log([&]() {
@@ -1249,10 +1252,10 @@ Status VFSWrapper::RemoveXattr(const Context& ctx, Ino ino,
   });
 
   ClientOpMetricGuard op_metric(
-      {&client_op_metric_->opRemoveXattr, &client_op_metric_->opAll},
+      {&client_metrics_->opRemoveXattr, &client_metrics_->opAll},
       !dingofs::IsInternalIno(ino));
 
-  if (name.length() > vfs_->GetMaxNameLength()) {
+  if (name.length() > FLAGS_vfs_meta_max_name_length) {
     s = Status::NameTooLong(fmt::format("name({}) too long", name.length()));
     return s;
   }
@@ -1264,12 +1267,12 @@ Status VFSWrapper::RemoveXattr(const Context& ctx, Ino ino,
   return s;
 }
 
-Status VFSWrapper::ListXattr(const Context& ctx, Ino ino,
-                             std::vector<std::string>* xattrs) {
-  VFS_WRAPPER_OPERATION_GUARD();
+Status ClientSession::ListXattr(const Context& ctx, Ino ino,
+                                std::vector<std::string>* xattrs) {
+  CLIENT_SESSION_OPERATION_GUARD();
   VLOG(2) << "VFSListXattr ino: " << ino;
 
-  auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::ListXattr");
+  auto span = trace_manager_->StartSpan("ClientSession::ListXattr");
 
   Status s;
   AccessLogGuard log([&]() {
@@ -1278,7 +1281,7 @@ Status VFSWrapper::ListXattr(const Context& ctx, Ino ino,
   });
 
   ClientOpMetricGuard op_metric(
-      {&client_op_metric_->opListXattr, &client_op_metric_->opAll});
+      {&client_metrics_->opListXattr, &client_metrics_->opAll});
 
   auto span_ctx = dingofs::SpanScope::GetContext(span);
   s = vfs_->ListXattr(span_ctx, ino, xattrs);
@@ -1287,13 +1290,14 @@ Status VFSWrapper::ListXattr(const Context& ctx, Ino ino,
   return s;
 }
 
-Status VFSWrapper::MkDir(const Context& ctx, Ino parent,
-                         const std::string& name, uint32_t mode, Attr* attr) {
-  VFS_WRAPPER_OPERATION_GUARD();
+Status ClientSession::MkDir(const Context& ctx, Ino parent,
+                            const std::string& name, uint32_t mode,
+                            Attr* attr) {
+  CLIENT_SESSION_OPERATION_GUARD();
   VLOG(2) << "VFSMkDir parent ino: " << parent << " name: " << name
           << " uid: " << ctx.uid << " gid: " << ctx.gid << " mode: " << mode;
 
-  auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::MkDir");
+  auto span = trace_manager_->StartSpan("ClientSession::MkDir");
 
   Status s;
   AccessLogGuard log([&]() {
@@ -1303,9 +1307,9 @@ Status VFSWrapper::MkDir(const Context& ctx, Ino parent,
   });
 
   ClientOpMetricGuard op_metric(
-      {&client_op_metric_->opMkDir, &client_op_metric_->opAll});
+      {&client_metrics_->opMkDir, &client_metrics_->opAll});
 
-  if (name.length() > vfs_->GetMaxNameLength()) {
+  if (name.length() > FLAGS_vfs_meta_max_name_length) {
     s = Status::NameTooLong(fmt::format("name({}) too long", name.length()));
     return s;
   }
@@ -1318,12 +1322,12 @@ Status VFSWrapper::MkDir(const Context& ctx, Ino parent,
   return s;
 }
 
-Status VFSWrapper::OpenDir(const Context& ctx, Ino ino, uint64_t* fh,
-                           bool& need_cache) {
-  VFS_WRAPPER_OPERATION_GUARD();
+Status ClientSession::OpenDir(const Context& ctx, Ino ino, uint64_t* fh,
+                              bool& need_cache) {
+  CLIENT_SESSION_OPERATION_GUARD();
   VLOG(2) << "VFSOpendir ino: " << ino;
 
-  auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::OpenDir");
+  auto span = trace_manager_->StartSpan("ClientSession::OpenDir");
 
   Status s;
   AccessLogGuard log([&]() {
@@ -1333,7 +1337,7 @@ Status VFSWrapper::OpenDir(const Context& ctx, Ino ino, uint64_t* fh,
   });
 
   ClientOpMetricGuard op_metric(
-      {&client_op_metric_->opOpenDir, &client_op_metric_->opAll});
+      {&client_metrics_->opOpenDir, &client_metrics_->opAll});
 
   auto span_ctx = dingofs::SpanScope::GetContext(span);
   s = vfs_->OpenDir(span_ctx, ino, fh, need_cache);
@@ -1342,14 +1346,14 @@ Status VFSWrapper::OpenDir(const Context& ctx, Ino ino, uint64_t* fh,
   return s;
 }
 
-Status VFSWrapper::ReadDir(const Context& ctx, Ino ino, uint64_t fh,
-                           uint64_t offset, bool with_attr,
-                           ReadDirHandler handler) {
-  VFS_WRAPPER_OPERATION_GUARD();
+Status ClientSession::ReadDir(const Context& ctx, Ino ino, uint64_t fh,
+                              uint64_t offset, bool with_attr,
+                              ReadDirHandler handler) {
+  CLIENT_SESSION_OPERATION_GUARD();
   VLOG(2) << "VFSReaddir ino: " << ino << " fh: " << fh << " offset: " << offset
           << " with_attr: " << (with_attr ? "true" : "false");
 
-  auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::ReadDir");
+  auto span = trace_manager_->StartSpan("ClientSession::ReadDir");
 
   Status s;
   uint32_t count = 0;
@@ -1360,7 +1364,7 @@ Status VFSWrapper::ReadDir(const Context& ctx, Ino ino, uint64_t fh,
   });
 
   ClientOpMetricGuard op_metric(
-      {&client_op_metric_->opReadDir, &client_op_metric_->opAll});
+      {&client_metrics_->opReadDir, &client_metrics_->opAll});
 
   auto span_ctx = dingofs::SpanScope::GetContext(span);
   s = vfs_->ReadDir(span_ctx, ino, fh, offset, with_attr, std::move(handler),
@@ -1370,11 +1374,11 @@ Status VFSWrapper::ReadDir(const Context& ctx, Ino ino, uint64_t fh,
   return s;
 }
 
-Status VFSWrapper::ReleaseDir(const Context& ctx, Ino ino, uint64_t fh) {
-  VFS_WRAPPER_OPERATION_GUARD();
+Status ClientSession::ReleaseDir(const Context& ctx, Ino ino, uint64_t fh) {
+  CLIENT_SESSION_OPERATION_GUARD();
   VLOG(2) << "VFSReleaseDir ino: " << ino << " fh: " << fh;
 
-  auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::ReleaseDir");
+  auto span = trace_manager_->StartSpan("ClientSession::ReleaseDir");
 
   Status s;
   AccessLogGuard log([&]() {
@@ -1383,7 +1387,7 @@ Status VFSWrapper::ReleaseDir(const Context& ctx, Ino ino, uint64_t fh) {
   });
 
   ClientOpMetricGuard op_metric(
-      {&client_op_metric_->opReleaseDir, &client_op_metric_->opAll});
+      {&client_metrics_->opReleaseDir, &client_metrics_->opAll});
 
   auto span_ctx = dingofs::SpanScope::GetContext(span);
   s = vfs_->ReleaseDir(span_ctx, ino, fh);
@@ -1392,12 +1396,12 @@ Status VFSWrapper::ReleaseDir(const Context& ctx, Ino ino, uint64_t fh) {
   return s;
 }
 
-Status VFSWrapper::RmDir(const Context& ctx, Ino parent,
-                         const std::string& name) {
-  VFS_WRAPPER_OPERATION_GUARD();
+Status ClientSession::RmDir(const Context& ctx, Ino parent,
+                            const std::string& name) {
+  CLIENT_SESSION_OPERATION_GUARD();
   VLOG(2) << "VFSRmdir parent: " << parent << " name: " << name;
 
-  auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::RmDir");
+  auto span = trace_manager_->StartSpan("ClientSession::RmDir");
 
   Status s;
   AccessLogGuard log([&]() {
@@ -1406,9 +1410,9 @@ Status VFSWrapper::RmDir(const Context& ctx, Ino parent,
   });
 
   ClientOpMetricGuard op_metric(
-      {&client_op_metric_->opRmDir, &client_op_metric_->opAll});
+      {&client_metrics_->opRmDir, &client_metrics_->opAll});
 
-  if (name.length() > vfs_->GetMaxNameLength()) {
+  if (name.length() > FLAGS_vfs_meta_max_name_length) {
     s = Status::NameTooLong(fmt::format("name({}) too long", name.length()));
     return s;
   }
@@ -1422,11 +1426,11 @@ Status VFSWrapper::RmDir(const Context& ctx, Ino parent,
   return s;
 }
 
-Status VFSWrapper::StatFs(const Context& ctx, Ino ino, FsStat* fs_stat) {
-  VFS_WRAPPER_OPERATION_GUARD();
+Status ClientSession::StatFs(const Context& ctx, Ino ino, FsStat* fs_stat) {
+  CLIENT_SESSION_OPERATION_GUARD();
   VLOG(2) << "VFSStatFs ino: " << ino;
 
-  auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::StatFs");
+  auto span = trace_manager_->StartSpan("ClientSession::StatFs");
 
   Status s;
   AccessLogGuard log([&]() {
@@ -1435,7 +1439,7 @@ Status VFSWrapper::StatFs(const Context& ctx, Ino ino, FsStat* fs_stat) {
   });
 
   ClientOpMetricGuard op_metric(
-      {&client_op_metric_->opStatfs, &client_op_metric_->opAll});
+      {&client_metrics_->opStatfs, &client_metrics_->opAll});
 
   auto span_ctx = dingofs::SpanScope::GetContext(span);
   s = vfs_->StatFs(span_ctx, ino, fs_stat);
@@ -1444,14 +1448,14 @@ Status VFSWrapper::StatFs(const Context& ctx, Ino ino, FsStat* fs_stat) {
   return s;
 }
 
-Status VFSWrapper::Ioctl(const Context& ctx, Ino ino, unsigned int cmd,
-                         unsigned flags, const void* in_buf, size_t in_bufsz,
-                         char* out_buf, size_t out_bufsz) {
-  VFS_WRAPPER_OPERATION_GUARD();
+Status ClientSession::Ioctl(const Context& ctx, Ino ino, unsigned int cmd,
+                            unsigned flags, const void* in_buf, size_t in_bufsz,
+                            char* out_buf, size_t out_bufsz) {
+  CLIENT_SESSION_OPERATION_GUARD();
   VLOG(2) << "VFSIoctl ino: " << ino << " cmd: " << cmd << " flags: " << flags
           << " in_bufsz: " << in_bufsz << " out_bufsz: " << out_bufsz;
 
-  auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::Ioctl");
+  auto span = trace_manager_->StartSpan("ClientSession::Ioctl");
 
   Status s;
   AccessLogGuard log([&]() {
@@ -1467,7 +1471,7 @@ Status VFSWrapper::Ioctl(const Context& ctx, Ino ino, unsigned int cmd,
   return s;
 }
 
-#undef VFS_WRAPPER_OPERATION_GUARD
+#undef CLIENT_SESSION_OPERATION_GUARD
 
 }  // namespace client
 }  // namespace dingofs

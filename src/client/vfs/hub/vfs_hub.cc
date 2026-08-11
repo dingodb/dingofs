@@ -78,8 +78,11 @@ static MetaSystemUPtr BuildMetaSystem(const VFSConfig& vfs_conf,
   return nullptr;
 }
 
-VFSHubImpl::VFSHubImpl(const VFSConfig& vfs_conf, ClientId client_id)
-    : client_id_(client_id), vfs_conf_(vfs_conf) {}
+VFSHubImpl::VFSHubImpl(const VFSConfig& vfs_conf, ClientId client_id,
+                       TraceManager& trace_manager)
+    : trace_manager_(trace_manager),
+      client_id_(client_id),
+      vfs_conf_(vfs_conf) {}
 
 WriterTable* VFSHubImpl::GetWriterTable() {
   CHECK_NOTNULL(writer_table_);
@@ -146,10 +149,6 @@ VFSHubImpl::~VFSHubImpl() {
     compactor_.reset();
   }
 
-  if (trace_manager_ != nullptr) {
-    trace_manager_.reset();
-  }
-
   if (logclean_manager_ != nullptr) {
     logclean_manager_.reset();
   }
@@ -166,14 +165,6 @@ Status VFSHubImpl::Start(bool skip_mount) {
   LOG(INFO) << fmt::format("[vfs.hub] vfs hub starting, skip_mount({}).",
                            skip_mount);
 
-  // trace manager
-  trace_manager_ = std::make_unique<TraceManager>();
-  if (FLAGS_enable_trace) {
-    if (!trace_manager_->Init()) {
-      return Status::Internal("init trace manager fail");
-    }
-  }
-
   {
     compactor_ = std::make_unique<CompactorImpl>(this);
     DINGOFS_RETURN_NOT_OK(compactor_->Start());
@@ -182,7 +173,7 @@ Status VFSHubImpl::Start(bool skip_mount) {
   // meta system
   {
     auto meta =
-        BuildMetaSystem(vfs_conf_, client_id_, *trace_manager_, *compactor_);
+        BuildMetaSystem(vfs_conf_, client_id_, trace_manager_, *compactor_);
     if (meta == nullptr) {
       return Status::Internal("build meta system fail");
     }
@@ -193,7 +184,7 @@ Status VFSHubImpl::Start(bool skip_mount) {
 
   // load fs info
   {
-    auto span = trace_manager_->StartSpan("vfs::start");
+    auto span = trace_manager_.StartSpan("vfs::start");
 
     DINGOFS_RETURN_NOT_OK(
         meta_wrapper_->GetFsInfo(SpanScope::GetContext(span), &fs_info_));
@@ -447,7 +438,8 @@ Status VFSHubImpl::Stop(bool skip_unmount) {
 
   // A handover must never publish state after dirty data failed to flush. The
   // old process is already quiesced at this point, so treat this as an
-  // unrecoverable handover failure rather than letting VFSWrapper dump state.
+  // unrecoverable handover failure rather than letting ClientSession dump
+  // state.
   if (skip_unmount && !handle_stop_status.ok()) {
     LOG(FATAL) << fmt::format("Handover writer flush failed: {}",
                               handle_stop_status.ToString());
@@ -478,7 +470,7 @@ Status VFSHubImpl::Stop(bool skip_unmount) {
   }
 
   if (warmup_manager_ != nullptr) {
-    // VFSWrapper has already rejected new public operations and drained all
+    // ClientSession has already rejected new public operations and drained all
     // existing operations before VFSHub::Stop, so no Open trigger can race
     // with this detach.
     if (meta_wrapper_ != nullptr) {
@@ -517,10 +509,6 @@ Status VFSHubImpl::Stop(bool skip_unmount) {
   // drained above. Block-store completions are drained by CBExecutor above.
   if (meta_wrapper_ != nullptr) {
     meta_wrapper_->Stop(skip_unmount);
-  }
-
-  if (trace_manager_ != nullptr) {
-    if (FLAGS_enable_trace) trace_manager_->Stop();
   }
 
   if (logclean_manager_ != nullptr) {

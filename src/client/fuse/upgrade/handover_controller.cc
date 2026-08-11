@@ -163,8 +163,9 @@ void HandoverController::Run() {
 
     // Do NOT pause IO (drain) if there is nothing to commit yet. The checkpoint
     // is registered by FuseOpInit during Serve(); a SIGHUP between arming this
-    // controller and that registration -- or after g_vfs->Start() failed and it
-    // is never registered -- would otherwise drain a full round only to abort.
+    // controller and that registration -- or after ClientSession::Start()
+    // failed and it is never registered -- would otherwise drain a full round
+    // only to abort.
     // Tell the new to back off and keep serving without ever pausing.
     bool has_checkpoint;
     {

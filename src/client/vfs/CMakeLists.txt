@@ -23,7 +23,7 @@ add_subdirectory(compaction)
 
 add_library(vfs_lib
     vfs_impl.cc
-    vfs_wrapper.cc
+    client_session.cc
     access_log.cc
 )
 

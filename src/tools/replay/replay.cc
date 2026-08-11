@@ -17,7 +17,7 @@
 /*
  * dingo-replay: best-effort semantic replay of a legacy `fuse_access`
  * spdlog access-log against an *empty* target DingoFS filesystem, via
- * VFSWrapper (bypassing FUSE), following the src/tools/bench/mdtest_bench.cc
+ * ClientSession (bypassing FUSE), following the src/tools/bench/mdtest_bench.cc
  * setup pattern.
  *
  * See CONTEXT.md for terminology (Access Record, Best-effort Semantic
@@ -41,7 +41,7 @@
  *      fixed-size thread pool (size = max inflight) by reconstructed start
  *      time / speed. Records with the same source pid are assigned to the
  *      same worker. Each task waits (via std::shared_future) on its producer
- *      records' completion, resolves target ino/fh, issues the VFSWrapper
+ *      records' completion, resolves target ino/fh, issues the ClientSession
  *      call, and (if it is itself a producer) publishes its resulting target
  *      ino/fh for dependents.
  */
@@ -66,7 +66,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "client/vfs/vfs_wrapper.h"
+#include "client/vfs/client_session.h"
 #include "common/logging.h"
 #include "common/meta.h"
 #include "common/options/cache.h"
@@ -129,9 +129,9 @@ using dingofs::DirEntry;
 using dingofs::FsStat;
 using dingofs::Ino;
 using dingofs::Status;
+using dingofs::client::ClientSession;
 using dingofs::client::Context;
 using dingofs::client::DataBuffer;
-using dingofs::client::VFSWrapper;
 
 // ---------------------------------------------------------------------------
 // Engine record: a ParsedRecord plus dependency/runtime bookkeeping.
@@ -562,7 +562,7 @@ bool ResolveFh(std::vector<EngineRecord>& records, int64_t dep, uint64_t* out) {
   return true;
 }
 
-Status ExecuteOp(VFSWrapper* vfs, EngineRecord* rec, const Context& ctx,
+Status ExecuteOp(ClientSession* vfs, EngineRecord* rec, const Context& ctx,
                  Ino t_ino1, Ino t_ino2, uint64_t t_fh1, uint64_t t_fh2) {
   const ParsedRecord& p = rec->p;
   Status s;
@@ -741,7 +741,7 @@ Status ExecuteOp(VFSWrapper* vfs, EngineRecord* rec, const Context& ctx,
   return s;
 }
 
-void ExecuteRecord(VFSWrapper* vfs, std::vector<EngineRecord>* records_ptr,
+void ExecuteRecord(ClientSession* vfs, std::vector<EngineRecord>* records_ptr,
                    size_t idx, Stats* stats, AnomalyReport* report,
                    std::chrono::steady_clock::time_point t0) {
   auto& records = *records_ptr;
@@ -818,7 +818,7 @@ void ExecuteRecord(VFSWrapper* vfs, std::vector<EngineRecord>* records_ptr,
   if (r.done_promise) r.done_promise->set_value();
 }
 
-void RunReplay(VFSWrapper* vfs, std::vector<EngineRecord>* records_ptr,
+void RunReplay(ClientSession* vfs, std::vector<EngineRecord>* records_ptr,
                int max_inflight, double speed, Stats* stats,
                AnomalyReport* report) {
   auto& records = *records_ptr;
@@ -1034,7 +1034,7 @@ int main(int argc, char** argv) {
 
   dingofs::tools::replay::PreScan(&records, &report);
 
-  auto vfs = std::make_unique<dingofs::client::VFSWrapper>();
+  auto vfs = std::make_unique<dingofs::client::ClientSession>();
   dingofs::client::DingofsConfig config;
   config.mds_addrs = FLAGS_replay_mds_addr;
   config.fs_name = FLAGS_replay_fs_name;
