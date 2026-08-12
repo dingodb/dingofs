@@ -49,7 +49,8 @@ class Interaction {
   bool Init(const std::string& addr);
 
   template <typename Request, typename Response>
-  butil::Status SendRequest(const std::string& service_name, const std::string& api_name, Request& request,
+  butil::Status SendRequest(const std::string& service_name,
+                            const std::string& api_name, Request& request,
                             Response& response);
 
  private:
@@ -57,12 +58,14 @@ class Interaction {
 };
 
 template <typename Request, typename Response>
-butil::Status Interaction::SendRequest(const std::string& service_name, const std::string& api_name, Request& request,
-                                       Response& response) {
+butil::Status Interaction::SendRequest(const std::string& service_name,
+                                       const std::string& api_name,
+                                       Request& request, Response& response) {
   const google::protobuf::MethodDescriptor* method = nullptr;
 
   if (service_name == "MDSService") {
-    method = dingofs::pb::mds::MDSService::descriptor()->FindMethodByName(api_name);
+    method =
+        dingofs::pb::mds::MDSService::descriptor()->FindMethodByName(api_name);
   } else {
     LOG(FATAL) << "unknown service name: " << service_name;
   }
@@ -93,18 +96,22 @@ butil::Status Interaction::SendRequest(const std::string& service_name, const st
 
   channel_.CallMethod(method, &cntl, &request, &response, nullptr);
   if (FLAGS_log_each_request) {
-    std::cout << fmt::format("send request api {} response: {} request: {}", api_name,
-                             response.ShortDebugString().substr(0, 256), request.ShortDebugString().substr(0, 256))
-              << std::endl;
+    LOG(INFO) << fmt::format("send request api {} response: {} request: {}",
+                             api_name,
+                             response.ShortDebugString().substr(0, 256),
+                             request.ShortDebugString().substr(0, 256));
   }
   if (cntl.Failed()) {
-    std::cerr << fmt::format("{} rpc fail, {} {} {}\n", api_name, cntl.log_id(), cntl.ErrorCode(), cntl.ErrorText());
+    LOG(ERROR) << fmt::format("{} rpc fail, {} {} {}", api_name, cntl.log_id(),
+                              cntl.ErrorCode(), cntl.ErrorText());
     return Status(cntl.ErrorCode(), cntl.ErrorText());
   }
 
   if (response.error().errcode() != dingofs::pb::error::OK) {
-    std::cerr << fmt::format("{} response fail, error: {} {}\n", api_name,
-                             dingofs::pb::error::Errno_Name(response.error().errcode()), response.error().errmsg());
+    LOG(ERROR) << fmt::format(
+        "{} response fail, error: {} {}", api_name,
+        dingofs::pb::error::Errno_Name(response.error().errcode()),
+        response.error().errmsg());
 
     return Status(response.error().errcode(), response.error().errmsg());
   }

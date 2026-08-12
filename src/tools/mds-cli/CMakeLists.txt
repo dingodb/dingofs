@@ -15,6 +15,7 @@
 
 add_library(mds_client
   mds.cc
+  output.cc
   store.cc
   interaction.cc
   br.cc

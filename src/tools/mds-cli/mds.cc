@@ -34,6 +34,7 @@
 #include "glog/logging.h"
 #include "mds/common/helper.h"
 #include "tools/mds-cli/dir_tree_walker.h"
+#include "tools/mds-cli/output.h"
 #include "tools/mds-cli/owner_router.h"
 #include "tools/mds-cli/trash_restore.h"
 #include "utils/time.h"
@@ -44,12 +45,12 @@ namespace mds {
 namespace client {
 
 MDSClient::MDSClient(uint32_t fs_id) : fs_id_(fs_id) {
-  // ponytail: alsologtostderr keeps console output while still writing log
-  // files; logtostdout/logtostderr disable file output entirely.
-  FLAGS_alsologtostderr = true;
+  // Keep diagnostics in the log file. User-facing command results are
+  // rendered explicitly by the output formatter.
+  FLAGS_alsologtostderr = false;
 }
 
-MDSClient::~MDSClient() { FLAGS_alsologtostderr = false; }
+MDSClient::~MDSClient() = default;
 
 bool MDSClient::Init(const std::string& mds_addr) {
   interaction_ = dingofs::mds::client::Interaction::New();
@@ -111,7 +112,7 @@ CreateFsResponse MDSClient::CreateFs(const std::string& fs_name,
   CreateFsResponse response;
 
   if (fs_name.empty()) {
-    std::cerr << "fs_name is empty\n";
+    LOG(ERROR) << "fs_name is empty\n";
     return response;
   }
 
@@ -122,34 +123,34 @@ CreateFsResponse MDSClient::CreateFs(const std::string& fs_name,
   if (!s3_info.endpoint.empty()) {
     if (s3_info.ak.empty() || s3_info.sk.empty() ||
         s3_info.bucket_name.empty()) {
-      std::cerr << "s3 info is empty.\n";
+      LOG(ERROR) << "s3 info is empty.\n";
       return response;
     }
 
   } else if (!rados_info.mon_host.empty()) {
     if (rados_info.user_name.empty() || rados_info.key.empty() ||
         rados_info.pool_name.empty() || rados_info.cluster_name.empty()) {
-      std::cerr << "rados info is empty.\n";
+      LOG(ERROR) << "rados info is empty.\n";
       return response;
     }
 
   } else if (!local_file_info.path.empty()) {
     if (local_file_info.path.empty()) {
-      std::cerr << "local file info is empty.\n";
+      LOG(ERROR) << "local file info is empty.\n";
       return response;
     }
 
   } else {
-    std::cerr << "s3 info and rados info is empty.\n";
+    LOG(ERROR) << "s3 info and rados info is empty.\n";
     return response;
   }
 
   if (params.chunk_size == 0) {
-    std::cerr << "chunk_size is 0\n";
+    LOG(ERROR) << "chunk_size is 0\n";
     return response;
   }
   if (params.block_size == 0) {
-    std::cerr << "block_size is 0\n";
+    LOG(ERROR) << "block_size is 0\n";
     return response;
   }
 
@@ -201,8 +202,6 @@ CreateFsResponse MDSClient::CreateFs(const std::string& fs_name,
     request.add_candidate_mds_ids(mds_id);
   }
 
-  std::cout << "request: " << request.ShortDebugString() << "\n";
-
   auto status =
       interaction_->SendRequest("MDSService", "CreateFs", request, response);
   if (!status.ok()) {
@@ -212,9 +211,11 @@ CreateFsResponse MDSClient::CreateFs(const std::string& fs_name,
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
-    std::cout << "success, fs_id: " << response.fs_info().fs_id() << "\n";
+    PrintMessage("createfs", "filesystem created", response);
   } else {
-    std::cerr << "fail, error: " << response.ShortDebugString() << "\n";
+    PrintFailure("createfs",
+                 dingofs::pb::error::Errno_Name(response.error().errcode()),
+                 response.error().errmsg());
   }
 
   return response;
@@ -241,9 +242,11 @@ MountFsResponse MDSClient::MountFs(const std::string& fs_name,
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
-    std::cout << "MountFs success\n";
+    PrintMessage("mountfs", "filesystem mounted", response);
   } else {
-    std::cerr << "MountFs fail, error: " << response.ShortDebugString() << "\n";
+    PrintFailure("mountfs",
+                 dingofs::pb::error::Errno_Name(response.error().errcode()),
+                 response.error().errmsg());
   }
 
   return response;
@@ -266,10 +269,11 @@ UmountFsResponse MDSClient::UmountFs(const std::string& fs_name,
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
-    std::cout << "UmountFs success\n";
+    PrintMessage("umountfs", "filesystem unmounted", response);
   } else {
-    std::cerr << "UmountFs fail, error: " << response.ShortDebugString()
-              << "\n";
+    PrintFailure("umountfs",
+                 dingofs::pb::error::Errno_Name(response.error().errcode()),
+                 response.error().errmsg());
   }
 
   return response;
@@ -281,14 +285,12 @@ DeleteFsResponse MDSClient::DeleteFs(const std::string& fs_name,
   DeleteFsResponse response;
 
   if (fs_name.empty()) {
-    std::cerr << "fs_name is empty\n";
+    LOG(ERROR) << "fs_name is empty\n";
     return response;
   }
 
   request.set_fs_name(fs_name);
   request.set_is_force(is_force);
-
-  std::cout << "request: " << request.ShortDebugString() << "\n";
 
   auto status =
       interaction_->SendRequest("MDSService", "DeleteFs", request, response);
@@ -298,7 +300,13 @@ DeleteFsResponse MDSClient::DeleteFs(const std::string& fs_name,
     return response;
   }
 
-  std::cout << "response success: " << response.ShortDebugString() << "\n";
+  if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
+    PrintMessage("deletefs", "filesystem deleted", response);
+  } else {
+    PrintFailure("deletefs",
+                 dingofs::pb::error::Errno_Name(response.error().errcode()),
+                 response.error().errmsg());
+  }
 
   return response;
 }
@@ -325,7 +333,7 @@ UpdateFsInfoResponse MDSClient::UpdateFs(const std::string& fs_name,
 
 GetFsInfoResponse MDSClient::GetFs(const std::string& fs_name) {
   if (fs_name.empty()) {
-    std::cerr << "fs_name is empty\n";
+    LOG(ERROR) << "fs_name is empty\n";
     return {};
   }
 
@@ -342,7 +350,13 @@ GetFsInfoResponse MDSClient::GetFs(const std::string& fs_name) {
     return response;
   }
 
-  std::cout << "response success: " << response.ShortDebugString() << '\n';
+  if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
+    PrintMessage("getfs", "filesystem retrieved", response);
+  } else {
+    PrintFailure("getfs",
+                 dingofs::pb::error::Errno_Name(response.error().errcode()),
+                 response.error().errmsg());
+  }
 
   return response;
 }
@@ -383,8 +397,12 @@ ListFsInfoResponse MDSClient::ListFs() {
     return response;
   }
 
-  for (const auto& fs_info : response.fs_infos()) {
-    std::cout << "fs_info: " << fs_info.ShortDebugString() << "\n";
+  if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
+    PrintMessage("listfs", "filesystems retrieved", response);
+  } else {
+    PrintFailure("listfs",
+                 dingofs::pb::error::Errno_Name(response.error().errcode()),
+                 response.error().errmsg());
   }
 
   return response;
@@ -417,9 +435,11 @@ MkDirResponse MDSClient::MkDir(Ino parent, const std::string& name) {
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
-    std::cout << "success, ino: " << response.inode().ino() << "\n";
+    PrintMessage("mkdir", "directory created", response);
   } else {
-    std::cerr << "fail, error: " << response.ShortDebugString() << "\n";
+    PrintFailure("mkdir",
+                 dingofs::pb::error::Errno_Name(response.error().errcode()),
+                 response.error().errmsg());
   }
 
   return response;
@@ -512,9 +532,11 @@ MkNodResponse MDSClient::MkNod(Ino parent, const std::string& name) {
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
-    std::cout << "success, ino: " << response.inode().ino() << "\n";
+    PrintMessage("mknod", "file created", response);
   } else {
-    std::cerr << "fail, error: " << response.ShortDebugString() << "\n";
+    PrintFailure("mknod",
+                 dingofs::pb::error::Errno_Name(response.error().errcode()),
+                 response.error().errmsg());
   }
 
   return response;
@@ -551,7 +573,11 @@ GetDentryResponse MDSClient::GetDentry(Ino parent, const std::string& name) {
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
-    std::cout << "dentry: " << response.dentry().ShortDebugString() << "\n";
+    PrintMessage("getdentry", "dentry retrieved", response);
+  } else {
+    PrintFailure("getdentry",
+                 dingofs::pb::error::Errno_Name(response.error().errcode()),
+                 response.error().errmsg());
   }
 
   return response;
@@ -577,8 +603,12 @@ ListDentryResponse MDSClient::ListDentry(Ino parent, bool is_only_dir) {
     return response;
   }
 
-  for (const auto& dentry : response.dentries()) {
-    std::cout << "dentry: " << dentry.ShortDebugString() << "\n";
+  if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
+    PrintMessage("listdentry", "directory entries retrieved", response);
+  } else {
+    PrintFailure("listdentry",
+                 dingofs::pb::error::Errno_Name(response.error().errcode()),
+                 response.error().errmsg());
   }
 
   return response;
@@ -656,8 +686,12 @@ BatchGetInodeResponse MDSClient::BatchGetInode(
     return response;
   }
 
-  for (const auto& inode : response.inodes()) {
-    std::cout << "inode: " << inode.ShortDebugString() << "\n";
+  if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
+    PrintMessage("batchgetinode", "inodes retrieved", response);
+  } else {
+    PrintFailure("batchgetinode",
+                 dingofs::pb::error::Errno_Name(response.error().errcode()),
+                 response.error().errmsg());
   }
 
   return response;
@@ -685,8 +719,12 @@ BatchGetXAttrResponse MDSClient::BatchGetXattr(
     return response;
   }
 
-  for (const auto& xattr : response.xattrs()) {
-    std::cout << "xattr: " << xattr.ShortDebugString() << "\n";
+  if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
+    PrintMessage("batchgetxattr", "extended attributes retrieved", response);
+  } else {
+    PrintFailure("batchgetxattr",
+                 dingofs::pb::error::Errno_Name(response.error().errcode()),
+                 response.error().errmsg());
   }
 
   return response;
@@ -738,7 +776,11 @@ void MDSClient::GetFsStats(const std::string& fs_name) {
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
-    std::cout << "fs stats: " << response.stats().ShortDebugString() << "\n";
+    PrintMessage("getfsstats", "filesystem statistics retrieved", response);
+  } else {
+    PrintFailure("getfsstats",
+                 dingofs::pb::error::Errno_Name(response.error().errcode()),
+                 response.error().errmsg());
   }
 }
 
@@ -753,6 +795,18 @@ void MDSClient::GetFsPerSecondStats(const std::string& fs_name) {
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
+    return;
+  }
+
+  if (GetOutputConfig().format == OutputFormat::kJson) {
+    if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
+      PrintMessage("getfspersecondstats", "per-second statistics retrieved",
+                   response);
+    } else {
+      PrintFailure("getfspersecondstats",
+                   dingofs::pb::error::Errno_Name(response.error().errcode()),
+                   response.error().errmsg());
+    }
     return;
   }
 
@@ -842,8 +896,8 @@ bool MDSClient::ResolvePath(const std::string& path, Ino& out_ino) {
       if (name != ".") {
         auto resp = Lookup(cur, name);
         if (resp.error().errcode() != dingofs::pb::error::Errno::OK) {
-          std::cerr << fmt::format("resolve path '{}' fail at '{}': {}\n", path,
-                                   name, resp.error().errmsg());
+          LOG(ERROR) << fmt::format("resolve path '{}' fail at '{}': {}\n",
+                                    path, name, resp.error().errmsg());
           return false;
         }
         cur = resp.inode().ino();
@@ -1019,10 +1073,11 @@ GetAttrResponse MDSClient::GetAttr(Ino ino) {
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
-    std::cout << "GetAttr success, inode: "
-              << response.inode().ShortDebugString() << "\n";
+    PrintMessage("getattr", "attributes retrieved", response);
   } else {
-    std::cerr << "GetAttr fail, error: " << response.ShortDebugString() << "\n";
+    PrintFailure("getattr",
+                 dingofs::pb::error::Errno_Name(response.error().errcode()),
+                 response.error().errmsg());
   }
 
   return response;
@@ -1060,9 +1115,11 @@ SetAttrResponse MDSClient::SetAttr(Ino ino, uint32_t to_set,
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
-    std::cout << "SetAttr success\n";
+    PrintSuccess("setattr", "attributes updated");
   } else {
-    std::cerr << "SetAttr fail, error: " << response.ShortDebugString() << "\n";
+    PrintFailure("setattr",
+                 dingofs::pb::error::Errno_Name(response.error().errcode()),
+                 response.error().errmsg());
   }
 
   return response;
@@ -1089,10 +1146,11 @@ GetXAttrResponse MDSClient::GetXAttr(Ino ino, const std::string& name) {
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
-    std::cout << "GetXAttr success, size: " << response.value().size() << "\n";
+    PrintMessage("getxattr", "extended attribute retrieved", response);
   } else {
-    std::cerr << "GetXAttr fail, error: " << response.ShortDebugString()
-              << "\n";
+    PrintFailure("getxattr",
+                 dingofs::pb::error::Errno_Name(response.error().errcode()),
+                 response.error().errmsg());
   }
 
   return response;
@@ -1123,10 +1181,11 @@ SetXAttrResponse MDSClient::SetXAttr(
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
-    std::cout << "SetXAttr success\n";
+    PrintSuccess("setxattr", "extended attributes updated");
   } else {
-    std::cerr << "SetXAttr fail, error: " << response.ShortDebugString()
-              << "\n";
+    PrintFailure("setxattr",
+                 dingofs::pb::error::Errno_Name(response.error().errcode()),
+                 response.error().errmsg());
   }
 
   return response;
@@ -1175,10 +1234,11 @@ ListXAttrResponse MDSClient::ListXAttr(Ino ino) {
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
-    std::cout << "ListXAttr success, count: " << response.xattrs_size() << "\n";
+    PrintMessage("listxattr", "extended attributes listed", response);
   } else {
-    std::cerr << "ListXAttr fail, error: " << response.ShortDebugString()
-              << "\n";
+    PrintFailure("listxattr",
+                 dingofs::pb::error::Errno_Name(response.error().errcode()),
+                 response.error().errmsg());
   }
 
   return response;
@@ -1368,10 +1428,11 @@ SetFsQuotaResponse MDSClient::SetFsQuota(const QuotaEntry& quota) {
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
-    std::cout << "SetFsQuota success\n";
+    PrintSuccess("setfsquota", "filesystem quota updated");
   } else {
-    std::cerr << "SetFsQuota fail, error: " << response.ShortDebugString()
-              << "\n";
+    PrintFailure("setfsquota",
+                 dingofs::pb::error::Errno_Name(response.error().errcode()),
+                 response.error().errmsg());
   }
 
   return response;
@@ -1394,11 +1455,11 @@ GetFsQuotaResponse MDSClient::GetFsQuota() {
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
-    std::cout << "GetFsQuota success, quota: "
-              << response.quota().ShortDebugString() << "\n";
+    PrintMessage("getfsquota", "filesystem quota retrieved", response);
   } else {
-    std::cerr << "GetFsQuota fail, error: " << response.ShortDebugString()
-              << "\n";
+    PrintFailure("getfsquota",
+                 dingofs::pb::error::Errno_Name(response.error().errcode()),
+                 response.error().errmsg());
   }
 
   return response;
@@ -1424,10 +1485,11 @@ SetDirQuotaResponse MDSClient::SetDirQuota(Ino ino, const QuotaEntry& quota) {
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
-    std::cout << "SetDirQuota success\n";
+    PrintSuccess("setdirquota", "directory quota updated");
   } else {
-    std::cerr << "SetDirQuota fail, error: " << response.ShortDebugString()
-              << "\n";
+    PrintFailure("setdirquota",
+                 dingofs::pb::error::Errno_Name(response.error().errcode()),
+                 response.error().errmsg());
   }
 
   return response;
@@ -1452,11 +1514,11 @@ GetDirQuotaResponse MDSClient::GetDirQuota(Ino ino) {
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
-    std::cout << "GetDirQuota success, quota: "
-              << response.quota().ShortDebugString() << "\n";
+    PrintMessage("getdirquota", "directory quota retrieved", response);
   } else {
-    std::cerr << "GetDirQuota fail, error: " << response.ShortDebugString()
-              << "\n";
+    PrintFailure("getdirquota",
+                 dingofs::pb::error::Errno_Name(response.error().errcode()),
+                 response.error().errmsg());
   }
 
   return response;
@@ -1481,10 +1543,11 @@ DeleteDirQuotaResponse MDSClient::DeleteDirQuota(Ino ino) {
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
-    std::cout << "DeleteDirQuota success\n";
+    PrintSuccess("deletedirquota", "directory quota deleted");
   } else {
-    std::cerr << "DeleteDirQuota fail, error: " << response.ShortDebugString()
-              << "\n";
+    PrintFailure("deletedirquota",
+                 dingofs::pb::error::Errno_Name(response.error().errcode()),
+                 response.error().errmsg());
   }
 
   return response;
@@ -1501,8 +1564,6 @@ JoinFsResponse MDSClient::JoinFs(const std::string& fs_name, uint32_t fs_id,
     request.add_mds_ids(mds_id);
   }
 
-  std::cout << "JoinFs request: " << request.ShortDebugString();
-
   auto status =
       interaction_->SendRequest("MDSService", "JoinFs", request, response);
   if (!status.ok()) {
@@ -1512,9 +1573,11 @@ JoinFsResponse MDSClient::JoinFs(const std::string& fs_name, uint32_t fs_id,
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
-    std::cout << "JoinFs success\n";
+    PrintSuccess("joinfs", "filesystem membership updated");
   } else {
-    std::cerr << "JoinFs fail, error: " << response.ShortDebugString() << "\n";
+    PrintFailure("joinfs",
+                 dingofs::pb::error::Errno_Name(response.error().errcode()),
+                 response.error().errmsg());
   }
 
   return response;
@@ -1540,9 +1603,11 @@ QuitFsResponse MDSClient::QuitFs(const std::string& fs_name, uint32_t fs_id,
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
-    std::cout << "QuitFs success\n";
+    PrintSuccess("quitfs", "filesystem membership updated");
   } else {
-    std::cerr << "QuitFs fail, error: " << response.ShortDebugString() << "\n";
+    PrintFailure("quitfs",
+                 dingofs::pb::error::Errno_Name(response.error().errcode()),
+                 response.error().errmsg());
   }
 
   return response;
@@ -1572,10 +1637,11 @@ JoinCacheGroupResponse MDSClient::JoinCacheGroup(const std::string& member_id,
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
-    std::cout << "JoinCacheGroup success\n";
+    PrintSuccess("joincachegroup", "cache member joined");
   } else {
-    std::cerr << "JoinCacheGroup fail, error: " << response.ShortDebugString()
-              << "\n";
+    PrintFailure("joincachegroup",
+                 dingofs::pb::error::Errno_Name(response.error().errcode()),
+                 response.error().errmsg());
   }
 
   return response;
@@ -1601,10 +1667,11 @@ LeaveCacheGroupResponse MDSClient::LeaveCacheGroup(
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
-    std::cout << "LeaveCacheGroup success\n";
+    PrintSuccess("leavecachegroup", "cache member left");
   } else {
-    std::cerr << "LeaveCacheGroup fail, error: " << response.ShortDebugString()
-              << "\n";
+    PrintFailure("leavecachegroup",
+                 dingofs::pb::error::Errno_Name(response.error().errcode()),
+                 response.error().errmsg());
   }
 
   return response;
@@ -1622,8 +1689,12 @@ ListGroupsResponse MDSClient::ListGroups() {
     return response;
   }
 
-  for (const auto& group_name : response.group_names()) {
-    std::cout << "group_name: " << group_name << "\n";
+  if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
+    PrintMessage("listgroups", "cache groups retrieved", response);
+  } else {
+    PrintFailure("listgroups",
+                 dingofs::pb::error::Errno_Name(response.error().errcode()),
+                 response.error().errmsg());
   }
 
   return response;
@@ -1650,10 +1721,11 @@ ReweightMemberResponse MDSClient::ReweightMember(const std::string& member_id,
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
-    std::cout << "ReweightMember success\n";
+    PrintSuccess("reweightmember", "cache member weight updated");
   } else {
-    std::cerr << "ReweightMember fail, error: " << response.ShortDebugString()
-              << "\n";
+    PrintFailure("reweightmember",
+                 dingofs::pb::error::Errno_Name(response.error().errcode()),
+                 response.error().errmsg());
   }
 
   return response;
@@ -1673,13 +1745,12 @@ ListMembersResponse MDSClient::ListMembers(const std::string& group_name) {
     return response;
   }
 
-  if (response.error().errcode() != dingofs::pb::error::Errno::OK) {
-    std::cerr << "ListMembers fail, error: " << response.ShortDebugString()
-              << "\n";
-  }
-
-  for (const auto& member : response.members()) {
-    std::cout << "cache_member: " << member.ShortDebugString() << "\n";
+  if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
+    PrintMessage("listmembers", "cache members retrieved", response);
+  } else {
+    PrintFailure("listmembers",
+                 dingofs::pb::error::Errno_Name(response.error().errcode()),
+                 response.error().errmsg());
   }
 
   return response;
@@ -1704,10 +1775,11 @@ UnLockMemberResponse MDSClient::UnlockMember(const std::string& member_id,
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
-    std::cout << "UnlockMember success\n";
+    PrintSuccess("unlockmember", "cache member unlocked");
   } else {
-    std::cerr << "UnlockMember fail, error: " << response.ShortDebugString()
-              << "\n";
+    PrintFailure("unlockmember",
+                 dingofs::pb::error::Errno_Name(response.error().errcode()),
+                 response.error().errmsg());
   }
 
   return response;
@@ -1728,10 +1800,11 @@ DeleteMemberResponse MDSClient::DeleteMember(const std::string& member_id) {
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
-    std::cout << "DeleteMember success\n";
+    PrintSuccess("deletemember", "cache member deleted");
   } else {
-    std::cerr << "DeleteMember fail, error: " << response.ShortDebugString()
-              << "\n";
+    PrintFailure("deletemember",
+                 dingofs::pb::error::Errno_Name(response.error().errcode()),
+                 response.error().errmsg());
   }
 
   return response;
@@ -1740,19 +1813,19 @@ DeleteMemberResponse MDSClient::DeleteMember(const std::string& member_id) {
 void MDSClient::UpdateFsS3Info(const std::string& fs_name,
                                const S3Info& s3_info) {
   if (fs_name.empty()) {
-    std::cerr << "fs_name is empty"
-              << "\n";
+    LOG(ERROR) << "fs_name is empty"
+               << "\n";
     return;
   }
   auto fs_response = GetFs(fs_name);
   pb::mds::FsInfo fs_info;
   fs_info.CopyFrom(fs_response.fs_info());
   if (fs_info.fs_id() == 0) {
-    std::cerr << "not found fs: " << fs_name << "\n";
+    LOG(ERROR) << "not found fs: " << fs_name << "\n";
     return;
   }
   if (fs_info.fs_type() != pb::mds::FsType::S3) {
-    std::cerr << "fs type is not S3, fs_type: " << fs_info.fs_type() << "\n";
+    LOG(ERROR) << "fs type is not S3, fs_type: " << fs_info.fs_type() << "\n";
     return;
   }
 
@@ -1769,8 +1842,8 @@ void MDSClient::UpdateFsS3Info(const std::string& fs_name,
 void MDSClient::UpdateFsRadosInfo(const std::string& fs_name,
                                   const RadosInfo& rados_info) {
   if (fs_name.empty()) {
-    std::cerr << "fs_name is empty"
-              << "\n";
+    LOG(ERROR) << "fs_name is empty"
+               << "\n";
     return;
   }
 
@@ -1778,11 +1851,12 @@ void MDSClient::UpdateFsRadosInfo(const std::string& fs_name,
   pb::mds::FsInfo fs_info;
   fs_info.CopyFrom(fs_response.fs_info());
   if (fs_info.fs_id() == 0) {
-    std::cerr << "not found fs: " << fs_name << "\n";
+    LOG(ERROR) << "not found fs: " << fs_name << "\n";
     return;
   }
   if (fs_info.fs_type() != pb::mds::FsType::RADOS) {
-    std::cerr << "fs type is not RADOS, fs_type: " << fs_info.fs_type() << "\n";
+    LOG(ERROR) << "fs type is not RADOS, fs_type: " << fs_info.fs_type()
+               << "\n";
     return;
   }
 
@@ -1800,8 +1874,8 @@ void MDSClient::UpdateFsRadosInfo(const std::string& fs_name,
 void MDSClient::UpdateFsTrashDays(const std::string& fs_name,
                                   uint32_t trash_days) {
   if (fs_name.empty()) {
-    std::cerr << "fs_name is empty"
-              << "\n";
+    LOG(ERROR) << "fs_name is empty"
+               << "\n";
     return;
   }
 
@@ -1809,7 +1883,7 @@ void MDSClient::UpdateFsTrashDays(const std::string& fs_name,
   pb::mds::FsInfo fs_info;
   fs_info.CopyFrom(fs_response.fs_info());
   if (fs_info.fs_id() == 0) {
-    std::cerr << "not found fs: " << fs_name << "\n";
+    LOG(ERROR) << "not found fs: " << fs_name << "\n";
     return;
   }
 
@@ -1820,7 +1894,7 @@ void MDSClient::UpdateFsTrashDays(const std::string& fs_name,
 void MDSClient::UpdateFsEnableUidGidMap(const std::string& fs_name,
                                         bool enable) {
   if (fs_name.empty()) {
-    std::cerr << "fs_name is empty\n";
+    LOG(ERROR) << "fs_name is empty\n";
     return;
   }
 
@@ -1828,7 +1902,7 @@ void MDSClient::UpdateFsEnableUidGidMap(const std::string& fs_name,
   pb::mds::FsInfo fs_info;
   fs_info.CopyFrom(fs_response.fs_info());
   if (fs_info.fs_id() == 0) {
-    std::cerr << "not found fs: " << fs_name << "\n";
+    LOG(ERROR) << "not found fs: " << fs_name << "\n";
     return;
   }
 
@@ -1842,7 +1916,7 @@ void MDSClient::UpdateFsEnableUidGidMap(const std::string& fs_name,
 void MDSClient::UpdateFsEnableDirStats(const std::string& fs_name,
                                        bool enable) {
   if (fs_name.empty()) {
-    std::cerr << "fs_name is empty\n";
+    LOG(ERROR) << "fs_name is empty\n";
     return;
   }
 
@@ -1850,7 +1924,7 @@ void MDSClient::UpdateFsEnableDirStats(const std::string& fs_name,
   pb::mds::FsInfo fs_info;
   fs_info.CopyFrom(fs_response.fs_info());
   if (fs_info.fs_id() == 0) {
-    std::cerr << "not found fs: " << fs_name << "\n";
+    LOG(ERROR) << "not found fs: " << fs_name << "\n";
     return;
   }
 
@@ -1879,8 +1953,8 @@ GetDirStatResponse MDSClient::GetDirStat(Ino ino) {
   }
 
   if (response.error().errcode() != dingofs::pb::error::Errno::OK) {
-    std::cerr << "GetDirStat fail, error: " << response.ShortDebugString()
-              << "\n";
+    LOG(ERROR) << "GetDirStat fail, error: " << response.ShortDebugString()
+               << "\n";
   }
 
   return response;
@@ -2141,11 +2215,11 @@ bool SetupWalk(MDSClient& mds_client, uint32_t fs_id,
                WalkOptions& wopts) {
   auto fs_resp = mds_client.GetFs(fs_id);
   if (fs_resp.error().errcode() != dingofs::pb::error::Errno::OK) {
-    std::cerr << "get fs info fail: " << fs_resp.ShortDebugString() << "\n";
+    LOG(ERROR) << "get fs info fail: " << fs_resp.ShortDebugString() << "\n";
     return false;
   }
   if (!router.Init(fs_id, mds_client)) {
-    std::cerr << "cannot resolve owner mds routing; aborting walk\n";
+    LOG(ERROR) << "cannot resolve owner mds routing; aborting walk\n";
     return false;
   }
   wopts.strict = options.strict;
@@ -2185,14 +2259,14 @@ void HandleSummary(MDSClient& mds_client, uint32_t fs_id,
 
   uint32_t depth = options.depth;
   if (depth > kMaxSummaryDepth) {
-    std::cerr << fmt::format("warn: depth should be less than {}\n",
-                             kMaxSummaryDepth + 1);
+    LOG(ERROR) << fmt::format("warn: depth should be less than {}\n",
+                              kMaxSummaryDepth + 1);
     depth = kMaxSummaryDepth;
   }
   uint32_t entries = options.entries;
   if (entries > kMaxSummaryEntries) {
-    std::cerr << fmt::format("warn: entries should be less than {}\n",
-                             kMaxSummaryEntries + 1);
+    LOG(ERROR) << fmt::format("warn: entries should be less than {}\n",
+                              kMaxSummaryEntries + 1);
     entries = kMaxSummaryEntries;
   }
 
@@ -2204,8 +2278,9 @@ void HandleSummary(MDSClient& mds_client, uint32_t fs_id,
     // Fail loud: a summary is only useful if it is complete. Rather than print
     // a silently-undercounted tree behind a warning, abort so a skipped subtree
     // (an unreachable/erroring owner mds) can never be mistaken for the truth.
-    std::cerr << "summary: directory walk failed (an owner mds was unreachable "
-                 "or errored); result would be incomplete, aborting\n";
+    LOG(ERROR)
+        << "summary: directory walk failed (an owner mds was unreachable "
+           "or errored); result would be incomplete, aborting\n";
     return;
   }
   PrintTreeTable(tree, AbsOsPath(options.path));
@@ -2217,12 +2292,13 @@ void HandleSummary(MDSClient& mds_client, uint32_t fs_id,
 void SyncDirStatOneLevel(OwnerRouter& router, Ino ino, bool repair) {
   MDSClient* owner = router.ClientForIno(ino);
   if (owner == nullptr) {
-    std::cerr << fmt::format("no owner mds for ino({})\n", ino);
+    LOG(ERROR) << fmt::format("no owner mds for ino({})\n", ino);
     return;
   }
   auto resp = owner->SyncDirStat(ino, repair);
   if (resp.error().errcode() != dingofs::pb::error::Errno::OK) {
-    std::cerr << "syncdirstat fail, error: " << resp.ShortDebugString() << "\n";
+    LOG(ERROR) << "syncdirstat fail, error: " << resp.ShortDebugString()
+               << "\n";
     return;
   }
   std::vector<pb::mds::DirStatMismatch> mismatches(resp.mismatches().begin(),
@@ -2252,7 +2328,7 @@ void HandleSyncDirStat(MDSClient& mds_client, uint32_t fs_id,
       WalkSyncDirStat(router, ino, wopts, options.repair, mismatches);
   PrintSyncDirStatResult(mismatches, options.repair);
   if (!complete)
-    std::cerr
+    LOG(ERROR)
         << "warn: directory walk incomplete; some directories were skipped\n";
 }
 
@@ -2271,8 +2347,8 @@ void HandleInfo(MDSClient& mds_client, uint32_t fs_id,
   // refresh the owner's cache).
   auto inode_resp = mds_client.GetInode(ino, /*bypass_cache=*/true);
   if (inode_resp.error().errcode() != dingofs::pb::error::Errno::OK) {
-    std::cerr << "info: get inode fail, error: "
-              << inode_resp.ShortDebugString() << "\n";
+    LOG(ERROR) << "info: get inode fail, error: "
+               << inode_resp.ShortDebugString() << "\n";
     return;
   }
   const auto& inode = inode_resp.inode();
@@ -2297,7 +2373,7 @@ void HandleInfo(MDSClient& mds_client, uint32_t fs_id,
     if (!ok) {
       // Fail loud: an incomplete read (a skipped subtree under -r, or a failed
       // single-level stat) would print a silently-wrong number. Abort instead.
-      std::cerr
+      LOG(ERROR)
           << "info: dir-stat read failed (an owner mds was unreachable or "
              "errored); result would be incomplete, aborting\n";
       return;
@@ -2310,14 +2386,14 @@ void HandleInfo(MDSClient& mds_client, uint32_t fs_id,
     if (inode.type() == pb::mds::FileType::FILE && inode.length() > 0) {
       auto fs_resp = mds_client.GetFs(fs_id);
       if (fs_resp.error().errcode() != dingofs::pb::error::Errno::OK) {
-        std::cerr << "info: get fs info fail, error: "
-                  << fs_resp.ShortDebugString() << "\n";
+        LOG(ERROR) << "info: get fs info fail, error: "
+                   << fs_resp.ShortDebugString() << "\n";
         return;
       }
       const uint64_t chunk_size = fs_resp.fs_info().chunk_size();
       const uint32_t block_size = fs_resp.fs_info().block_size();
       if (chunk_size == 0 || block_size == 0) {
-        std::cerr << "info: fs chunk_size/block_size is 0\n";
+        LOG(ERROR) << "info: fs chunk_size/block_size is 0\n";
         return;
       }
       const int64_t chunk_num = (inode.length() + chunk_size - 1) / chunk_size;
@@ -2328,8 +2404,8 @@ void HandleInfo(MDSClient& mds_client, uint32_t fs_id,
       mds_client.SetEpoch(fs_resp.fs_info().partition_policy().epoch());
       auto rs = mds_client.ReadSliceAll(ino, chunk_num);
       if (rs.error().errcode() != dingofs::pb::error::Errno::OK) {
-        std::cerr << "info: read slice fail, error: " << rs.ShortDebugString()
-                  << "\n";
+        LOG(ERROR) << "info: read slice fail, error: " << rs.ShortDebugString()
+                   << "\n";
         return;
       }
       if (options.raw) {
@@ -2422,20 +2498,25 @@ bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr,
   if (mds_cmd.count(cmd) == 0) return false;
 
   if (mds_addr.empty()) {
-    std::cout << "mds_addr is empty.\n";
+    PrintFailure(cmd, "INVALID_ARGUMENT", "mds_addr is empty");
     return true;
   }
 
   MDSClient mds_client(fs_id);
   if (!mds_client.Init(mds_addr)) {
-    std::cout << "init interaction fail.\n";
+    PrintFailure(cmd, "INITIALIZATION_FAILED",
+                 "unable to initialize MDS connection");
     return true;
   }
 
   if (cmd == Helper::ToLowerCase("GetMdsList")) {
     auto response = mds_client.GetMdsList();
-    for (const auto& mds : response.mdses()) {
-      std::cout << "mds: " << mds.ShortDebugString() << "\n";
+    if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
+      PrintMessage("getmdslist", "MDS list retrieved", response);
+    } else {
+      PrintFailure("getmdslist",
+                   dingofs::pb::error::Errno_Name(response.error().errcode()),
+                   response.error().errmsg());
     }
 
   } else if (cmd == Helper::ToLowerCase("CreateFs")) {
@@ -2513,9 +2594,11 @@ bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr,
     }
     auto resp = mds_client.GetInode(options.ino);
     if (resp.error().errcode() == dingofs::pb::error::Errno::OK) {
-      std::cout << "inode: " << resp.inode().ShortDebugString() << "\n";
+      PrintSuccess(cmd, "inode retrieved",
+                   {{"ino", std::to_string(resp.inode().ino())}});
     } else {
-      std::cerr << "GetInode fail, error: " << resp.ShortDebugString() << "\n";
+      PrintFailure(cmd, dingofs::pb::error::Errno_Name(resp.error().errcode()),
+                   resp.error().errmsg());
     }
 
   } else if (cmd == Helper::ToLowerCase("BatchGetInode")) {
@@ -2549,7 +2632,13 @@ bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr,
 
   } else if (cmd == Helper::ToLowerCase("GetFsQuota")) {
     auto response = mds_client.GetFsQuota();
-    std::cout << "fs quota: " << response.quota().ShortDebugString() << '\n';
+    if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
+      PrintMessage("getfsquota", "filesystem quota retrieved", response);
+    } else {
+      PrintFailure("getfsquota",
+                   dingofs::pb::error::Errno_Name(response.error().errcode()),
+                   response.error().errmsg());
+    }
 
   } else if (cmd == Helper::ToLowerCase("SetDirQuota")) {
     if (options.ino == 0) {
@@ -2569,8 +2658,7 @@ bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr,
       return true;
     }
 
-    auto response = mds_client.GetDirQuota(options.ino);
-    std::cout << "dir quota: " << response.quota().ShortDebugString() << '\n';
+    mds_client.GetDirQuota(options.ino);
 
   } else if (cmd == Helper::ToLowerCase("DeleteDirQuota")) {
     if (options.ino == 0) {
@@ -2591,13 +2679,7 @@ bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr,
 
     std::vector<int64_t> mds_ids;
     dingofs::mds::Helper::SplitString(options.mds_id_list, ',', mds_ids);
-    auto response = mds_client.JoinFs(options.fs_name, options.fs_id, mds_ids);
-    if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
-      std::cout << "joinfs success." << '\n';
-    } else {
-      std::cout << "joinfs fail, error: " << response.ShortDebugString()
-                << '\n';
-    }
+    mds_client.JoinFs(options.fs_name, options.fs_id, mds_ids);
 
   } else if (cmd == Helper::ToLowerCase("QuitFs")) {
     if (options.fs_name.empty() && options.fs_id == 0) {
@@ -2612,43 +2694,18 @@ bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr,
 
     std::vector<int64_t> mds_ids;
     dingofs::mds::Helper::SplitString(options.mds_id_list, ',', mds_ids);
-    auto response = mds_client.QuitFs(options.fs_name, options.fs_id, mds_ids);
-    if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
-      std::cout << "quitfs success." << '\n';
-    } else {
-      std::cout << "quitfs fail, error: " << response.ShortDebugString()
-                << '\n';
-    }
+    mds_client.QuitFs(options.fs_name, options.fs_id, mds_ids);
   } else if (cmd == Helper::ToLowerCase("JoinCacheGroup")) {
-    auto response =
-        mds_client.JoinCacheGroup(options.member_id, options.ip, options.port,
-                                  options.group_name, options.weight);
-    if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
-      std::cout << "joincachegroup success." << '\n';
-    } else {
-      std::cout << "joincachegroup fail, error: " << response.ShortDebugString()
-                << '\n';
-    }
+    mds_client.JoinCacheGroup(options.member_id, options.ip, options.port,
+                              options.group_name, options.weight);
 
   } else if (cmd == Helper::ToLowerCase("LeaveCacheGroup")) {
-    auto response = mds_client.LeaveCacheGroup(
-        options.member_id, options.ip, options.port, options.group_name);
-    if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
-      std::cout << "leavecachegroup success.\n";
-    } else {
-      std::cout << "leavecachegroup fail, error: "
-                << response.ShortDebugString() << '\n';
-    }
+    mds_client.LeaveCacheGroup(options.member_id, options.ip, options.port,
+                               options.group_name);
 
   } else if (cmd == Helper::ToLowerCase("ReweightMember")) {
-    auto response = mds_client.ReweightMember(options.member_id, options.ip,
-                                              options.port, options.weight);
-    if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
-      std::cout << "reweightmember success.\n";
-    } else {
-      std::cout << "reweightmember fail, error: " << response.ShortDebugString()
-                << '\n';
-    }
+    mds_client.ReweightMember(options.member_id, options.ip, options.port,
+                              options.weight);
 
   } else if (cmd == Helper::ToLowerCase("ListGroups")) {
     auto response = mds_client.ListGroups();
@@ -2657,22 +2714,9 @@ bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr,
     auto response = mds_client.ListMembers(options.group_name);
 
   } else if (cmd == Helper::ToLowerCase("UnlockMember")) {
-    auto response =
-        mds_client.UnlockMember(options.member_id, options.ip, options.port);
-    if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
-      std::cout << "unlockmember success.\n";
-    } else {
-      std::cout << "unlockmember fail, error: " << response.ShortDebugString()
-                << '\n';
-    }
+    mds_client.UnlockMember(options.member_id, options.ip, options.port);
   } else if (cmd == Helper::ToLowerCase("DeleteMember")) {
-    auto response = mds_client.DeleteMember(options.member_id);
-    if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
-      std::cout << "deletemember success.\n";
-    } else {
-      std::cout << "deletemember fail, error: " << response.ShortDebugString()
-                << '\n';
-    }
+    mds_client.DeleteMember(options.member_id);
 
   } else if (cmd == Helper::ToLowerCase("RestoreTrash")) {
     TrashRestore::Options restore_options;

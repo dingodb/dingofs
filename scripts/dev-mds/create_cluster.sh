@@ -29,16 +29,16 @@ BUILD_DIR=$BASE_DIR/build
 MDS_CLIENT_BIN_PATH=$BUILD_DIR/bin/dingo-mds-client
 
 
-output=`$MDS_CLIENT_BIN_PATH --cmd=CreateAllTable --cluster_id=${FLAGS_cluster_id} --coor_addr=list://${COORDINATOR_ADDR} 2>&1`
-is_fail=`echo $output | grep "rpc fail" | wc -l`
-if [ $is_fail -eq 1 ]; then
+# Use the machine-readable result instead of matching human-readable output.
+# The client keeps detailed diagnostics in its log files and uses its exit code
+# to report the operation result.
+if ! output=$("$MDS_CLIENT_BIN_PATH" \
+    --cmd=CreateAllTable \
+    --format=json \
+    --color=never \
+    --cluster_id="${FLAGS_cluster_id}" \
+    --coor_addr="list://${COORDINATOR_ADDR}" 2>&1); then
   echo "create cluster fail, $output"
-  exit 1
-fi
-
-is_success=`echo $output | grep success |  wc -l`
-if [ $is_success -eq 0 ]; then
-  echo "cluster ${FLAGS_cluster_id} create fail"
   exit 1
 fi
 
