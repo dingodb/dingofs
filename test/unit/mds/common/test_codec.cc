@@ -134,6 +134,25 @@ TEST_F(MetaDataCodecTest, FsQuotaKey) {
   EXPECT_EQ(quota.max_inodes(), actual_quota.max_inodes());
 }
 
+TEST_F(MetaDataCodecTest, SliceRefKey) {
+  constexpr uint64_t kSliceId = 0x123456789ABCDEF0ULL;
+  std::string key = MetaCodec::EncodeSliceRefKey(kSliceId);
+
+  EXPECT_TRUE(MetaCodec::IsSliceRefKey(key));
+
+  uint64_t actual_slice_id = 0;
+  MetaCodec::DecodeSliceRefKey(key, actual_slice_id);
+  EXPECT_EQ(kSliceId, actual_slice_id);
+
+  SliceRefEntry slice_ref;
+  slice_ref.set_id(kSliceId);
+  slice_ref.set_ref_count(2);
+  std::string value = MetaCodec::EncodeSliceRefValue(slice_ref);
+  auto desc = MetaCodec::ParseMetaTableKey(key, value);
+  EXPECT_NE(desc.first.find(fmt::format("{}", kSliceId)), std::string::npos);
+  EXPECT_NE(desc.second.find("ref_count: 2"), std::string::npos);
+}
+
 // static bool IsInodeKey(const std::string& key);
 // static std::string EncodeInodeKey(uint32_t fs_id, Ino ino);
 // static void DecodeInodeKey(const std::string& key, uint32_t& fs_id, uint64_t&
