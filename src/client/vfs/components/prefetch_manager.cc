@@ -46,8 +46,12 @@ int PrefetchManager::HandlePrefetch(
   for (; iter; iter++) {
     auto& context = *iter;
 
-    self->prefetch_executor_->Execute(
-        [self, context]() { self->ProcessPrefetch(context); });
+    self->prefetch_executor_->Execute([self, context]() {
+      if (!self->running_.load()) {
+        return;
+      }
+      self->ProcessPrefetch(context);
+    });
   }
 
   return 0;

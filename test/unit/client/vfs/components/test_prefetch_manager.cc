@@ -18,7 +18,10 @@
 #include <gtest/gtest.h>
 
 #include <atomic>
+#include <chrono>
+#include <condition_variable>
 #include <memory>
+#include <mutex>
 #include <thread>
 #include <vector>
 
@@ -218,15 +221,45 @@ TEST_F(PrefetchManagerTest, SubmitTask_MultipleBlocks) {
   waiter.Wait();
 }
 
-TEST_F(PrefetchManagerTest, Stop_DrainsPendingTasks) {
-  ASSERT_TRUE(mgr_->Start(2).ok());
+TEST_F(PrefetchManagerTest, Stop_DropsQueuedTasks) {
+  ASSERT_TRUE(mgr_->Start(1).ok());
 
-  // Submit many tasks and then stop - should not crash or hang.
-  for (int i = 0; i < 20; ++i) {
-    mgr_->SubmitTask(MakeSingleBlockCtx(static_cast<uint64_t>(i + 1000)));
+  std::mutex mutex;
+  std::condition_variable cv;
+  bool first_started = false;
+  bool release_first = false;
+
+  EXPECT_CALL(*mock_block_store_, PrefetchAsync(_, _, _))
+      .Times(1)
+      .WillOnce([&](ContextSPtr, PrefetchReq, StatusCallback cb) {
+        {
+          std::unique_lock<std::mutex> lock(mutex);
+          first_started = true;
+          cv.notify_one();
+          cv.wait(lock, [&]() { return release_first; });
+        }
+        cb(Status::OK());
+      });
+
+  mgr_->SubmitTask(MakeSingleBlockCtx(1000));
+  {
+    std::unique_lock<std::mutex> lock(mutex);
+    cv.wait(lock, [&]() { return first_started; });
   }
+  mgr_->SubmitTask(MakeSingleBlockCtx(1001));
 
-  ASSERT_TRUE(mgr_->Stop().ok());
+  std::thread releaser([&]() {
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    {
+      std::lock_guard<std::mutex> lock(mutex);
+      release_first = true;
+    }
+    cv.notify_one();
+  });
+
+  auto status = mgr_->Stop();
+  releaser.join();
+  ASSERT_TRUE(status.ok());
 }
 
 TEST_F(PrefetchManagerTest, Concurrent_SubmitFromMultipleThreads) {
