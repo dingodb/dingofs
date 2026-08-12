@@ -382,9 +382,13 @@ Status LocalMetaSystem::Open(ContextSPtr, Ino ino, int flags, uint64_t, bool*) {
     auto status = Get(inode_key, value);
 
     attr_entry = MetaCodec::DecodeInodeValue(value);
+    std::vector<KeyValue> kvs;
 
     if (flags & O_TRUNC) {
       file_length = attr_entry.length();
+      status =
+          AppendZeroSlicesToExistingChunks(fs_id, ino, 0, file_length, kvs);
+      if (!status.ok()) return status;
       attr_entry.set_length(0);
 
       attr_entry.set_ctime(std::max(attr_entry.ctime(), now_ns));
@@ -395,11 +399,10 @@ Status LocalMetaSystem::Open(ContextSPtr, Ino ino, int flags, uint64_t, bool*) {
 
     attr_entry.set_version(attr_entry.version() + 1);
 
-    // write to leveldb
-    std::vector<KeyValue> kvs = {
-        {KeyValue::OpType::kPut, inode_key,
-         MetaCodec::EncodeInodeValue(attr_entry)},
-    };
+    // Commit the inode and zero-slice updates atomically. Otherwise a later
+    // sparse rewrite can expose slices that belonged to the truncated file.
+    kvs.push_back({KeyValue::OpType::kPut, inode_key,
+                   MetaCodec::EncodeInodeValue(attr_entry)});
     status = Put(kvs);
     if (!status.ok()) return status;
   }
@@ -1286,6 +1289,55 @@ Status LocalMetaSystem::AppendZeroSliceToChunk(uint32_t fs_id, Ino ino,
 
   kvs.push_back({KeyValue::OpType::kPut, chunk_key,
                  MetaCodec::EncodeChunkValue(chunk_entry)});
+  return Status::OK();
+}
+
+Status LocalMetaSystem::AppendZeroSlicesToExistingChunks(
+    uint32_t fs_id, Ino ino, uint64_t offset, uint64_t end_offset,
+    std::vector<KeyValue>& kvs) {
+  if (offset >= end_offset) return Status::OK();
+
+  const uint64_t chunk_size = fs_info_.chunk_size();
+  const uint64_t first_chunk = offset / chunk_size;
+  const uint64_t last_chunk = (end_offset - 1) / chunk_size;
+  auto* iter = db_->NewIterator(leveldb::ReadOptions());
+  iter->Seek(MetaCodec::EncodeChunkKey(fs_id, ino, first_chunk));
+
+  while (iter->Valid() && MetaCodec::IsChunkKey(iter->key().ToString())) {
+    uint32_t chunk_fs_id;
+    Ino chunk_ino;
+    uint64_t chunk_index;
+    MetaCodec::DecodeChunkKey(iter->key().ToString(), chunk_fs_id, chunk_ino,
+                              chunk_index);
+    if (chunk_fs_id != fs_id || chunk_ino != ino || chunk_index > last_chunk) {
+      break;
+    }
+
+    auto chunk_entry = MetaCodec::DecodeChunkValue(iter->value().ToString());
+    const uint64_t chunk_offset = chunk_index * chunk_size;
+    const uint64_t zero_start = std::max(offset, chunk_offset);
+    const uint64_t zero_end = std::min(end_offset, chunk_offset + chunk_size);
+    if (zero_start < zero_end) {
+      auto* slice_entry = chunk_entry.add_slices();
+      slice_entry->set_id(0);
+      slice_entry->set_pos(zero_start - chunk_offset);
+      slice_entry->set_size(0);
+      slice_entry->set_off(0);
+      slice_entry->set_len(zero_end - zero_start);
+      chunk_entry.set_version(chunk_entry.version() + 1);
+
+      kvs.push_back({KeyValue::OpType::kPut, iter->key().ToString(),
+                     MetaCodec::EncodeChunkValue(chunk_entry)});
+    }
+    iter->Next();
+  }
+
+  const auto iter_status = iter->status();
+  delete iter;
+  if (!iter_status.ok()) {
+    return Status::IoError(
+        fmt::format("scan chunk fail, {}.", iter_status.ToString()));
+  }
   return Status::OK();
 }
 
