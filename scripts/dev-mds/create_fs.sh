@@ -42,18 +42,20 @@ if [ ! -f "$MDS_CLIENT_BIN_PATH" ]; then
 fi
 
 
-# check fs whether exist through output contained ENOT_FOUND
-output=`$MDS_CLIENT_BIN_PATH --cmd=getfs --mds_addr=${FLAGS_mds_addr} --fs_name=${FLAGS_fs_name} 2>&1`
-is_fail=`echo $output | grep "rpc fail" | wc -l`
-if [ $is_fail -eq 1 ]; then
-  echo "get fs fail, $output"
-  exit 1
-fi
-
-is_exist=`echo $output | grep success | grep ${FLAGS_fs_name} |  wc -l`
-if [ $is_exist -eq 1 ]; then
+# Query the filesystem using the machine-readable output. A successful
+# command means the filesystem exists. A not-found response is the only
+# expected failure; all other failures abort the deployment.
+if output=$("$MDS_CLIENT_BIN_PATH" \
+    --cmd=getfs \
+    --format=json \
+    --color=never \
+    --mds_addr="${FLAGS_mds_addr}" \
+    --fs_name="${FLAGS_fs_name}" 2>&1); then
   echo "fs ${FLAGS_fs_name} already exist"
   exit 0
+elif ! echo "$output" | grep -q 'NOT_FOUND'; then
+  echo "get fs fail, $output"
+  exit 1
 fi
 
 echo "fs ${FLAGS_fs_name} not exist, create it"
@@ -64,24 +66,34 @@ if [ ${FLAGS_use_local_datastore} = 0 ]; then
   local_storage_path=${LOCAL_DATASTORE_PATH}/${FLAGS_fs_name}
   mkdir -p ${local_storage_path}
   
-  output=`$MDS_CLIENT_BIN_PATH --cmd=createfs --mds_addr=${FLAGS_mds_addr} --fs_name=${FLAGS_fs_name} --fs_partition_type=parent_hash --storage_path=${LOCAL_DATASTORE_PATH}`
+  if ! output=$("$MDS_CLIENT_BIN_PATH" \
+      --cmd=createfs \
+      --format=json \
+      --color=never \
+      --mds_addr="${FLAGS_mds_addr}" \
+      --fs_name="${FLAGS_fs_name}" \
+      --fs_partition_type=parent_hash \
+      --storage_path="${LOCAL_DATASTORE_PATH}" 2>&1); then
+    echo "create fs fail, $output"
+    exit 1
+  fi
 
 else
-  output=`$MDS_CLIENT_BIN_PATH --cmd=createfs --mds_addr=${FLAGS_mds_addr} --fs_name=${FLAGS_fs_name} --fs_partition_type=parent_hash --s3_endpoint=${S3_ENDPOINT} --s3_ak=${S3_AK} --s3_sk=${S3_SK} --s3_bucketname=${S3_BUCKETNAME}`
+  if ! output=$("$MDS_CLIENT_BIN_PATH" \
+      --cmd=createfs \
+      --format=json \
+      --color=never \
+      --mds_addr="${FLAGS_mds_addr}" \
+      --fs_name="${FLAGS_fs_name}" \
+      --fs_partition_type=parent_hash \
+      --s3_endpoint="${S3_ENDPOINT}" \
+      --s3_ak="${S3_AK}" \
+      --s3_sk="${S3_SK}" \
+      --s3_bucketname="${S3_BUCKETNAME}" 2>&1); then
+    echo "create fs fail, $output"
+    exit 1
+  fi
 
-fi
-
-
-is_fail=`echo $output | grep "rpc fail" | wc -l`
-if [ $is_fail -eq 1 ]; then
-  echo "create fs fail, $output"
-  exit 1
-fi
-
-is_success=`echo $output | grep success |  wc -l`
-if [ $is_success -eq 0 ]; then
-  echo "fs ${FLAGS_fs_name} create fail"
-  exit 1
 fi
 
 echo "fs ${FLAGS_fs_name} create success"

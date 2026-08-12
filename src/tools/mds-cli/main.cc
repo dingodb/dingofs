@@ -25,6 +25,7 @@
 #include "mds/common/helper.h"
 #include "tools/mds-cli/br.h"
 #include "tools/mds-cli/mds.h"
+#include "tools/mds-cli/output.h"
 #include "tools/mds-cli/store.h"
 
 DEFINE_string(
@@ -33,6 +34,9 @@ DEFINE_string(
 DEFINE_string(mds_addr, "", "mds address");
 
 DEFINE_string(cmd, "", "command");
+DEFINE_string(format, "pretty", "output format: pretty or json");
+DEFINE_string(color, "auto", "ANSI color: auto, always, or never");
+DEFINE_bool(verbose, false, "show verbose command output");
 
 DEFINE_uint32(cluster_id, 0, "cluster id");
 
@@ -181,10 +185,39 @@ int main(int argc, char* argv[]) {
   int rc = dingofs::ParseFlags(&argc, &argv, extras);
   if (rc != 0) return 1;
 
+  dingofs::mds::client::OutputConfig output_config;
+  const auto output_format = Helper::ToLowerCase(FLAGS_format);
+  if (output_format == "pretty") {
+    output_config.format = dingofs::mds::client::OutputFormat::kPretty;
+  } else if (output_format == "json") {
+    output_config.format = dingofs::mds::client::OutputFormat::kJson;
+  } else {
+    std::cerr << "invalid --format: " << FLAGS_format
+              << " (expected pretty or json)\n";
+    return 2;
+  }
+  const auto color_mode = Helper::ToLowerCase(FLAGS_color);
+  if (color_mode == "never") {
+    output_config.color = dingofs::mds::client::ColorMode::kNever;
+  } else if (color_mode == "auto") {
+    output_config.color = dingofs::mds::client::ColorMode::kAuto;
+  } else if (color_mode == "always") {
+    output_config.color = dingofs::mds::client::ColorMode::kAlways;
+  } else {
+    std::cerr << "invalid --color: " << FLAGS_color
+              << " (expected auto, always, or never)\n";
+    return 2;
+  }
+  output_config.verbose = FLAGS_verbose;
+  dingofs::mds::client::SetOutputConfig(output_config);
+
   dingofs::mds::MetaCodec::SetClusterID(FLAGS_cluster_id);
 
   std::string program_name = GetLastName(std::string(argv[0]));
   dingofs::Logger::Init(program_name);
+  // Keep diagnostics in the configured log files; command output is rendered
+  // explicitly by OutputFormatter.
+  FLAGS_stderrthreshold = google::GLOG_FATAL;
 
   std::string lower_cmd = Helper::ToLowerCase(FLAGS_cmd);
 
@@ -302,7 +335,7 @@ int main(int argc, char* argv[]) {
 
     if (dingofs::mds::client::MdsCommandRunner::Run(options, FLAGS_mds_addr,
                                                     lower_cmd, FLAGS_fs_id)) {
-      return 0;
+      return dingofs::mds::client::GetOutputExitCode();
     }
   }
 
@@ -332,9 +365,11 @@ int main(int argc, char* argv[]) {
     rados_info.key = FLAGS_rados_key;
     rados_info.cluster_name = FLAGS_rados_cluster_name;
 
-    dingofs::mds::client::StoreCommandRunner::Run(
-        options, GetDefaultCoorAddrPath(), lower_cmd);
+    if (dingofs::mds::client::StoreCommandRunner::Run(
+            options, GetDefaultCoorAddrPath(), lower_cmd)) {
+      return dingofs::mds::client::GetOutputExitCode();
+    }
   }
 
-  return 0;
+  return dingofs::mds::client::GetOutputExitCode();
 }
