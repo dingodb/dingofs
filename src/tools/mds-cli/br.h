@@ -34,14 +34,19 @@ enum class Type : uint8_t {
   kS3,
 };
 
+enum class DataType : uint8_t {
+  kMeta = 1,
+  kFsMeta = 2,
+};
+
 class Output {
  public:
   Output() = default;
   virtual ~Output() = default;
 
   virtual bool Init() = 0;
-  virtual void Append(const std::string& key, const std::string& value) = 0;
-  virtual void Flush() = 0;
+  virtual Status Append(const std::string& key, const std::string& value) = 0;
+  virtual Status Flush() = 0;
 };
 
 using OutputUPtr = std::unique_ptr<Output>;
@@ -52,8 +57,12 @@ class Input {
   virtual ~Input() = default;
 
   virtual bool Init() = 0;
+  virtual Status ValidateHeader(DataType expected_type,
+                                uint32_t expected_fs_id) = 0;
   virtual bool IsEof() const = 0;
+  virtual void Reset() = 0;
   virtual Status Read(std::string& key, std::string& value) = 0;
+  virtual Status VerifyRecordCount(uint64_t actual_count) const = 0;
 };
 
 using InputUPtr = std::unique_ptr<Input>;
@@ -89,7 +98,7 @@ class Backup {
 class Restore {
  public:
   Restore() = default;
-  ~Restore() = default;
+  ~Restore();
 
   struct Options {
     Type type = Type::kStdout;  // output type
@@ -117,7 +126,7 @@ class Restore {
 
   Status GetFsInfo(uint32_t fs_id, FsInfoEntry& fs_info);
 
-  Status RestoreMetaTable(InputUPtr input);
+  Status RestoreMetaTable(InputUPtr input, bool is_force);
   Status RestoreFsMetaTable(uint32_t fs_id, InputUPtr input, bool is_force);
 
   OperationProcessorSPtr operation_processor_;
@@ -140,7 +149,8 @@ class BackupCommandRunner {
     S3Info s3_info;
   };
 
-  static bool Run(const Options& options, const std::string& coor_addr, const std::string& cmd);
+  static bool Run(const Options& options, const std::string& coor_addr,
+                  const std::string& cmd);
 };
 
 class RestoreCommandRunner {
@@ -160,7 +170,8 @@ class RestoreCommandRunner {
     S3Info s3_info;  // S3 information for backup and restore
   };
 
-  static bool Run(const Options& options, const std::string& coor_addr, const std::string& cmd);
+  static bool Run(const Options& options, const std::string& coor_addr,
+                  const std::string& cmd);
 };
 
 }  // namespace br

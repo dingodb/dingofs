@@ -1032,7 +1032,7 @@ std::string MetaCodec::EncodeSliceRefKey(uint64_t slice_id) {
 void MetaCodec::DecodeSliceRefKey(const std::string& key, uint64_t& slice_id) {
   CHECK(IsSliceRefKey(key)) << fmt::format("invalid slice ref key({}).", Helper::StringToHex(key));
 
-  slice_id = SerialHelper::ReadULong(key.substr(kPrefixSize + 1 + 4 + 1));
+  slice_id = SerialHelper::ReadULong(key.substr(kPrefixSize + 1 + 1));
 }
 
 std::string MetaCodec::EncodeSliceRefValue(const SliceRefEntry& entry) { return entry.SerializeAsString(); }
@@ -1674,6 +1674,15 @@ std::pair<std::string, std::string> MetaCodec::ParseMetaTableKey(const std::stri
       value_desc = op_log.ShortDebugString();
     } break;
 
+    case kMetaFsSliceRef: {
+      uint64_t slice_id;
+      DecodeSliceRefKey(key, slice_id);
+      key_desc = fmt::format("{} kTableMeta kMetaFsSliceRef {}", kPrefix, slice_id);
+
+      auto slice_ref = DecodeSliceRefValue(value);
+      value_desc = slice_ref.ShortDebugString();
+    } break;
+
     default:
       CHECK(false) << fmt::format("invalid meta type({}) key({}).", static_cast<int>(meta_type),
                                   Helper::StringToHex(key));
@@ -1744,6 +1753,20 @@ std::pair<std::string, std::string> MetaCodec::ParseFsMetaTableKey(const std::st
           value_desc = chunk.ShortDebugString();
         } break;
 
+        case kFsDirInodeMutation: {
+          uint32_t fs_id;
+          Ino ino;
+          uint32_t index;
+          DecodeDirInodeMutationKey(key, fs_id, ino, index);
+          key_desc = fmt::format(
+              "{} kTableFsMeta {} kMetaFsInode {} "
+              "kFsDirInodeMutation {}",
+              kPrefix, fs_id, ino, index);
+
+          auto mutation = DecodeDirInodeMutationValue(value);
+          value_desc = mutation.ShortDebugString();
+        } break;
+
         default:
           CHECK(false) << fmt::format("invalid inode type({}) key({}).", static_cast<int>(inode_type),
                                       Helper::StringToHex(key));
@@ -1773,6 +1796,17 @@ std::pair<std::string, std::string> MetaCodec::ParseFsMetaTableKey(const std::st
       value_desc = dir_quota.ShortDebugString();
 
     } break;
+
+    case kMetaFsDirStat: {
+      uint32_t fs_id;
+      Ino ino;
+      DecodeDirStatKey(key, fs_id, ino);
+      key_desc = fmt::format("{} kTableFsMeta {} kMetaFsDirStat {}", kPrefix, fs_id, ino);
+
+      auto dir_stat = DecodeDirStatValue(value);
+      value_desc = dir_stat.ShortDebugString();
+    } break;
+
     case kMetaFsDelSlice: {
       uint32_t fs_id;
       Ino ino;
