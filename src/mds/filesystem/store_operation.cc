@@ -14,6 +14,7 @@
 #include "mds/filesystem/store_operation.h"
 
 #include <fcntl.h>
+#include <sys/stat.h>
 
 #include <algorithm>
 #include <cstddef>
@@ -73,6 +74,19 @@ DEFINE_uint32(mds_store_operation_max_inflight_per_key, 2,
 DEFINE_validator(mds_store_operation_max_inflight_per_key, brpc::PositiveInteger);
 
 DECLARE_uint32(mds_filesession_live_time_s);
+
+static void ApplySetgidInheritance(uint32_t parent_mode, uint32_t parent_gid, AttrEntry& child_attr) {
+  if ((parent_mode & S_ISGID) == 0) return;
+
+  child_attr.set_gid(parent_gid);
+  if (S_ISDIR(child_attr.mode())) {
+    child_attr.set_mode(child_attr.mode() | S_ISGID);
+  }
+}
+
+static void ApplySetgidInheritance(const AttrEntry& parent_attr, AttrEntry& child_attr) {
+  ApplySetgidInheritance(parent_attr.mode(), parent_attr.gid(), child_attr);
+}
 
 static const uint32_t kOpNameBufInitSize = 128;
 static const uint32_t kCleanCompactedSliceIntervalS = 180;  // 3 minutes
@@ -802,6 +816,7 @@ Status MkDirOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) 
   txn->Put(dentry_key, MetaCodec::EncodeDentryValue(dentry_.Copy()));
 
   // create inode
+  ApplySetgidInheritance(parent_attr, attr_);
   txn->Put(MetaCodec::EncodeInodeKey(fs_id, dentry_.INo()), MetaCodec::EncodeInodeValue(attr_));
 
   // seed an empty dir-stat record so the dir is tracked from birth (no first-flush
@@ -855,7 +870,8 @@ Status BatchMkDirOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_pa
   }
 
   // create inode + seed empty dir-stat in the same txn so each dir is tracked from birth
-  for (const auto& attr : attrs_) {
+  for (auto& attr : attrs_) {
+    ApplySetgidInheritance(parent_attr, attr);
     txn->Put(MetaCodec::EncodeInodeKey(fs_id, attr.ino()), MetaCodec::EncodeInodeValue(attr));
 
     DirStatEntry dir_stat;
@@ -896,6 +912,11 @@ Status MkNodOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) 
   txn->Put(dentry_key, MetaCodec::EncodeDentryValue(dentry_.Copy()));
 
   // create inode
+  if (shared_param.UseMutation()) {
+    ApplySetgidInheritance(parent_inode_->Mode(), parent_inode_->Gid(), attr_);
+  } else {
+    ApplySetgidInheritance(parent_attr, attr_);
+  }
   txn->Put(MetaCodec::EncodeInodeKey(fs_id, dentry_.INo()), MetaCodec::EncodeInodeValue(attr_));
 
   // update parent attr
@@ -953,7 +974,12 @@ Status BatchMkNodOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_pa
   }
 
   // create inode
-  for (const auto& attr : attrs_) {
+  for (auto& attr : attrs_) {
+    if (shared_param.UseMutation()) {
+      ApplySetgidInheritance(parent_inode_->Mode(), parent_inode_->Gid(), attr);
+    } else {
+      ApplySetgidInheritance(parent_attr, attr);
+    }
     txn->Put(MetaCodec::EncodeInodeKey(fs_id, attr.ino()), MetaCodec::EncodeInodeValue(attr));
   }
 
@@ -1000,7 +1026,7 @@ Status BatchCreateFileOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shar
 
   for (size_t i = 0; i < dentries_.size(); ++i) {
     const auto& dentry = dentries_[i];
-    const auto& attr = attrs_[i];
+    auto& attr = attrs_[i];
     const auto& file_session = file_sessions_[i];
 
     // check dentry exist
@@ -1016,6 +1042,11 @@ Status BatchCreateFileOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shar
     txn->Put(dentry_key, MetaCodec::EncodeDentryValue(dentry.Copy()));
 
     // create inode
+    if (shared_param.UseMutation()) {
+      ApplySetgidInheritance(parent_inode_->Mode(), parent_inode_->Gid(), attr);
+    } else {
+      ApplySetgidInheritance(parent_attr, attr);
+    }
     txn->Put(MetaCodec::EncodeInodeKey(fs_id, dentry.INo()), MetaCodec::EncodeInodeValue(attr));
 
     // add file session

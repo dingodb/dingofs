@@ -115,8 +115,9 @@ TEST_F(GroupCommitTest, ConcurrentMkNodUnderParkingPressure) {
       threads.emplace_back([&, i]() {
         const Ino ino = ino_base + i;
         Dentry dentry(kFsId, "f" + std::to_string(ino), kParentIno, ino, pb::mds::FileType::FILE, 0);
+        auto attr = MakeFileAttr(ino);
 
-        MkNodOperation operation(traces[i], parent_inode, dentry, MakeFileAttr(ino));
+        MkNodOperation operation(traces[i], parent_inode, dentry, attr);
         operation.SetEvent(&done);
         EXPECT_TRUE(processor_->RunBatched(&operation));
         done.wait();  // no operation may be dropped, otherwise this hangs

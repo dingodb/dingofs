@@ -557,7 +557,7 @@ class CreateRootOperation : public Operation {
 
 class MkDirOperation : public Operation {
  public:
-  MkDirOperation(Trace& trace, const Dentry& dentry, const AttrEntry& attr)
+  MkDirOperation(Trace& trace, const Dentry& dentry, AttrEntry& attr)
       : Operation(trace), dentry_(dentry), attr_(attr) {};
   ~MkDirOperation() override = default;
 
@@ -580,14 +580,14 @@ class MkDirOperation : public Operation {
 
  private:
   const Dentry& dentry_;
-  const AttrEntry& attr_;
+  AttrEntry& attr_;
 
   Result result_;
 };
 
 class BatchMkDirOperation : public Operation {
  public:
-  BatchMkDirOperation(Trace& trace, const std::vector<Dentry>& dentries, const std::vector<AttrEntry>& attrs)
+  BatchMkDirOperation(Trace& trace, const std::vector<Dentry>& dentries, std::vector<AttrEntry>& attrs)
       : Operation(trace), dentries_(dentries), attrs_(attrs) {};
   ~BatchMkDirOperation() override = default;
 
@@ -609,14 +609,14 @@ class BatchMkDirOperation : public Operation {
 
  private:
   const std::vector<Dentry>& dentries_;
-  const std::vector<AttrEntry>& attrs_;
+  std::vector<AttrEntry>& attrs_;
 
   Result result_;
 };
 
 class MkNodOperation : public Operation {
  public:
-  MkNodOperation(Trace& trace, InodeSPtr parent_inode, const Dentry& dentry, const AttrEntry& attr)
+  MkNodOperation(Trace& trace, InodeSPtr parent_inode, const Dentry& dentry, AttrEntry& attr)
       : Operation(trace), parent_inode_(parent_inode), dentry_(dentry), attr_(attr) {};
   ~MkNodOperation() override = default;
 
@@ -644,7 +644,7 @@ class MkNodOperation : public Operation {
  private:
   InodeSPtr parent_inode_;
   const Dentry& dentry_;
-  const AttrEntry& attr_;
+  AttrEntry& attr_;
 
   Result result_;
 };
@@ -652,7 +652,7 @@ class MkNodOperation : public Operation {
 class BatchMkNodOperation : public Operation {
  public:
   BatchMkNodOperation(Trace& trace, InodeSPtr parent_inode, const std::vector<Dentry>& dentries,
-                      const std::vector<AttrEntry>& attrs)
+                      std::vector<AttrEntry>& attrs)
       : Operation(trace), parent_inode_(parent_inode), dentries_(dentries), attrs_(attrs) {};
   ~BatchMkNodOperation() override = default;
 
@@ -680,7 +680,7 @@ class BatchMkNodOperation : public Operation {
  private:
   InodeSPtr parent_inode_;
   const std::vector<Dentry>& dentries_;
-  const std::vector<AttrEntry>& attrs_;
+  std::vector<AttrEntry>& attrs_;
 
   Result result_;
 };
@@ -688,7 +688,7 @@ class BatchMkNodOperation : public Operation {
 class BatchCreateFileOperation : public Operation {
  public:
   BatchCreateFileOperation(Trace& trace, InodeSPtr parent_inode, const std::vector<Dentry>& dentries,
-                           const std::vector<AttrEntry>& attrs, const std::vector<FileSessionSPtr>& file_sessions)
+                           std::vector<AttrEntry>& attrs, const std::vector<FileSessionSPtr>& file_sessions)
       : Operation(trace),
         parent_inode_(parent_inode),
         dentries_(dentries),
@@ -720,7 +720,7 @@ class BatchCreateFileOperation : public Operation {
  private:
   InodeSPtr parent_inode_;
   const std::vector<Dentry>& dentries_;
-  const std::vector<AttrEntry>& attrs_;
+  std::vector<AttrEntry>& attrs_;
   const std::vector<FileSessionSPtr>& file_sessions_;
 
   Result result_;
