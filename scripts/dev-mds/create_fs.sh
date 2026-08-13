@@ -43,8 +43,9 @@ fi
 
 
 # Query the filesystem using the machine-readable output. A successful
-# command means the filesystem exists. A not-found response is the only
-# expected failure; all other failures abort the deployment.
+# command means the filesystem exists. The MDS client reports a missing
+# filesystem as `NotFound` in the error message (the RPC status is normalized
+# to EINTERNAL), so do not rely on the old NOT_FOUND error name.
 if output=$("$MDS_CLIENT_BIN_PATH" \
     --cmd=getfs \
     --format=json \
@@ -53,7 +54,7 @@ if output=$("$MDS_CLIENT_BIN_PATH" \
     --fs_name="${FLAGS_fs_name}" 2>&1); then
   echo "fs ${FLAGS_fs_name} already exist"
   exit 0
-elif ! echo "$output" | grep -q 'NOT_FOUND'; then
+elif ! printf '%s\n' "$output" | grep -Eqi 'not[_ ]?found'; then
   echo "get fs fail, $output"
   exit 1
 fi
@@ -62,10 +63,13 @@ echo "fs ${FLAGS_fs_name} not exist, create it"
 
 # create fs
 output=""
-if [ ${FLAGS_use_local_datastore} = 0 ]; then
-  local_storage_path=${LOCAL_DATASTORE_PATH}/${FLAGS_fs_name}
-  mkdir -p ${local_storage_path}
-  
+if [ "${FLAGS_use_local_datastore}" -eq "${FLAGS_TRUE}" ]; then
+  local_storage_path="${LOCAL_DATASTORE_PATH}/${FLAGS_fs_name}"
+  if ! mkdir -p "${local_storage_path}"; then
+    echo "create local datastore fail, ${local_storage_path}"
+    exit 1
+  fi
+
   if ! output=$("$MDS_CLIENT_BIN_PATH" \
       --cmd=createfs \
       --format=json \
@@ -73,7 +77,7 @@ if [ ${FLAGS_use_local_datastore} = 0 ]; then
       --mds_addr="${FLAGS_mds_addr}" \
       --fs_name="${FLAGS_fs_name}" \
       --fs_partition_type=parent_hash \
-      --storage_path="${LOCAL_DATASTORE_PATH}" 2>&1); then
+      --storage_path="${local_storage_path}" 2>&1); then
     echo "create fs fail, $output"
     exit 1
   fi
