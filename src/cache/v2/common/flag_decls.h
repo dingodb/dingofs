@@ -92,7 +92,6 @@ DECLARE_string(cache_eviction);
 DECLARE_string(cache_dir);
 DECLARE_string(cache_dir_uuid);
 DECLARE_uint32(cache_size_mb);
-DECLARE_uint32(iodepth);
 
 // store/cache_manager.cc
 DECLARE_uint32(cache_expire_s);
