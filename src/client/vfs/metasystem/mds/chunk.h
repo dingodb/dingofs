@@ -21,6 +21,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -228,7 +229,7 @@ class CommitTask {
     return status_;
   }
 
-  bool MaybeRun() {
+  bool MaybeRun(bool retry_failed = true) {
     utils::WriteLockGuard lk(lock_);
 
     if (state_ == State::INIT) {
@@ -239,7 +240,7 @@ class CommitTask {
       return false;
 
     } else {
-      if (status_.ok()) return false;
+      if (status_.ok() || !retry_failed) return false;
 
       retries_.fetch_add(1, std::memory_order_relaxed);
       state_ = State::RUNNING;
@@ -252,7 +253,16 @@ class CommitTask {
 
   uint32_t Retries() const { return retries_.load(std::memory_order_relaxed); }
 
-  void Wait() { cond.Wait(); }
+  void Wait() {
+    waiter_count_.fetch_add(1, std::memory_order_relaxed);
+    cond.Wait();
+    waiter_count_.fetch_sub(1, std::memory_order_relaxed);
+  }
+
+  // for unit test only, return waiter count
+  uint32_t WaiterCount() const {
+    return waiter_count_.load(std::memory_order_relaxed);
+  }
 
   void Signal() { cond.DecreaseBroadcast(); }
 
@@ -277,6 +287,8 @@ class CommitTask {
   Status status_;
 
   std::atomic<uint32_t> retries_{0};
+  // for unit test only, record how many waiters are waiting for this task
+  std::atomic<uint32_t> waiter_count_{0};
 
   mds::BthreadCond cond;
 };
@@ -296,6 +308,12 @@ class ChunkSet {
 
   Ino GetIno() const { return ino_; }
 
+  // Serializes a metadata flush against new writes for this inode, so the set
+  // being drained cannot grow indefinitely under a sustained concurrent
+  // writer. Write operations take this mutex before updating the set.
+  using FlushGuard = std::unique_lock<std::mutex>;
+  FlushGuard AcquireFlushGuard() { return FlushGuard(write_flush_mutex_); }
+
   uint64_t GetLastWriteSliceLength() const {
     utils::ReadLockGuard guard(lock_);
     return last_write_slice_length_;
@@ -303,6 +321,7 @@ class ChunkSet {
 
   // write memo operationsm
   void SetLastWriteLength(uint64_t offset, uint64_t size) {
+    std::lock_guard<std::mutex> flush_guard(write_flush_mutex_);
     utils::WriteLockGuard lk(lock_);
     last_write_length_ = std::max(last_write_length_, offset + size);
     last_write_time_ns_ = utils::TimestampNs();
@@ -413,6 +432,7 @@ class ChunkSet {
   const Ino ino_;
   const uint32_t chunk_size_;
 
+  mutable std::mutex write_flush_mutex_;
   mutable utils::RWLock lock_;
 
   // record write file length by writeslice operation

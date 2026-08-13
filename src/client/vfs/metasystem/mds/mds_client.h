@@ -210,9 +210,10 @@ class MDSClient {
     AttrEntry attr;
     std::vector<mds::ChunkEntry> chunks;
   };
-  Status WriteSlice(ContextSPtr& ctx, Ino ino,
-                    const std::vector<mds::DeltaSliceEntry>& delta_slices,
-                    WriteSliceResult& result);
+  virtual Status WriteSlice(
+      ContextSPtr& ctx, Ino ino,
+      const std::vector<mds::DeltaSliceEntry>& delta_slices,
+      WriteSliceResult& result);
 
   struct CompactChunkParam {
     uint64_t version{0};
