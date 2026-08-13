@@ -18,6 +18,8 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cerrno>
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -58,8 +60,19 @@ std::string Helper::ToUpperCase(const std::string& str) {
   return result;
 }
 
-bool Helper::StringToBool(const std::string& str) { return !(str == "0" || str == "false"); }
-int32_t Helper::StringToInt32(const std::string& str) { return std::strtol(str.c_str(), nullptr, 10); }
+bool Helper::StringToBool(const std::string& str) {
+  return !(str == "0" || IsEqualIgnoreCase(str, "false"));
+}
+
+int32_t Helper::StringToInt32(const std::string& str) {
+  errno = 0;
+  long value = std::strtol(str.c_str(), nullptr, 10);
+  if (errno == ERANGE || value > INT32_MAX || value < INT32_MIN) {
+    LOG(ERROR) << "StringToInt32 out of range: " << str;
+    return value < 0 ? INT32_MIN : INT32_MAX;
+  }
+  return static_cast<int32_t>(value);
+}
 int64_t Helper::StringToInt64(const std::string& str) { return std::strtoll(str.c_str(), nullptr, 10); }
 uint64_t Helper::StringToUint64(const std::string& str) { return std::strtoull(str.c_str(), nullptr, 10); }
 float Helper::StringToFloat(const std::string& str) { return std::strtof(str.c_str(), nullptr); }
@@ -82,21 +95,29 @@ std::string Helper::StringToHex(const std::string_view& str) {
 }
 
 std::string Helper::HexToString(const std::string& hex_str) {
-  std::string result;
+  // The hex string must be of even length and contain only hex digits.
+  if (hex_str.length() % 2 != 0) {
+    LOG(ERROR) << "HexToString error: odd length hex string: " << hex_str;
+    return "";
+  }
 
-  try {
-    // The hex_string must be of even length
-    for (size_t i = 0; i < hex_str.length(); i += 2) {
-      std::string hex_byte = hex_str.substr(i, 2);
-      int byte_value = std::stoi(hex_byte, nullptr, 16);
-      result += static_cast<unsigned char>(byte_value);
+  auto hex_value = [](char c) -> int {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return -1;
+  };
+
+  std::string result;
+  result.reserve(hex_str.length() / 2);
+  for (size_t i = 0; i < hex_str.length(); i += 2) {
+    int high = hex_value(hex_str[i]);
+    int low = hex_value(hex_str[i + 1]);
+    if (high < 0 || low < 0) {
+      LOG(ERROR) << "HexToString error: invalid hex char in: " << hex_str;
+      return "";
     }
-  } catch (const std::invalid_argument& ia) {
-    LOG(ERROR) << "HexToString error Irnvalid argument: " << ia.what() << '\n';
-    return "";
-  } catch (const std::out_of_range& oor) {
-    LOG(ERROR) << "HexToString error Out of Range error: " << oor.what() << '\n';
-    return "";
+    result += static_cast<char>((high << 4) | low);
   }
 
   return result;
@@ -281,8 +302,8 @@ int64_t Helper::GenerateRealRandomInteger(int64_t min_value, int64_t max_value) 
 }
 
 int64_t Helper::GenerateRandomInteger(int64_t min_value, int64_t max_value) {
-  std::mt19937 rng;
-  std::uniform_real_distribution<> distrib(min_value, max_value);
+  thread_local std::mt19937_64 rng(std::random_device{}());
+  std::uniform_int_distribution<int64_t> distrib(min_value, max_value);
 
   return distrib(rng);
 }

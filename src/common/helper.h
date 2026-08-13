@@ -96,17 +96,13 @@ class Helper {
 
   template <typename T>
   static std::vector<T> PbRepeatedToVector(const google::protobuf::RepeatedPtrField<T>& data) {
-    std::vector<T> vec;
-    vec.reserve(data.size());
-    for (auto& item : data) {
-      vec.emplace_back(std::move(item));
-    }
-
-    return vec;
+    // const source: elements are copied.
+    return {data.begin(), data.end()};
   }
 
   template <typename T>
   static std::vector<T> PbRepeatedToVector(google::protobuf::RepeatedPtrField<T>* data) {
+    // mutable source: elements are moved out, leaving them unspecified.
     std::vector<T> vec;
     vec.reserve(data->size());
     for (auto& item : *data) {
@@ -165,12 +161,14 @@ class Helper {
   }
 
   static std::string GetHostName() {
-    char hostname[kMaxHostNameLength];
+    char hostname[kMaxHostNameLength + 1];
     int ret = gethostname(hostname, kMaxHostNameLength);
     if (ret < 0) {
       LOG(ERROR) << "[meta.filesystem] get hostname fail, ret=" << ret;
       return "";
     }
+    // gethostname does not guarantee null termination on truncation.
+    hostname[kMaxHostNameLength] = '\0';
 
     return std::string(hostname);
   }
@@ -296,10 +294,12 @@ class Helper {
 
   // parse ~/.dingofs/path to /home/user/.dingofs/path
   static std::string ExpandPath(const std::string& path) {
-    std::string home_dir = GetHomeDir();
-    std::string expand_dir;
-    butil::ReplaceChars(path, "~", home_dir, &expand_dir);
-    return expand_dir;
+    // only expand a leading "~" (i.e. "~" or "~/..."), do not touch '~'
+    // appearing elsewhere in the path.
+    if (path == "~" || (path.size() >= 2 && path[0] == '~' && path[1] == '/')) {
+      return GetHomeDir() + path.substr(1);
+    }
+    return path;
   }
 
   static bool IsExistPath(const std::string& path) {
