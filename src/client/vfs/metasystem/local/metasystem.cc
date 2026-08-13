@@ -782,7 +782,7 @@ Status LocalMetaSystem::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh,
     }
 
     AttrEntry attr_entry;
-    status = GetAttrEntry(ino, attr_entry);
+    status = GetAttrEntry(entry.ino, attr_entry);
     if (!status.ok()) return status;
 
     if (with_attr) entry.attr = meta::Helper::ToAttr(attr_entry);
