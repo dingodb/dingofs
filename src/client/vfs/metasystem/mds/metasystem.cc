@@ -625,25 +625,9 @@ Status MDSMetaSystem::MkNod(ContextSPtr ctx, Ino parent,
   AssertStop();
 
   AttrEntry attr_entry, parent_attr_entry;
-  if (FLAGS_vfs_meta_batch_operation_enable) {
-    auto operation = std::make_shared<MkNodOperation>(ctx, parent, name, uid,
-                                                      gid, mode, rdev);
-    auto status = RunOperation(operation);
-    if (!status.ok()) return status;
-
-    auto& result = operation->GetResult();
-    attr_entry = result.attr_entry;
-    parent_attr_entry = result.parent_attr_entry;
-
-    LOG_DEBUG << fmt::format("[meta.fs] mknod {}/{} attr({}) parent_attr({})",
-                             parent, name, attr_entry.ShortDebugString(),
-                             parent_attr_entry.ShortDebugString());
-
-  } else {
-    auto status = mds_client_.MkNod(ctx, parent, name, uid, gid, mode, rdev,
-                                    attr_entry, parent_attr_entry);
-    if (!status.ok()) return status;
-  }
+  auto status = mds_client_.MkNod(ctx, parent, name, uid, gid, mode, rdev,
+                                  attr_entry, parent_attr_entry);
+  if (!status.ok()) return status;
 
   PutInodeToCache(parent_attr_entry);
   auto inode = PutInodeToCache(attr_entry);
@@ -1180,26 +1164,9 @@ Status MDSMetaSystem::MkDir(ContextSPtr ctx, Ino parent,
   AssertStop();
 
   AttrEntry attr_entry, parent_attr_entry;
-
-  if (FLAGS_vfs_meta_batch_operation_enable) {
-    auto operation =
-        std::make_shared<MkDirOperation>(ctx, parent, name, uid, gid, mode);
-    auto status = RunOperation(operation);
-    if (!status.ok()) return status;
-
-    auto& result = operation->GetResult();
-    attr_entry = result.attr_entry;
-    parent_attr_entry = result.parent_attr_entry;
-
-    LOG_DEBUG << fmt::format("[meta.fs] mkdir {}/{} attr({}) parent_attr({})",
-                             parent, name, attr_entry.ShortDebugString(),
-                             parent_attr_entry.ShortDebugString());
-
-  } else {
-    auto status = mds_client_.MkDir(ctx, parent, name, uid, gid, mode, 0,
-                                    attr_entry, parent_attr_entry);
-    if (!status.ok()) return status;
-  }
+  auto status = mds_client_.MkDir(ctx, parent, name, uid, gid, mode, 0,
+                                  attr_entry, parent_attr_entry);
+  if (!status.ok()) return status;
 
   PutInodeToCache(parent_attr_entry);
   auto inode = PutInodeToCache(attr_entry);
@@ -1350,30 +1317,11 @@ Status MDSMetaSystem::Unlink(ContextSPtr ctx, Ino parent,
   AssertStop();
 
   AttrEntry attr_entry, parent_attr_entry;
-
-  if (FLAGS_vfs_meta_batch_operation_enable) {
-    auto operation = std::make_shared<UnlinkOperation>(ctx, parent, name);
-    auto status = RunOperation(operation);
-    if (!status.ok()) {
-      if (status.IsNotExist()) return Status::OK();
-      return status;
-    }
-
-    auto& result = operation->GetResult();
-    attr_entry = result.attr_entry;
-    parent_attr_entry = result.parent_attr_entry;
-
-    LOG_DEBUG << fmt::format("[meta.fs] unlink {}/{} attr({}) parent_attr({})",
-                             parent, name, attr_entry.ShortDebugString(),
-                             parent_attr_entry.ShortDebugString());
-
-  } else {
-    auto status =
-        mds_client_.UnLink(ctx, parent, name, attr_entry, parent_attr_entry);
-    if (!status.ok()) {
-      if (status.IsNotExist()) return Status::OK();
-      return status;
-    }
+  auto status =
+      mds_client_.UnLink(ctx, parent, name, attr_entry, parent_attr_entry);
+  if (!status.ok()) {
+    if (status.IsNotExist()) return Status::OK();
+    return status;
   }
 
   PutInodeToCache(parent_attr_entry);
