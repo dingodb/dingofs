@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "mds/filesystem/partition.h"
+#include "common/helper.h"
 
 #include <json/value.h>
 
@@ -151,16 +152,16 @@ std::pair<DirShardSPtr, DirShardSPtr> DirShard::Split(const std::string& key, ui
 }
 
 std::string DirShard::ToString() const {
-  return fmt::format("id({}) range[{},{}) version({}) size({})", id_, Helper::StringToHex(range_.start),
-                     Helper::StringToHex(range_.end), version_, Size());
+  return fmt::format("id({}) range[{},{}) version({}) size({})", id_, ::dingofs::Helper::StringToHex(range_.start),
+                     ::dingofs::Helper::StringToHex(range_.end), version_, Size());
 }
 
 void DirShard::Dump(Json::Value& value) const {
   utils::ReadLockGuard lk(lock_);
 
   value["id"] = id_;
-  value["start"] = Helper::StringToHex(range_.start);
-  value["end"] = Helper::StringToHex(range_.end);
+  value["start"] = ::dingofs::Helper::StringToHex(range_.start);
+  value["end"] = ::dingofs::Helper::StringToHex(range_.end);
   value["version"] = version_;
   value["size"] = Size();
 }
@@ -217,7 +218,7 @@ Status ShardPartition::Scan(const std::string& trace_id, const std::string& star
                             bool is_only_dir, std::vector<Dentry>& dentries) {
   limit = (limit > 0) ? limit : UINT32_MAX;
 
-  std::string next_name = Helper::PrefixNext(start_name);
+  std::string next_name = ::dingofs::Helper::PrefixNext(start_name);
   do {
     Range range;
     auto shard = GetShard(next_name, range);
@@ -549,7 +550,7 @@ Status ShardPartition::DoSplitDirShard(const Range& range) {
 
   LOG(INFO) << fmt::format("[partition.{}.{}] split dir shard, parent({}) left({}) right({}) shard_boundaries({}).",
                            fs_id_, ino_, shard->ToString(), left->ToString(), right->ToString(),
-                           Helper::VectorToString(shard_boundaries_));
+                           ::dingofs::Helper::VectorToString(shard_boundaries_));
 
   return Status::OK();
 }

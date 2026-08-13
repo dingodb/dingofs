@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "client/vfs/metasystem/mds/mds_client.h"
+#include "common/helper.h"
 
 #include <json/value.h>
 
@@ -753,7 +754,7 @@ Status MDSClient::Open(
 
   attr_entry.Swap(response.mutable_inode());
   if (prefetch_chunk) {
-    chunks = mds::Helper::PbRepeatedToVector(response.chunks());
+    chunks = ::dingofs::Helper::PbRepeatedToVector(response.chunks());
   }
   parent_memo_.UpsertVersion(ino, response.inode().version());
 
@@ -1194,7 +1195,7 @@ Status MDSClient::SetAttr(ContextSPtr& ctx, Ino ino, const Attr& attr,
   out.attr_entry.Swap(response.mutable_inode());
   out.shrink_file = response.shrink_file();
   out.expand_file = response.expand_file();
-  out.effected_chunks = mds::Helper::PbRepeatedToVector(response.chunks());
+  out.effected_chunks = ::dingofs::Helper::PbRepeatedToVector(response.chunks());
 
   return Status::OK();
 }
@@ -1456,7 +1457,7 @@ Status MDSClient::ReadSlice(
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
 
-  mds::Helper::VectorToPbRepeated(chunk_descriptors,
+  ::dingofs::Helper::VectorToPbRepeated(chunk_descriptors,
                                   request.mutable_chunk_descriptors());
 
   auto status = SendRequest(SpanScope::GetContext(span, ctx), span, get_mds_fn,
@@ -1466,7 +1467,7 @@ Status MDSClient::ReadSlice(
     return status;
   }
 
-  chunks = mds::Helper::PbRepeatedToVector(*response.mutable_chunks());
+  chunks = ::dingofs::Helper::PbRepeatedToVector(*response.mutable_chunks());
 
   return Status::OK();
 }
@@ -1492,7 +1493,7 @@ Status MDSClient::WriteSlice(
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
 
-  mds::Helper::VectorToPbRepeated(delta_slices, request.mutable_delta_slices());
+  ::dingofs::Helper::VectorToPbRepeated(delta_slices, request.mutable_delta_slices());
 
   auto status = SendRequest(SpanScope::GetContext(span, ctx), span, get_mds_fn,
                             "MDSService", "WriteSlice", request, response);
@@ -1502,7 +1503,7 @@ Status MDSClient::WriteSlice(
   }
 
   result.attr = response.inode();
-  result.chunks = mds::Helper::PbRepeatedToVector(response.chunks());
+  result.chunks = ::dingofs::Helper::PbRepeatedToVector(response.chunks());
 
   return Status::OK();
 }
@@ -1599,7 +1600,7 @@ Status MDSClient::CopyFileRange(ContextSPtr& ctx,
 
   out.bytes_copied = response.bytes_copied();
   out.attr_entry.Swap(response.mutable_dst_inode());
-  out.effected_chunks = mds::Helper::PbRepeatedToVector(response.dst_chunks());
+  out.effected_chunks = ::dingofs::Helper::PbRepeatedToVector(response.dst_chunks());
 
   return Status::OK();
 }
@@ -1639,7 +1640,7 @@ Status MDSClient::Fallocate(ContextSPtr& ctx, Ino ino, int32_t mode,
   out.attr_entry.Swap(response.mutable_inode());
   out.shrink_file = response.shrink_file();
   out.expand_file = response.expand_file();
-  out.effected_chunks = mds::Helper::PbRepeatedToVector(response.chunks());
+  out.effected_chunks = ::dingofs::Helper::PbRepeatedToVector(response.chunks());
 
   return Status::OK();
 }

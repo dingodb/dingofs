@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "tools/mds-cli/store.h"
+#include "common/helper.h"
 
 #include <cstdint>
 #include <iostream>
@@ -143,7 +144,7 @@ static void TraversePrint(FsTreeNode* item, bool is_details, int level) {
   std::cout << fmt::format(
       "{} [{},{},{}/{},{},{},{},{},{},{},{}]\n", dentry.name(), dentry.ino(),
       pb::mds::FileType_Name(attr.type()), attr.mode(),
-      Helper::FsModeToString(attr.mode()), attr.nlink(), attr.uid(), attr.gid(),
+      ::dingofs::Helper::FsModeToString(attr.mode()), attr.nlink(), attr.uid(), attr.gid(),
       attr.length(), format_time_fn(attr.ctime()), format_time_fn(attr.mtime()),
       format_time_fn(attr.atime()));
 
@@ -277,14 +278,14 @@ bool StoreCommandRunner::Run(const Options& options,
                              const std::string& coor_addr,
                              const std::string& cmd) {
   static std::set<std::string> mds_cmd = {
-      Helper::ToLowerCase("CreateMetaTable"),
-      Helper::ToLowerCase("CreateFsStatsTable"),
-      Helper::ToLowerCase("CreateAllTable"),
-      Helper::ToLowerCase("DropMetaTable"),
-      Helper::ToLowerCase("DropFsStatsTable"),
-      Helper::ToLowerCase("DropFsMetaTable"),
-      Helper::ToLowerCase("UpdateFsS3InfoByStore"),
-      Helper::ToLowerCase("UpdateFsRadosInfoByStore"),
+      ::dingofs::Helper::ToLowerCase("CreateMetaTable"),
+      ::dingofs::Helper::ToLowerCase("CreateFsStatsTable"),
+      ::dingofs::Helper::ToLowerCase("CreateAllTable"),
+      ::dingofs::Helper::ToLowerCase("DropMetaTable"),
+      ::dingofs::Helper::ToLowerCase("DropFsStatsTable"),
+      ::dingofs::Helper::ToLowerCase("DropFsMetaTable"),
+      ::dingofs::Helper::ToLowerCase("UpdateFsS3InfoByStore"),
+      ::dingofs::Helper::ToLowerCase("UpdateFsRadosInfoByStore"),
       "tree",
   };
 
@@ -303,14 +304,14 @@ bool StoreCommandRunner::Run(const Options& options,
     return true;
   }
 
-  if (cmd == Helper::ToLowerCase("CreateMetaTable")) {
+  if (cmd == ::dingofs::Helper::ToLowerCase("CreateMetaTable")) {
     if (store_client.CreateMetaTable(options.meta_table_name)) {
       PrintSuccess(cmd, "metadata table created");
     } else {
       PrintFailure(cmd, "STORE_ERROR", "failed to create metadata table");
     }
 
-  } else if (cmd == Helper::ToLowerCase("CreateFsStatsTable")) {
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("CreateFsStatsTable")) {
     if (store_client.CreateFsStatsTable(options.fsstats_table_name)) {
       PrintSuccess(cmd, "filesystem statistics table created");
     } else {
@@ -318,7 +319,7 @@ bool StoreCommandRunner::Run(const Options& options,
                    "failed to create filesystem statistics table");
     }
 
-  } else if (cmd == Helper::ToLowerCase("CreateAllTable")) {
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("CreateAllTable")) {
     const bool meta_ok = store_client.CreateMetaTable(options.meta_table_name);
     const bool stats_ok =
         store_client.CreateFsStatsTable(options.fsstats_table_name);
@@ -328,14 +329,14 @@ bool StoreCommandRunner::Run(const Options& options,
       PrintFailure(cmd, "STORE_ERROR", "failed to create all metadata tables");
     }
 
-  } else if (cmd == Helper::ToLowerCase("DropMetaTable")) {
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("DropMetaTable")) {
     if (store_client.DropMetaTable()) {
       PrintSuccess(cmd, "metadata table dropped");
     } else {
       PrintFailure(cmd, "STORE_ERROR", "failed to drop metadata table");
     }
 
-  } else if (cmd == Helper::ToLowerCase("DropFsStatsTable")) {
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("DropFsStatsTable")) {
     if (store_client.DropFsStatsTable()) {
       PrintSuccess(cmd, "filesystem statistics table dropped");
     } else {
@@ -343,7 +344,7 @@ bool StoreCommandRunner::Run(const Options& options,
                    "failed to drop filesystem statistics table");
     }
 
-  } else if (cmd == Helper::ToLowerCase("DropFsMetaTable")) {
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("DropFsMetaTable")) {
     if (options.fs_id == 0) {
       LOG(ERROR) << "fs_id is invalid.";
       PrintFailure(cmd, "INVALID_ARGUMENT", "fs_id is invalid");
@@ -356,17 +357,17 @@ bool StoreCommandRunner::Run(const Options& options,
                    "failed to drop filesystem metadata table");
     }
 
-  } else if (cmd == Helper::ToLowerCase("tree")) {
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("tree")) {
     store_client.PrintDentryTree(options.fs_id, true);
 
-  } else if (cmd == Helper::ToLowerCase("UpdateFsS3InfoByStore")) {
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("UpdateFsS3InfoByStore")) {
     if (store_client.UpdateFsS3Info(options.fs_name, options.s3_info)) {
       PrintSuccess(cmd, "filesystem S3 information updated");
     } else {
       PrintFailure(cmd, "STORE_ERROR",
                    "failed to update filesystem S3 information");
     }
-  } else if (cmd == Helper::ToLowerCase("UpdateFsRadosInfoByStore")) {
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("UpdateFsRadosInfoByStore")) {
     if (store_client.UpdateFsRadosInfo(options.fs_name, options.rados_info)) {
       PrintSuccess(cmd, "filesystem RADOS information updated");
     } else {

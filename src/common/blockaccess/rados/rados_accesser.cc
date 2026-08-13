@@ -34,6 +34,7 @@
 #include <vector>
 
 #include "common/directory.h"
+#include "common/helper.h"
 #include "common/options/blockaccess.h"
 #include "common/status.h"
 #include "utils/scoped_cleanup.h"
@@ -173,7 +174,7 @@ bool RadosAccesser::Init() {
   // Non-fatal: a failure here only loses introspection, never blocks mount.
   if (FLAGS_rados_enable_admin_socket) {
     const std::string socket_dir = GetDefaultDir(kSocketDir);
-    if (!Helper::CreateDirectory(socket_dir)) {
+    if (!::dingofs::Helper::CreateDirectory(socket_dir)) {
       LOG(WARNING)
           << "Create admin socket dir failed, skip rados admin socket: "
           << socket_dir;

@@ -17,6 +17,7 @@
 #include <string>
 
 #include "brpc/channel.h"
+#include "common/helper.h"
 #include "butil/endpoint.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
@@ -34,11 +35,11 @@ static std::vector<std::string> SplitMdsAddrs(const std::string& mds_addrs) {
   std::vector<std::string> addrs;
 
   if (mds_addrs.find(',') != std::string::npos) {
-    mds::Helper::SplitString(mds_addrs, ',', addrs);
+    dingofs::Helper::SplitString(mds_addrs, ',', addrs);
     return addrs;
 
   } else if (mds_addrs.find(';') != std::string::npos) {
-    mds::Helper::SplitString(mds_addrs, ';', addrs);
+    dingofs::Helper::SplitString(mds_addrs, ';', addrs);
     return addrs;
   }
 
@@ -177,7 +178,7 @@ EndPoint RPC::RandomlyPickupEndPoint() {
   // priority take from active channels
   if (!channels_.empty()) {
     uint32_t random_num =
-        mds::Helper::GenerateRealRandomInteger(0, channels_.size());
+        ::dingofs::Helper::GenerateRealRandomInteger(0, channels_.size());
     uint32_t index = random_num % channels_.size();
     auto it = channels_.begin();
     std::advance(it, index);
@@ -187,7 +188,7 @@ EndPoint RPC::RandomlyPickupEndPoint() {
   } else if (!fallback_endpoints_.empty()) {
     // take from fallback
     uint32_t random_num =
-        mds::Helper::GenerateRealRandomInteger(0, fallback_endpoints_.size());
+        ::dingofs::Helper::GenerateRealRandomInteger(0, fallback_endpoints_.size());
     uint32_t index = random_num % fallback_endpoints_.size();
     auto it = fallback_endpoints_.begin();
     std::advance(it, index);

@@ -481,17 +481,7 @@ ResolveResult WarmupManager::ResolveTask(const WarmupTaskContext& context) {
     return result;
   }
 
-  std::vector<std::string> inodes;
-  utils::SplitString(context.task_inodes, ",", &inodes);
-  for (const auto& value : inodes) {
-    Ino ino;
-    if (!utils::StringToUll(value, &ino)) {
-      ++result.errors;
-      if (result.status.ok()) {
-        result.status = Status::InvalidParam("invalid warmup inode");
-      }
-      continue;
-    }
+  for (const auto& ino : context.task_keys) {
     Status status = WalkFile(context, ino, &result.blocks);
     if (!status.ok()) {
       ++result.errors;
@@ -500,6 +490,7 @@ ResolveResult WarmupManager::ResolveTask(const WarmupTaskContext& context) {
       }
     }
   }
+
   return result;
 }
 

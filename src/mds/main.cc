@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <csignal>
+#include "../common/helper.h"
 #include <iostream>
 #include <string>
 #include <thread>
@@ -210,7 +211,7 @@ static void SetupSignalHandler() {
 }
 
 static bool GeneratePidFile(const std::string& filepath) {
-  int64_t pid = dingofs::mds::Helper::GetPid();
+  int64_t pid = ::dingofs::Helper::GetPid();
   if (pid <= 0) {
     LOG(ERROR) << "get pid fail.";
     return false;
@@ -218,7 +219,7 @@ static bool GeneratePidFile(const std::string& filepath) {
 
   LOG(INFO) << "pid file: " << filepath;
 
-  return dingofs::mds::Helper::SaveFile(filepath, std::to_string(pid));
+  return ::dingofs::Helper::SaveFile(filepath, std::to_string(pid));
 }
 
 static bool CheckStorageUrl(const std::string& storage_url) {

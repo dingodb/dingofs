@@ -16,6 +16,7 @@
 
 #include "dingofs/debug.pb.h"
 #include "dingofs/error.pb.h"
+#include "common/helper.h"
 #include "mds/common/context.h"
 #include "mds/filesystem/dentry.h"
 #include "mds/filesystem/inode.h"
@@ -228,7 +229,7 @@ void DebugServiceImpl::GetOpenFile(google::protobuf::RpcController*, const pb::d
     return ServiceHelper::SetError(response->mutable_error(), status);
   }
 
-  Helper::VectorToPbRepeated(file_sessions, response->mutable_file_sessions());
+  ::dingofs::Helper::VectorToPbRepeated(file_sessions, response->mutable_file_sessions());
 }
 
 void DebugServiceImpl::TraceWorkerSet(google::protobuf::RpcController*, const pb::debug::TraceWorkerSetRequest* request,
