@@ -14,10 +14,12 @@
 
 #include "client/vfs/metasystem/mds/batch_processor.h"
 
+#include <absl/container/flat_hash_map.h>
 #include <bthread/types.h>
 #include <glog/logging.h>
 
 #include <memory>
+#include <mutex>
 
 namespace dingofs {
 namespace client {
@@ -66,9 +68,40 @@ void WriteSliceOperation::BatchRun(MDSClient& mds_client,
         status.ToString());
   }
 
-  // only first operation set result, others ignore, because batch operation
-  // belong to same file.
-  operations.front()->Done(status, result);
+  // The RPC combines all tasks for the inode, but each task owns a disjoint
+  // set of chunks and must complete independently. Passing the full response
+  // to every callback would let one task finish chunks owned by another task,
+  // so partition the response before publishing completion.
+  absl::flat_hash_map<uint32_t, const mds::ChunkEntry*> chunks_by_index;
+  if (status.ok()) {
+    chunks_by_index.reserve(result.chunks.size());
+    for (const auto& chunk : result.chunks) {
+      chunks_by_index[chunk.index()] = &chunk;
+    }
+  }
+
+  for (const auto& operation : operations) {
+    if (!status.ok()) {
+      operation->Done(status, {});
+      continue;
+    }
+
+    MDSClient::WriteSliceResult operation_result;
+    operation_result.attr = result.attr;
+
+    Status operation_status = Status::OK();
+    for (uint32_t chunk_index : operation->task->GetChunkIndexs()) {
+      auto it = chunks_by_index.find(chunk_index);
+      if (it == chunks_by_index.end()) {
+        operation_status = Status::Internal(
+            fmt::format("writeslice response missing chunk({})", chunk_index));
+        break;
+      }
+      operation_result.chunks.push_back(*it->second);
+    }
+
+    operation->Done(operation_status, operation_result);
+  }
 }
 
 void WriteSliceOperation::PreHandle(
@@ -262,8 +295,10 @@ bool BatchProcessor::Init() {
 }
 
 bool BatchProcessor::Stop() {
-  stopped_.store(true);
-
+  {
+    std::lock_guard<std::mutex> lk(thread_mutex_);
+    stopped_.store(true, std::memory_order_relaxed);
+  }
   thread_cond_.notify_all();
 
   if (thread_.joinable()) thread_.join();
@@ -272,11 +307,16 @@ bool BatchProcessor::Stop() {
 }
 
 bool BatchProcessor::AsyncRun(OperationSPtr operation) {
-  if (stopped_.load(std::memory_order_relaxed)) {
-    return false;
+  {
+    // Queue insertion and the consumer's empty-check/wait transition use the
+    // same mutex.  Otherwise a notify between Dequeue() and wait() is lost and
+    // the operation can remain queued forever.
+    std::lock_guard<std::mutex> lk(thread_mutex_);
+    if (stopped_.load(std::memory_order_relaxed)) {
+      return false;
+    }
+    operations_.Enqueue(operation);
   }
-
-  operations_.Enqueue(operation);
 
   thread_cond_.notify_one();
 
@@ -284,15 +324,7 @@ bool BatchProcessor::AsyncRun(OperationSPtr operation) {
 }
 
 bool BatchProcessor::RunBatched(OperationSPtr operation) {
-  if (stopped_.load(std::memory_order_relaxed)) {
-    return false;
-  }
-
-  operations_.Enqueue(operation);
-
-  thread_cond_.notify_one();
-
-  return true;
+  return AsyncRun(std::move(operation));
 }
 
 void BatchProcessor::ProcessOperation() {
@@ -304,11 +336,14 @@ void BatchProcessor::ProcessOperation() {
     operation = nullptr;
     stage_operations.clear();
 
-    while (!operations_.Dequeue(operation) &&
-           !stopped_.load(std::memory_order_relaxed)) {
+    {
       std::unique_lock<std::mutex> lk(thread_mutex_);
-      thread_cond_.wait(lk);
-      lk.unlock();
+      thread_cond_.wait(lk, [this, &operation]() {
+        // Try the queue first so Stop() still drains an operation that was
+        // accepted before the stopped flag was set.
+        return operations_.Dequeue(operation) ||
+               stopped_.load(std::memory_order_relaxed);
+      });
     }
 
     if (operation) stage_operations.push_back(operation);
