@@ -122,7 +122,6 @@ DECLARE_uint32(vfs_meta_read_dir_batch_size);
 DECLARE_uint32(vfs_meta_rpc_timeout_ms);
 DECLARE_int32(vfs_meta_rpc_retry_times);
 
-DECLARE_bool(vfs_meta_batch_operation_enable);
 DECLARE_uint32(vfs_meta_batch_operation_merge_delay_us);
 DECLARE_uint32(vfs_meta_commit_slice_max_num);
 
