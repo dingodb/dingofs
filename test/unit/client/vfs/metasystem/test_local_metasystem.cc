@@ -138,6 +138,33 @@ TEST_F(LocalMetaSystemTest, OpenTruncDoesNotMaterializeSparseChunks) {
   EXPECT_TRUE(slices.empty());
 }
 
+TEST_F(LocalMetaSystemTest, ReadDirWithAttrReturnsChildAttributes) {
+  auto child = CreateFile("child");
+
+  constexpr uint64_t kFh = 1;
+  bool need_cache = false;
+  auto status = meta_system_->OpenDir(nullptr, 1, kFh, need_cache);
+  ASSERT_TRUE(status.ok()) << status.ToString();
+
+  std::vector<DirEntry> entries;
+  uint32_t count = 0;
+  status = meta_system_->ReadDir(
+      nullptr, 1, kFh, 0, true,
+      [&entries](const DirEntry& entry, uint64_t) {
+        entries.push_back(entry);
+        return true;
+      },
+      count);
+  ASSERT_TRUE(status.ok()) << status.ToString();
+  ASSERT_EQ(entries.size(), 1);
+  EXPECT_EQ(entries[0].ino, child.ino);
+  EXPECT_EQ(entries[0].attr.ino, child.ino);
+  EXPECT_EQ(entries[0].attr.type, FileType::kFile);
+
+  status = meta_system_->ReleaseDir(nullptr, 1, kFh);
+  EXPECT_TRUE(status.ok()) << status.ToString();
+}
+
 }  // namespace
 }  // namespace local
 }  // namespace vfs
