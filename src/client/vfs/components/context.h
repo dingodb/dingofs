@@ -65,7 +65,9 @@ struct WarmupTaskContext {
   WarmupTaskContext(const WarmupTaskContext& task) = default;
   WarmupTaskContext(Ino ino) : task_key(ino), type(WarmupType::kWarmupIntime) {}
   WarmupTaskContext(const std::vector<Ino>& inos)
-      : task_keys(inos), type(WarmupType::kWarmupManual) {}
+      : task_keys(inos), type(WarmupType::kWarmupManual) {
+    task_key = inos.empty() ? 0 : inos.front();
+  }
   WarmupTaskContext(Ino ino, const std::string& ino_list_str)
       : task_key(ino), type(WarmupType::kWarmupManual) {
     dingofs::Helper::SplitString(ino_list_str, ',', task_keys);
@@ -73,7 +75,6 @@ struct WarmupTaskContext {
 
   WarmupType type;
   Ino task_key;
-  // comma separated inodeid('1000023,10000021,...'), provide by dingo-tool
   std::vector<Ino> task_keys;
 };
 

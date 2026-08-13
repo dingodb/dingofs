@@ -867,11 +867,6 @@ DirProfileSPtr MDSMetaSystem::GetDirProfile(Ino ino) {
 void MDSMetaSystem::WarmupSmallFiles(const std::vector<Ino>& inoes) {
   if (warmup_manager_ == nullptr) return;
 
-  // for (Ino ino : inoes) {
-  //   LOG_DEBUG << fmt::format("[meta.fs] submit warmup task, ino({}).", ino);
-  //   warmup_manager_->SubmitTask(WarmupTaskContext(ino));
-  // }
-
   LOG_DEBUG << fmt::format("[meta.fs] submit warmup task, ino({}).", inoes);
 
   warmup_manager_->SubmitTask(WarmupTaskContext(inoes));
