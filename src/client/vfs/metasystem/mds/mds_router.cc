@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "client/vfs/metasystem/mds/mds_router.h"
+#include "common/helper.h"
 
 #include <cstdint>
 
@@ -171,7 +172,7 @@ bool ParentHashMDSRouter::GetRandomlyMDS(mds::MDSMeta& mds_meta) {
   utils::ReadLockGuard lk(lock_);
 
   Ino parent =
-      mds::Helper::GenerateRandomInteger(0, hash_partition_.bucket_num());
+      ::dingofs::Helper::GenerateRandomInteger(0, hash_partition_.bucket_num());
   int64_t bucket_id = parent % hash_partition_.bucket_num();
   auto it = mds_map_.find(bucket_id);
   CHECK(it != mds_map_.end())

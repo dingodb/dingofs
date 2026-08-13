@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <algorithm>
+#include "common/helper.h"
 #include <atomic>
 #include <string>
 #include <type_traits>
@@ -358,7 +359,7 @@ TEST_F(InodeCacheTest, Benchmark) {
   //   threads.emplace_back([thread_no = i, &inode_cache, &ino_gen]() {
   //     for (;;) {
   //       Ino ino =
-  //           1000000000000 + Helper::GenerateRealRandomInteger(0, 100000000);
+  //           1000000000000 + ::dingofs::Helper::GenerateRealRandomInteger(0, 100000000);
   //       auto inode = inode_cache.Get(ino);
   //     }
   //   });

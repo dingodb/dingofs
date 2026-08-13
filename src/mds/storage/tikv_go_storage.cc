@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "butil/compiler_specific.h"
+#include "common/helper.h"
 #include "dingofs/error.pb.h"
 #include "fmt/core.h"
 #include "glog/logging.h"
@@ -168,7 +169,7 @@ bool TikvGoStorage::Init(const std::string& addr) {
   LOG(INFO) << fmt::format("[storage] init tikv-go storage, addr({}).", addr);
 
   std::vector<std::string> addr_list;
-  Helper::SplitString(addr, ',', addr_list);
+  dingofs::Helper::SplitString(addr, ',', addr_list);
 
   // build c array of char* for the go function.
   std::vector<const char*> c_addrs;

@@ -16,6 +16,7 @@
 #define DINGOFS_MDS_COMMON_SUFFIX_SET_H_
 
 #include <sys/types.h>
+#include "common/helper.h"
 
 #include <string>
 #include <vector>
@@ -34,7 +35,7 @@ class SuffixSet {
 
   void Update(const std::string& suffix_str) {
     std::vector<std::string> suffixs;
-    Helper::SplitString(suffix_str, ',', suffixs);
+    ::dingofs::Helper::SplitString(suffix_str, ',', suffixs);
 
     {
       utils::WriteLockGuard lk(lock_);

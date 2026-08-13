@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "mds/server.h"
+#include "../common/helper.h"
 
 #include <memory>
 #include <string>
@@ -624,7 +625,7 @@ static void DescribeTcmallocByJson(Json::Value& value) {
     tcmalloc->GetStats(stat_buf.data(), stat_buf.size());
 
     std::vector<std::string> lines;
-    Helper::SplitString(stat_buf, '\n', lines);
+    ::dingofs::Helper::SplitString(stat_buf, '\n', lines);
     for (size_t i = 0; i < lines.size() - 1; ++i) {
       value[fmt::format("stats-{:0>2}", i)] = lines[i];
     }

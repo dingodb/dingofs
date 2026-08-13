@@ -140,7 +140,7 @@ Status VFSImpl::ResolveMountRoot() {
   Ino parent = kRootIno;
   ContextSPtr ctx = std::make_shared<Context>("");
   std::vector<std::string> dir_names;
-  Helper::SplitString(mount_root_path_, '/', dir_names);
+  ::dingofs::Helper::SplitString(mount_root_path_, '/', dir_names);
   // remove the empty string before the first '/'
   if (!dir_names.empty()) dir_names.erase(dir_names.begin());
   for (const auto& dir_name : dir_names) {

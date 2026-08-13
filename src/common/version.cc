@@ -85,7 +85,7 @@ std::string DingoShortVersionString() {
   kUseCICDBuild = false;
 #endif
 
-  return Helper::ToLowerCase(
+  return ::dingofs::Helper::ToLowerCase(
       fmt::format("{}, {} build-{}:{} + {}", kGitBranchName,
                   kUseCICDBuild ? "ci/cd" : "local", kGitBranchName,
                   kGitLastCommit, kDingoFsBuildType));

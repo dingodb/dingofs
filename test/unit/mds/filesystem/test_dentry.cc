@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <glog/logging.h>
+#include "common/helper.h"
 
 #include <chrono>
 #include <cstdint>
@@ -153,7 +154,7 @@ TEST_F(DentryTest, ReadDir) {
     std::thread t([sandbox, thread_no = i, file_store]() {
       for (size_t j = 0; j < 10000; ++j) {
         const std::string file_path = fmt::format(
-            "{}/file_{}_{}", sandbox, Helper::GenerateRandomString(32), j);
+            "{}/file_{}_{}", sandbox, ::dingofs::Helper::GenerateRandomString(32), j);
 
         std::ofstream ofs(file_path);
         // ofs << "this is a test file." << '\n';

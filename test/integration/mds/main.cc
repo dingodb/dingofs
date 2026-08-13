@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <iostream>
+#include "common/helper.h"
 #include <string>
 #include <vector>
 
@@ -22,8 +23,8 @@
 #include "mds/common/helper.h"
 
 static void InitLog(const std::string& log_dir) {
-  if (!dingofs::mds::Helper::IsExistPath(log_dir)) {
-    dingofs::mds::Helper::CreateDirectories(log_dir);
+  if (!::dingofs::Helper::IsExistPath(log_dir)) {
+    ::dingofs::Helper::CreateDirectories(log_dir);
   }
 
   FLAGS_logbufsecs = 0;

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "mds/service/fsstat_service.h"
+#include "common/helper.h"
 
 #include <json/value.h>
 #include <sys/types.h>
@@ -754,7 +755,7 @@ static void RenderStorageEngine(butil::IOBufBuilder& os) {
 
     std::string coor_addr = Server::GetInstance().GetStoreAddr();
     std::vector<std::string> addr_vec;
-    Helper::SplitString(coor_addr, ',', addr_vec);
+    dingofs::Helper::SplitString(coor_addr, ',', addr_vec);
 
     for (const auto& addr : addr_vec) {
       os << fmt::format(R"(<a href="http://{}" target="_blank">{}</a>&nbsp)", addr, addr);
@@ -1456,7 +1457,7 @@ body {
 static void RenderFsDetailsPage(const FsInfoEntry& fs_info, butil::IOBufBuilder& os) {
   std::string header = fmt::format("FileSystem: {}({})", fs_info.fs_name(), fs_info.fs_id());
   std::string json;
-  Helper::ProtoToJson(fs_info, json);
+  ::dingofs::Helper::ProtoToJson(fs_info, json);
   RenderJsonPage("dingofs fs details", header, json, os);
 }
 
@@ -1710,7 +1711,7 @@ static void RenderOplogPage(const std::vector<FsOpLog>& oplogs, butil::IOBufBuil
 static void RenderInodePage(const AttrEntry& attr, butil::IOBufBuilder& os) {
   std::string header = fmt::format("Inode: {}", attr.ino());
   std::string json;
-  Helper::ProtoToJson(attr, json);
+  ::dingofs::Helper::ProtoToJson(attr, json);
   RenderJsonPage("dingofs inode details", header, json, os);
 }
 
@@ -1880,7 +1881,7 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
   LOG(INFO) << fmt::format("FsStatService path: {}", path);
 
   std::vector<std::string> params;
-  Helper::SplitString(path, '/', params);
+  ::dingofs::Helper::SplitString(path, '/', params);
 
   // /FsStatService
   if (params.empty()) {
@@ -1894,7 +1895,7 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
 
   } else if (params.size() == 1) {
     // /FsStatService/{fs_id}
-    uint32_t fs_id = Helper::StringToInt32(params[0]);
+    uint32_t fs_id = ::dingofs::Helper::StringToInt32(params[0]);
 
     auto file_system_set = Server::GetInstance().GetFileSystemSet();
     auto file_system = file_system_set->GetFileSystem(fs_id);
@@ -1939,7 +1940,7 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
   } else if (params.size() == 2 && params[0] == "filesession") {
     // /FsStatService/filesession/{fs_id}
 
-    uint32_t fs_id = Helper::StringToInt32(params[1]);
+    uint32_t fs_id = ::dingofs::Helper::StringToInt32(params[1]);
     auto file_system_set = Server::GetInstance().GetFileSystemSet();
     std::vector<FileSessionEntry> file_sessions;
     auto status = file_system_set->GetFileSessions(fs_id, file_sessions);
@@ -1953,7 +1954,7 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
   } else if (params.size() == 2 && params[0] == "quota") {
     // /FsStatService/quota/{fs_id}
 
-    uint32_t fs_id = Helper::StringToInt32(params[1]);
+    uint32_t fs_id = ::dingofs::Helper::StringToInt32(params[1]);
     auto file_system_set = Server::GetInstance().GetFileSystemSet();
     auto file_system = file_system_set->GetFileSystem(fs_id);
     if (file_system != nullptr) {
@@ -1966,7 +1967,7 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
   } else if (params.size() == 2 && params[0] == "dirstat") {
     // /FsStatService/dirstat/{fs_id}
 
-    uint32_t fs_id = Helper::StringToInt32(params[1]);
+    uint32_t fs_id = ::dingofs::Helper::StringToInt32(params[1]);
     auto file_system_set = Server::GetInstance().GetFileSystemSet();
     auto file_system = file_system_set->GetFileSystem(fs_id);
     if (file_system != nullptr) {
@@ -1979,7 +1980,7 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
   } else if (params.size() == 2 && params[0] == "delfiles") {
     // /FsStatService/delfiles/{fs_id}
 
-    uint32_t fs_id = Helper::StringToInt32(params[1]);
+    uint32_t fs_id = ::dingofs::Helper::StringToInt32(params[1]);
     auto file_system_set = Server::GetInstance().GetFileSystemSet();
     std::vector<AttrEntry> delfiles;
     auto status = file_system_set->GetDelFiles(fs_id, delfiles);
@@ -1993,8 +1994,8 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
   } else if (params.size() == 3 && params[0] == "delfiles") {
     // /FsStatService/delfiles/{fs_id}/{ino}
 
-    uint32_t fs_id = Helper::StringToInt32(params[1]);
-    uint64_t ino = Helper::StringToUint64(params[2]);
+    uint32_t fs_id = ::dingofs::Helper::StringToInt32(params[1]);
+    uint64_t ino = ::dingofs::Helper::StringToUint64(params[2]);
 
     auto file_system_set = Server::GetInstance().GetFileSystemSet();
     auto file_system = file_system_set->GetFileSystem(fs_id);
@@ -2014,7 +2015,7 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
 
   } else if (params.size() == 2 && params[0] == "delslices") {
     // /FsStatService/delslices/{fs_id}
-    uint32_t fs_id = Helper::StringToInt32(params[1]);
+    uint32_t fs_id = ::dingofs::Helper::StringToInt32(params[1]);
     auto file_system_set = Server::GetInstance().GetFileSystemSet();
     std::vector<TrashSliceList> delslices;
     auto status = file_system_set->GetDelSlices(fs_id, delslices);
@@ -2040,7 +2041,7 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
   } else if (params.size() == 2 && params[0] == "oplog") {
     // /FsStatService/oplog/{fs_id}
 
-    uint32_t fs_id = Helper::StringToInt32(params[1]);
+    uint32_t fs_id = ::dingofs::Helper::StringToInt32(params[1]);
     auto file_system_set = Server::GetInstance().GetFileSystemSet();
 
     std::vector<FsOpLog> oplogs;
@@ -2055,8 +2056,8 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
   } else if (params.size() == 2) {
     // /FsStatService/{fs_id}/{ino}
 
-    uint32_t fs_id = Helper::StringToInt32(params[0]);
-    uint64_t ino = Helper::StringToUint64(params[1]);
+    uint32_t fs_id = ::dingofs::Helper::StringToInt32(params[0]);
+    uint64_t ino = ::dingofs::Helper::StringToUint64(params[1]);
 
     auto file_system_set = Server::GetInstance().GetFileSystemSet();
     auto file_system = file_system_set->GetFileSystem(fs_id);
@@ -2077,8 +2078,8 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
   } else if (params.size() == 3 && params[0] == "partition") {
     // /FsStatService/partition/{fs_id}/{ino}
 
-    uint32_t fs_id = Helper::StringToInt32(params[1]);
-    uint64_t ino = Helper::StringToUint64(params[2]);
+    uint32_t fs_id = ::dingofs::Helper::StringToInt32(params[1]);
+    uint64_t ino = ::dingofs::Helper::StringToUint64(params[2]);
 
     LOG(INFO) << fmt::format("Get dir json, fs_id: {}, ino: {}", fs_id, ino);
 
@@ -2104,8 +2105,8 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
   } else if (params.size() == 3 && params[0] == "chunk") {
     // /FsStatService/chunk/{fs_id}/{ino}
 
-    uint32_t fs_id = Helper::StringToInt32(params[1]);
-    uint64_t ino = Helper::StringToUint64(params[2]);
+    uint32_t fs_id = ::dingofs::Helper::StringToInt32(params[1]);
+    uint64_t ino = ::dingofs::Helper::StringToUint64(params[2]);
 
     FsUtils fs_utils(Server::GetInstance().GetOperationProcessor());
 
@@ -2121,8 +2122,8 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
   } else if (params.size() == 3 && params[0] == "shard") {
     // /FsStatService/shard/{fs_id}/{ino}
 
-    uint32_t fs_id = Helper::StringToInt32(params[1]);
-    uint64_t ino = Helper::StringToUint64(params[2]);
+    uint32_t fs_id = ::dingofs::Helper::StringToInt32(params[1]);
+    uint64_t ino = ::dingofs::Helper::StringToUint64(params[2]);
 
     auto file_system_set = Server::GetInstance().GetFileSystemSet();
     auto file_system = file_system_set->GetFileSystem(fs_id);

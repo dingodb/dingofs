@@ -12,6 +12,7 @@
 // limitations under the License.
 
 #include "mds/filesystem/store_operation.h"
+#include "common/helper.h"
 
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -95,7 +96,7 @@ static constexpr uint32_t kTryMaxCount = 10;
 
 static uint32_t CalWaitTimeUs(int retry) {
   // exponential backoff
-  return Helper::GenerateRealRandomInteger(1000, 5000) * (1 << retry);
+  return ::dingofs::Helper::GenerateRealRandomInteger(1000, 5000) * (1 << retry);
 }
 
 static bool IsRetry(uint32_t& retry) {
@@ -1733,7 +1734,7 @@ Status FlushFileOperation::Run(TxnUPtr& txn) {
       attr = MetaCodec::DecodeInodeValue(kv.value);
 
     } else {
-      LOG(FATAL) << fmt::format("[operation.{}.{}] invalid key({}).", fs_id_, ino_, Helper::StringToHex(kv.key));
+      LOG(FATAL) << fmt::format("[operation.{}.{}] invalid key({}).", fs_id_, ino_, ::dingofs::Helper::StringToHex(kv.key));
     }
   }
 
@@ -1866,7 +1867,7 @@ Status RmDirOperation::Run(TxnUPtr& txn) {
     } else if (kv.key == bucket_dentry_key) {
       trash_bucket_exist = true;
     } else {
-      LOG(FATAL) << fmt::format("[operation.{}.{}] invalid key({}).", fs_id, parent, Helper::StringToHex(kv.key));
+      LOG(FATAL) << fmt::format("[operation.{}.{}] invalid key({}).", fs_id, parent, ::dingofs::Helper::StringToHex(kv.key));
     }
   }
   if (parent_attr.ino() == 0) {
@@ -2406,7 +2407,7 @@ Status RenameOperation::Run(TxnUPtr& txn) {
       trash_bucket_exist = true;
 
     } else {
-      LOG(FATAL) << fmt::format("[operation.{}.{}] invalid key({}).", fs_id_, old_parent_, Helper::StringToHex(kv.key));
+      LOG(FATAL) << fmt::format("[operation.{}.{}] invalid key({}).", fs_id_, old_parent_, ::dingofs::Helper::StringToHex(kv.key));
     }
   }
   // kTrashInodeId is a virtual directory: no inode key in KV. Synthesize the
@@ -3792,7 +3793,7 @@ Status GetInodeAttrOperation::Run(TxnUPtr& txn) {
         result_.attr_with_mutation.mutations.push_back(MetaCodec::DecodeDirInodeMutationValue(value));
 
       } else {
-        LOG(FATAL) << fmt::format("invalid key({}).", Helper::StringToHex(key));
+        LOG(FATAL) << fmt::format("invalid key({}).", ::dingofs::Helper::StringToHex(key));
       }
 
       return true;
@@ -3847,7 +3848,7 @@ Status BatchGetInodeAttrOperation::Run(TxnUPtr& txn) {
       attr_with_mutation_map[ino].mutations.push_back(MetaCodec::DecodeDirInodeMutationValue(kv.value));
 
     } else {
-      LOG(FATAL) << fmt::format("invalid key({}).", Helper::StringToHex(kv.key));
+      LOG(FATAL) << fmt::format("invalid key({}).", ::dingofs::Helper::StringToHex(kv.key));
     }
   }
 

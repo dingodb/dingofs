@@ -21,6 +21,7 @@ add_subdirectory(readmempool)
 add_subdirectory(writemempool)
 
 add_library(dingofs_common
+    helper.cc
     version.cc
     flag.cc
     string_slice.cc
@@ -44,6 +45,7 @@ set_property(SOURCE version.cc APPEND PROPERTY COMPILE_DEFINITIONS
 target_link_libraries(dingofs_common
     dingofs_utils
     brpc::brpc
+    protobuf::libprotobuf
     fmt::fmt
     gflags::gflags
     glog::glog
