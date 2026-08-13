@@ -248,17 +248,40 @@ cd ${FSSTRESS_TEST_DIR}
 ### xfstests工具
 主要用于测试文件系统语义。
 测试方法: 项目下有xfstests目录，里面有xfstests说明信息，可以参考。
+注意: xfstests测试使用xftest和xfscratch两个文件系统进行测试，不要使用$ARGUMENTS[0]。
 ```bash
 
 # 环境信息
 # xfstests项目目录
 XFSTESTS_TOOL_DIR=/home/dengzihui/work/dingofs-test/xfstests-dev
+# xfstests测试运行的根目录，里面包括运行时信息（挂载点、日志等）
+XFSTESTS_ROOT_DIR=/mnt/dingofs-xfstests
 
 # MDS地址
-DINGOFS_META_URL_TEMPLATE=mds://10.220.69.5:7801/{fsname}
+MDS_ADDR=10.220.69.5:7801
+DINGOFS_META_URL_TEMPLATE=mds://${MDS_ADDR}/{fsname}
+
+# 创建日志目录
+mkdir -p ${XFSTESTS_LOG_DIR}
+
+# 初始化环境完成后清理老日志
+rm -rf ${XFSTESTS_ROOT_DIR}/runtime/xftest/log/*
+rm -rf ${XFSTESTS_ROOT_DIR}/runtime/xfscratch/log/*
+
+
+# 检查文件系统xftest和xfscratch是否存在，使用dingo-mds-client工具
+# 示例: 检查文件系统xftest是否存在
+dingo-mds-client --cmd=getfs --mds_addr=${MDS_ADDR} --fs_name=xftest
+dingo-mds-client --cmd=getfs --mds_addr=${MDS_ADDR} --fs_name=xfscratch
+
+
+# 运行具体测试用例前需要调用脚本xfstests/setup.sh初始化环境,示例:
+./xfstests/setup.sh ${XFSTESTS_TOOL_DIR} ${DINGOFS_META_URL_TEMPLATE} 
 
 # 准备好环境后，运行测试用例，只运行generic下面的已支持的测试用例
 # 已支持的测试用例文件: $XFSTESTS_TOOL_DIR/tests/generic/supported
+
+
 
 
 ```

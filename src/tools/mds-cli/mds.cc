@@ -207,7 +207,6 @@ CreateFsResponse MDSClient::CreateFs(const std::string& fs_name,
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -238,7 +237,6 @@ MountFsResponse MDSClient::MountFs(const std::string& fs_name,
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -265,7 +263,6 @@ UmountFsResponse MDSClient::UmountFs(const std::string& fs_name,
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -297,7 +294,6 @@ DeleteFsResponse MDSClient::DeleteFs(const std::string& fs_name,
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -347,7 +343,6 @@ GetFsInfoResponse MDSClient::GetFs(const std::string& fs_name) {
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -394,7 +389,6 @@ ListFsInfoResponse MDSClient::ListFs() {
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -431,7 +425,6 @@ MkDirResponse MDSClient::MkDir(Ino parent, const std::string& name) {
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -528,7 +521,6 @@ MkNodResponse MDSClient::MkNod(Ino parent, const std::string& name) {
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -569,7 +561,6 @@ GetDentryResponse MDSClient::GetDentry(Ino parent, const std::string& name) {
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -600,7 +591,6 @@ ListDentryResponse MDSClient::ListDentry(Ino parent, bool is_only_dir) {
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -683,7 +673,6 @@ BatchGetInodeResponse MDSClient::BatchGetInode(
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -716,7 +705,6 @@ BatchGetXAttrResponse MDSClient::BatchGetXattr(
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -772,7 +760,6 @@ void MDSClient::GetFsStats(const std::string& fs_name) {
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -795,18 +782,18 @@ void MDSClient::GetFsPerSecondStats(const std::string& fs_name) {
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
+  }
+
+  if (response.error().errcode() != dingofs::pb::error::Errno::OK) {
+    PrintFailure("getfspersecondstats",
+                 dingofs::pb::error::Errno_Name(response.error().errcode()),
+                 response.error().errmsg());
     return;
   }
 
   if (GetOutputConfig().format == OutputFormat::kJson) {
-    if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
-      PrintMessage("getfspersecondstats", "per-second statistics retrieved",
-                   response);
-    } else {
-      PrintFailure("getfspersecondstats",
-                   dingofs::pb::error::Errno_Name(response.error().errcode()),
-                   response.error().errmsg());
-    }
+    PrintMessage("getfspersecondstats", "per-second statistics retrieved",
+                 response);
     return;
   }
 
@@ -1069,7 +1056,6 @@ GetAttrResponse MDSClient::GetAttr(Ino ino) {
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -1111,7 +1097,6 @@ SetAttrResponse MDSClient::SetAttr(Ino ino, uint32_t to_set,
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -1142,7 +1127,6 @@ GetXAttrResponse MDSClient::GetXAttr(Ino ino, const std::string& name) {
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -1177,7 +1161,6 @@ SetXAttrResponse MDSClient::SetXAttr(
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -1230,7 +1213,6 @@ ListXAttrResponse MDSClient::ListXAttr(Ino ino) {
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -1424,7 +1406,6 @@ SetFsQuotaResponse MDSClient::SetFsQuota(const QuotaEntry& quota) {
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -1451,7 +1432,6 @@ GetFsQuotaResponse MDSClient::GetFsQuota() {
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -1481,7 +1461,6 @@ SetDirQuotaResponse MDSClient::SetDirQuota(Ino ino, const QuotaEntry& quota) {
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -1510,7 +1489,6 @@ GetDirQuotaResponse MDSClient::GetDirQuota(Ino ino) {
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -1539,7 +1517,6 @@ DeleteDirQuotaResponse MDSClient::DeleteDirQuota(Ino ino) {
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -1569,7 +1546,6 @@ JoinFsResponse MDSClient::JoinFs(const std::string& fs_name, uint32_t fs_id,
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -1599,7 +1575,6 @@ QuitFsResponse MDSClient::QuitFs(const std::string& fs_name, uint32_t fs_id,
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -1633,7 +1608,6 @@ JoinCacheGroupResponse MDSClient::JoinCacheGroup(const std::string& member_id,
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -1663,7 +1637,6 @@ LeaveCacheGroupResponse MDSClient::LeaveCacheGroup(
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -1686,7 +1659,6 @@ ListGroupsResponse MDSClient::ListGroups() {
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -1717,7 +1689,6 @@ ReweightMemberResponse MDSClient::ReweightMember(const std::string& member_id,
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -1742,7 +1713,6 @@ ListMembersResponse MDSClient::ListMembers(const std::string& group_name) {
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -1771,7 +1741,6 @@ UnLockMemberResponse MDSClient::UnlockMember(const std::string& member_id,
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -1796,7 +1765,6 @@ DeleteMemberResponse MDSClient::DeleteMember(const std::string& member_id) {
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -2631,14 +2599,7 @@ bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr,
     mds_client.SetFsQuota(quota);
 
   } else if (cmd == Helper::ToLowerCase("GetFsQuota")) {
-    auto response = mds_client.GetFsQuota();
-    if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
-      PrintMessage("getfsquota", "filesystem quota retrieved", response);
-    } else {
-      PrintFailure("getfsquota",
-                   dingofs::pb::error::Errno_Name(response.error().errcode()),
-                   response.error().errmsg());
-    }
+    mds_client.GetFsQuota();
 
   } else if (cmd == Helper::ToLowerCase("SetDirQuota")) {
     if (options.ino == 0) {
