@@ -1564,32 +1564,77 @@ void MDSMetaSystem::LaunchWriteSlice(ContextSPtr& ctx, ChunkSetSPtr chunk_set,
   LOG(INFO) << fmt::format("[meta.fs.{}] launch write slice {}.", ino,
                            task->Describe());
 
-  auto operation = std::make_shared<WriteSliceOperation>(
-      ctx, ino, task,
-      [this, chunk_set, ino](const Status& status, CommitTaskSPtr task,
-                             const std::vector<mds::ChunkEntry>& chunks) {
-        task->SetDone(status);
+  struct Params {
+    Ino ino;
+    ContextSPtr ctx;
+    ChunkSetSPtr chunk_set;
+    CommitTaskSPtr task;
+    MDSMetaSystem* meta_system;
+  };
 
-        if (status.ok()) {
-          LOG(INFO) << fmt::format(
-              "[meta.fs.{}] flush delta slice done, task({}) status({}).", ino,
-              task->TaskID(), status.ToString());
+  Params* params = new Params({.ino = ino,
+                               .ctx = ctx,
+                               .chunk_set = chunk_set,
+                               .task = task,
+                               .meta_system = this});
 
-          chunk_set->FinishCommitTask(task->TaskID(), chunks);
+  bthread_t tid;
+  bthread_attr_t attr = BTHREAD_ATTR_NORMAL;
+  if (bthread_start_background(
+          &tid, &attr,
+          [](void* arg) -> void* {
+            Params* params = reinterpret_cast<Params*>(arg);
+            const Ino ino = params->ino;
+            auto& ctx = params->ctx;
+            auto& chunk_set = params->chunk_set;
+            auto& task = params->task;
+            auto* meta_system = params->meta_system;
+            auto& mds_client = meta_system->mds_client_;
 
-          chunk_memo_.Remember(ino, chunks);
+            // generate delta slice entries
+            std::vector<mds::DeltaSliceEntry> delta_slice_entries;
+            for (const auto& delta_slice : task->DeltaSlices()) {
+              mds::DeltaSliceEntry delta_slice_entry;
+              delta_slice_entry.set_chunk_index(delta_slice.chunk_index);
+              delta_slice_entry.set_curr_version(delta_slice.version);
 
-        } else {
-          LOG(ERROR) << fmt::format(
-              "[meta.fs.{}] flush delta slice fail, task({}) retry({}) "
-              "status({}).",
-              ino, task->TaskID(), task->Retries(), status.ToString());
-        }
-      });
+              for (const auto& slice : delta_slice.slices) {
+                *delta_slice_entry.add_slices() = Helper::ToSlice(slice);
+              }
 
-  if (!batch_processor_.AsyncRun(operation)) {
-    LOG(ERROR) << fmt::format("[meta.fs.{}] flush delta slice fail.", ino);
+              delta_slice_entries.push_back(std::move(delta_slice_entry));
+            }
+
+            std::vector<mds::ChunkEntry> out_chunks;
+            Status status = mds_client.WriteSlice(ctx, ino, delta_slice_entries,
+                                                  out_chunks);
+            if (status.ok()) {
+              LOG_DEBUG << fmt::format(
+                  "[meta.fs.{}] writeslice done, task({}) status({}).", ino,
+                  task->TaskID(), status.ToString());
+
+              chunk_set->FinishCommitTask(task->TaskID(), out_chunks);
+              meta_system->chunk_memo_.Remember(ino, out_chunks);
+
+            } else {
+              LOG(ERROR) << fmt::format(
+                  "[meta.fs.{}] writeslice fail, task({}) retry({}) "
+                  "status({}).",
+                  ino, task->TaskID(), task->Retries(), status.ToString());
+            }
+
+            // Publish completion only after all task-owned state is installed.
+            // A waiter that observes OK must not find the task still pending.
+            task->SetDone(status);
+
+            delete params;
+
+            return nullptr;
+          },
+          params) != 0) {
+    delete params;
     task->SetDone(Status::Internal("launch write slice fail"));
+    LOG(FATAL) << "[meta.fs] start background thread fail.";
   }
 }
 

@@ -496,9 +496,12 @@ void ChunkSet::FinishCommitTask(uint64_t task_id,
   last_active_s_ = utils::Timestamp();
 
   auto task_it = commit_task_map_.find(task_id);
-  CHECK(task_it != commit_task_map_.end()) << fmt::format(
-      "[meta.chunkset.{}] finish commit task fail, task({}) not found.", ino_,
-      task_id);
+  if (task_it == commit_task_map_.end()) {
+    LOG(ERROR) << fmt::format(
+        "[meta.chunkset.{}] finish commit task fail, task({}) not found.", ino_,
+        task_id);
+    return;
+  }
 
   auto& task = task_it->second;
   if (last_commited_length_ < task->GetLength()) {
