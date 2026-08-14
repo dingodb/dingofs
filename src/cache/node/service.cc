@@ -193,6 +193,19 @@ void BlockCacheServiceImpl::Prefetch(
   response->set_status(ToPBErr(status));
 }
 
+void BlockCacheServiceImpl::Delete(
+    google::protobuf::RpcController* /*controller*/,
+    const pb::cache::DeleteRequest* request,
+    pb::cache::DeleteResponse* response, google::protobuf::Closure* done) {
+  Status status;
+  auto* srv_done = new ServiceClosure(done, request, response, status);
+  brpc::ClosureGuard done_guard(srv_done);
+
+  BlockHandle handle = FromHandlePB(request->handle());
+  status = node_->Delete(std::move(handle));
+  response->set_status(ToPBErr(status));
+}
+
 void BlockCacheServiceImpl::Ping(
     google::protobuf::RpcController* /*controller*/,
     const pb::cache::PingRequest* /*request*/,

@@ -215,6 +215,14 @@ Status CacheNode::Range(BlockHandle handle, off_t offset, size_t length,
   return status;
 }
 
+Status CacheNode::Delete(BlockHandle handle) {
+  if (!IsRunning()) {
+    return Status::CacheDown("cache node is down");
+  }
+
+  return block_cache_->Delete(std::move(handle));
+}
+
 Status CacheNode::AsyncCache(BlockHandle handle, IOBuffer block) {
   if (!IsRunning()) {
     LOG(ERROR) << "Cache node is down, skip async cache block, key="

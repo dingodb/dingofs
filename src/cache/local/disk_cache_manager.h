@@ -53,6 +53,8 @@ struct DiskCacheManagerMetrics {
         evict_blocks(Name("evict_blocks")),
         evict_bytes(Name("evict_bytes")),
         expire_blocks(Name("expire_blocks")),
+        delete_blocks(Name("delete_blocks")),
+        delete_bytes(Name("delete_bytes")),
         eviction_policy(Name("eviction_policy"), "") {}
 
   std::string Name(const std::string& name) const {
@@ -70,6 +72,8 @@ struct DiskCacheManagerMetrics {
     evict_blocks.reset();
     evict_bytes.reset();
     expire_blocks.reset();
+    delete_blocks.reset();
+    delete_bytes.reset();
   }
 
   std::string prefix;
@@ -82,6 +86,8 @@ struct DiskCacheManagerMetrics {
   bvar::Adder<int64_t> evict_blocks;   // blocks freed by capacity/free-space
   bvar::Adder<int64_t> evict_bytes;    // bytes freed by capacity/free-space
   bvar::Adder<int64_t> expire_blocks;  // blocks freed by TTL expiry
+  bvar::Adder<int64_t> delete_blocks;
+  bvar::Adder<int64_t> delete_bytes;
   bvar::Status<std::string> eviction_policy;
 };
 
@@ -114,6 +120,14 @@ class DiskCacheManager {
   virtual void AddCached(const BlockHandle& handle, uint32_t size,
                          uint32_t atime_sec);
   virtual void DeleteCached(const BlockHandle& handle);
+
+  enum class DeleteResult : uint8_t {
+    kDeleted = 0,
+    kNotFound = 1,
+    kStaged = 2,
+  };
+  virtual DeleteResult DeleteBlock(const BlockHandle& handle);
+
   virtual bool Exist(const BlockHandle& handle);
 
   virtual bool StageFull() const;

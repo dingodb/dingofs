@@ -117,6 +117,7 @@ TEST_F(RemoteBlockCacheTest, OperationsReturnNotFoundWithoutNode) {
   EXPECT_TRUE(cache.Put(Handle(), Buffer("remote-block"), {}).IsNotFound());
   EXPECT_TRUE(cache.Cache(Handle(), Buffer("remote-block"), {}).IsNotFound());
   EXPECT_TRUE(cache.Prefetch(Handle(), 4096, {}).IsNotFound());
+  EXPECT_TRUE(cache.Delete(Handle(), {}).IsNotFound());
 
   std::string out(8, '\0');
   IOBuffer buffer(out.data(), out.size());
@@ -151,10 +152,11 @@ TEST_F(RemoteBlockCacheTest, AsyncOperationsReturnNotFoundWithoutNode) {
   cache.AsyncRange(Handle(), 0, out.size(), &range_buffer, cb, range_option);
   cache.AsyncCache(Handle(), Buffer("remote-block"), cb, {});
   cache.AsyncPrefetch(Handle(), 4096, cb, {});
+  cache.AsyncDelete(Handle(), cb, {});
 
   ASSERT_TRUE(
-      WaitUntil([&]() { return done.load(std::memory_order_relaxed) == 4; }));
-  EXPECT_EQ(not_found.load(std::memory_order_relaxed), 4);
+      WaitUntil([&]() { return done.load(std::memory_order_relaxed) == 5; }));
+  EXPECT_EQ(not_found.load(std::memory_order_relaxed), 5);
 
   cache.Shutdown();
 }

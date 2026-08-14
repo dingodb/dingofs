@@ -310,6 +310,37 @@ Status DiskCache::Load(BlockHandle handle, off_t offset, size_t length,
   return status;
 }
 
+Status DiskCache::Delete(BlockHandle handle, DeleteOption /*option*/) {
+  auto status = CheckStatus(kWantExec);
+  if (!status.ok()) {
+    LOG(ERROR) << "Disk cache status is unavailable, skip delete: key="
+               << handle.Filename() << ", status=" << status.ToString();
+    return status;
+  }
+
+  switch (manager_->DeleteBlock(handle)) {
+    case DiskCacheManager::DeleteResult::kDeleted:
+      VLOG(3) << "Block deleted: key = " << handle.Filename();
+      return Status::OK();
+    case DiskCacheManager::DeleteResult::kStaged:
+      LOG(INFO) << "Skip deleting staged block which is waiting for upload: "
+                << "key = " << handle.Filename();
+      return Status::OK();
+    case DiskCacheManager::DeleteResult::kNotFound:
+      break;
+  }
+
+  if (StillLoading()) {
+    status = iutil::Unlink(GetCachePath(handle));
+    if (!status.ok() && !status.IsNotFound()) {
+      LOG(ERROR) << "Fail to delete block file during loading: key="
+                 << handle.Filename() << ", status=" << status.ToString();
+      return status;
+    }
+  }
+  return Status::OK();
+}
+
 // CheckStatus cache status:
 //   1. check running status (UP/DOWN)
 //   2. check disk healthy (HEALTHY/UNHEALTHY)

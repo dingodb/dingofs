@@ -192,6 +192,25 @@ Status RemoteCacheCluster::SendPrefetchRequest(const BlockHandle& handle,
   return status;
 }
 
+Status RemoteCacheCluster::SendDeleteRequest(const BlockHandle& handle) {
+  Status status;
+  RemoteCacheClusterMetricsGuard guard("Delete", 0, status, vars_.get());
+
+  pb::cache::DeleteRequest raw;
+  *raw.mutable_handle() = ToHandlePB(handle);
+  auto request = MakeRequest("Delete", raw);
+
+  auto response =
+      SendRequest<pb::cache::DeleteRequest, pb::cache::DeleteResponse>(request);
+  status = response.status;
+  if (status.IsCacheUnhealthy()) {
+    LOG_EVERY_SECOND(ERROR) << "Fail to send " << request;
+  } else if (!status.ok()) {
+    LOG(ERROR) << "Fail to send " << request;
+  }
+  return status;
+}
+
 template <typename T, typename U>
 Response<U> RemoteCacheCluster::SendRequest(const Request<T>& request) {
   auto node_group = CHECK_NOTNULL(GetRemoteNodeGroup());

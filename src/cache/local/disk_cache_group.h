@@ -40,6 +40,7 @@ struct DiskCacheGroupMetrics {
   OpVar op_stage{absl::StrFormat("%s_%s", prefix, "stage")};
   OpVar op_cache{absl::StrFormat("%s_%s", prefix, "cache")};
   OpVar op_load{absl::StrFormat("%s_%s", prefix, "load")};
+  OpVar op_delete{absl::StrFormat("%s_%s", prefix, "delete")};
 };
 
 using DiskCacheGroupMetricsSPtr = std::shared_ptr<DiskCacheGroupMetrics>;
@@ -48,7 +49,8 @@ struct DiskCacheGroupMetricsGuard {
   DiskCacheGroupMetricsGuard(const std::string& op_name, size_t bytes,
                              Status& status, DiskCacheGroupMetricsSPtr metric)
       : op_name(op_name), bytes(bytes), status(status), metric(metric) {
-    CHECK(op_name == "Stage" || op_name == "Cache" || op_name == "Load")
+    CHECK(op_name == "Stage" || op_name == "Cache" || op_name == "Load" ||
+          op_name == "Delete")
         << "Invalid operation name: " << op_name;
     timer.start();
   }
@@ -63,6 +65,8 @@ struct DiskCacheGroupMetricsGuard {
       op = &metric->op_cache;
     } else if (op_name == "Load") {
       op = &metric->op_load;
+    } else if (op_name == "Delete") {
+      op = &metric->op_delete;
     }
 
     if (status.ok()) {
@@ -98,6 +102,7 @@ class DiskCacheGroup final : public CacheStore {
                CacheOption option = {}) override;
   Status Load(BlockHandle handle, off_t offset, size_t length, IOBuffer* buffer,
               LoadOption option = {}) override;
+  Status Delete(BlockHandle handle, DeleteOption option = {}) override;
 
   std::string Id() const override;
   bool IsRunning() const override;

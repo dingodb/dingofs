@@ -48,6 +48,7 @@ class CacheNode {
   Status Put(BlockHandle handle, IOBuffer block);
   Status Range(BlockHandle handle, off_t offset, size_t length,
                IOBuffer* buffer, size_t block_length, bool* cache_hit);
+  Status Delete(BlockHandle handle);
 
   Status AsyncCache(BlockHandle handle, IOBuffer block);
   Status AsyncPrefetch(BlockHandle handle, size_t length);

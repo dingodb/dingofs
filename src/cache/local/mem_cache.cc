@@ -90,16 +90,20 @@ Status MemCache::Stage(BlockHandle handle, IOBuffer block, StageOption option) {
 
   auto key = handle.Filename();
   size_t length = block.Size();
-  Insert(GetShard(key), key, std::move(block));
+  Insert(GetShard(key), key, std::move(block), true);
   uploader_(handle, length, option.block_attr);
   return Status::OK();
 }
 
-Status MemCache::RemoveStage(BlockHandle /*handle*/,
-                             RemoveStageOption /*option*/) {
-  // No-op: staged block stays in memory as a cached block. This mirrors the
-  // disk cache behavior where the stage file is hard-linked to the cache file,
-  // so removing the stage entry leaves the cache copy intact.
+Status MemCache::RemoveStage(BlockHandle handle, RemoveStageOption /*option*/) {
+  auto key = handle.Filename();
+  auto& shard = GetShard(key);
+  BAIDU_SCOPED_LOCK(shard.mutex);
+
+  auto it = shard.index.find(key);
+  if (it != shard.index.end()) {
+    it->second->staged = false;
+  }
   return Status::OK();
 }
 
@@ -152,6 +156,33 @@ Status MemCache::Load(BlockHandle handle, off_t offset, size_t length,
   return Status::OK();
 }
 
+Status MemCache::Delete(BlockHandle handle, DeleteOption /*option*/) {
+  if (!IsRunning()) {
+    return Status::CacheDown("memory cache is down");
+  }
+
+  auto key = handle.Filename();
+  auto& shard = GetShard(key);
+  BAIDU_SCOPED_LOCK(shard.mutex);
+
+  auto it = shard.index.find(key);
+  if (it == shard.index.end()) {
+    return Status::OK();
+  }
+  if (it->second->staged) {
+    LOG(INFO) << "Skip deleting staged block which is waiting for upload: "
+              << "key = " << key;
+    return Status::OK();
+  }
+
+  uint64_t size = it->second->data.Size();
+  shard.used_bytes -= size;
+  vars_->used_bytes << -static_cast<int64_t>(size);
+  shard.lru.erase(it->second);
+  shard.index.erase(it);
+  return Status::OK();
+}
+
 bool MemCache::IsCached(const BlockHandle& handle) const {
   auto key = handle.Filename();
   const auto& shard = GetShard(key);
@@ -180,7 +211,8 @@ bool MemCache::Dump(Json::Value& value) const {
   return true;
 }
 
-void MemCache::Insert(Shard& shard, const std::string& key, IOBuffer block) {
+void MemCache::Insert(Shard& shard, const std::string& key, IOBuffer block,
+                      bool staged) {
   size_t size = block.Size();
   BAIDU_SCOPED_LOCK(shard.mutex);
 
@@ -189,6 +221,7 @@ void MemCache::Insert(Shard& shard, const std::string& key, IOBuffer block) {
     int64_t delta = static_cast<int64_t>(size) -
                     static_cast<int64_t>(it->second->data.Size());
     it->second->data = std::move(block);
+    it->second->staged = it->second->staged || staged;
     shard.used_bytes =
         static_cast<uint64_t>(static_cast<int64_t>(shard.used_bytes) + delta);
     shard.lru.splice(shard.lru.begin(), shard.lru, it->second);
@@ -197,7 +230,7 @@ void MemCache::Insert(Shard& shard, const std::string& key, IOBuffer block) {
   }
 
   EvictLocked(shard, size);
-  shard.lru.push_front({key, std::move(block)});
+  shard.lru.push_front({key, std::move(block), staged});
   shard.index[key] = shard.lru.begin();
   shard.used_bytes += size;
   vars_->used_bytes << static_cast<int64_t>(size);

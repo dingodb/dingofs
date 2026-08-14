@@ -101,6 +101,7 @@ class MemCache final : public CacheStore {
                CacheOption option = {}) override;
   Status Load(BlockHandle handle, off_t offset, size_t length, IOBuffer* buffer,
               LoadOption option = {}) override;
+  Status Delete(BlockHandle handle, DeleteOption option = {}) override;
 
   std::string Id() const override { return uuid_; }
 
@@ -116,6 +117,7 @@ class MemCache final : public CacheStore {
   struct Entry {
     std::string key;
     IOBuffer data;
+    bool staged{false};
   };
   using EntryList = std::list<Entry>;
 
@@ -133,7 +135,8 @@ class MemCache final : public CacheStore {
   }
 
   // Inserts or updates under `shard.mutex`. Evicts LRU tail as needed.
-  void Insert(Shard& shard, const std::string& key, IOBuffer block);
+  void Insert(Shard& shard, const std::string& key, IOBuffer block,
+              bool staged = false);
   // Assumes `shard.mutex` is held.
   void EvictLocked(Shard& shard, uint64_t need_bytes);
 

@@ -109,6 +109,10 @@ struct PrefetchOption {
   CacheTier tier{CacheTier::kDefault};
 };
 
+struct DeleteOption {
+  CacheTier tier{CacheTier::kDefault};
+};
+
 // async callback
 using AsyncCallback = std::function<void(Status)>;
 
@@ -141,6 +145,10 @@ class BlockCache {
     return Status::NotSupport("not implemented");
   }
 
+  virtual Status Delete(BlockHandle /*handle*/, DeleteOption /*option*/ = {}) {
+    return Status::NotSupport("not implemented");
+  }
+
   // block operations (async)
   virtual void AsyncPut(BlockHandle /*handle*/, IOBuffer /*block*/,
                         AsyncCallback cb, PutOption /*option*/ = {}) {
@@ -166,6 +174,13 @@ class BlockCache {
 
   virtual void AsyncPrefetch(BlockHandle /*handle*/, size_t /*length*/,
                              AsyncCallback cb, PrefetchOption /*option*/ = {}) {
+    if (cb) {
+      cb(Status::NotSupport("not implemented"));
+    }
+  }
+
+  virtual void AsyncDelete(BlockHandle /*handle*/, AsyncCallback cb,
+                           DeleteOption /*option*/ = {}) {
     if (cb) {
       cb(Status::NotSupport("not implemented"));
     }

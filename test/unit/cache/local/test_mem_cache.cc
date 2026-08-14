@@ -171,6 +171,64 @@ TEST_F(MemCacheTest, CacheAndLoad) {
   }
 }
 
+TEST_F(MemCacheTest, Delete) {
+  MemCache cache({.cache_size_mb = 1});
+  ASSERT_TRUE(cache.Start([](BlockHandle, size_t, BlockAttr) {}).ok());
+
+  auto handle = MakeHandle(401, 0, 5);
+
+  {
+    ASSERT_TRUE(cache.Cache(handle, MakeBlock("hello")).ok());
+    ASSERT_TRUE(cache.Delete(handle).ok());
+    EXPECT_FALSE(cache.IsCached(handle));
+
+    IOBuffer buf;
+    EXPECT_TRUE(cache.Load(handle, 0, 5, &buf).IsNotFound());
+  }
+
+  {
+    ASSERT_TRUE(cache.Delete(MakeHandle(402, 0, 1)).ok());
+  }
+
+  {
+    Json::Value value;
+    EXPECT_TRUE(cache.Dump(value));
+    EXPECT_EQ(value["used_bytes"].asUInt64(), 0u);
+    EXPECT_EQ(value["block_count"].asUInt64(), 0u);
+  }
+
+  ASSERT_TRUE(cache.Shutdown().ok());
+
+  {
+    EXPECT_TRUE(cache.Delete(handle).IsCacheDown());
+  }
+}
+
+TEST_F(MemCacheTest, DeleteSkipsStaged) {
+  MemCache cache({.cache_size_mb = 1});
+  ASSERT_TRUE(cache.Start([](BlockHandle, size_t, BlockAttr) {}).ok());
+
+  auto handle = MakeHandle(501, 0, 5);
+  ASSERT_TRUE(cache.Stage(handle, MakeBlock("world")).ok());
+
+  {
+    ASSERT_TRUE(cache.Delete(handle).ok());
+    EXPECT_TRUE(cache.IsCached(handle));
+  }
+
+  {
+    ASSERT_TRUE(cache.Cache(handle, MakeBlock("WORLD")).ok());
+    ASSERT_TRUE(cache.Delete(handle).ok());
+    EXPECT_TRUE(cache.IsCached(handle));
+  }
+
+  {
+    ASSERT_TRUE(cache.RemoveStage(handle).ok());
+    ASSERT_TRUE(cache.Delete(handle).ok());
+    EXPECT_FALSE(cache.IsCached(handle));
+  }
+}
+
 TEST_F(MemCacheTest, LRUEvictionWithinShard) {
   MemCache cache({.cache_size_mb = 0});  // every shard has capacity 0
   ASSERT_TRUE(cache.Start([](BlockHandle, size_t, BlockAttr) {}).ok());

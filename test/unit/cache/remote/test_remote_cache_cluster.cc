@@ -63,6 +63,7 @@ TEST(RemoteCacheClusterTest, RequestsReturnNotFoundWithoutNode) {
   EXPECT_TRUE(cluster.SendPutRequest(Handle(1001), payload).IsNotFound());
   EXPECT_TRUE(cluster.SendCacheRequest(Handle(1002), payload).IsNotFound());
   EXPECT_TRUE(cluster.SendPrefetchRequest(Handle(1003), 4096).IsNotFound());
+  EXPECT_TRUE(cluster.SendDeleteRequest(Handle(1005)).IsNotFound());
 
   std::string out(8, '\0');
   IOBuffer out_buffer(out.data(), out.size());
@@ -92,6 +93,10 @@ TEST(RemoteCacheClusterMetricsGuardTest, RecordsSuccessAndErrors) {
   {
     Status status = Status::NotFound("no node");
     RemoteCacheClusterMetricsGuard guard("Prefetch", 4096, status, &vars);
+  }
+  {
+    Status status = Status::OK();
+    RemoteCacheClusterMetricsGuard guard("Delete", 0, status, &vars);
   }
 }
 

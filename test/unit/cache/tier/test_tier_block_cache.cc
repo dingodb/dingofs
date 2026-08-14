@@ -158,6 +158,10 @@ TEST_F(TierBlockCacheTest, PrefetchWithoutLayerReturnsNotFound) {
   EXPECT_TRUE(tier_->Prefetch(Handle(350), 4096).IsNotFound());
 }
 
+TEST_F(TierBlockCacheTest, DeleteWithoutLayerReturnsOk) {
+  EXPECT_TRUE(tier_->Delete(Handle(360)).ok());
+}
+
 TEST_F(TierBlockCacheTest, AsyncPutInvokesCallback) {
   EXPECT_CALL(accesser_, AsyncPut(_, _))
       .WillOnce(Invoke(
@@ -222,6 +226,18 @@ TEST_F(TierBlockCacheTest, AsyncPrefetchInvokesCallback) {
 
   ASSERT_TRUE(WaitUntil([&done]() { return done.load(); }));
   EXPECT_TRUE(result.IsNotFound());
+}
+
+TEST_F(TierBlockCacheTest, AsyncDeleteInvokesCallback) {
+  std::atomic<bool> done{false};
+  Status result;
+  tier_->AsyncDelete(Handle(404), [&](Status s) {
+    result = s;
+    done.store(true);
+  });
+
+  ASSERT_TRUE(WaitUntil([&done]() { return done.load(); }));
+  EXPECT_TRUE(result.ok());
 }
 
 }  // namespace cache
