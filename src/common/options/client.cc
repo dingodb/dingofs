@@ -160,7 +160,7 @@ DEFINE_bool(vfs_meta_batch_operation_enable, false,
             "enable batch operation, default is false");
 DEFINE_validator(vfs_meta_batch_operation_enable, brpc::PassValidate);
 
-DEFINE_uint32(vfs_meta_batch_operation_merge_delay_us, 10,
+DEFINE_uint32(vfs_meta_batch_operation_merge_delay_us, 0,
               "batch operation merge delay us.");
 DEFINE_validator(vfs_meta_batch_operation_merge_delay_us, brpc::PassValidate);
 
