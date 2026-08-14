@@ -1,4 +1,4 @@
-# Copyright (c) 2024 dingodb.com, Inc. All Rights Reserved
+# Copyright (c) 2026 dingodb.com, Inc. All Rights Reserved
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,20 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(vfs)
-
-add_executable(test_client
-  main.cc
-  $<TARGET_OBJECTS:test_client_vfs_metasystem>
+file(GLOB TEST_DINGOFS_CLIENT_VFS_METASYSTEM_SRCS
+  "*.cc"
 )
 
-target_link_libraries(test_client
-  test_compact_utils
-  test_client_vfs_data
-  test_client_vfs_metasystem
-  PROTO_OBJS
+# OBJECT library: gtest self-registration lives in static initializers, and a
+# plain static archive gets dropped by the linker because nothing references it.
+add_library(test_client_vfs_metasystem OBJECT
+  ${TEST_DINGOFS_CLIENT_VFS_METASYSTEM_SRCS}
 )
 
-set_target_properties(test_client PROPERTIES
-  RUNTIME_OUTPUT_DIRECTORY ${TEST_EXECUTABLE_OUTPUT_PATH}
+target_link_libraries(test_client_vfs_metasystem
+  vfs_metasystem_mds_lib
+
+  protobuf::libprotobuf
+  ${TEST_DEPS_WITHOUT_MAIN}
 )

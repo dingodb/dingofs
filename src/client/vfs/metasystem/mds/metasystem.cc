@@ -1573,7 +1573,7 @@ void MDSMetaSystem::LaunchWriteSlice(ContextSPtr& ctx, ChunkSetSPtr chunk_set,
   };
 
   Params* params = new Params({.ino = ino,
-                               .ctx = ctx,
+                               .ctx = ctx ? ctx : std::make_shared<Context>(""),
                                .chunk_set = chunk_set,
                                .task = task,
                                .meta_system = this});
@@ -1613,8 +1613,15 @@ void MDSMetaSystem::LaunchWriteSlice(ContextSPtr& ctx, ChunkSetSPtr chunk_set,
                   "[meta.fs.{}] writeslice done, task({}) status({}).", ino,
                   task->TaskID(), status.ToString());
 
-              chunk_set->FinishCommitTask(task->TaskID(), out_chunks);
-              meta_system->chunk_memo_.Remember(ino, out_chunks);
+              // Only publish the result when the task is still valid. A task
+              // invalidated by O_TRUNC carries pre-truncate chunk versions, and
+              // ChunkMemo keeps the max version it ever saw, so remembering it
+              // would make later Open/ReadSlice skip fetching the real chunk.
+              if (chunk_set->FinishCommitTask(task->TaskID(), task->Epoch(),
+                                              out_chunks) ==
+                  ChunkSet::CommitResult::kApplied) {
+                meta_system->chunk_memo_.Remember(ino, out_chunks);
+              }
 
             } else {
               LOG(ERROR) << fmt::format(
@@ -1633,8 +1640,12 @@ void MDSMetaSystem::LaunchWriteSlice(ContextSPtr& ctx, ChunkSetSPtr chunk_set,
           },
           params) != 0) {
     delete params;
+    // Recoverable: the waiter observes the failure and the task stays in the
+    // map for MaybeRun() to retry. Never abort the whole mount for this.
     task->SetDone(Status::Internal("launch write slice fail"));
-    LOG(FATAL) << "[meta.fs] start background thread fail.";
+    LOG(ERROR) << fmt::format(
+        "[meta.fs.{}] start write slice bthread fail, task({}).", ino,
+        task->TaskID());
   }
 }
 
