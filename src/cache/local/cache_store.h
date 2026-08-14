@@ -57,6 +57,8 @@ class CacheStore {
     BlockAttr block_attr;
   };
 
+  struct DeleteOption {};
+
   using UploadFunc = std::function<void(BlockHandle handle, size_t length,
                                         BlockAttr block_attr)>;
 
@@ -73,6 +75,7 @@ class CacheStore {
                        CacheOption option = {}) = 0;
   virtual Status Load(BlockHandle handle, off_t offset, size_t length,
                       IOBuffer* buffer, LoadOption option = {}) = 0;
+  virtual Status Delete(BlockHandle handle, DeleteOption option = {}) = 0;
 
   virtual std::string Id() const = 0;
   virtual bool IsRunning() const = 0;

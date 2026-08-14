@@ -47,6 +47,7 @@ class MockCacheStore : public CacheStore {
               (BlockHandle handle, off_t offset, size_t length,
                IOBuffer* buffer, LoadOption),
               (override));
+  MOCK_METHOD(Status, Delete, (BlockHandle handle, DeleteOption), (override));
   MOCK_METHOD(std::string, Id, (), (const, override));
   MOCK_METHOD(bool, IsRunning, (), (const, override));
   MOCK_METHOD(bool, IsCached, (const BlockHandle& handle), (const, override));

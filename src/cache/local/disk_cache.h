@@ -125,6 +125,7 @@ class DiskCache final : public CacheStore {
                CacheOption option = {}) override;
   Status Load(BlockHandle handle, off_t offset, size_t length, IOBuffer* buffer,
               LoadOption option = {}) override;
+  Status Delete(BlockHandle handle, DeleteOption option = {}) override;
 
   std::string Id() const override { return uuid_; }
 

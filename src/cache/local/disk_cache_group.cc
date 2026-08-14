@@ -152,6 +152,17 @@ Status DiskCacheGroup::Load(BlockHandle handle, off_t offset, size_t length,
   return status;
 }
 
+Status DiskCacheGroup::Delete(BlockHandle handle, DeleteOption option) {
+  CHECK_RUNNING("Disk cache group");
+
+  Status status;
+  DiskCacheGroupMetricsGuard metric_guard(__func__, 0, status, vars_);
+  auto store = GetStore(handle);
+  status = store->Delete(std::move(handle), option);
+
+  return status;
+}
+
 std::string DiskCacheGroup::Id() const { return "disk_cache_group"; }
 
 bool DiskCacheGroup::IsRunning() const {

@@ -152,6 +152,16 @@ Status RemoteBlockCache::Prefetch(BlockHandle handle, size_t length,
   return status;
 }
 
+Status RemoteBlockCache::Delete(BlockHandle handle, DeleteOption /*option*/) {
+  DCHECK_RUNNING("RemoteBlockCache");
+
+  auto status = cluster_->SendDeleteRequest(handle);
+  if (!status.ok()) {
+    LOG(ERROR) << "Fail to delete block from remote cache";
+  }
+  return status;
+}
+
 void RemoteBlockCache::AsyncPut(BlockHandle handle, IOBuffer block,
                                 AsyncCallback cb, PutOption option) {
   DCHECK_RUNNING("RemoteBlockCache");
@@ -218,6 +228,24 @@ void RemoteBlockCache::AsyncPrefetch(BlockHandle handle, size_t length,
   auto tid = iutil::RunInBthread(
       [self, handle = std::move(handle), length, cb, option]() mutable {
         Status status = self->Prefetch(std::move(handle), length, option);
+        if (cb) {
+          cb(status);
+        }
+      });
+
+  if (tid != 0) {
+    joiner_->BackgroundJoin(tid);
+  }
+}
+
+void RemoteBlockCache::AsyncDelete(BlockHandle handle, AsyncCallback cb,
+                                   DeleteOption option) {
+  DCHECK_RUNNING("RemoteBlockCache");
+
+  auto* self = GetSelfPtr();
+  auto tid = iutil::RunInBthread(
+      [self, handle = std::move(handle), cb, option]() mutable {
+        Status status = self->Delete(std::move(handle), option);
         if (cb) {
           cb(status);
         }

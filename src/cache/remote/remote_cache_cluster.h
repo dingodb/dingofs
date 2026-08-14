@@ -104,6 +104,7 @@ struct RemoteCacheClusterMetrics {
   OpVar op_range{absl::StrFormat("%s_%s", prefix, "range")};
   OpVar op_cache{absl::StrFormat("%s_%s", prefix, "cache")};
   OpVar op_prefetch{absl::StrFormat("%s_%s", prefix, "prefetch")};
+  OpVar op_delete{absl::StrFormat("%s_%s", prefix, "delete")};
 };
 
 using RemoteCacheClusterMetricsUPtr =
@@ -115,7 +116,7 @@ struct RemoteCacheClusterMetricsGuard {
                                  RemoteCacheClusterMetrics* vars)
       : opname(opname), bytes(bytes), status(status), vars(vars) {
     CHECK(opname == "Put" || opname == "Range" || opname == "Cache" ||
-          opname == "Prefetch")
+          opname == "Prefetch" || opname == "Delete")
         << "Invalid operation name=" << opname;
     timer.start();
   }
@@ -132,6 +133,8 @@ struct RemoteCacheClusterMetricsGuard {
       op = &vars->op_cache;
     } else if (opname == "Prefetch") {
       op = &vars->op_prefetch;
+    } else if (opname == "Delete") {
+      op = &vars->op_delete;
     }
 
     if (status.ok()) {
@@ -165,6 +168,7 @@ class RemoteCacheCluster {
                           size_t block_whole_length, bool* cache_hit);
   Status SendCacheRequest(const BlockHandle& handle, const IOBuffer& block);
   Status SendPrefetchRequest(const BlockHandle& handle, size_t length);
+  Status SendDeleteRequest(const BlockHandle& handle);
 
   bool Dump(Json::Value& value);
 

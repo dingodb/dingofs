@@ -228,6 +228,29 @@ void DiskCacheManager::DeleteCached(const BlockHandle& handle) {
   shard.index.erase(iter);
 }
 
+DiskCacheManager::DeleteResult DiskCacheManager::DeleteBlock(
+    const BlockHandle& handle) {
+  auto& shard = GetShard(handle);
+  BAIDU_SCOPED_LOCK(shard.mutex);
+
+  auto iter = shard.index.find(handle);
+  if (iter == shard.index.end()) {
+    return DeleteResult::kNotFound;
+  }
+
+  CacheEntry& entry = iter->second;
+  if (entry.staged) {
+    return DeleteResult::kStaged;
+  }
+
+  shard.policy->OnErase(&entry);
+  uint64_t freed =
+      FlushVictimsLocked(shard, CacheVictims{&entry}, "deleted by caller");
+  vars_->delete_blocks << 1;
+  vars_->delete_bytes << static_cast<int64_t>(freed);
+  return DeleteResult::kDeleted;
+}
+
 bool DiskCacheManager::Exist(const BlockHandle& handle) {
   auto& shard = GetShard(handle);
   BAIDU_SCOPED_LOCK(shard.mutex);

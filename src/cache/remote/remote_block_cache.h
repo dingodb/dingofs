@@ -67,6 +67,7 @@ class RemoteBlockCache final : public BlockCache {
   Status Cache(BlockHandle handle, IOBuffer block, CacheOption option) override;
   Status Prefetch(BlockHandle handle, size_t length,
                   PrefetchOption option) override;
+  Status Delete(BlockHandle handle, DeleteOption option) override;
 
   void AsyncPut(BlockHandle handle, IOBuffer block, AsyncCallback cb,
                 PutOption option) override;
@@ -77,6 +78,8 @@ class RemoteBlockCache final : public BlockCache {
                   CacheOption option) override;
   void AsyncPrefetch(BlockHandle handle, size_t length, AsyncCallback cb,
                      PrefetchOption option) override;
+  void AsyncDelete(BlockHandle handle, AsyncCallback cb,
+                   DeleteOption option) override;
 
   // We gurantee that cache node is always enable stage and cache.
   bool IsEnabled() const override { return !FLAGS_cache_group.empty(); }

@@ -23,17 +23,28 @@
 #include <gtest/gtest.h>
 #include <unistd.h>
 
+#include <chrono>
 #include <filesystem>
 #include <string>
+#include <thread>
 #include <vector>
 
+#include "cache/common/slab_pool.h"
 #include "cache/local/disk_cache_group.h"
+#include "common/block/block_key.h"
+#include "common/io_buffer.h"
+#include "common/options/cache.h"
 
 namespace dingofs {
 namespace cache {
 
 class DiskCacheGroupTest : public ::testing::Test {
  protected:
+  static void SetUpTestSuite() {
+    FLAGS_iodepth = 4;
+    ASSERT_TRUE(InitializeGlobalSlabPool().ok());
+  }
+
   void SetUp() override {
     static int seq = 0;
     base_index_ = 700 + (seq++ * 10);
@@ -60,6 +71,26 @@ class DiskCacheGroupTest : public ::testing::Test {
     return DiskCacheGroup::CalcWeights(std::move(options));
   }
 
+  static DiskCacheSPtr NonRoutedStore(DiskCacheGroup& group,
+                                      const BlockHandle& handle) {
+    auto routed = group.GetStore(handle);
+    for (const auto& it : group.stores_) {
+      if (it.second != routed) {
+        return it.second;
+      }
+    }
+    return nullptr;
+  }
+
+  template <typename Pred>
+  static bool WaitUntil(Pred pred, int timeout_ms = 3000) {
+    for (int waited = 0; waited < timeout_ms; waited += 10) {
+      if (pred()) return true;
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    return pred();
+  }
+
   uint32_t base_index_{0};
   std::string base_dir_;
   std::vector<DiskCacheOption> options_;
@@ -83,6 +114,36 @@ TEST_F(DiskCacheGroupTest, ShutdownBeforeStartAndDumpEmpty) {
   EXPECT_TRUE(group.Dump(value));
   ASSERT_TRUE(value["disks"].isArray());
   EXPECT_EQ(value["disks"].size(), 0u);
+}
+
+TEST_F(DiskCacheGroupTest, DeleteRoutesToSingleStore) {
+  auto saved_ratio = FLAGS_free_space_ratio;
+  FLAGS_free_space_ratio = 0.0;
+
+  DiskCacheGroup group(options_);
+  auto status = group.Start([](BlockHandle, size_t, BlockAttr) {});
+  if (status.IsNotSupport()) {
+    GTEST_SKIP() << "io_uring is unavailable in this environment";
+  }
+  ASSERT_TRUE(status.ok()) << status.ToString();
+
+  BlockHandle handle(1, BlockKey(1, 0, 4));
+  const std::string data = "data";
+  ASSERT_TRUE(group.Cache(handle, IOBuffer(data.data(), data.size())).ok());
+  ASSERT_TRUE(group.IsCached(handle));
+
+  auto other = NonRoutedStore(group, handle);
+  ASSERT_NE(other, nullptr);
+  ASSERT_TRUE(other->Cache(handle, IOBuffer(data.data(), data.size())).ok());
+
+  ASSERT_TRUE(group.Delete(handle).ok());
+  EXPECT_TRUE(WaitUntil([&]() { return !group.IsCached(handle); }));
+  EXPECT_TRUE(other->IsCached(handle));
+
+  ASSERT_TRUE(group.Delete(handle).ok());
+
+  ASSERT_TRUE(group.Shutdown().ok());
+  FLAGS_free_space_ratio = saved_ratio;
 }
 
 }  // namespace cache

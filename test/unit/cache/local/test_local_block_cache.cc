@@ -191,6 +191,19 @@ TEST_F(BlockCacheImplTest, PrefetchFetchesFromStorageAndCaches) {
   EXPECT_TRUE(block_cache_->IsCached(handle));
 }
 
+TEST_F(BlockCacheImplTest, CacheThenDeleteRangeMisses) {
+  ASSERT_TRUE(block_cache_->Cache(Handle(16), Buf("gone")).ok());
+  ASSERT_TRUE(block_cache_->IsCached(Handle(16)));
+
+  ASSERT_TRUE(block_cache_->Delete(Handle(16)).ok());
+  EXPECT_FALSE(block_cache_->IsCached(Handle(16)));
+
+  IOBuffer buffer;
+  EXPECT_TRUE(block_cache_->Range(Handle(16), 0, 4, &buffer).IsNotFound());
+
+  EXPECT_TRUE(block_cache_->Delete(Handle(16)).ok());
+}
+
 TEST_F(BlockCacheImplTest, AsyncCacheInvokesCallback) {
   std::atomic<bool> done{false};
   Status result;
@@ -252,6 +265,21 @@ TEST_F(BlockCacheImplTest, AsyncPrefetchInvokesCallback) {
   ASSERT_TRUE(WaitUntil([&done]() { return done.load(); }));
   EXPECT_TRUE(result.ok());
   EXPECT_TRUE(block_cache_->IsCached(handle));
+}
+
+TEST_F(BlockCacheImplTest, AsyncDeleteInvokesCallback) {
+  ASSERT_TRUE(block_cache_->Cache(Handle(17), Buf("adel")).ok());
+
+  std::atomic<bool> done{false};
+  Status result;
+  block_cache_->AsyncDelete(Handle(17), [&](Status s) {
+    result = s;
+    done.store(true);
+  });
+
+  ASSERT_TRUE(WaitUntil([&done]() { return done.load(); }));
+  EXPECT_TRUE(result.ok());
+  EXPECT_FALSE(block_cache_->IsCached(Handle(17)));
 }
 
 // The BlockHandle key is a oneof{BlockKey, TensorKey}; every other test uses a
