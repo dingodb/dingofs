@@ -478,7 +478,7 @@ uint32_t ChunkSet::TryCommitSlice(bool is_force) {
 CommitTaskSPtr ChunkSet::CreateCommitTaskUnlock(
     std::vector<CommitTask::DeltaSlice>&& delta_slices) {
   auto task = std::make_shared<CommitTask>(task_id_generator.fetch_add(1),
-                                           std::move(delta_slices));
+                                           epoch_, std::move(delta_slices));
 
   commit_task_map_.insert({task->TaskID(), task});
 
@@ -489,18 +489,32 @@ CommitTaskSPtr ChunkSet::CreateCommitTaskUnlock(
   return task;
 }
 
-void ChunkSet::FinishCommitTask(uint64_t task_id,
-                                const std::vector<ChunkEntry>& chunks) {
+ChunkSet::CommitResult ChunkSet::FinishCommitTask(
+    uint64_t task_id, uint64_t task_epoch,
+    const std::vector<ChunkEntry>& chunks) {
   utils::WriteLockGuard guard(lock_);
 
   last_active_s_ = utils::Timestamp();
 
+  // The file was truncated (O_TRUNC open) while this task was in flight. Its
+  // slices describe pre-truncate data, so drop the result entirely.
+  if (task_epoch != epoch_) {
+    LOG(WARNING) << fmt::format(
+        "[meta.chunkset.{}] discard commit task({}), chunk set was reset, "
+        "epoch({} -> {}).",
+        ino_, task_id, task_epoch, epoch_);
+    return CommitResult::kStaleEpoch;
+  }
+
   auto task_it = commit_task_map_.find(task_id);
   if (task_it == commit_task_map_.end()) {
+    // Same epoch but missing: nothing except Reset() and this function removes
+    // a task, so this is a real invariant violation, not a benign truncate.
     LOG(ERROR) << fmt::format(
-        "[meta.chunkset.{}] finish commit task fail, task({}) not found.", ino_,
-        task_id);
-    return;
+        "[meta.chunkset.{}] finish commit task fail, task({}) not found in "
+        "epoch({}).",
+        ino_, task_id, epoch_);
+    return CommitResult::kNotFound;
   }
 
   auto& task = task_it->second;
@@ -526,6 +540,8 @@ void ChunkSet::FinishCommitTask(uint64_t task_id,
       it->second->MarkCommited(chunk.version());
     }
   }
+
+  return CommitResult::kApplied;
 }
 
 std::vector<CommitTaskSPtr> ChunkSet::ListCommitTask() {

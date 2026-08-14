@@ -156,10 +156,17 @@ class CommitTask {
     std::vector<Slice> slices;
   };
 
-  CommitTask(uint64_t task_id, std::vector<DeltaSlice>&& delta_slices)
-      : task_id_(task_id), delta_slices_(std::move(delta_slices)), cond(1) {}
+  CommitTask(uint64_t task_id, uint64_t epoch,
+             std::vector<DeltaSlice>&& delta_slices)
+      : task_id_(task_id),
+        epoch_(epoch),
+        delta_slices_(std::move(delta_slices)),
+        cond(1) {}
 
   uint64_t TaskID() const { return task_id_; }
+  // epoch of the owning ChunkSet when this task was created, used to detect
+  // that the ChunkSet has been reset (O_TRUNC) while this task was in flight.
+  uint64_t Epoch() const { return epoch_; }
   const std::vector<DeltaSlice>& DeltaSlices() const { return delta_slices_; }
 
   std::vector<uint32_t> GetChunkIndexs() const {
@@ -260,6 +267,7 @@ class CommitTask {
   mutable utils::RWLock lock_;
 
   const uint64_t task_id_;
+  const uint64_t epoch_;
   const std::vector<DeltaSlice> delta_slices_;
 
   State state_{State::INIT};
@@ -346,9 +354,27 @@ class ChunkSet {
 
   uint32_t TryCommitSlice(bool is_force);
 
-  void FinishCommitTask(uint64_t task_id,
-                        const std::vector<ChunkEntry>& chunks);
+  enum class CommitResult : uint8_t {
+    // Result applied to the chunk set; the caller may publish it further.
+    kApplied = 0,
+    // A concurrent Reset() (O_TRUNC open) invalidated the task while its
+    // WriteSlice RPC was in flight. Expected under concurrent rewrite; the
+    // result describes pre-truncate data and must be discarded everywhere.
+    kStaleEpoch = 1,
+    // Task is gone but the chunk set was never reset. Nothing other than
+    // Reset() and a successful finish removes a task, so this is a real
+    // invariant violation (e.g. the same task finished twice).
+    kNotFound = 2,
+  };
+
+  CommitResult FinishCommitTask(uint64_t task_id, uint64_t task_epoch,
+                                const std::vector<ChunkEntry>& chunks);
   std::vector<CommitTaskSPtr> ListCommitTask();
+
+  uint64_t Epoch() const {
+    utils::ReadLockGuard guard(lock_);
+    return epoch_;
+  }
 
   size_t GetCommitTaskSize() const {
     utils::ReadLockGuard guard(lock_);
@@ -391,6 +417,11 @@ class ChunkSet {
 
   void Reset() {
     utils::WriteLockGuard guard(lock_);
+
+    // Invalidate every in-flight commit task: their WriteSlice RPC may still
+    // land after the truncate, and applying its result (chunk version, commited
+    // length, chunk memo) would resurrect pre-truncate state.
+    ++epoch_;
 
     chunk_map_.clear();
     commit_task_map_.clear();
@@ -440,6 +471,8 @@ class ChunkSet {
   absl::flat_hash_map<uint64_t, CommitTaskSPtr> commit_task_map_;
   // committing chunk index set, to avoid commit same chunk concurrently
   absl::flat_hash_set<uint32_t> committing_chunk_index_set_;
+  // bumped by Reset(), stamped on every commit task at creation
+  uint64_t epoch_{0};
 
   std::atomic<uint64_t> last_commit_ms_{0};
 
