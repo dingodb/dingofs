@@ -252,7 +252,6 @@ bool Chunk::Dump(Json::Value& value, bool is_summary) {
   value["is_completed"] = is_completed_;
   value["commited_version"] = commited_version_;
   value["last_compaction_time_ms"] = last_compaction_time_ms_;
-  value["last_active_s"] = last_active_s_;
 
   return true;
 }
@@ -336,9 +335,7 @@ bool CommitTask::Dump(Json::Value& value) {
 }
 
 ChunkSet::ChunkSet(Ino ino, uint32_t chunk_size)
-    : ino_(ino),
-      chunk_size_(chunk_size),
-      last_active_s_(utils::Timestamp()) {
+    : ino_(ino), chunk_size_(chunk_size) {
   CHECK(bthread_mutex_init(&write_flush_mutex_, nullptr) == 0)
       << "init write_flush_mutex_ fail.";
 }
@@ -346,6 +343,54 @@ ChunkSet::ChunkSet(Ino ino, uint32_t chunk_size)
 ChunkSet::~ChunkSet() {
   CHECK(bthread_mutex_destroy(&write_flush_mutex_) == 0)
       << "destroy write_flush_mutex_ fail.";
+}
+
+uint64_t ChunkSet::Epoch() const {
+  utils::ReadLockGuard guard(lock_);
+  return epoch_;
+}
+
+uint64_t ChunkSet::GetLastWriteSliceLength() const {
+  utils::ReadLockGuard guard(lock_);
+  return last_write_slice_length_;
+}
+
+void ChunkSet::SetLastWriteLength(uint64_t offset, uint64_t size) {
+  std::lock_guard<bthread_mutex_t> flush_guard(write_flush_mutex_);
+  utils::WriteLockGuard lk(lock_);
+  last_write_length_ = std::max(last_write_length_, offset + size);
+  last_write_time_ns_ = utils::TimestampNs();
+}
+
+void ChunkSet::ResetLastWriteLength() {
+  utils::WriteLockGuard lk(lock_);
+  last_write_length_ = 0;
+}
+
+void ChunkSet::InitFlushCheckpoint(uint64_t length) {
+  utils::WriteLockGuard lk(lock_);
+  if (!flush_checkpoint_inited_) {
+    flush_checkpoint_inited_ = true;
+    flush_checkpoint_length_ = length;
+  }
+}
+void ChunkSet::SetFlushCheckpoint(uint64_t length) {
+  utils::WriteLockGuard lk(lock_);
+  flush_checkpoint_inited_ = true;
+  flush_checkpoint_length_ = length;
+}
+uint64_t ChunkSet::GetFlushCheckpoint() const {
+  utils::ReadLockGuard guard(lock_);
+  return flush_checkpoint_length_;
+}
+uint64_t ChunkSet::GetLastWriteLength() const {
+  utils::ReadLockGuard guard(lock_);
+  return last_write_length_;
+}
+
+uint64_t ChunkSet::GetLastWriteTimeNs() const {
+  utils::ReadLockGuard guard(lock_);
+  return last_write_time_ns_;
 }
 
 void ChunkSet::Append(uint32_t index, const std::vector<Slice>& slices) {
@@ -394,6 +439,23 @@ void ChunkSet::InvalidateReadCache() {
   LOG_DEBUG << fmt::format(
       "[meta.chunkset.{}] invalidate read cache, chunk_num({}).", ino_,
       chunk_map_.size());
+}
+
+size_t ChunkSet::GetChunkSize() const {
+  utils::ReadLockGuard guard(lock_);
+  return chunk_map_.size();
+}
+
+bool ChunkSet::Exist(uint32_t index) {
+  utils::ReadLockGuard guard(lock_);
+  return chunk_map_.find(index) != chunk_map_.end();
+}
+
+ChunkSPtr ChunkSet::Get(uint32_t index) {
+  utils::ReadLockGuard guard(lock_);
+
+  auto it = chunk_map_.find(index);
+  return (it != chunk_map_.end()) ? it->second : nullptr;
 }
 
 uint64_t ChunkSet::GetVersion(uint32_t index) {
@@ -451,6 +513,11 @@ bool ChunkSet::HasCommitting() {
   return false;
 }
 
+bool ChunkSet::HasCommitTask() {
+  utils::ReadLockGuard guard(lock_);
+  return !commit_task_map_.empty();
+}
+
 uint32_t ChunkSet::TryCommitSlice(bool is_force) {
   uint64_t now_ms = utils::TimestampMs();
   if (!is_force && now_ms < (last_commit_ms_.load(std::memory_order_relaxed) +
@@ -497,8 +564,9 @@ uint32_t ChunkSet::TryCommitSlice(bool is_force) {
 
 CommitTaskSPtr ChunkSet::CreateCommitTaskUnlock(
     std::vector<CommitTask::DeltaSlice>&& delta_slices) {
-  auto task = std::make_shared<CommitTask>(
-      task_id_generator.fetch_add(1), std::move(delta_slices), chunk_size_);
+  auto task =
+      std::make_shared<CommitTask>(task_id_generator.fetch_add(1), epoch_,
+                                   std::move(delta_slices), chunk_size_);
 
   commit_task_map_.insert({task->TaskID(), task});
 
@@ -509,9 +577,19 @@ CommitTaskSPtr ChunkSet::CreateCommitTaskUnlock(
   return task;
 }
 
-void ChunkSet::FinishCommitTask(uint64_t task_id,
-                                const std::vector<ChunkEntry>& chunks) {
+Status ChunkSet::FinishCommitTask(CommitTaskSPtr& commit_task,
+                                  const std::vector<ChunkEntry>& chunks) {
+  const uint64_t task_id = commit_task->TaskID();
+  const uint64_t task_epoch = commit_task->Epoch();
+
   utils::WriteLockGuard guard(lock_);
+
+  if (task_epoch != epoch_) {
+    LOG(WARNING) << fmt::format(
+        "[meta.chunkset.{}] discard commit task({}), epoch({}->{}).", ino_,
+        task_id, task_epoch, epoch_);
+    return Status::NotFit("epoch mismatch");
+  }
 
   auto task_it = commit_task_map_.find(task_id);
   CHECK(task_it != commit_task_map_.end()) << fmt::format(
@@ -537,6 +615,8 @@ void ChunkSet::FinishCommitTask(uint64_t task_id,
       it->second->MarkCommited(chunk.version());
     }
   }
+
+  return Status::OK();
 }
 
 std::vector<CommitTaskSPtr> ChunkSet::ListCommitTask() {
@@ -552,6 +632,11 @@ std::vector<CommitTaskSPtr> ChunkSet::ListCommitTask() {
   return tasks;
 }
 
+size_t ChunkSet::GetCommitTaskSize() const {
+  utils::ReadLockGuard guard(lock_);
+  return commit_task_map_.size();
+}
+
 bool ChunkSet::HasUncommitedSlice() {
   utils::ReadLockGuard guard(lock_);
 
@@ -562,16 +647,6 @@ bool ChunkSet::HasUncommitedSlice() {
   }
 
   return false;
-}
-
-uint64_t ChunkSet::GetLastActiveTimeS() const {
-  utils::ReadLockGuard guard(lock_);
-
-  uint64_t last_active_s = last_active_s_;
-  for (const auto& [_, chunk] : chunk_map_) {
-    last_active_s = std::max(last_active_s, chunk->GetlastActiveTime());
-  }
-  return last_active_s;
 }
 
 size_t ChunkSet::Bytes() const {
@@ -618,7 +693,6 @@ bool ChunkSet::Dump(Json::Value& value, bool is_summary) {
 
   value["id_generator"] = task_id_generator.load();
   value["last_commit_ms"] = last_commit_ms_.load();
-  value["last_active_s"] = GetLastActiveTimeS();
 
   return true;
 }
