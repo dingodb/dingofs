@@ -55,6 +55,8 @@ class MockMetaSystem : public MetaSystem {
               (override));
   MOCK_METHOD(Status, Flush, (ContextSPtr ctx, Ino ino, uint64_t fh),
               (override));
+  MOCK_METHOD(Status, RollbackWriteLength,
+              (ContextSPtr ctx, Ino ino, uint64_t fh), (override));
   MOCK_METHOD(Status, Close, (ContextSPtr ctx, Ino ino, uint64_t fh),
               (override));
   MOCK_METHOD(Status, ReadSlice,

@@ -51,18 +51,9 @@ class BlockData {
   ~BlockData() { FreePageData(); }
 
   // Phase 1: ensure every page this write needs exists; allocate only, no
-  // memcpy, no len_ bump. New pages are appended to *created_pages (existing
-  // pages are skipped, not recorded). Allocates via TryAllocateBatch (never
-  // waits for capacity under the slice lock); on a short allocation returns
-  // NoSpace WITHOUT self-rollback so the caller can also undo pages it
-  // reserved in other blocks of the same SliceWriter transaction.
-  Status ReservePages(int32_t size, int32_t block_offset,
-                      std::vector<uint32_t>* created_pages);
-
-  // Free + erase the named pages. They MUST be this transaction's newly
-  // created pages (from ReservePages' created_pages) -- never pre-existing
-  // ones.
-  void RollbackPages(const std::vector<uint32_t>& created_pages);
+  // memcpy, no len_ bump. Missing pages transfer from the caller's admitted
+  // lease, so this operation cannot fail after successful pool admission.
+  void ReservePages(int32_t size, int32_t block_offset, WritePageLease* lease);
 
   // Phase 2: memcpy buf into already-reserved pages and bump
   // block_offset_/len_. Precondition: ReservePages covering this range already

@@ -21,6 +21,7 @@
 #include <mutex>
 #include <unordered_map>
 
+#include "common/callback.h"
 #include "common/status.h"
 
 namespace dingofs {
@@ -70,10 +71,14 @@ class WriterTable {
 
   // Lifecycle.
   Status Start();
-  void Stop();   // refuse new acquires; does not flush
+  void Stop();  // refuse new acquires; does not flush
 
   // Synchronously flush all live writers; idempotent.
   Status FlushAll();
+
+  // Fan-outs all currently dirty writers and invokes cb exactly once after
+  // every participant callback and transient holder release completes.
+  void FlushDirtyAsync(StatusCallback cb);
 
   // Get-or-create the FileWriter for ino. Returned pointer has a holder
   // outstanding; caller MUST call ReleaseWriter exactly once.

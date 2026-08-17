@@ -18,6 +18,10 @@
 
 #include <array>
 #include <atomic>
+#include <chrono>
+#include <condition_variable>
+#include <future>
+#include <mutex>
 #include <thread>
 #include <vector>
 
@@ -25,7 +29,67 @@
 
 namespace dingofs {
 
-// ─── WriteMemPool ──────────────────────────────────────────────────────
+class WriteMemPoolTestPeer {
+ public:
+  static char* RemovePhysicalPage(WriteMemPool* pool) {
+    char* page = nullptr;
+    CHECK_EQ(pool->page_pool_->RequireBatch(&page, 1), 1);
+    return page;
+  }
+
+  static void ReturnPhysicalPage(WriteMemPool* pool, char* page) {
+    pool->page_pool_->ReleaseBatch(&page, 1);
+  }
+};
+namespace {
+
+using namespace std::chrono_literals;
+
+class CountingObserver : public WritePressureObserver {
+ public:
+  void OnWritePressure() override {
+    std::lock_guard<std::mutex> lock(mutex_);
+    ++event_count_;
+    cv_.notify_all();
+  }
+
+  bool WaitForEvent() {
+    std::unique_lock<std::mutex> lock(mutex_);
+    return cv_.wait_for(lock, 5s, [this] { return event_count_ != 0; });
+  }
+
+ private:
+  std::mutex mutex_;
+  std::condition_variable cv_;
+  int event_count_{0};
+};
+
+class BlockingObserver : public WritePressureObserver {
+ public:
+  void OnWritePressure() override {
+    std::unique_lock<std::mutex> lock(mutex_);
+    entered_ = true;
+    cv_.notify_all();
+    cv_.wait(lock, [this] { return released_; });
+  }
+
+  bool WaitUntilEntered() {
+    std::unique_lock<std::mutex> lock(mutex_);
+    return cv_.wait_for(lock, 5s, [this] { return entered_; });
+  }
+
+  void Release() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    released_ = true;
+    cv_.notify_all();
+  }
+
+ private:
+  std::mutex mutex_;
+  std::condition_variable cv_;
+  bool entered_{false};
+  bool released_{false};
+};
 
 TEST(WriteMemPoolDeathTest, RejectsZeroPageSizeBeforeDivision) {
   EXPECT_DEATH({ WriteMemPool pool(4096, 0); }, "page_size > 0");
@@ -39,152 +103,220 @@ TEST(WriteMemPoolDeathTest, RejectsNonIntegralPageCapacity) {
   EXPECT_DEATH({ WriteMemPool pool(10 * 1024, 4096); }, "exact multiple");
 }
 
-TEST(WriteMemPoolTest, DeAllocateBatch_DecreasesUsed) {
-  constexpr int64_t kPageSize = 4096;
-  WriteMemPool mgr(kPageSize * 4, kPageSize);
+TEST(WriteMemPoolTest, GeometryAndLeaseAccounting) {
+  constexpr int64_t kPage = 4096;
+  WriteMemPool pool(kPage * 4, kPage);
+  EXPECT_EQ(pool.GetPageSize(), kPage);
+  EXPECT_EQ(pool.GetTotalBytes(), kPage * 4);
+  EXPECT_EQ(pool.BufferCount(), 4);
+  EXPECT_EQ(pool.TotalSize(), kPage * 4);
+  EXPECT_NE(pool.BaseAddr(), nullptr);
 
+  {
+    WritePageLease lease;
+    ASSERT_TRUE(pool.Acquire(2, &lease).ok());
+    EXPECT_EQ(lease.Size(), 2);
+    EXPECT_EQ(pool.GetUsedBytes(), kPage * 2);
+  }
+  EXPECT_EQ(pool.GetUsedBytes(), 0);
+}
+
+TEST(WriteMemPoolTest, TakeTransfersPageOwnership) {
+  constexpr int64_t kPage = 4096;
+  WriteMemPool pool(kPage * 2, kPage);
   char* page = nullptr;
-  ASSERT_EQ(mgr.TryAllocateBatch(1, &page), 1);
-  EXPECT_EQ(mgr.GetUsedBytes(), kPageSize);
-
-  mgr.DeAllocateBatch(&page, 1);
-  EXPECT_EQ(mgr.GetUsedBytes(), 0);
+  {
+    WritePageLease lease;
+    ASSERT_TRUE(pool.Acquire(1, &lease).ok());
+    lease.Take(1, &page);
+    EXPECT_TRUE(lease.Empty());
+  }
+  EXPECT_EQ(pool.GetUsedBytes(), kPage);
+  pool.Release(&page, 1);
+  EXPECT_EQ(pool.GetUsedBytes(), 0);
 }
 
-TEST(WriteMemPoolTest, GetPageSize_GetTotalBytes) {
-  constexpr int64_t kPageSize = 8192;
-  constexpr int64_t kTotal = kPageSize * 8;
-  WriteMemPool mgr(kTotal, kPageSize);
+TEST(WriteMemPoolTest, RemovingObserverWaitsForInFlightNotification) {
+  constexpr int64_t kPage = 4096;
+  WriteMemPool pool(kPage, kPage);
+  BlockingObserver observer;
+  pool.SetPressureObserver(&observer);
 
-  EXPECT_EQ(mgr.GetPageSize(), kPageSize);
-  EXPECT_EQ(mgr.GetTotalBytes(), kTotal);
-  EXPECT_NE(mgr.BaseAddr(), nullptr);
-  EXPECT_EQ(mgr.BufferSize(), kPageSize);
-  EXPECT_EQ(mgr.BufferCount(), 8);
-  EXPECT_EQ(mgr.TotalSize(), kTotal);
+  WritePageLease held;
+  ASSERT_TRUE(pool.Acquire(1, &held).ok());
+  auto blocked = std::async(std::launch::async, [&] {
+    WritePageLease lease;
+    return pool.Acquire(1, &lease);
+  });
+  if (!observer.WaitUntilEntered()) {
+    observer.Release();
+    pool.Close();
+    FAIL() << "pressure notification did not start";
+  }
+
+  std::promise<void> unregister_started;
+  auto unregister = std::async(std::launch::async, [&] {
+    unregister_started.set_value();
+    pool.SetPressureObserver(nullptr);
+  });
+  unregister_started.get_future().wait();
+  EXPECT_EQ(unregister.wait_for(50ms), std::future_status::timeout);
+
+  observer.Release();
+  EXPECT_EQ(unregister.wait_for(5s), std::future_status::ready);
+  unregister.get();
+
+  pool.Close();
+  EXPECT_TRUE(blocked.get().IsStop());
 }
 
-TEST(WriteMemPoolTest, IsHighPressure_True_WhenAboveThreshold) {
-  constexpr int64_t kPageSize = 1024;
-  // 2 pages total; allocate 2 to hit 100% usage
-  WriteMemPool mgr(kPageSize * 2, kPageSize);
+TEST(WriteMemPoolTest, TryAcquireIsExactAndDoesNotBypassWaiter) {
+  constexpr int64_t kPage = 4096;
+  WriteMemPool pool(kPage * 2, kPage);
+  CountingObserver observer;
+  pool.SetPressureObserver(&observer);
 
-  std::array<char*, 2> pages{};
-  ASSERT_EQ(mgr.TryAllocateBatch(pages.size(), pages.data()), pages.size());
+  WritePageLease held;
+  ASSERT_TRUE(pool.Acquire(2, &held).ok());
 
-  EXPECT_TRUE(mgr.IsHighPressure());
+  auto blocked = std::async(std::launch::async, [&] {
+    WritePageLease lease;
+    return pool.Acquire(2, &lease);
+  });
+  ASSERT_TRUE(observer.WaitForEvent());
 
-  mgr.DeAllocateBatch(pages.data(), pages.size());
+  WritePageLease opportunistic;
+  Status s = pool.TryAcquire(1, &opportunistic);
+  EXPECT_TRUE(s.IsNotFit()) << s.ToString();
+
+  held = WritePageLease();
+  EXPECT_TRUE(blocked.get().ok());
+  pool.SetPressureObserver(nullptr);
 }
 
-TEST(WriteMemPoolTest, Concurrent_AllocAndDealloc_FinalZero) {
-  constexpr int kThreads = 4;
-  constexpr int kIters = 200;
-  constexpr int64_t kPageSize = 4096;
+TEST(WriteMemPoolTest, FifoHeadIsNotBypassedBySmallerRequest) {
+  constexpr int64_t kPage = 4096;
+  WriteMemPool pool(kPage * 3, kPage);
+  CountingObserver observer;
+  pool.SetPressureObserver(&observer);
 
-  WriteMemPool mgr(static_cast<int64_t>(kThreads) * kIters * kPageSize,
-                   kPageSize);
+  WritePageLease initial;
+  ASSERT_TRUE(pool.Acquire(3, &initial).ok());
+  std::array<char*, 3> pages{};
+  initial.Take(pages.size(), pages.data());
+
+  std::promise<void> first_acquired;
+  auto first_acquired_future = first_acquired.get_future();
+  std::promise<void> release_first;
+  auto release_first_future = release_first.get_future();
+  auto first = std::async(std::launch::async, [&] {
+    WritePageLease lease;
+    Status s = pool.Acquire(2, &lease);
+    first_acquired.set_value();
+    release_first_future.wait();
+    return s;
+  });
+  ASSERT_TRUE(observer.WaitForEvent());
+
+  auto second = std::async(std::launch::async, [&] {
+    WritePageLease lease;
+    return pool.Acquire(1, &lease);
+  });
+
+  pool.Release(pages.data(), 1);
+  EXPECT_EQ(second.wait_for(50ms), std::future_status::timeout);
+
+  pool.Release(pages.data() + 1, 1);
+  ASSERT_EQ(first_acquired_future.wait_for(5s), std::future_status::ready);
+  EXPECT_EQ(second.wait_for(50ms), std::future_status::timeout);
+  release_first.set_value();
+  EXPECT_TRUE(first.get().ok());
+  EXPECT_TRUE(second.get().ok());
+
+  pool.Release(pages.data() + 2, 1);
+  pool.SetPressureObserver(nullptr);
+}
+
+TEST(WriteMemPoolTest, CloseWakesQueuedAcquireAndRejectsNewAdmission) {
+  constexpr int64_t kPage = 4096;
+  WriteMemPool pool(kPage, kPage);
+  CountingObserver observer;
+  pool.SetPressureObserver(&observer);
+  WritePageLease held;
+  ASSERT_TRUE(pool.Acquire(1, &held).ok());
+
+  auto blocked = std::async(std::launch::async, [&] {
+    WritePageLease lease;
+    return pool.Acquire(1, &lease);
+  });
+  ASSERT_TRUE(observer.WaitForEvent());
+  pool.Close();
+
+  Status waiting = blocked.get();
+  EXPECT_TRUE(waiting.IsStop()) << waiting.ToString();
+  WritePageLease rejected;
+  EXPECT_TRUE(pool.Acquire(1, &rejected).IsStop());
+}
+
+TEST(WriteMemPoolTest, OversizedRequestsFailWithoutQueueing) {
+  WriteMemPool pool(2 * 4096, 4096);
+  WritePageLease lease;
+  EXPECT_TRUE(pool.Acquire(3, &lease).IsNoSpace());
+  EXPECT_TRUE(pool.TryAcquire(3, &lease).IsNotFit());
+  EXPECT_FALSE(pool.IsPressured());
+}
+
+TEST(WriteMemPoolTest, ConcurrentAcquireAndReleaseReturnsToZero) {
+  constexpr int kThreads = 16;
+  constexpr int kIterations = 2000;
+  constexpr int64_t kPage = 4096;
+  WriteMemPool pool(kThreads * kPage, kPage);
 
   std::vector<std::thread> threads;
-  threads.reserve(kThreads);
-  for (int t = 0; t < kThreads; ++t) {
-    threads.emplace_back([&mgr]() {
-      for (int i = 0; i < kIters; ++i) {
-        char* page = nullptr;
-        const size_t count = mgr.TryAllocateBatch(1, &page);
-        mgr.DeAllocateBatch(&page, count);
+  for (int i = 0; i < kThreads; ++i) {
+    threads.emplace_back([&] {
+      for (int j = 0; j < kIterations; ++j) {
+        WritePageLease lease;
+        Status status = pool.Acquire(1, &lease);
+        ASSERT_TRUE(status.ok()) << status.ToString();
       }
     });
   }
-  for (auto& th : threads) {
-    th.join();
-  }
-
-  EXPECT_EQ(mgr.GetUsedBytes(), 0);
+  for (auto& thread : threads) thread.join();
+  EXPECT_EQ(pool.GetUsedBytes(), 0);
 }
 
-// ─── TryAllocateBatch ──────────────────────────────────────────────────
-
-TEST(WriteMemPoolTest, TryAllocateBatch_ReturnsPage_IncreasesUsed) {
-  constexpr int64_t kPageSize = 4096;
-  WriteMemPool mgr(kPageSize * 4, kPageSize);
-
-  char* page = nullptr;
-  ASSERT_EQ(mgr.TryAllocateBatch(1, &page), 1);
-  EXPECT_EQ(mgr.GetUsedBytes(), kPageSize);
-
-  mgr.DeAllocateBatch(&page, 1);
-  EXPECT_EQ(mgr.GetUsedBytes(), 0);
-}
-
-TEST(WriteMemPoolTest, TryAllocateBatch_ReturnsShort_WhenExhausted_NoBlock) {
-  constexpr int64_t kPageSize = 4096;
-  WriteMemPool mgr(kPageSize * 2, kPageSize);  // 2 slots
-
+TEST(WriteMemPoolTest, ReleaseAfterCloseRestoresAccounting) {
+  constexpr int64_t kPage = 4096;
+  WriteMemPool pool(2 * kPage, kPage);
+  WritePageLease lease;
+  ASSERT_TRUE(pool.Acquire(2, &lease).ok());
   std::array<char*, 2> pages{};
-  ASSERT_EQ(mgr.TryAllocateBatch(pages.size(), pages.data()), pages.size());
+  lease.Take(pages.size(), pages.data());
 
-  // Pool drained -- TryAllocateBatch returns immediately (no bounded wait) and
-  // used stays at capacity (a short result must not bump used_pages_).
-  char* extra = nullptr;
-  EXPECT_EQ(mgr.TryAllocateBatch(1, &extra), 0);
-  EXPECT_EQ(mgr.GetUsedBytes(), 2 * kPageSize);
+  pool.Close();
+  pool.Release(pages.data(), pages.size());
 
-  mgr.DeAllocateBatch(pages.data(), pages.size());
+  EXPECT_EQ(pool.GetUsedBytes(), 0);
+  WritePageLease rejected;
+  EXPECT_TRUE(pool.TryAcquire(1, &rejected).IsStop());
 }
 
-TEST(WriteMemPoolTest, EmptyBatchIsNoOp) {
-  constexpr int64_t kPageSize = 4096;
-  WriteMemPool mgr(kPageSize * 2, kPageSize);
+TEST(WriteMemPoolTest, StablePhysicalShortBreaksPool) {
+  constexpr int64_t kPage = 4096;
+  WriteMemPool pool(2 * kPage, kPage);
+  char* stolen = WriteMemPoolTestPeer::RemovePhysicalPage(&pool);
 
-  EXPECT_EQ(mgr.TryAllocateBatch(0, nullptr), 0);
-  mgr.DeAllocateBatch(nullptr, 0);
-  EXPECT_EQ(mgr.GetUsedBytes(), 0);
+  WritePageLease lease;
+  Status status = pool.Acquire(2, &lease);
+  EXPECT_TRUE(status.IsInternal()) << status.ToString();
+  EXPECT_TRUE(lease.Empty());
+  EXPECT_EQ(pool.GetUsedBytes(), 0);
+
+  WritePageLease rejected;
+  EXPECT_TRUE(pool.Acquire(1, &rejected).IsInternal());
+  WriteMemPoolTestPeer::ReturnPhysicalPage(&pool, stolen);
 }
 
-TEST(WriteMemPoolTest, CrossThreadBatchAccountingReturnsToZero) {
-  constexpr int64_t kPageSize = 4096;
-  constexpr size_t kMaxBatch = 64;
-  constexpr int kIterations = 2000;
-  constexpr std::array<size_t, 3> kBatchSizes = {1, 16, 64};
-  WriteMemPool mgr(kPageSize * 256, kPageSize);
-
-  struct TransferSlot {
-    // 0: producer may allocate; 1: releaser owns the returned prefix.
-    std::atomic<uint32_t> state{0};
-    size_t count{0};
-    std::array<char*, kMaxBatch> pages{};
-  } slot;
-  std::atomic<bool> short_allocation{false};
-
-  std::thread producer([&]() {
-    for (int iteration = 0; iteration < kIterations; ++iteration) {
-      while (slot.state.load(std::memory_order_acquire) != 0) {
-        std::this_thread::yield();
-      }
-      const size_t requested =
-          kBatchSizes[iteration % kBatchSizes.size()];
-      slot.count = mgr.TryAllocateBatch(requested, slot.pages.data());
-      if (slot.count != requested) {
-        short_allocation.store(true, std::memory_order_relaxed);
-      }
-      slot.state.store(1, std::memory_order_release);
-    }
-  });
-  std::thread releaser([&]() {
-    for (int iteration = 0; iteration < kIterations; ++iteration) {
-      while (slot.state.load(std::memory_order_acquire) != 1) {
-        std::this_thread::yield();
-      }
-      mgr.DeAllocateBatch(slot.pages.data(), slot.count);
-      slot.state.store(0, std::memory_order_release);
-    }
-  });
-
-  producer.join();
-  releaser.join();
-  EXPECT_FALSE(short_allocation.load(std::memory_order_relaxed));
-  EXPECT_EQ(mgr.GetUsedBytes(), 0);
-}
-
+}  // namespace
 }  // namespace dingofs

@@ -697,11 +697,9 @@ TEST_F(CompactorTest, ForceCompact_NonZeroChunkAndOffset_BytesPreserved) {
   }
 }
 
-// 22. A write failure (page pool exhausted) must abort the compaction with an
-// error, upload nothing, and trigger no cleanup — nothing was ever uploaded.
-TEST_F(CompactorTest, ForceCompact_WritePoolExhausted_FailsWithoutUpload) {
-  // 64 KiB pool cannot back a 4 MiB block: SliceWriter::Write fails in the
-  // reserve phase and rolls back before any upload is submitted.
+// 22. Compaction capacity admission is non-blocking and precedes its dense
+// read. A miss must return NotFit without heap/read/upload work.
+TEST_F(CompactorTest, ForceCompact_WritePoolBusy_SkipsDenseRead) {
   WriteMemPool tiny_pool(64 * 1024, 4096);
   ON_CALL(*mock_hub_, GetWriteMemPool()).WillByDefault(Return(&tiny_pool));
 
@@ -709,6 +707,7 @@ TEST_F(CompactorTest, ForceCompact_WritePoolExhausted_FailsWithoutUpload) {
   ON_CALL(*mock_hub_, GetBlockAccesser()).WillByDefault(Return(&accesser));
   EXPECT_CALL(*mock_hub_, GetBlockAccesser()).Times(AnyNumber());
   EXPECT_CALL(accesser, BatchDelete(_)).Times(0);
+  EXPECT_CALL(*mock_block_store_, RangeAsync).Times(0);
   EXPECT_CALL(*mock_block_store_, PutAsync).Times(0);
 
   std::vector<Slice> slices = {dingofs::client::vfs::test::MakeSlice(
@@ -716,7 +715,7 @@ TEST_F(CompactorTest, ForceCompact_WritePoolExhausted_FailsWithoutUpload) {
   std::vector<Slice> out;
   Status s = compactor_->ForceCompact(ctx_, /*ino=*/503, /*chunk_index=*/0,
                                       slices, out);
-  EXPECT_TRUE(s.IsNoSpace()) << s.ToString();
+  EXPECT_TRUE(s.IsNotFit()) << s.ToString();
   EXPECT_TRUE(out.empty());
   EXPECT_EQ(tiny_pool.GetUsedBytes(), 0);
 }

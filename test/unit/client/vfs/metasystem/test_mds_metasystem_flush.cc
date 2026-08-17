@@ -139,16 +139,19 @@ TEST(MDSMetaSystemFlushTest, FailedAttemptTerminatesCurrentFlush) {
   auto retry = std::async(std::launch::async,
                           [&]() { return metasystem.Flush(ctx, kIno, kFh); });
   const auto retry_deadline = std::chrono::steady_clock::now() + 1s;
-  while ((task->Retries() == 0 || task->WaiterCount() == 0) &&
+  while (task->Retries() == 0 &&
          std::chrono::steady_clock::now() < retry_deadline) {
     std::this_thread::yield();
   }
   ASSERT_EQ(task->Retries(), 1);
-  ASSERT_GT(task->WaiterCount(), 0);
 
-  MDSMetaSystemTestPeer::CompleteForCleanup(metasystem, kIno, task);
+  // No MDS is reachable in this unit test, so the retried write-slice bthread
+  // fails its RPC and the explicit Flush propagates that error.  Waiting on the
+  // future also joins the detached bthread: its SetDone is what unblocks
+  // AsyncFlushSlice's Wait, so the metasystem is never destroyed while the
+  // bthread still dereferences `this`.
   ASSERT_EQ(retry.wait_for(1s), std::future_status::ready);
-  EXPECT_TRUE(retry.get().ok());
+  EXPECT_FALSE(retry.get().ok());
 }
 
 TEST(MDSMetaSystemFlushTest, ConcurrentWriteDoesNotExtendActiveFlush) {

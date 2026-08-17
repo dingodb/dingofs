@@ -30,6 +30,7 @@
 #include "client/vfs/components/prefetch_manager.h"
 #include "client/vfs/components/warmup_manager.h"
 #include "client/vfs/data/reader/reader_registry.h"
+#include "client/vfs/data/write_pressure_controller.h"
 #include "client/vfs/data/writer_table.h"
 #include "client/vfs/metasystem/local/metasystem.h"
 #include "client/vfs/metasystem/mds/metasystem.h"
@@ -44,7 +45,6 @@
 #include "common/directory.h"
 #include "common/options/cache.h"
 #include "common/options/client.h"
-#include "common/options/common.h"
 #include "common/status.h"
 #include "common/version.h"
 #include "utils/executor/thread/executor_impl.h"
@@ -58,6 +58,7 @@ static const std::string kReadExecutorName = "vfs_read";
 static const std::string kReadCleanupExecutorName = "vfs_read_cleanup";
 static const std::string kWriteBackgroundExecutorName = "vfs_write_bg";
 static const std::string kCBExecutorName = "vfs_callback";
+static const std::string kWritePressureExecutorName = "vfs_write_pressure";
 
 static MetaSystemUPtr BuildMetaSystem(const VFSConfig& vfs_conf,
                                       const ClientId& client_id,
@@ -109,6 +110,10 @@ VFSHubImpl::~VFSHubImpl() {
     handle_manager_.reset();
   }
 
+  if (write_pressure_controller_ != nullptr) {
+    write_pressure_controller_.reset();
+  }
+
   if (writer_table_ != nullptr) {
     writer_table_.reset();
   }
@@ -127,6 +132,10 @@ VFSHubImpl::~VFSHubImpl() {
 
   if (flush_executor_ != nullptr) {
     flush_executor_.reset();
+  }
+
+  if (write_pressure_executor_ != nullptr) {
+    write_pressure_executor_.reset();
   }
 
   if (warmup_manager_ != nullptr) {
@@ -165,6 +174,14 @@ Status VFSHubImpl::Start(bool skip_mount) {
   LOG(INFO) << fmt::format("[vfs.hub] vfs hub starting, skip_mount({}).",
                            skip_mount);
 
+  const uint64_t write_buffer_total_bytes =
+      FLAGS_vfs_write_buffer_total_mb * 1024 * 1024;
+  if (write_buffer_total_bytes % FLAGS_vfs_write_buffer_page_size != 0) {
+    return Status::InvalidParam(fmt::format(
+        "write buffer total size ({}) must be a multiple of page size ({})",
+        write_buffer_total_bytes, FLAGS_vfs_write_buffer_page_size));
+  }
+
   {
     compactor_ = std::make_unique<CompactorImpl>(this);
     DINGOFS_RETURN_NOT_OK(compactor_->Start());
@@ -193,6 +210,27 @@ Status VFSHubImpl::Start(bool skip_mount) {
     if (fs_info_.status != FsStatus::kNormal) {
       return Status::Internal(fmt::format("fs is unavailable, status({})",
                                           FsStatus2Str(fs_info_.status)));
+    }
+
+    if (fs_info_.block_size % FLAGS_vfs_write_buffer_page_size != 0) {
+      return Status::InvalidParam(fmt::format(
+          "filesystem block size ({}) must be a multiple of write buffer "
+          "page size ({})",
+          fs_info_.block_size, FLAGS_vfs_write_buffer_page_size));
+    }
+
+    const uint64_t max_chunk_pages =
+        (static_cast<uint64_t>(fs_info_.chunk_size) +
+         FLAGS_vfs_write_buffer_page_size - 1) /
+        FLAGS_vfs_write_buffer_page_size;
+    const uint64_t write_buffer_capacity_pages =
+        write_buffer_total_bytes / FLAGS_vfs_write_buffer_page_size;
+    if (max_chunk_pages > write_buffer_capacity_pages) {
+      return Status::InvalidParam(fmt::format(
+          "filesystem chunk size ({}) requires up to {} write buffer pages, "
+          "exceeding write buffer capacity ({} pages, {} bytes)",
+          fs_info_.chunk_size, max_chunk_pages, write_buffer_capacity_pages,
+          write_buffer_total_bytes));
     }
   }
 
@@ -320,9 +358,19 @@ Status VFSHubImpl::Start(bool skip_mount) {
     }
   }
 
+  {
+    write_pressure_executor_ =
+        std::make_unique<ExecutorImpl>(kWritePressureExecutorName, 1);
+    if (!write_pressure_executor_->Start()) {
+      return Status::Internal("write pressure executor start fail");
+    }
+  }
+
   write_buffer_manager_ = std::make_unique<WriteMemPool>(
-      FLAGS_vfs_write_buffer_total_mb * 1024 * 1024,
-      FLAGS_vfs_write_buffer_page_size);
+      write_buffer_total_bytes, FLAGS_vfs_write_buffer_page_size);
+  write_pressure_controller_ = std::make_unique<WritePressureController>(
+      writer_table_.get(), write_pressure_executor_.get());
+  write_buffer_manager_->SetPressureObserver(write_pressure_controller_.get());
 
   // read mempool (the read-path buffer accountant; replaces ReadBufferManager)
   {
@@ -427,8 +475,25 @@ Status VFSHubImpl::Stop(bool skip_unmount) {
     uid_gid_mapper_->StopWatching();
   }
 
+  // Close page admission first so blocked foreground writers wake and no new
+  // leases can enter teardown. Existing page owners may still release.
+  if (write_buffer_manager_ != nullptr) {
+    write_buffer_manager_->Close();
+    write_buffer_manager_->SetPressureObserver(nullptr);
+  }
+
   if (compactor_ != nullptr) {
     compactor_->Stop();
+  }
+
+  // Drain the event-driven flush round before HandleManager performs the final
+  // synchronous writer flush. This prevents overlapping pressure and shutdown
+  // flush ownership.
+  if (write_pressure_controller_ != nullptr) {
+    write_pressure_controller_->StopAndDrain();
+  }
+  if (write_pressure_executor_ != nullptr) {
+    write_pressure_executor_->Stop();
   }
 
   Status handle_stop_status;

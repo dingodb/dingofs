@@ -73,6 +73,22 @@ class FlushTasksTest : public test::VFSTestBase {
     EXPECT_CALL(*mock_hub_, GetTraceManager()).Times(AnyNumber());
   }
 
+  template <typename WriterPtr>
+  Status Write(const WriterPtr& writer, const char* buf, int32_t size,
+               int32_t chunk_offset) {
+    WriteMemPool* pool = mock_hub_->GetWriteMemPool();
+    const uint64_t page_size = pool->GetPageSize();
+    const size_t page_need =
+        static_cast<size_t>(((static_cast<uint64_t>(chunk_offset) % page_size) +
+                             static_cast<uint64_t>(size) + page_size - 1) /
+                            page_size);
+    WritePageLease lease;
+    Status status = pool->Acquire(page_need, &lease);
+    if (!status.ok()) return status;
+    writer->Write(ctx_, buf, size, chunk_offset, &lease);
+    return Status::OK();
+  }
+
   std::unique_ptr<TraceManager> trace_manager_;
 };
 
@@ -117,7 +133,7 @@ TEST_F(FlushTasksTest, ChunkFlushTask_AllSlices_Success) {
     uint64_t chunk_off = static_cast<uint64_t>(i) * kPageSize;
     auto sw = std::make_shared<SliceWriter>(ctx, mock_hub_, chunk_off);
     std::vector<char> buf(kPageSize, static_cast<char>('A' + i));
-    ASSERT_TRUE(sw->Write(ctx_, buf.data(), kPageSize, chunk_off).ok());
+    ASSERT_TRUE(Write(sw, buf.data(), kPageSize, chunk_off).ok());
     slices.emplace(seq, sw);
   }
 
@@ -148,7 +164,7 @@ TEST_F(FlushTasksTest, ChunkFlushTask_SliceFail_Propagated) {
   uint64_t seq = ctx.seq;
   auto sw = std::make_shared<SliceWriter>(ctx, mock_hub_, 0);
   std::vector<char> buf(kPageSize, 'F');
-  ASSERT_TRUE(sw->Write(ctx_, buf.data(), kPageSize, 0).ok());
+  ASSERT_TRUE(Write(sw, buf.data(), kPageSize, 0).ok());
 
   std::map<uint64_t, SliceWriterPtr> slices;
   slices.emplace(seq, sw);
@@ -190,7 +206,7 @@ TEST_F(FlushTasksTest, ChunkFlushTask_Concurrent_ExactlyOnce) {
     uint64_t chunk_off = static_cast<uint64_t>(i) * kPageSize;
     auto sw = std::make_shared<SliceWriter>(ctx, mock_hub_, chunk_off);
     std::vector<char> buf(kPageSize, static_cast<char>('a' + i));
-    ASSERT_TRUE(sw->Write(ctx_, buf.data(), kPageSize, chunk_off).ok());
+    ASSERT_TRUE(Write(sw, buf.data(), kPageSize, chunk_off).ok());
     slices.emplace(seq, sw);
   }
 
@@ -239,7 +255,7 @@ TEST_F(FlushTasksTest, FileFlushTask_AllSuccess_CallbackCalledOnce) {
                                             static_cast<uint64_t>(i));
     std::vector<char> buf(kPageSize, static_cast<char>('A' + i));
     uint64_t chunk_off = 0;
-    ASSERT_TRUE(cw->Write(ctx_, buf.data(), kPageSize, chunk_off).ok());
+    ASSERT_TRUE(Write(cw, buf.data(), kPageSize, chunk_off).ok());
     writers_map.emplace(static_cast<uint64_t>(i), cw.get());
     owned_writers.push_back(std::move(cw));
   }
@@ -269,7 +285,7 @@ TEST_F(FlushTasksTest, FileFlushTask_OneChunkFail_ErrorPropagated) {
 
   auto cw = std::make_unique<ChunkWriter>(mock_hub_, kIno, 0);
   std::vector<char> buf(kPageSize, 'E');
-  ASSERT_TRUE(cw->Write(ctx_, buf.data(), kPageSize, 0).ok());
+  ASSERT_TRUE(Write(cw, buf.data(), kPageSize, 0).ok());
 
   std::unordered_map<int64_t, ChunkWriter*> writers_map;
   writers_map.emplace(0u, cw.get());
@@ -322,7 +338,7 @@ TEST_F(FlushTasksTest, FileFlushTask_Concurrent_ExactlyOnce) {
     auto cw = std::make_unique<ChunkWriter>(mock_hub_, kIno,
                                             static_cast<uint64_t>(i));
     std::vector<char> buf(kPageSize, static_cast<char>('a' + i));
-    ASSERT_TRUE(cw->Write(ctx_, buf.data(), kPageSize, 0).ok());
+    ASSERT_TRUE(Write(cw, buf.data(), kPageSize, 0).ok());
     writers_map.emplace(static_cast<uint64_t>(i), cw.get());
     owned_writers.push_back(std::move(cw));
   }

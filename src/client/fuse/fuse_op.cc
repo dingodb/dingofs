@@ -18,10 +18,12 @@
 
 #include <sys/types.h>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <limits>
 #include <memory>
 #include <string>
 
@@ -47,6 +49,8 @@ USING_FLAG(fuse_enable_keep_cache)
 USING_FLAG(fuse_enable_readdir_cache)
 USING_FLAG(fuse_enable_parallel_dirops)
 USING_FLAG(fuse_dryrun_bench_mode)
+USING_FLAG(vfs_write_buffer_page_size)
+USING_FLAG(vfs_write_buffer_total_mb)
 
 using dingofs::Status;
 using dingofs::client::fuse::FuseUpgradeState;
@@ -107,6 +111,22 @@ void InitFuseConnInfo(struct fuse_conn_info* conn) {
 
   conn->max_readahead = FLAGS_fuse_max_readahead_kb * 1024;
   conn->max_background = FLAGS_fuse_max_background;
+
+  // One foreground request may start at the last byte of a page. Cap the
+  // negotiated payload so its worst-case page need always fits in the pool;
+  // larger user writes are split by the kernel instead of becoming an
+  // impossible FIFO head.
+  constexpr uint64_t kMiB = 1024 * 1024;
+  const uint64_t capacity_bytes = FLAGS_vfs_write_buffer_total_mb * kMiB;
+  CHECK_GE(capacity_bytes, FLAGS_vfs_write_buffer_page_size);
+  const uint64_t safe_max_write =
+      capacity_bytes - FLAGS_vfs_write_buffer_page_size + 1;
+  if (conn->max_write > safe_max_write) {
+    conn->max_write = static_cast<uint32_t>(std::min<uint64_t>(
+        safe_max_write, std::numeric_limits<uint32_t>::max()));
+    LOG(INFO) << "cap FUSE max_write to write-page admission capacity: "
+              << conn->max_write;
+  }
 }
 
 void Attr2Stat(const Attr& attr, struct stat* stat) {
@@ -177,7 +197,8 @@ static void ReplyAttr(fuse_req_t req, const Attr& attr) {
   memset(&stat, 0, sizeof(stat));
   Attr2Stat(attr, &stat);
 
-  int ret = fuse_reply_attr(req, &stat, g_client_session->GetAttrTimeout(attr.type));
+  int ret =
+      fuse_reply_attr(req, &stat, g_client_session->GetAttrTimeout(attr.type));
   if (ret != 0) {
     LOG(ERROR) << fmt::format("[fuse] fuse_reply_attr fail, ret({}).", errno);
   }
@@ -646,7 +667,8 @@ void FuseOpRead(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
   }
 
   uint64_t rsize = 0;
-  Status s = g_client_session->Read(ctx, ino, &data_buffer, size, off, fi->fh, &rsize);
+  Status s =
+      g_client_session->Read(ctx, ino, &data_buffer, size, off, fi->fh, &rsize);
   s.ok() ? ReplyData(req, data_buffer) : ReplyError(req, s);
 }
 
@@ -723,8 +745,9 @@ void FuseOpFallocate(fuse_req_t req, fuse_ino_t ino, int mode, off_t offset,
     return;
   }
 
-  Status s = g_client_session->Fallocate(ctx, ino, mode, static_cast<uint64_t>(offset),
-                              static_cast<uint64_t>(length));
+  Status s =
+      g_client_session->Fallocate(ctx, ino, mode, static_cast<uint64_t>(offset),
+                                  static_cast<uint64_t>(length));
   ReplyError(req, s);
 }
 
@@ -1038,7 +1061,8 @@ void FuseOpCreate(fuse_req_t req, fuse_ino_t parent, const char* name,
 
   uint64_t fh = 0;
   Attr out_attr;
-  Status s = g_client_session->Create(ctx, parent, name, mode, fi->flags, &fh, &out_attr);
+  Status s = g_client_session->Create(ctx, parent, name, mode, fi->flags, &fh,
+                                      &out_attr);
   if (!s.ok()) {
     ReplyError(req, s);
 
@@ -1081,7 +1105,7 @@ void FuseOpIoctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void* arg,
 
   std::string out_buf(out_bufsz, '\0');
   Status s = g_client_session->Ioctl(ctx, ino, cmd, flags, in_buf, in_bufsz,
-                          out_buf.data(), out_bufsz);
+                                     out_buf.data(), out_bufsz);
   s.ok() ? ReplyIoctl(req, out_buf.data(), out_bufsz) : ReplyError(req, s);
 }
 

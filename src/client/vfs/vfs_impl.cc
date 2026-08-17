@@ -709,11 +709,9 @@ Status VFSImpl::Write(ContextSPtr ctx, Ino ino, const char* buf, uint64_t size,
 
   s = handle->resources.writer->Write(SpanScope::GetContext(span), buf, size,
                                       offset, out_wsize);
-  // Use *out_wsize, not size: writer->Write may short-write (OK with
-  // *out_wsize < size) when the page pool is exhausted mid-write. Metadata must
-  // reflect only what is durable -- MetaSystem::Write extends the inode length
-  // to offset + len, so passing the full size would claim bytes that were never
-  // written (reads past the durable prefix would see a phantom hole).
+  // Use *out_wsize, not size: shutdown or a sticky writer failure can stop a
+  // multi-chunk write after a successful prefix. Metadata must reflect only
+  // bytes accepted by the writer.
   if (s.ok() && *out_wsize > 0) {
     s = meta_system_->Write(SpanScope::GetContext(span), ino, buf, offset,
                             *out_wsize, fh);
@@ -723,10 +721,7 @@ Status VFSImpl::Write(ContextSPtr ctx, Ino ino, const char* buf, uint64_t size,
                                       static_cast<int64_t>(*out_wsize));
   }
 
-  // No status logging here: VFSImpl returns Status without logging per-op
-  // outcomes (like the other ops); the uniform status + out_wsize record lives
-  // in ClientSession's access log, the pool-pressure locality in SliceWriter,
-  // and the failure rate in the vfs_write_buffer_alloc_fail_num metric.
+  // ClientSession's access log records status + out_wsize uniformly.
   return s;
 }
 

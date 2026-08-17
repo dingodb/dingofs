@@ -47,6 +47,7 @@ namespace client {
 namespace vfs {
 
 class WriterTable;  // forward decl; full include lives in vfs_hub.cc
+class WritePressureController;
 class ReaderRegistry;
 
 class VFSHub {
@@ -271,7 +272,9 @@ class VFSHubImpl : public VFSHub {
 
   std::unique_ptr<Executor> flush_executor_;
   std::unique_ptr<Executor> cb_executor_;
+  std::unique_ptr<Executor> write_pressure_executor_;
   std::unique_ptr<WriteMemPool> write_buffer_manager_;
+  std::unique_ptr<WritePressureController> write_pressure_controller_;
   std::unique_ptr<ReadMemPool> read_mem_pool_;
   std::unique_ptr<ReadMemPoolVars>
       read_mem_pool_vars_;  // after pool: dtor first

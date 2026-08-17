@@ -21,10 +21,14 @@
 #include <condition_variable>
 #include <future>
 #include <mutex>
+#include <utility>
+#include <vector>
 
+#include "client/vfs/data/write_pressure_controller.h"
 #include "client/vfs/data/writer/file_writer.h"
 #include "client/vfs/data/writer_table.h"
 #include "test/unit/client/vfs/test_base.h"
+#include "utils/executor/thread/executor_impl.h"
 
 namespace dingofs {
 namespace client {
@@ -161,6 +165,104 @@ TEST_F(WriterTableTest, FlushAll_ErrorDoesNotSkipRemainingWriters) {
   table_->ReleaseWriter(w2);
 }
 
+TEST_F(WriterTableTest, PressureFlushReturnsPagesAndUnblocksFifoWriter) {
+  constexpr int64_t kPage = 4096;
+  WriteMemPool tiny_pool(kPage, kPage);
+  ON_CALL(*mock_hub_, GetWriteMemPool()).WillByDefault(Return(&tiny_pool));
+
+  ExecutorImpl pressure_executor("test_write_pressure", 1);
+  ASSERT_TRUE(pressure_executor.Start());
+  WritePressureController controller(table_.get(), &pressure_executor);
+  tiny_pool.SetPressureObserver(&controller);
+
+  FileWriter* first = table_->AcquireWriter(210);
+  FileWriter* second = table_->AcquireWriter(211);
+  ASSERT_NE(first, nullptr);
+  ASSERT_NE(second, nullptr);
+
+  std::vector<char> first_buf(kPage, 'a');
+  uint64_t first_written = 0;
+  ASSERT_TRUE(
+      first->Write(ctx_, first_buf.data(), first_buf.size(), 0, &first_written)
+          .ok());
+  ASSERT_EQ(first_written, first_buf.size());
+  ASSERT_EQ(tiny_pool.GetUsedBytes(), kPage);
+
+  std::vector<char> second_buf(kPage, 'b');
+  auto blocked_write = std::async(std::launch::async, [&] {
+    uint64_t written = 0;
+    Status status =
+        second->Write(ctx_, second_buf.data(), second_buf.size(), 0, &written);
+    return std::make_pair(status, written);
+  });
+
+  ASSERT_EQ(blocked_write.wait_for(std::chrono::seconds(5)),
+            std::future_status::ready);
+  auto [status, written] = blocked_write.get();
+  EXPECT_TRUE(status.ok()) << status.ToString();
+  EXPECT_EQ(written, second_buf.size());
+
+  ASSERT_TRUE(table_->FlushAll().ok());
+  tiny_pool.Close();
+  tiny_pool.SetPressureObserver(nullptr);
+  controller.StopAndDrain();
+  ASSERT_TRUE(pressure_executor.Stop());
+
+  table_->ReleaseWriter(first);
+  table_->ReleaseWriter(second);
+  EXPECT_EQ(tiny_pool.GetUsedBytes(), 0);
+}
+
+TEST_F(WriterTableTest, PressureFlushSeesPartialChunkBeforeNextAdmission) {
+  constexpr int64_t kPage = 4096;
+  constexpr uint64_t kChunk = 2 * kPage;
+  ON_CALL(*mock_hub_, GetFsInfo())
+      .WillByDefault(Return(test::MakeTestFsInfo(kChunk, kChunk)));
+
+  WriteMemPool tiny_pool(kChunk, kPage);
+  ON_CALL(*mock_hub_, GetWriteMemPool()).WillByDefault(Return(&tiny_pool));
+
+  ExecutorImpl pressure_executor("test_write_pressure_cross_chunk", 1);
+  ASSERT_TRUE(pressure_executor.Start());
+  WritePressureController controller(table_.get(), &pressure_executor);
+  tiny_pool.SetPressureObserver(&controller);
+
+  FileWriter* writer = table_->AcquireWriter(212);
+  ASSERT_NE(writer, nullptr);
+
+  // The first page ends chunk 0 but leaves a partial slice, so ChunkWriter
+  // cannot trigger its full-chunk flush. Chunk 1 then needs both pool pages
+  // while only one is free and must rely on pressure flush for progress.
+  std::vector<char> buf(3 * kPage, 'x');
+  auto write = std::async(std::launch::async, [&] {
+    uint64_t written = 0;
+    Status status =
+        writer->Write(ctx_, buf.data(), buf.size(), kPage, &written);
+    return std::make_pair(status, written);
+  });
+
+  const auto completion = write.wait_for(std::chrono::seconds(1));
+  if (completion != std::future_status::ready) {
+    tiny_pool.Close();
+  }
+  EXPECT_EQ(completion, std::future_status::ready)
+      << "a completed partial chunk must become visible to pressure flush "
+         "before the next chunk waits for admission";
+
+  auto [status, written] = write.get();
+  EXPECT_TRUE(status.ok()) << status.ToString();
+  EXPECT_EQ(written, buf.size());
+
+  EXPECT_TRUE(writer->Flush().ok());
+  EXPECT_EQ(tiny_pool.GetUsedBytes(), 0);
+
+  tiny_pool.Close();
+  tiny_pool.SetPressureObserver(nullptr);
+  controller.StopAndDrain();
+  EXPECT_TRUE(pressure_executor.Stop());
+  table_->ReleaseWriter(writer);
+}
+
 TEST_F(WriterTableTest, FlushAllPinsWriterAgainstLastConcurrentRelease) {
   auto* w = table_->AcquireWriter(203);
   ASSERT_NE(w, nullptr);
@@ -234,7 +336,7 @@ TEST_F(WriterTableTest, ReleaseNullptr_NoOp) {
 // must not leave the table in an inconsistent state.
 TEST_F(WriterTableTest, Stop_Idempotent) {
   table_->Stop();
-  table_->Stop();   // second call must be safe
+  table_->Stop();  // second call must be safe
   EXPECT_EQ(table_->AcquireWriter(400), nullptr);
 }
 

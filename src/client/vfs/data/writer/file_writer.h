@@ -36,9 +36,7 @@ class VFSHub;
 class FileWriter {
  public:
   FileWriter(VFSHub* hub, uint64_t ino)
-      : vfs_hub_(hub),
-        ino_(ino),
-        uuid_(fmt::format("file_writer-{}", ino_)) {}
+      : vfs_hub_(hub), ino_(ino), uuid_(fmt::format("file_writer-{}", ino_)) {}
 
   ~FileWriter();
 
@@ -50,6 +48,10 @@ class FileWriter {
                uint64_t* out_wsize);
 
   Status Flush();
+
+  // Starts a flush only when published writes are not fully flushed. The
+  // callback is invoked exactly once, possibly inline for a clean writer.
+  void FlushDirtyAsync(StatusCallback cb);
 
   void AcquireRef();
 
@@ -82,7 +84,7 @@ class FileWriter {
   std::atomic<int64_t> refs_{0};
 
   mutable std::mutex status_mutex_;
-  Status file_status_;   // sticky after first error
+  Status file_status_;  // sticky after first error
 
   mutable std::mutex mutex_;
   std::condition_variable cv_;
