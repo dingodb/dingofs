@@ -8,6 +8,7 @@ Test root directory resolution order:
   3. ./dingofs_test (cwd)
 Each test case runs inside its own temporary subdirectory.
 """
+import errno
 import hashlib
 import os
 import random
@@ -67,6 +68,46 @@ def md5_file(path, bufsize=1 << 20):
 
 def rand_name(n=8):
     return "".join(random.choice(string.ascii_lowercase + string.digits) for _ in range(n))
+
+
+# ---- fallocate support (Linux) ----
+FALLOC_FL_KEEP_SIZE = 0x01
+FALLOC_FL_PUNCH_HOLE = 0x02
+FALLOC_FL_COLLAPSE_RANGE = 0x08
+FALLOC_FL_ZERO_RANGE = 0x10
+FALLOC_FL_INSERT_RANGE = 0x20
+
+
+def _libc_fallocate(fd, mode, offset, length):
+    import ctypes
+    import ctypes.util
+    libc = ctypes.CDLL(ctypes.util.find_library("c"), use_errno=True)
+    if libc.fallocate(ctypes.c_int(fd), ctypes.c_int(mode),
+                      ctypes.c_longlong(offset), ctypes.c_longlong(length)) != 0:
+        e = ctypes.get_errno()
+        raise OSError(e, os.strerror(e))
+
+
+def fallocate(fd, mode, offset, length):
+    """Run fallocate(2) on an open fd.
+
+    mode == 0 uses posix_fallocate (extends file size). Non-zero modes are the
+    FALLOC_FL_* constants. Returns True on success; returns False when the
+    operation or mode is unsupported by the filesystem (EOPNOTSUPP/ENOTSUP/
+    ENOSYS/ENODEV, and EINVAL for non-zero modes). Other failures raise
+    OSError.
+    """
+    unsupported = (errno.EOPNOTSUPP, errno.ENOTSUP, errno.ENOSYS, errno.ENODEV)
+    try:
+        if mode == 0:
+            os.posix_fallocate(fd, offset, length)
+        else:
+            _libc_fallocate(fd, mode, offset, length)
+    except OSError as e:
+        if e.errno in unsupported or (mode != 0 and e.errno == errno.EINVAL):
+            return False
+        raise
+    return True
 
 
 class Checker(object):
