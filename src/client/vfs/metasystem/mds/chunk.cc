@@ -336,6 +336,7 @@ bool CommitTask::Dump(Json::Value& value) {
 }
 
 void ChunkSet::Append(uint32_t index, const std::vector<Slice>& slices) {
+  std::lock_guard<std::mutex> flush_guard(write_flush_mutex_);
   utils::WriteLockGuard guard(lock_);
 
   auto it = chunk_map_.find(index);

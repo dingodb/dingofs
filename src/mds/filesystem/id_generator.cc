@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "mds/filesystem/id_generator.h"
+#include "common/helper.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -64,7 +65,7 @@ DEFINE_bool(mds_slice_id_generator_share_enable, true, "Slice ID generator share
 
 static uint32_t CalWaitTimeUs(int retry) {
   // exponential backoff
-  return Helper::GenerateRealRandomInteger(1000, 5000) * (1 << retry);
+  return ::dingofs::Helper::GenerateRealRandomInteger(1000, 5000) * (1 << retry);
 }
 
 static bool IsRetry(uint32_t& retry) {

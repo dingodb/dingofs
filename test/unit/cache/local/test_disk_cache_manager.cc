@@ -194,6 +194,61 @@ TEST_F(DiskCacheManagerTest, AddCachedDoesNotUnpinStaging) {
   EXPECT_FALSE(manager.Exist(key));
 }
 
+TEST_F(DiskCacheManagerTest, DeleteBlock) {
+  DiskCacheManager manager(100 * 1024 * 1024, layout_);
+  manager.Start();
+
+  {
+    Cache(manager, Key(1));
+    EXPECT_EQ(manager.DeleteBlock(Key(1)),
+              DiskCacheManager::DeleteResult::kDeleted);
+    EXPECT_FALSE(manager.Exist(Key(1)));
+  }
+
+  {
+    EXPECT_EQ(manager.DeleteBlock(Key(2)),
+              DiskCacheManager::DeleteResult::kNotFound);
+  }
+
+  {
+    Stage(manager, Key(3));
+    EXPECT_EQ(manager.DeleteBlock(Key(3)),
+              DiskCacheManager::DeleteResult::kStaged);
+    EXPECT_TRUE(manager.Exist(Key(3)));
+
+    manager.PromoteStagingToCached(Key(3));
+    EXPECT_EQ(manager.DeleteBlock(Key(3)),
+              DiskCacheManager::DeleteResult::kDeleted);
+    EXPECT_FALSE(manager.Exist(Key(3)));
+  }
+
+  manager.Shutdown();
+}
+
+TEST_F(DiskCacheManagerTest, DeleteBlockUnlinksCacheFile) {
+  DiskCacheManager manager(100 * 1024 * 1024, layout_);
+  manager.Start();
+
+  auto key = Key(1);
+  auto cache_path = layout_->GetCachePath(key);
+  std::filesystem::create_directories(
+      std::filesystem::path(cache_path).parent_path());
+  std::ofstream(cache_path) << "block-data";
+  ASSERT_TRUE(std::filesystem::exists(cache_path));
+
+  Cache(manager, key, 400);
+  ASSERT_EQ(manager.DeleteBlock(key), DiskCacheManager::DeleteResult::kDeleted);
+
+  bool deleted = false;
+  for (int i = 0; i < 500 && !deleted; ++i) {
+    deleted = !std::filesystem::exists(cache_path);
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  }
+  EXPECT_TRUE(deleted);
+
+  manager.Shutdown();
+}
+
 TEST_F(DiskCacheManagerTest, PerShardCapacityTriggersEviction) {
   // Eviction is per-shard: capacity is split into kShardCount shards. Scale the
   // whole-disk capacity so each shard holds 1000 bytes, and drive three

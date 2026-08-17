@@ -16,6 +16,7 @@
 #define DINGOFS_SRC_CLIENT_VFS_META_MDS_RPC_H_
 
 #include <atomic>
+#include "common/helper.h"
 #include <cstdint>
 #include <memory>
 #include <sstream>
@@ -61,7 +62,7 @@ inline bool IsInvalidEndpoint(const EndPoint& endpoint) {
 
 inline uint32_t CalWaitTimeUs(int retry) {
   // exponential backoff
-  return mds::Helper::GenerateRealRandomInteger(50000, 100000) * (1 << retry);
+  return ::dingofs::Helper::GenerateRealRandomInteger(50000, 100000) * (1 << retry);
 }
 
 inline bool IsRetry(int& retry, int max_retry) {

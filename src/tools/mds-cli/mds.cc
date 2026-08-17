@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "tools/mds-cli/mds.h"
+#include "common/helper.h"
 
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -167,6 +168,8 @@ CreateFsResponse MDSClient::CreateFs(const std::string& fs_name,
   request.set_enable_uid_gid_map(params.enable_uid_gid_map);
   request.set_enable_dir_stats(params.enable_dir_stats);
 
+  request.set_expect_mds_num(params.expect_mds_num);
+
   if (params.partition_type == "mono") {
     request.set_partition_type(
         ::dingofs::pb::mds::PartitionType::MONOLITHIC_PARTITION);
@@ -207,7 +210,6 @@ CreateFsResponse MDSClient::CreateFs(const std::string& fs_name,
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -238,7 +240,6 @@ MountFsResponse MDSClient::MountFs(const std::string& fs_name,
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -265,7 +266,6 @@ UmountFsResponse MDSClient::UmountFs(const std::string& fs_name,
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -297,7 +297,6 @@ DeleteFsResponse MDSClient::DeleteFs(const std::string& fs_name,
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -347,7 +346,6 @@ GetFsInfoResponse MDSClient::GetFs(const std::string& fs_name) {
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -394,7 +392,6 @@ ListFsInfoResponse MDSClient::ListFs() {
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -431,7 +428,6 @@ MkDirResponse MDSClient::MkDir(Ino parent, const std::string& name) {
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -528,7 +524,6 @@ MkNodResponse MDSClient::MkNod(Ino parent, const std::string& name) {
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -569,7 +564,6 @@ GetDentryResponse MDSClient::GetDentry(Ino parent, const std::string& name) {
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -600,7 +594,6 @@ ListDentryResponse MDSClient::ListDentry(Ino parent, bool is_only_dir) {
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -683,7 +676,6 @@ BatchGetInodeResponse MDSClient::BatchGetInode(
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -716,7 +708,6 @@ BatchGetXAttrResponse MDSClient::BatchGetXattr(
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -736,17 +727,15 @@ void MDSClient::SetFsStats(const std::string& fs_name) {
 
   request.set_fs_name(fs_name);
 
-  using Helper = dingofs::mds::Helper;
-
   pb::mds::FsStatsData stats;
-  stats.set_read_bytes(Helper::GenerateRealRandomInteger(1000, 10000000));
-  stats.set_read_qps(Helper::GenerateRealRandomInteger(100, 1000));
-  stats.set_write_bytes(Helper::GenerateRealRandomInteger(1000, 10000000));
-  stats.set_write_qps(Helper::GenerateRealRandomInteger(100, 1000));
-  stats.set_s3_read_bytes(Helper::GenerateRealRandomInteger(1000, 1000000));
-  stats.set_s3_read_qps(Helper::GenerateRealRandomInteger(100, 1000));
-  stats.set_s3_write_bytes(Helper::GenerateRealRandomInteger(1000, 1000000));
-  stats.set_s3_write_qps(Helper::GenerateRealRandomInteger(100, 10000));
+  stats.set_read_bytes(::dingofs::Helper::GenerateRealRandomInteger(1000, 10000000));
+  stats.set_read_qps(::dingofs::Helper::GenerateRealRandomInteger(100, 1000));
+  stats.set_write_bytes(::dingofs::Helper::GenerateRealRandomInteger(1000, 10000000));
+  stats.set_write_qps(::dingofs::Helper::GenerateRealRandomInteger(100, 1000));
+  stats.set_s3_read_bytes(::dingofs::Helper::GenerateRealRandomInteger(1000, 1000000));
+  stats.set_s3_read_qps(::dingofs::Helper::GenerateRealRandomInteger(100, 1000));
+  stats.set_s3_write_bytes(::dingofs::Helper::GenerateRealRandomInteger(1000, 1000000));
+  stats.set_s3_write_qps(::dingofs::Helper::GenerateRealRandomInteger(100, 10000));
 
   request.mutable_stats()->CopyFrom(stats);
 
@@ -772,7 +761,6 @@ void MDSClient::GetFsStats(const std::string& fs_name) {
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -795,18 +783,18 @@ void MDSClient::GetFsPerSecondStats(const std::string& fs_name) {
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
+  }
+
+  if (response.error().errcode() != dingofs::pb::error::Errno::OK) {
+    PrintFailure("getfspersecondstats",
+                 dingofs::pb::error::Errno_Name(response.error().errcode()),
+                 response.error().errmsg());
     return;
   }
 
   if (GetOutputConfig().format == OutputFormat::kJson) {
-    if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
-      PrintMessage("getfspersecondstats", "per-second statistics retrieved",
-                   response);
-    } else {
-      PrintFailure("getfspersecondstats",
-                   dingofs::pb::error::Errno_Name(response.error().errcode()),
-                   response.error().errmsg());
-    }
+    PrintMessage("getfspersecondstats", "per-second statistics retrieved",
+                 response);
     return;
   }
 
@@ -1069,7 +1057,6 @@ GetAttrResponse MDSClient::GetAttr(Ino ino) {
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -1111,7 +1098,6 @@ SetAttrResponse MDSClient::SetAttr(Ino ino, uint32_t to_set,
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -1142,7 +1128,6 @@ GetXAttrResponse MDSClient::GetXAttr(Ino ino, const std::string& name) {
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -1177,7 +1162,6 @@ SetXAttrResponse MDSClient::SetXAttr(
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -1230,7 +1214,6 @@ ListXAttrResponse MDSClient::ListXAttr(Ino ino) {
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -1424,7 +1407,6 @@ SetFsQuotaResponse MDSClient::SetFsQuota(const QuotaEntry& quota) {
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -1451,7 +1433,6 @@ GetFsQuotaResponse MDSClient::GetFsQuota() {
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -1481,7 +1462,6 @@ SetDirQuotaResponse MDSClient::SetDirQuota(Ino ino, const QuotaEntry& quota) {
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -1510,7 +1490,6 @@ GetDirQuotaResponse MDSClient::GetDirQuota(Ino ino) {
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -1539,7 +1518,6 @@ DeleteDirQuotaResponse MDSClient::DeleteDirQuota(Ino ino) {
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -1569,7 +1547,6 @@ JoinFsResponse MDSClient::JoinFs(const std::string& fs_name, uint32_t fs_id,
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -1599,7 +1576,6 @@ QuitFsResponse MDSClient::QuitFs(const std::string& fs_name, uint32_t fs_id,
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -1633,7 +1609,6 @@ JoinCacheGroupResponse MDSClient::JoinCacheGroup(const std::string& member_id,
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -1663,7 +1638,6 @@ LeaveCacheGroupResponse MDSClient::LeaveCacheGroup(
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -1686,7 +1660,6 @@ ListGroupsResponse MDSClient::ListGroups() {
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -1717,7 +1690,6 @@ ReweightMemberResponse MDSClient::ReweightMember(const std::string& member_id,
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -1742,7 +1714,6 @@ ListMembersResponse MDSClient::ListMembers(const std::string& group_name) {
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -1771,7 +1742,6 @@ UnLockMemberResponse MDSClient::UnlockMember(const std::string& member_id,
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -1796,7 +1766,6 @@ DeleteMemberResponse MDSClient::DeleteMember(const std::string& member_id) {
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
@@ -2509,7 +2478,7 @@ bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr,
     return true;
   }
 
-  if (cmd == Helper::ToLowerCase("GetMdsList")) {
+  if (cmd == ::dingofs::Helper::ToLowerCase("GetMdsList")) {
     auto response = mds_client.GetMdsList();
     if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
       PrintMessage("getmdslist", "MDS list retrieved", response);
@@ -2519,7 +2488,7 @@ bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr,
                    response.error().errmsg());
     }
 
-  } else if (cmd == Helper::ToLowerCase("CreateFs")) {
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("CreateFs")) {
     dingofs::mds::client::MDSClient::CreateFsParams params;
     params.partition_type = options.fs_partition_type;
     params.chunk_size = options.chunk_size;
@@ -2536,58 +2505,58 @@ bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr,
 
     mds_client.CreateFs(options.fs_name, params);
 
-  } else if (cmd == Helper::ToLowerCase("DeleteFs")) {
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("DeleteFs")) {
     mds_client.DeleteFs(options.fs_name, options.is_force);
 
-  } else if (cmd == Helper::ToLowerCase("UpdateFs")) {
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("UpdateFs")) {
     mds_client.UpdateFs(options.fs_name, {});
 
-  } else if (cmd == Helper::ToLowerCase("UpdateFsS3Info")) {
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("UpdateFsS3Info")) {
     mds_client.UpdateFsS3Info(options.fs_name, options.s3_info);
 
-  } else if (cmd == Helper::ToLowerCase("UpdateFsRadosInfo")) {
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("UpdateFsRadosInfo")) {
     mds_client.UpdateFsRadosInfo(options.fs_name, options.rados_info);
 
-  } else if (cmd == Helper::ToLowerCase("UpdateFsTrashDays")) {
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("UpdateFsTrashDays")) {
     mds_client.UpdateFsTrashDays(options.fs_name, options.trash_days);
 
-  } else if (cmd == Helper::ToLowerCase("UpdateFsEnableUidGidMap")) {
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("UpdateFsEnableUidGidMap")) {
     mds_client.UpdateFsEnableUidGidMap(options.fs_name,
                                        options.enable_uid_gid_map);
 
-  } else if (cmd == Helper::ToLowerCase("UpdateFsEnableDirStats")) {
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("UpdateFsEnableDirStats")) {
     mds_client.UpdateFsEnableDirStats(options.fs_name,
                                       options.enable_dir_stats);
 
-  } else if (cmd == Helper::ToLowerCase("GetFs")) {
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("GetFs")) {
     mds_client.GetFs(options.fs_name);
 
-  } else if (cmd == Helper::ToLowerCase("ListFs")) {
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("ListFs")) {
     mds_client.ListFs();
 
-  } else if (cmd == Helper::ToLowerCase("MkDir")) {
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("MkDir")) {
     mds_client.MkDir(options.parent, options.name);
 
-  } else if (cmd == Helper::ToLowerCase("BatchMkDir")) {
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("BatchMkDir")) {
     std::vector<int64_t> parents;
-    dingofs::mds::Helper::SplitString(options.parents, ',', parents);
+    dingofs::Helper::SplitString(options.parents, ',', parents);
     mds_client.BatchMkDir(parents, options.prefix, options.num);
 
-  } else if (cmd == Helper::ToLowerCase("MkNod")) {
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("MkNod")) {
     mds_client.MkNod(options.parent, options.name);
 
-  } else if (cmd == Helper::ToLowerCase("BatchMkNod")) {
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("BatchMkNod")) {
     std::vector<int64_t> parents;
-    dingofs::mds::Helper::SplitString(options.parents, ',', parents);
+    dingofs::Helper::SplitString(options.parents, ',', parents);
     mds_client.BatchMkNod(parents, options.prefix, options.num);
 
-  } else if (cmd == Helper::ToLowerCase("GetDentry")) {
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("GetDentry")) {
     mds_client.GetDentry(options.parent, options.name);
 
-  } else if (cmd == Helper::ToLowerCase("ListDentry")) {
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("ListDentry")) {
     mds_client.ListDentry(options.parent, false);
 
-  } else if (cmd == Helper::ToLowerCase("GetInode")) {
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("GetInode")) {
     if (options.ino == 0) {
       std::cout << "ino is empty.\n";
       return true;
@@ -2601,46 +2570,39 @@ bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr,
                    resp.error().errmsg());
     }
 
-  } else if (cmd == Helper::ToLowerCase("BatchGetInode")) {
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("BatchGetInode")) {
     std::vector<int64_t> inos;
-    dingofs::mds::Helper::SplitString(options.parents, ',', inos);
+    dingofs::Helper::SplitString(options.parents, ',', inos);
     mds_client.BatchGetInode(inos);
 
-  } else if (cmd == Helper::ToLowerCase("BatchGetXattr")) {
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("BatchGetXattr")) {
     std::vector<int64_t> inos;
-    dingofs::mds::Helper::SplitString(options.parents, ',', inos);
+    dingofs::Helper::SplitString(options.parents, ',', inos);
     mds_client.BatchGetXattr(inos);
 
-  } else if (cmd == Helper::ToLowerCase("SetFsStats")) {
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("SetFsStats")) {
     mds_client.SetFsStats(options.fs_name);
 
-  } else if (cmd == Helper::ToLowerCase("ContinueSetFsStats")) {
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("ContinueSetFsStats")) {
     mds_client.ContinueSetFsStats(options.fs_name);
 
-  } else if (cmd == Helper::ToLowerCase("GetFsStats")) {
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("GetFsStats")) {
     mds_client.GetFsStats(options.fs_name);
 
-  } else if (cmd == Helper::ToLowerCase("GetFsPerSecondStats")) {
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("GetFsPerSecondStats")) {
     mds_client.GetFsPerSecondStats(options.fs_name);
 
-  } else if (cmd == Helper::ToLowerCase("SetFsQuota")) {
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("SetFsQuota")) {
     dingofs::mds::QuotaEntry quota;
     quota.set_max_bytes(options.max_bytes);
     quota.set_max_inodes(options.max_inodes);
 
     mds_client.SetFsQuota(quota);
 
-  } else if (cmd == Helper::ToLowerCase("GetFsQuota")) {
-    auto response = mds_client.GetFsQuota();
-    if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
-      PrintMessage("getfsquota", "filesystem quota retrieved", response);
-    } else {
-      PrintFailure("getfsquota",
-                   dingofs::pb::error::Errno_Name(response.error().errcode()),
-                   response.error().errmsg());
-    }
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("GetFsQuota")) {
+    mds_client.GetFsQuota();
 
-  } else if (cmd == Helper::ToLowerCase("SetDirQuota")) {
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("SetDirQuota")) {
     if (options.ino == 0) {
       std::cout << "ino is empty.\n";
       return true;
@@ -2652,7 +2614,7 @@ bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr,
 
     mds_client.SetDirQuota(options.ino, quota);
 
-  } else if (cmd == Helper::ToLowerCase("GetDirQuota")) {
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("GetDirQuota")) {
     if (options.ino == 0) {
       std::cout << "ino is empty.\n";
       return true;
@@ -2660,13 +2622,13 @@ bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr,
 
     mds_client.GetDirQuota(options.ino);
 
-  } else if (cmd == Helper::ToLowerCase("DeleteDirQuota")) {
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("DeleteDirQuota")) {
     if (options.ino == 0) {
       std::cout << "ino is empty.\n";
       return true;
     }
     mds_client.DeleteDirQuota(options.ino);
-  } else if (cmd == Helper::ToLowerCase("JoinFs")) {
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("JoinFs")) {
     if (options.fs_name.empty() && options.fs_id == 0) {
       std::cout << "fs_name and fs_id is empty.\n";
       return true;
@@ -2678,10 +2640,10 @@ bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr,
     }
 
     std::vector<int64_t> mds_ids;
-    dingofs::mds::Helper::SplitString(options.mds_id_list, ',', mds_ids);
+    dingofs::Helper::SplitString(options.mds_id_list, ',', mds_ids);
     mds_client.JoinFs(options.fs_name, options.fs_id, mds_ids);
 
-  } else if (cmd == Helper::ToLowerCase("QuitFs")) {
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("QuitFs")) {
     if (options.fs_name.empty() && options.fs_id == 0) {
       std::cout << "fs_name and fs_id is empty.\n";
       return true;
@@ -2693,32 +2655,32 @@ bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr,
     }
 
     std::vector<int64_t> mds_ids;
-    dingofs::mds::Helper::SplitString(options.mds_id_list, ',', mds_ids);
+    dingofs::Helper::SplitString(options.mds_id_list, ',', mds_ids);
     mds_client.QuitFs(options.fs_name, options.fs_id, mds_ids);
-  } else if (cmd == Helper::ToLowerCase("JoinCacheGroup")) {
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("JoinCacheGroup")) {
     mds_client.JoinCacheGroup(options.member_id, options.ip, options.port,
                               options.group_name, options.weight);
 
-  } else if (cmd == Helper::ToLowerCase("LeaveCacheGroup")) {
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("LeaveCacheGroup")) {
     mds_client.LeaveCacheGroup(options.member_id, options.ip, options.port,
                                options.group_name);
 
-  } else if (cmd == Helper::ToLowerCase("ReweightMember")) {
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("ReweightMember")) {
     mds_client.ReweightMember(options.member_id, options.ip, options.port,
                               options.weight);
 
-  } else if (cmd == Helper::ToLowerCase("ListGroups")) {
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("ListGroups")) {
     auto response = mds_client.ListGroups();
 
-  } else if (cmd == Helper::ToLowerCase("ListMembers")) {
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("ListMembers")) {
     auto response = mds_client.ListMembers(options.group_name);
 
-  } else if (cmd == Helper::ToLowerCase("UnlockMember")) {
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("UnlockMember")) {
     mds_client.UnlockMember(options.member_id, options.ip, options.port);
-  } else if (cmd == Helper::ToLowerCase("DeleteMember")) {
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("DeleteMember")) {
     mds_client.DeleteMember(options.member_id);
 
-  } else if (cmd == Helper::ToLowerCase("RestoreTrash")) {
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("RestoreTrash")) {
     TrashRestore::Options restore_options;
     restore_options.fs_id = options.fs_id;
     restore_options.hours = options.trash_hours;
@@ -2731,13 +2693,13 @@ bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr,
     }
     runner.Run();
 
-  } else if (cmd == Helper::ToLowerCase("Info")) {
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("Info")) {
     HandleInfo(mds_client, fs_id, options);
 
-  } else if (cmd == Helper::ToLowerCase("Summary")) {
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("Summary")) {
     HandleSummary(mds_client, fs_id, options);
 
-  } else if (cmd == Helper::ToLowerCase("SyncDirStat")) {
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("SyncDirStat")) {
     HandleSyncDirStat(mds_client, fs_id, options);
   }
 

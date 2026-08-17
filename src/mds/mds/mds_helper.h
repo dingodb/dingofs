@@ -16,6 +16,7 @@
 #define DINGOFS_MDS_MDS_MDS_HELPER_H_
 
 #include <cstdint>
+#include "common/helper.h"
 #include <vector>
 
 #include "mds/common/helper.h"
@@ -83,7 +84,7 @@ class MdsHelper {
       if (temp_mds_metas.empty()) break;
 
       auto it = temp_mds_metas.begin();
-      std::advance(it, Helper::GenerateRealRandomInteger(0, 100000) % temp_mds_metas.size());
+      std::advance(it, ::dingofs::Helper::GenerateRealRandomInteger(0, 100000) % temp_mds_metas.size());
 
       selected_mds_metas.push_back(*it);
       temp_mds_metas.erase(it);

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <fmt/format.h>
+#include "common/helper.h"
 #include <glog/logging.h>
 
 #include <string>
@@ -150,7 +151,7 @@ static std::string GetDefaultCoorAddrPath() {
   std::vector<std::string> paths = {"./coor_list", "./conf/coor_list",
                                     "./bin/coor_list"};
   for (const auto& path : paths) {
-    if (dingofs::mds::Helper::IsExistPath(path)) {
+    if (::dingofs::Helper::IsExistPath(path)) {
       return "file://" + path;
     }
   }
@@ -179,14 +180,12 @@ static dingofs::FlagExtraInfo extras = {
 };
 
 int main(int argc, char* argv[]) {
-  using Helper = dingofs::mds::Helper;
-
   //  parse gflags
   int rc = dingofs::ParseFlags(&argc, &argv, extras);
   if (rc != 0) return 1;
 
   dingofs::mds::client::OutputConfig output_config;
-  const auto output_format = Helper::ToLowerCase(FLAGS_format);
+  const auto output_format = ::dingofs::Helper::ToLowerCase(FLAGS_format);
   if (output_format == "pretty") {
     output_config.format = dingofs::mds::client::OutputFormat::kPretty;
   } else if (output_format == "json") {
@@ -196,7 +195,7 @@ int main(int argc, char* argv[]) {
               << " (expected pretty or json)\n";
     return 2;
   }
-  const auto color_mode = Helper::ToLowerCase(FLAGS_color);
+  const auto color_mode = ::dingofs::Helper::ToLowerCase(FLAGS_color);
   if (color_mode == "never") {
     output_config.color = dingofs::mds::client::ColorMode::kNever;
   } else if (color_mode == "auto") {
@@ -219,14 +218,14 @@ int main(int argc, char* argv[]) {
   // explicitly by OutputFormatter.
   FLAGS_stderrthreshold = google::GLOG_FATAL;
 
-  std::string lower_cmd = Helper::ToLowerCase(FLAGS_cmd);
+  std::string lower_cmd = ::dingofs::Helper::ToLowerCase(FLAGS_cmd);
 
   // run backup command
   {
     dingofs::mds::br::BackupCommandRunner::Options options;
     options.cluster_id = FLAGS_cluster_id;
-    options.type = Helper::ToLowerCase(FLAGS_type);
-    options.output_type = Helper::ToLowerCase(FLAGS_output_type);
+    options.type = ::dingofs::Helper::ToLowerCase(FLAGS_type);
+    options.output_type = ::dingofs::Helper::ToLowerCase(FLAGS_output_type);
     options.fs_id = FLAGS_fs_id;
     options.fs_name = FLAGS_fs_name;
     options.file_path = FLAGS_out;
@@ -249,8 +248,8 @@ int main(int argc, char* argv[]) {
   {
     dingofs::mds::br::RestoreCommandRunner::Options options;
     options.cluster_id = FLAGS_cluster_id;
-    options.type = Helper::ToLowerCase(FLAGS_type);
-    options.input_type = Helper::ToLowerCase(FLAGS_input_type);
+    options.type = ::dingofs::Helper::ToLowerCase(FLAGS_type);
+    options.input_type = ::dingofs::Helper::ToLowerCase(FLAGS_input_type);
     options.fs_id = FLAGS_fs_id;
     options.fs_name = FLAGS_fs_name;
     options.file_path = FLAGS_in;
@@ -308,7 +307,7 @@ int main(int argc, char* argv[]) {
     options.trash_put_back = FLAGS_put_back;
     options.trash_threads = FLAGS_restore_threads;
     if (!FLAGS_hours.empty()) {
-      dingofs::mds::Helper::SplitString(FLAGS_hours, ',', options.trash_hours);
+      dingofs::Helper::SplitString(FLAGS_hours, ',', options.trash_hours);
     }
 
     options.depth = FLAGS_depth;

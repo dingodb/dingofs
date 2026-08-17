@@ -80,7 +80,7 @@ TEST(HelperTest, ParseMetaURLRejectsMissingSlashForMds) {
 // ------------------------- string helpers -------------------------
 
 TEST(HelperTest, ToLowerCaseConvertsAsciiUppercase) {
-  EXPECT_EQ(Helper::ToLowerCase("HeLLo-World_123"), "hello-world_123");
+  EXPECT_EQ(::dingofs::Helper::ToLowerCase("HeLLo-World_123"), "hello-world_123");
 }
 
 TEST(HelperTest, RemoveHttpPrefixStripsHttpsPreservingCase) {
@@ -117,19 +117,19 @@ TEST(HelperTest, SplitUniteCacheDirUsesDefaultSizeWhenOmitted) {
 
 TEST(HelperTest, SplitStringToStringsSplitsOnDelimiter) {
   std::vector<std::string> out;
-  Helper::SplitString("a,b,,c", ',', out);
+  ::dingofs::Helper::SplitString("a,b,,c", ',', out);
   EXPECT_EQ(out, (std::vector<std::string>{"a", "b", "", "c"}));
 }
 
 TEST(HelperTest, SplitStringToInt64ParsesEachToken) {
   std::vector<int64_t> out;
-  Helper::SplitString("1,2,3", ',', out);
+  ::dingofs::Helper::SplitString("1,2,3", ',', out);
   EXPECT_EQ(out, (std::vector<int64_t>{1, 2, 3}));
 }
 
 TEST(HelperTest, SplitStringToInt64SkipsUnparsableTokens) {
   std::vector<int64_t> out;
-  Helper::SplitString("1,notanumber,3", ',', out);
+  ::dingofs::Helper::SplitString("1,notanumber,3", ',', out);
   EXPECT_EQ(out, (std::vector<int64_t>{1, 3}));
 }
 
@@ -149,6 +149,102 @@ TEST(HelperTest, Char2AddrFormatsPointerAsHex) {
   EXPECT_EQ(addr.rfind("0x", 0), 0u);
 }
 
+TEST(HelperTest, StringConversions) {
+  EXPECT_TRUE(::dingofs::Helper::IsEqualIgnoreCase("HeLLo", "hello"));
+  EXPECT_FALSE(::dingofs::Helper::IsEqualIgnoreCase("hello", "world"));
+  EXPECT_EQ(::dingofs::Helper::ToUpperCase("Hello-123"), "HELLO-123");
+  EXPECT_FALSE(::dingofs::Helper::StringToBool("false"));
+  EXPECT_TRUE(::dingofs::Helper::StringToBool("true"));
+  // Case-insensitive false, and "0".
+  EXPECT_FALSE(::dingofs::Helper::StringToBool("False"));
+  EXPECT_FALSE(::dingofs::Helper::StringToBool("FALSE"));
+  EXPECT_FALSE(::dingofs::Helper::StringToBool("0"));
+  EXPECT_EQ(::dingofs::Helper::StringToInt32("-12"), -12);
+  // Overflow clamps instead of silently truncating.
+  EXPECT_EQ(::dingofs::Helper::StringToInt32("2147483647"), INT32_MAX);
+  EXPECT_EQ(::dingofs::Helper::StringToInt32("2147483648"), INT32_MAX);
+  EXPECT_EQ(::dingofs::Helper::StringToInt32("-2147483648"), INT32_MIN);
+  EXPECT_EQ(::dingofs::Helper::StringToInt32("-2147483649"), INT32_MIN);
+  EXPECT_EQ(::dingofs::Helper::StringToInt32("99999999999999999999"), INT32_MAX);
+  EXPECT_EQ(::dingofs::Helper::StringToInt64("123456789"), 123456789);
+  EXPECT_EQ(::dingofs::Helper::StringToUint64("123456789"), 123456789);
+  EXPECT_FLOAT_EQ(::dingofs::Helper::StringToFloat("1.25"), 1.25F);
+  EXPECT_DOUBLE_EQ(::dingofs::Helper::StringToDouble("2.5"), 2.5);
+}
+
+TEST(HelperTest, PbRepeatedToVectorConstDoesNotMutateSource) {
+  google::protobuf::RepeatedPtrField<std::string> field;
+  *field.Add() = "hello";
+  *field.Add() = "world";
+
+  const auto& const_field = field;
+  auto vec = ::dingofs::Helper::PbRepeatedToVector(const_field);
+  EXPECT_EQ(vec, (std::vector<std::string>{"hello", "world"}));
+  // Regression: const overload used to std::move from const refs (silently
+  // copying anyway); verify the source is intact.
+  EXPECT_EQ(field[0], "hello");
+  EXPECT_EQ(field[1], "world");
+
+  // Pointer overload moves elements out.
+  auto moved = ::dingofs::Helper::PbRepeatedToVector(&field);
+  EXPECT_EQ(moved, (std::vector<std::string>{"hello", "world"}));
+}
+
+TEST(HelperTest, HexConversion) {
+  const std::string input("a\0\xff", 3);
+  const auto hex = ::dingofs::Helper::StringToHex(input);
+  EXPECT_EQ(hex, "6100ff");
+  EXPECT_EQ(::dingofs::Helper::HexToString(hex), input);
+}
+
+TEST(HelperTest, HexToStringRejectsInvalidInput) {
+  // Odd-length hex string is invalid.
+  EXPECT_EQ(::dingofs::Helper::HexToString("abc"), "");
+  // Non-hex characters are invalid (previously std::stoi accepted e.g. "0x"
+  // prefixes or partially parsed garbage).
+  EXPECT_EQ(::dingofs::Helper::HexToString("zz"), "");
+  EXPECT_EQ(::dingofs::Helper::HexToString("6g"), "");
+  // Empty input round-trips to empty output.
+  EXPECT_EQ(::dingofs::Helper::HexToString(""), "");
+  // Uppercase hex is accepted.
+  EXPECT_EQ(::dingofs::Helper::HexToString("6100FF"), std::string("a\0\xff", 3));
+}
+
+TEST(HelperTest, ParseAddr) {
+  std::string host;
+  int port = 0;
+  ASSERT_TRUE(::dingofs::Helper::ParseAddr("127.0.0.1:7800", host, port));
+  EXPECT_EQ(host, "127.0.0.1");
+  EXPECT_EQ(port, 7800);
+  EXPECT_FALSE(::dingofs::Helper::ParseAddr("invalid", host, port));
+}
+
+TEST(HelperTest, PrefixNext) {
+  EXPECT_EQ(::dingofs::Helper::PrefixNext("abc"), "abd");
+  EXPECT_EQ(::dingofs::Helper::PrefixNext(std::string("\xff", 1)),
+            std::string("\xff", 1));
+}
+
+TEST(HelperTest, GenerateRandomStringHasRequestedLength) {
+  EXPECT_EQ(::dingofs::Helper::GenerateRandomString(32).size(), 32u);
+}
+
+TEST(HelperTest, GenerateRandomIntegerStaysInRangeAndVaries) {
+  bool saw_different = false;
+  int64_t first = ::dingofs::Helper::GenerateRandomInteger(0, 1000000);
+  for (int i = 0; i < 100; ++i) {
+    int64_t v = ::dingofs::Helper::GenerateRandomInteger(0, 1000000);
+    ASSERT_GE(v, 0);
+    ASSERT_LE(v, 1000000);
+    if (v != first) saw_different = true;
+  }
+  // Regression: previously used a default-seeded std::mt19937, producing the
+  // same value on every call.
+  EXPECT_TRUE(saw_different);
+  // Inclusive bounds must be reachable, degenerate range works.
+  EXPECT_EQ(::dingofs::Helper::GenerateRandomInteger(7, 7), 7);
+}
+
 // ------------------------- filesystem helpers -------------------------
 
 TEST(HelperTest, CreateDirectoryThenIsExistPath) {
@@ -156,11 +252,11 @@ TEST(HelperTest, CreateDirectoryThenIsExistPath) {
                      "dingofs_helper_test_dir")
                         .string();
   std::filesystem::remove_all(dir);
-  EXPECT_FALSE(Helper::IsExistPath(dir));
-  ASSERT_TRUE(Helper::CreateDirectory(dir));
-  EXPECT_TRUE(Helper::IsExistPath(dir));
+  EXPECT_FALSE(::dingofs::Helper::IsExistPath(dir));
+  ASSERT_TRUE(::dingofs::Helper::CreateDirectory(dir));
+  EXPECT_TRUE(::dingofs::Helper::IsExistPath(dir));
   // Creating an already-existing directory is a no-op success, not a failure.
-  EXPECT_TRUE(Helper::CreateDirectory(dir));
+  EXPECT_TRUE(::dingofs::Helper::CreateDirectory(dir));
   std::filesystem::remove_all(dir);
 }
 
@@ -171,7 +267,16 @@ TEST(HelperTest, ToCanonicalPathResolvesDotSegments) {
 
 TEST(HelperTest, ExpandPathReplacesHomeTilde) {
   std::string home = Helper::GetHomeDir();
-  EXPECT_EQ(Helper::ExpandPath("~/data"), home + "/data");
+  EXPECT_EQ(::dingofs::Helper::ExpandPath("~/data"), home + "/data");
+  EXPECT_EQ(::dingofs::Helper::ExpandPath("~"), home);
+}
+
+TEST(HelperTest, ExpandPathOnlyExpandsLeadingTilde) {
+  // Regression: previously replaced every '~' in the path, corrupting file
+  // names such as backup files ("a~") or "~user" style paths.
+  EXPECT_EQ(::dingofs::Helper::ExpandPath("/tmp/a~b"), "/tmp/a~b");
+  EXPECT_EQ(::dingofs::Helper::ExpandPath("~user/data"), "~user/data");
+  EXPECT_EQ(::dingofs::Helper::ExpandPath("/abs/path"), "/abs/path");
 }
 
 }  // namespace dingofs

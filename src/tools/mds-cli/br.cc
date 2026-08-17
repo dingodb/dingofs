@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "tools/mds-cli/br.h"
+#include "common/helper.h"
 
 #include <unistd.h>
 
@@ -257,8 +258,8 @@ class StdOutput : public Output {
 
   Status Append(const std::string& key, const std::string& value) override {
     if (is_binary_) {
-      std::cout << Helper::StringToHex(key) << ": "
-                << Helper::StringToHex(value) << "\n";
+      std::cout << ::dingofs::Helper::StringToHex(key) << ": "
+                << ::dingofs::Helper::StringToHex(value) << "\n";
     } else {
       auto desc = MetaCodec::ParseKey(key, value);
       std::cout << fmt::format("{}. key({}) value({})\n", ++count_, desc.first,
@@ -402,8 +403,8 @@ class S3Output : public Output {
     }
 
     LOG(INFO) << fmt::format("append key({}) value({}).",
-                             Helper::StringToHex(key),
-                             Helper::StringToHex(value));
+                             ::dingofs::Helper::StringToHex(key),
+                             ::dingofs::Helper::StringToHex(value));
     data_.append(EncodeKeyValue(key, value));
     ++record_count_;
     return Status::OK();
@@ -550,8 +551,8 @@ class S3Input : public Input {
     }
 
     LOG(INFO) << fmt::format("read key({}) value({}).",
-                             Helper::StringToHex(key),
-                             Helper::StringToHex(value));
+                             ::dingofs::Helper::StringToHex(key),
+                             ::dingofs::Helper::StringToHex(value));
 
     return Status::OK();
   }
@@ -689,7 +690,7 @@ Status Backup::BackupMetaTable(OutputUPtr output) {
         } else {
           output_status =
               Status(pb::error::EINTERNAL,
-                     fmt::format("unknown key({})", Helper::StringToHex(key)));
+                     fmt::format("unknown key({})", ::dingofs::Helper::StringToHex(key)));
           return false;
         }
 
@@ -752,7 +753,7 @@ Status Backup::BackupFsMetaTable(uint32_t fs_id, OutputUPtr output) {
         } else {
           output_status =
               Status(pb::error::EINTERNAL,
-                     fmt::format("unknown key({})", Helper::StringToHex(key)));
+                     fmt::format("unknown key({})", ::dingofs::Helper::StringToHex(key)));
           return false;
         }
 
@@ -964,7 +965,7 @@ bool IsValidProtoValue(const std::string& value) {
 
 Status InvalidValueStatus(const std::string& key) {
   return Status(pb::error::EINTERNAL, fmt::format("invalid value for key({})",
-                                                  Helper::StringToHex(key)));
+                                                  ::dingofs::Helper::StringToHex(key)));
 }
 
 Status ValidateMetaTableInput(Input* input, MetaTableStats& stats) {
@@ -981,7 +982,7 @@ Status ValidateMetaTableInput(Input* input, MetaTableStats& stats) {
     if (!IsKeyInRange(key, range)) {
       return Status(pb::error::EINTERNAL,
                     fmt::format("key({}) is outside meta table range",
-                                Helper::StringToHex(key)));
+                                ::dingofs::Helper::StringToHex(key)));
     }
 
     bool is_valid_value = false;
@@ -1014,7 +1015,7 @@ Status ValidateMetaTableInput(Input* input, MetaTableStats& stats) {
       is_valid_value = IsValidProtoValue<SliceRefEntry>(value);
     } else {
       return Status(pb::error::EINTERNAL,
-                    fmt::format("unknown key({})", Helper::StringToHex(key)));
+                    fmt::format("unknown key({})", ::dingofs::Helper::StringToHex(key)));
     }
     if (!is_valid_value) return InvalidValueStatus(key);
 
@@ -1044,7 +1045,7 @@ Status ValidateFsMetaTableInput(uint32_t fs_id, Input* input,
     if (!IsKeyInRange(key, range)) {
       return Status(pb::error::EINTERNAL,
                     fmt::format("key({}) does not belong to fs_id({})",
-                                Helper::StringToHex(key), fs_id));
+                                ::dingofs::Helper::StringToHex(key), fs_id));
     }
 
     bool is_valid_value = false;
@@ -1077,7 +1078,7 @@ Status ValidateFsMetaTableInput(uint32_t fs_id, Input* input,
       is_valid_value = IsValidProtoValue<AttrEntry>(value);
     } else {
       return Status(pb::error::EINTERNAL,
-                    fmt::format("unknown key({})", Helper::StringToHex(key)));
+                    fmt::format("unknown key({})", ::dingofs::Helper::StringToHex(key)));
     }
     if (!is_valid_value) return InvalidValueStatus(key);
 
@@ -1204,8 +1205,6 @@ Status Restore::RestoreFsMetaTable(uint32_t fs_id, InputUPtr input,
 bool BackupCommandRunner::Run(const Options& options,
                               const std::string& coor_addr,
                               const std::string& cmd) {
-  using Helper = dingofs::mds::Helper;
-
   if (cmd != "backup") return false;
 
   if (coor_addr.empty()) {
@@ -1243,7 +1242,7 @@ bool BackupCommandRunner::Run(const Options& options,
     return true;
   }
 
-  if (options.type == Helper::ToLowerCase("meta")) {
+  if (options.type == ::dingofs::Helper::ToLowerCase("meta")) {
     auto status = backup.BackupMetaTable(backup_options);
     if (!status.ok()) {
       std::cerr << fmt::format("backup meta table fail, status({}).",
@@ -1251,7 +1250,7 @@ bool BackupCommandRunner::Run(const Options& options,
                 << '\n';
     }
 
-  } else if (options.type == Helper::ToLowerCase("fsmeta")) {
+  } else if (options.type == ::dingofs::Helper::ToLowerCase("fsmeta")) {
     auto status = backup.BackupFsMetaTable(backup_options, options.fs_id);
     if (!status.ok()) {
       std::cerr << fmt::format("backup fsmeta table fail, status({}).",
@@ -1287,7 +1286,7 @@ bool RestoreCommandRunner::Run(const Options& options,
   if (options.input_type == "file") {
     restore_options.type = Type::kFile;
     restore_options.file_path = options.file_path;
-    if (options.file_path.empty() || !Helper::IsExistPath(options.file_path)) {
+    if (options.file_path.empty() || !::dingofs::Helper::IsExistPath(options.file_path)) {
       std::cerr << fmt::format("file path is empty or not exist.") << '\n';
       return true;
     }
@@ -1307,10 +1306,10 @@ bool RestoreCommandRunner::Run(const Options& options,
     return true;
   }
 
-  if (options.type == Helper::ToLowerCase("meta")) {
+  if (options.type == ::dingofs::Helper::ToLowerCase("meta")) {
     std::cerr << "not support restore meta table." << '\n';
 
-  } else if (options.type == Helper::ToLowerCase("fsmeta")) {
+  } else if (options.type == ::dingofs::Helper::ToLowerCase("fsmeta")) {
     auto status = restore.RestoreFsMetaTable(restore_options, options.fs_id);
     if (!status.ok()) {
       std::cerr << fmt::format("restore fsmeta table fail, status({}).",

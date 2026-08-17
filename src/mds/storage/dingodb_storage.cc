@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "mds/storage/dingodb_storage.h"
+#include "common/helper.h"
 
 #include <cstdint>
 #include <memory>
@@ -290,8 +291,8 @@ Status DingodbStorage::BatchGet(const std::vector<std::string>& keys, std::vecto
 }
 
 Status DingodbStorage::Scan(const Range& range, std::vector<KeyValue>& kvs) {
-  CHECK(range.start < range.end) << fmt::format("invalid range({}/{}).", Helper::StringToHex(range.start),
-                                                Helper::StringToHex(range.end));
+  CHECK(range.start < range.end) << fmt::format("invalid range({}/{}).", ::dingofs::Helper::StringToHex(range.start),
+                                                ::dingofs::Helper::StringToHex(range.end));
 
   auto txn = NewSdkTxn();
   if (txn == nullptr) {
@@ -411,8 +412,8 @@ Status DingodbTxn::BatchGet(const std::vector<std::string>& keys, std::vector<Ke
 }
 
 Status DingodbTxn::Scan(const Range& range, uint64_t limit, std::vector<KeyValue>& kvs) {
-  CHECK(range.start < range.end) << fmt::format("invalid range({}/{}).", Helper::StringToHex(range.start),
-                                                Helper::StringToHex(range.end));
+  CHECK(range.start < range.end) << fmt::format("invalid range({}/{}).", ::dingofs::Helper::StringToHex(range.start),
+                                                ::dingofs::Helper::StringToHex(range.end));
 
   uint64_t start_time = utils::TimestampUs();
   ON_SCOPE_EXIT([&]() { txn_trace_.read_time_us += (utils::TimestampUs() - start_time); });

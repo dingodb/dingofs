@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "mds/common/distribution_lock.h"
+#include "common/helper.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -179,7 +180,7 @@ Status CoorDistributionLock::CheckLock(std::string& watch_key, int64_t& watch_re
 
   CoordinatorClient::Range range;
   range.start = lock_prefix_;
-  range.end = Helper::PrefixNext(lock_prefix_);
+  range.end = ::dingofs::Helper::PrefixNext(lock_prefix_);
 
   std::vector<CoordinatorClient::KVWithExt> kvs;
   bool more;
@@ -202,7 +203,7 @@ Status CoorDistributionLock::CheckLock(std::string& watch_key, int64_t& watch_re
 
   // debug log
   for (auto& kv : kvs) {
-    LOG(INFO) << fmt::format("[dlock.{}] key({}) revision({}).", LockKey(), Helper::StringToHex(kv.kv.key),
+    LOG(INFO) << fmt::format("[dlock.{}] key({}) revision({}).", LockKey(), ::dingofs::Helper::StringToHex(kv.kv.key),
                              kv.mod_revision);
   }
 
@@ -225,7 +226,7 @@ Status CoorDistributionLock::CheckLock(std::string& watch_key, int64_t& watch_re
   size_t watch_index = index - 1;
   watch_key = kvs[watch_index].kv.key;
   watch_revision = kvs[watch_index].mod_revision;
-  LOG(INFO) << fmt::format("[dlock.{}] watch key({}) revision({}).", LockKey(), Helper::StringToHex(watch_key),
+  LOG(INFO) << fmt::format("[dlock.{}] watch key({}) revision({}).", LockKey(), ::dingofs::Helper::StringToHex(watch_key),
                            watch_revision);
   CHECK(!watch_key.empty()) << "watch key is empty.";
 
@@ -235,7 +236,7 @@ Status CoorDistributionLock::CheckLock(std::string& watch_key, int64_t& watch_re
 Status CoorDistributionLock::Watch(const std::string& watch_key, int64_t watch_revision) {
   CHECK(!watch_key.empty()) << "watch key is empty.";
 
-  LOG(INFO) << fmt::format("[dlock.{}] watch key({}) revision({}).", LockKey(), Helper::StringToHex(watch_key),
+  LOG(INFO) << fmt::format("[dlock.{}] watch key({}) revision({}).", LockKey(), ::dingofs::Helper::StringToHex(watch_key),
                            watch_revision);
 
   CoordinatorClient::WatchOut out;
@@ -249,7 +250,7 @@ Status CoorDistributionLock::Watch(const std::string& watch_key, int64_t watch_r
   LOG(INFO) << fmt::format("[dlock.{}] received watch event.", LockKey());
   for (auto& envent : out.events) {
     LOG(INFO) << fmt::format("[dlock.{}] watch event, type({}) key({}) lease({}) revision({}).", LockKey(),
-                             CoordinatorClient::EventTypeName(envent.type), Helper::StringToHex(envent.kv.kv.key),
+                             CoordinatorClient::EventTypeName(envent.type), ::dingofs::Helper::StringToHex(envent.kv.kv.key),
                              envent.kv.lease, envent.kv.mod_revision);
   }
 

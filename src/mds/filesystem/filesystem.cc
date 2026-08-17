@@ -393,7 +393,7 @@ Status FileSystem::GetPartitionFromStore(Context& ctx, Ino parent, const std::st
 
   LOG_DEBUG << fmt::format("[fs.{}.{}.{}.{}][{}us] fetch partition, version({}) shard_boundaries({}) reason({}).",
                            fs_id_, parent, method_name, request_id, duration.ElapsedUs(), attr.version(),
-                           Helper::VectorToString(Helper::PbRepeatedToVector(attr.shard_boundaries())), reason);
+                           ::dingofs::Helper::VectorToString(::dingofs::Helper::PbRepeatedToVector(attr.shard_boundaries())), reason);
 
   return Status::OK();
 }
@@ -831,7 +831,7 @@ Status FileSystem::BatchCreate(Context& ctx, Ino parent, const std::vector<MkNod
 
   // notify buddy mds to refresh inode
   if (operation.GetBatchIndex() == 0 && IsParentHashPartition()) {
-    std::vector<Ino> parents = Helper::PbRepeatedToVector(last_parent_attr.parents());
+    std::vector<Ino> parents = ::dingofs::Helper::PbRepeatedToVector(last_parent_attr.parents());
     NotifyBuddyRefreshInode(parents, parent_attr_or_mutation, reason);
   }
 
@@ -940,7 +940,7 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryWithPaOut& 
   entry_out.attr.Swap(&attr);
 
   if (operation.GetBatchIndex() == 0 && IsParentHashPartition()) {
-    std::vector<Ino> parents = Helper::PbRepeatedToVector(last_parent_attr.parents());
+    std::vector<Ino> parents = ::dingofs::Helper::PbRepeatedToVector(last_parent_attr.parents());
     NotifyBuddyRefreshInode(parents, parent_attr_or_mutation, reason);
   }
 
@@ -1059,7 +1059,7 @@ Status FileSystem::BatchMkNod(Context& ctx, const std::vector<MkNodParam>& param
   entry_out.attrs.swap(attrs);
 
   if (operation.GetBatchIndex() == 0 && IsParentHashPartition()) {
-    std::vector<Ino> parents = Helper::PbRepeatedToVector(last_parent_attr.parents());
+    std::vector<Ino> parents = ::dingofs::Helper::PbRepeatedToVector(last_parent_attr.parents());
     NotifyBuddyRefreshInode(parents, parent_attr_or_mutation, reason);
   }
 
@@ -1362,7 +1362,7 @@ void FileSystem::AsyncKeepAliveFileSession(const std::vector<FileSessionParam>& 
         for (const auto& file_session : param->file_sessions) {
           KeepAliveFileSessionOperation::Param::FileSession op_file_session;
           op_file_session.ino = file_session.ino();
-          op_file_session.session_ids = Helper::PbRepeatedToVector(file_session.session_ids());
+          op_file_session.session_ids = ::dingofs::Helper::PbRepeatedToVector(file_session.session_ids());
           op_param.file_sessions.push_back(std::move(op_file_session));
           ino_str += fmt::format("{},", file_session.ino());
         }
@@ -1859,7 +1859,7 @@ Status FileSystem::Link(Context& ctx, Ino ino, Ino new_parent, const std::string
   entry_out.attr.Swap(&attr);
 
   if (operation.GetBatchIndex() == 0 && IsParentHashPartition()) {
-    std::vector<Ino> parents = Helper::PbRepeatedToVector(last_parent_attr.parents());
+    std::vector<Ino> parents = ::dingofs::Helper::PbRepeatedToVector(last_parent_attr.parents());
     NotifyBuddyRefreshInode(parents, parent_attr_or_mutation, reason);
   }
 
@@ -1979,7 +1979,7 @@ Status FileSystem::UnLink(Context& ctx, Ino parent, const std::string& name, Ent
   entry_out.attr.Swap(&attr);
 
   if (operation.GetBatchIndex() == 0 && IsParentHashPartition()) {
-    std::vector<Ino> parents = Helper::PbRepeatedToVector(last_parent_attr.parents());
+    std::vector<Ino> parents = ::dingofs::Helper::PbRepeatedToVector(last_parent_attr.parents());
     NotifyBuddyRefreshInode(parents, parent_attr_or_mutation, reason);
   }
 
@@ -2112,7 +2112,7 @@ Status FileSystem::BatchUnLink(Context& ctx, Ino parent, const std::vector<std::
   entry_out.attrs.swap(child_attrs);
 
   if (operation.GetBatchIndex() == 0 && IsParentHashPartition()) {
-    std::vector<Ino> parents = Helper::PbRepeatedToVector(last_parent_attr.parents());
+    std::vector<Ino> parents = ::dingofs::Helper::PbRepeatedToVector(last_parent_attr.parents());
     NotifyBuddyRefreshInode(parents, parent_attr_or_mutation, reason);
   }
 
@@ -2218,7 +2218,7 @@ Status FileSystem::Symlink(Context& ctx, const std::string& symlink, Ino new_par
   entry_out.attr.Swap(&attr);
 
   if (operation.GetBatchIndex() == 0 && IsParentHashPartition()) {
-    std::vector<Ino> parents = Helper::PbRepeatedToVector(last_parent_attr.parents());
+    std::vector<Ino> parents = ::dingofs::Helper::PbRepeatedToVector(last_parent_attr.parents());
     NotifyBuddyRefreshInode(parents, parent_attr_or_mutation, reason);
   }
 
@@ -2515,7 +2515,7 @@ void FileSystem::NotifyBuddyRefreshFsInfo(std::vector<uint64_t> mds_ids, const F
 }
 
 void FileSystem::NotifyBuddyRefreshInode(const AttrEntry& attr, const std::string& reason) {
-  NotifyBuddyRefreshInode(Helper::PbRepeatedToVector(attr.parents()), {.attr = attr}, reason);
+  NotifyBuddyRefreshInode(::dingofs::Helper::PbRepeatedToVector(attr.parents()), {.attr = attr}, reason);
 }
 
 void FileSystem::NotifyBuddyRefreshInode(const std::vector<Ino>& parents, const AttrOrMutation& attr_or_mutation,
@@ -2933,7 +2933,7 @@ Status FileSystem::ReadSlice(Context& ctx, Ino ino, const std::vector<ChunkDescr
 
   LOG_DEBUG << fmt::format("[fs.{}.{}.{}][{}us] readslice {}/{} finish, miss({}) status({}).", fs_id_, ctx.RequestId(),
                            trace.GetReqTypeInt(), duration.ElapsedUs(), ino, param_desc,
-                           Helper::VectorToString(miss_chunk_indexes), status.error_str());
+                           ::dingofs::Helper::VectorToString(miss_chunk_indexes), status.error_str());
   trace.RecordElapsedTime("resume");
 
   if (!status.ok() && status.error_code() != pb::error::ENOT_FOUND) {
@@ -3602,7 +3602,7 @@ Status FileSystem::JoinHashFs(Context& ctx, const std::vector<uint64_t>& mds_ids
     log.set_fs_name(FsName());
     log.set_fs_id(fs_id_);
     log.set_type(pb::mds::FsOpLog::JOIN_FS);
-    Helper::VectorToPbRepeated(mds_ids, log.mutable_join_fs()->mutable_mds_ids());
+    ::dingofs::Helper::VectorToPbRepeated(mds_ids, log.mutable_join_fs()->mutable_mds_ids());
     log.set_comment(reason);
 
     return Status::OK();
@@ -3696,7 +3696,7 @@ Status FileSystem::QuitFs(Context& ctx, const std::vector<uint64_t>& mds_ids, co
     log.set_fs_name(FsName());
     log.set_fs_id(fs_id_);
     log.set_type(pb::mds::FsOpLog::QUIT_FS);
-    Helper::VectorToPbRepeated(mds_ids, log.mutable_quit_fs()->mutable_mds_ids());
+    ::dingofs::Helper::VectorToPbRepeated(mds_ids, log.mutable_quit_fs()->mutable_mds_ids());
     log.set_comment(reason);
 
     return Status::OK();
@@ -3770,8 +3770,8 @@ Status FileSystem::QuitAndJoinFs(Context& ctx, const std::vector<uint64_t>& quit
     log.set_fs_name(FsName());
     log.set_fs_id(fs_id_);
     log.set_type(pb::mds::FsOpLog::QUIT_AND_JOIN_FS);
-    Helper::VectorToPbRepeated(quit_mds_ids, log.mutable_quit_and_join_fs()->mutable_quit_mds_ids());
-    Helper::VectorToPbRepeated(join_mds_ids, log.mutable_quit_and_join_fs()->mutable_join_mds_ids());
+    ::dingofs::Helper::VectorToPbRepeated(quit_mds_ids, log.mutable_quit_and_join_fs()->mutable_quit_mds_ids());
+    ::dingofs::Helper::VectorToPbRepeated(join_mds_ids, log.mutable_quit_and_join_fs()->mutable_join_mds_ids());
     log.set_comment(reason);
 
     return Status::OK();
@@ -3828,8 +3828,8 @@ Status FileSystem::UpdatePartitionPolicy(const std::map<uint64_t, BucketSetEntry
     log.set_fs_name(FsName());
     log.set_fs_id(fs_id_);
     log.set_type(pb::mds::FsOpLog::QUIT_AND_JOIN_FS);
-    Helper::VectorToPbRepeated(quit_mds_ids, log.mutable_quit_and_join_fs()->mutable_quit_mds_ids());
-    Helper::VectorToPbRepeated(join_mds_ids, log.mutable_quit_and_join_fs()->mutable_join_mds_ids());
+    ::dingofs::Helper::VectorToPbRepeated(quit_mds_ids, log.mutable_quit_and_join_fs()->mutable_quit_mds_ids());
+    ::dingofs::Helper::VectorToPbRepeated(join_mds_ids, log.mutable_quit_and_join_fs()->mutable_join_mds_ids());
     log.set_comment(reason);
 
     return Status::OK();
@@ -4186,7 +4186,7 @@ FsInfoEntry FileSystemSet::GenFsInfo(uint32_t fs_id, const CreateFsParam& param)
   if (param.partition_type == pb::mds::PartitionType::MONOLITHIC_PARTITION) {
     auto* mono = partition_policy->mutable_mono();
     if (param.candidate_mds_ids.empty()) {
-      int select_offset = Helper::GenerateRealRandomInteger(0, 1000) % mds_metas.size();
+      int select_offset = ::dingofs::Helper::GenerateRealRandomInteger(0, 1000) % mds_metas.size();
       mono->set_mds_id(mds_metas.at(select_offset).ID());
     } else {
       mono->set_mds_id(param.candidate_mds_ids.front());

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "mds/service/service_access.h"
+#include "common/helper.h"
 
 #include "butil/endpoint.h"
 #include "common/logging.h"
@@ -51,7 +52,7 @@ std::shared_ptr<brpc::Channel> ChannelPool::GetChannel(const butil::EndPoint& en
   options.backup_request_ms = kRpcTimeoutMs;
   options.connection_type = brpc::ConnectionType::CONNECTION_TYPE_SINGLE;
   if (channel->Init(endpoint, nullptr) != 0) {
-    LOG(ERROR) << "init channel fail, endpoint: " << Helper::EndPointToString(endpoint);
+    LOG(ERROR) << "init channel fail, endpoint: " << ::dingofs::Helper::EndPointToString(endpoint);
     return nullptr;
   }
 

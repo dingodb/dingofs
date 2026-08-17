@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "mds/common/partition_helper.h"
+#include "common/helper.h"
 
 #include <gflags/gflags_declare.h>
 
@@ -42,7 +43,7 @@ static uint64_t RandomSelectMdsId(std::set<uint64_t>& mds_ids) {
   CHECK(!mds_ids.empty()) << "mds_ids is empty";
 
   auto it = mds_ids.begin();
-  std::advance(it, Helper::GenerateRandomInteger(0, 100000) % mds_ids.size());
+  std::advance(it, ::dingofs::Helper::GenerateRandomInteger(0, 100000) % mds_ids.size());
   uint64_t mds_id = *it;
   mds_ids.erase(it);
   return mds_id;

@@ -166,6 +166,8 @@ DECLARE_uint32(cache_rpc_timeout_ms);
 // Timeout for remote cache prefetch RPCs, in milliseconds.
 DECLARE_uint32(cache_prefetch_rpc_timeout_ms);
 
+DECLARE_uint32(cache_delete_rpc_timeout_ms);
+
 // Timeout for pinging a remote cache node, in milliseconds.
 DECLARE_uint32(cache_ping_rpc_timeout_ms);
 

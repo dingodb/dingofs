@@ -63,6 +63,11 @@ class BlockCacheServiceImpl final : public pb::cache::BlockCacheService {
                 pb::cache::PrefetchResponse* response,
                 google::protobuf::Closure* done) override;
 
+  void Delete(google::protobuf::RpcController* controller,
+              const pb::cache::DeleteRequest* request,
+              pb::cache::DeleteResponse* response,
+              google::protobuf::Closure* done) override;
+
   void Ping(google::protobuf::RpcController* controller,
             const pb::cache::PingRequest* request,
             pb::cache::PingResponse* response,

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "mds/filesystem/fs_utils.h"
+#include "common/helper.h"
 
 #include <cstdint>
 #include <map>
@@ -204,7 +205,7 @@ void FsUtils::GenFsTreeJson(FsTreeNode* node, nlohmann::json& doc) {
 
   // mode,nlink,uid,gid,size,ctime,mtime,atime
   doc["description"] =
-      fmt::format("{},{}/{},{},{},{},{},{},{},{}", attr.version(), attr.mode(), Helper::FsModeToString(attr.mode()),
+      fmt::format("{},{}/{},{},{},{},{},{},{},{}", attr.version(), attr.mode(), ::dingofs::Helper::FsModeToString(attr.mode()),
                   attr.nlink(), attr.uid(), attr.gid(), attr.length(), FormatTime(attr.ctime()),
                   FormatTime(attr.mtime()), FormatTime(attr.atime()));
 
@@ -266,7 +267,7 @@ Status FsUtils::GenRootDirJsonString(std::string& output) {
 
   // mode,nlink,uid,gid,size,ctime,mtime,atime
   item["description"] =
-      fmt::format("{},{}/{},{},{},{},{},{},{},{}", attr.version(), attr.mode(), Helper::FsModeToString(attr.mode()),
+      fmt::format("{},{}/{},{},{},{},{},{},{},{}", attr.version(), attr.mode(), ::dingofs::Helper::FsModeToString(attr.mode()),
                   attr.nlink(), attr.uid(), attr.gid(), attr.length(), FormatTime(attr.ctime()),
                   FormatTime(attr.mtime()), FormatTime(attr.atime()));
 
@@ -359,7 +360,7 @@ Status FsUtils::GenDirJsonString(Ino parent, std::string& output) {
 
     // mode,nlink,uid,gid,size,ctime,mtime,atime
     item["description"] =
-        fmt::format("{},{}/{},{},{},{},{},{},{},{}", attr.version(), attr.mode(), Helper::FsModeToString(attr.mode()),
+        fmt::format("{},{}/{},{},{},{},{},{},{},{}", attr.version(), attr.mode(), ::dingofs::Helper::FsModeToString(attr.mode()),
                     attr.nlink(), attr.uid(), attr.gid(), attr.length(), FormatTime(attr.ctime()),
                     FormatTime(attr.mtime()), FormatTime(attr.atime()));
 
@@ -388,7 +389,7 @@ Status FsUtils::GenDirJsonString(Ino parent, std::string& output) {
     }
     item["description"] = fmt::format(
         "{},{}/{},{},{},{},{},{},{},{}", attr.version(), attr.mode(),
-        Helper::FsModeToString(attr.mode()), attr.nlink(), attr.uid(), attr.gid(),
+        ::dingofs::Helper::FsModeToString(attr.mode()), attr.nlink(), attr.uid(), attr.gid(),
         attr.length(), FormatTime(attr.ctime()), FormatTime(attr.mtime()),
         FormatTime(attr.atime()));
     doc.push_back(item);

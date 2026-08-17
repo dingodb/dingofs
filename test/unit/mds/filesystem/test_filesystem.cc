@@ -516,6 +516,54 @@ TEST_F(FileSystemTest, MkDir) {
   ASSERT_EQ(param.rdev, inode->Rdev()) << "inode rdev not equal.";
 }
 
+TEST_F(FileSystemTest, CreateInheritsSetgidParent) {
+  auto fs = Fs();
+  Context ctx;
+
+  FileSystem::MkDirParam parent_param;
+  parent_param.parent = kRootIno;
+  parent_param.name = "setgid_parent";
+  parent_param.mode = 02777;
+  parent_param.uid = 1;
+  parent_param.gid = 123;
+
+  EntryWithPaOut parent_out;
+  ASSERT_TRUE(fs->MkDir(ctx, parent_param, parent_out).ok());
+  ASSERT_NE(parent_out.attr.mode() & S_ISGID, 0);
+
+  FileSystem::MkDirParam dir_param;
+  dir_param.parent = parent_out.attr.ino();
+  dir_param.name = "dir";
+  dir_param.mode = 0000;
+  dir_param.uid = 1;
+  dir_param.gid = 10000;
+
+  EntryWithPaOut dir_out;
+  ASSERT_TRUE(fs->MkDir(ctx, dir_param, dir_out).ok());
+  EXPECT_EQ(dir_out.attr.gid(), parent_param.gid);
+  EXPECT_NE(dir_out.attr.mode() & S_ISGID, 0);
+
+  FileSystem::MkNodParam node_param;
+  node_param.parent = parent_out.attr.ino();
+  node_param.name = "node";
+  node_param.mode = S_IFREG;
+  node_param.uid = 1;
+  node_param.gid = 10000;
+
+  EntryWithPaOut node_out;
+  ASSERT_TRUE(fs->MkNod(ctx, node_param, node_out).ok());
+  EXPECT_EQ(node_out.attr.gid(), parent_param.gid);
+
+  node_param.name = "created";
+  node_param.session_id = "setgid-test-session";
+  EntriesWithPaOut create_out;
+  ASSERT_TRUE(
+      fs->BatchCreate(ctx, parent_out.attr.ino(), {node_param}, create_out)
+          .ok());
+  ASSERT_EQ(create_out.attrs.size(), 1);
+  EXPECT_EQ(create_out.attrs.front().gid(), parent_param.gid);
+}
+
 TEST_F(FileSystemTest, RmDir) {
   GTEST_SKIP() << "skip test.";
 

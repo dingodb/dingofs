@@ -23,8 +23,10 @@
 #include <cstdint>
 #include <ostream>
 #include <string>
+#include <string_view>
 
 #include "cache/v2/utils/hash.h"
+#include "cache/v2/utils/string.h"
 #include "dingofs/cache.pb.h"
 
 namespace dingofs {
@@ -50,6 +52,21 @@ struct BlockHandle {
     pb->set_id(id);
     pb->set_index(index);
     pb->set_size(size);
+  }
+
+  bool ParseFromFilename(std::string_view name) {
+    uint64_t parsed_id = 0;
+    uint32_t parsed_index = 0;
+    uint32_t parsed_size = 0;
+    if (!SplitUint(&name, '_', &parsed_id) ||
+        !SplitUint(&name, '_', &parsed_index) ||
+        !SplitUint(&name, '\0', &parsed_size)) {
+      return false;
+    }
+    id = parsed_id;
+    index = parsed_index;
+    size = parsed_size;
+    return true;
   }
 
   uint64_t Hash() const {

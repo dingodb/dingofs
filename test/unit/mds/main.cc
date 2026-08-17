@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "fmt/core.h"
+#include "common/helper.h"
 #include "gflags/gflags.h"
 #include "glog/logging.h"
 #include "gtest/gtest.h"
@@ -20,8 +21,8 @@
 #include "test/unit/coverage/coverage.h"
 
 static void InitLog(const std::string& log_dir) {
-  if (!dingofs::mds::Helper::IsExistPath(log_dir)) {
-    dingofs::mds::Helper::CreateDirectories(log_dir);
+  if (!::dingofs::Helper::IsExistPath(log_dir)) {
+    ::dingofs::Helper::CreateDirectories(log_dir);
   }
 
   FLAGS_logbufsecs = 0;

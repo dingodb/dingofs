@@ -19,11 +19,14 @@
 #include <fcntl.h>
 #include <netdb.h>
 #include <pwd.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include <cstdint>
 #include <filesystem>
 #include <iomanip>
+#include <sstream>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -35,6 +38,9 @@
 #include "common/types.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
+#include "google/protobuf/message.h"
+#include "google/protobuf/repeated_field.h"
+#include "google/protobuf/util/json_util.h"
 #include "options/cache.h"
 #include "utils/string.h"
 
@@ -44,13 +50,125 @@ static const uint32_t kMaxHostNameLength = 255;
 
 class Helper {
  public:
+  static int64_t GetPid();
+  static int64_t GetThreadID();
+
+  static bool IsEqualIgnoreCase(const std::string& str1, const std::string& str2);
+  static std::string ToUpperCase(const std::string& str);
+
+  // string type cast
+  static bool StringToBool(const std::string& str);
+  static int32_t StringToInt32(const std::string& str);
+  static int64_t StringToInt64(const std::string& str);
+  static uint64_t StringToUint64(const std::string& str);
+  static float StringToFloat(const std::string& str);
+  static double StringToDouble(const std::string& str);
+
+  static std::string StringToHex(const std::string& str);
+  static std::string StringToHex(const std::string_view& str);
+  static std::string HexToString(const std::string& hex_str);
+
+  static bool ParseAddr(const std::string& addr, std::string& host, int& port);
+
+  // local file system operation
+  static std::string ConcatPath(const std::string& path1, const std::string& path2);
+  static std::vector<std::string> TraverseDirectory(const std::string& path, bool ignore_dir = false,
+                                                    bool ignore_file = false);
+  static std::vector<std::string> TraverseDirectory(const std::string& path, const std::string& prefix,
+                                                    bool ignore_dir = false, bool ignore_file = false);
+  static std::string FindFileInDirectory(const std::string& dirpath, const std::string& prefix);
+  static bool CreateDirectories(const std::string& path);
+  static bool RemoveFileOrDirectory(const std::string& path);
+  static bool RemoveAllFileOrDirectory(const std::string& path);
+  static bool Rename(const std::string& src_path, const std::string& dst_path, bool is_force = true);
+  static int64_t GetFileSize(const std::string& path);
+
+  static std::string GenerateRandomString(int length);
+  static int64_t GenerateRealRandomInteger(int64_t min_value, int64_t max_value);
+  static int64_t GenerateRandomInteger(int64_t min_value, int64_t max_value);
+  static float GenerateRandomFloat(float min_value, float max_value);
+
+  static std::string PrefixNext(const std::string& input);
+  static std::string EndPointToString(const butil::EndPoint& endpoint);
+  static bool SaveFile(const std::string& filepath, const std::string& data);
+  static std::string FsModeToString(mode_t mode);
+  static bool ProtoToJson(const google::protobuf::Message& message, std::string& json);
+
+  template <typename T>
+  static std::vector<T> PbRepeatedToVector(const google::protobuf::RepeatedPtrField<T>& data) {
+    // const source: elements are copied.
+    return {data.begin(), data.end()};
+  }
+
+  template <typename T>
+  static std::vector<T> PbRepeatedToVector(google::protobuf::RepeatedPtrField<T>* data) {
+    // mutable source: elements are moved out, leaving them unspecified.
+    std::vector<T> vec;
+    vec.reserve(data->size());
+    for (auto& item : *data) {
+      vec.emplace_back(std::move(item));
+    }
+
+    return vec;
+  }
+
+  template <typename T>
+  static std::vector<T> PbRepeatedToVector(const google::protobuf::RepeatedField<T>& data) {
+    std::vector<T> vec;
+    vec.reserve(data.size());
+    for (auto& item : data) {
+      vec.push_back(item);
+    }
+
+    return vec;
+  }
+
+  template <typename T>
+  static std::vector<T> PbRepeatedToVector(google::protobuf::RepeatedField<T>* data) {
+    std::vector<T> vec;
+    vec.reserve(data->size());
+    for (auto& item : *data) {
+      vec.push_back(item);
+    }
+
+    return vec;
+  }
+
+  template <typename T>
+  static void VectorToPbRepeated(const std::vector<T>& vec, google::protobuf::RepeatedPtrField<T>* out) {
+    for (auto& item : vec) {
+      *(out->Add()) = item;
+    }
+  }
+
+  template <typename T>
+  static void VectorToPbRepeated(const std::vector<T>& vec, google::protobuf::RepeatedField<T>* out) {
+    for (auto& item : vec) {
+      out->Add(item);
+    }
+  }
+
+  template <typename T>
+  static std::string VectorToString(const std::vector<T>& vec) {
+    std::string str;
+    for (uint32_t i = 0; i < vec.size(); ++i) {
+      str += fmt::format("{}", vec[i]);
+      if (i + 1 < vec.size()) {
+        str += ",";
+      }
+    }
+    return str;
+  }
+
   static std::string GetHostName() {
-    char hostname[kMaxHostNameLength];
+    char hostname[kMaxHostNameLength + 1];
     int ret = gethostname(hostname, kMaxHostNameLength);
     if (ret < 0) {
       LOG(ERROR) << "[meta.filesystem] get hostname fail, ret=" << ret;
       return "";
     }
+    // gethostname does not guarantee null termination on truncation.
+    hostname[kMaxHostNameLength] = '\0';
 
     return std::string(hostname);
   }
@@ -176,10 +294,12 @@ class Helper {
 
   // parse ~/.dingofs/path to /home/user/.dingofs/path
   static std::string ExpandPath(const std::string& path) {
-    std::string home_dir = GetHomeDir();
-    std::string expand_dir;
-    butil::ReplaceChars(path, "~", home_dir, &expand_dir);
-    return expand_dir;
+    // only expand a leading "~" (i.e. "~" or "~/..."), do not touch '~'
+    // appearing elsewhere in the path.
+    if (path == "~" || (path.size() >= 2 && path[0] == '~' && path[1] == '/')) {
+      return GetHomeDir() + path.substr(1);
+    }
+    return path;
   }
 
   static bool IsExistPath(const std::string& path) {
@@ -287,8 +407,8 @@ class Helper {
     butil::SplitString(str, c, &vec);
   }
 
-  static void SplitString(const std::string& str, char c,
-                          std::vector<int64_t>& vec) {
+  template <typename T>
+  static void SplitString(const std::string& str, char c, std::vector<T>& vec) {
     std::vector<std::string> strs;
     SplitString(str, c, strs);
     for (auto& s : strs) {

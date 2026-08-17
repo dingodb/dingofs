@@ -181,6 +181,7 @@ class MDSMetaSystem : public vfs::MetaSystem {
 
  private:
   friend class OpenTask;
+  friend class MDSMetaSystemTestPeer;
 
   // Convert the backend-specific mds::FsInfoEntry into the backend-agnostic
   // vfs::FsInfo consumed by upper layers (GetFsInfo).
@@ -216,8 +217,8 @@ class MDSMetaSystem : public vfs::MetaSystem {
   void LaunchWriteSlice(ContextSPtr& ctx, ChunkSetSPtr chunk_set,
                         CommitTaskSPtr task);
   // async flush batch slices of single file
-  void AsyncFlushSlice(ContextSPtr& ctx, ChunkSetSPtr chunk_set, bool is_force,
-                       bool is_wait);
+  Status AsyncFlushSlice(ContextSPtr& ctx, ChunkSetSPtr chunk_set,
+                         bool is_force, bool is_wait);
 
   // flush slices and file
   Status FlushSliceAndFile(ContextSPtr ctx, Ino ino);

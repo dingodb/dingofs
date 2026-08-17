@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <string>
+#include "common/helper.h"
 
 #include "common/const.h"
 #include "gflags/gflags.h"
@@ -76,7 +77,7 @@ class MDSTest : public testing::Test {
 
 const std::string MDSTest::fs_name_ =
     "integration_test_" +
-    dingofs::mds::Helper::GenerateRandomString(kRandomStringLength);
+    ::dingofs::Helper::GenerateRandomString(kRandomStringLength);
 const std::string MDSTest::client_id_ = "7872fd60-62df-470c-813c-111111111111";
 
 MDSClientUPtr MDSTest::mds_client_ = nullptr;
@@ -183,7 +184,7 @@ TEST_F(MDSTest, FsInfoOperations) {
 TEST_F(MDSTest, DentryAndInodeOperations) {
   std::string dir_name =
       "test_dir_" +
-      dingofs::mds::Helper::GenerateRandomString(kRandomStringLength);
+      ::dingofs::Helper::GenerateRandomString(kRandomStringLength);
   // create a directory
   {
     auto response = mds_client_->MkDir(dingofs::kRootIno, dir_name);
@@ -255,7 +256,7 @@ TEST_F(MDSTest, DentryAndInodeOperations) {
 TEST_F(MDSTest, FileCreateOpenRelease) {
   std::string file_name =
       "test_file_" +
-      dingofs::mds::Helper::GenerateRandomString(kRandomStringLength);
+      ::dingofs::Helper::GenerateRandomString(kRandomStringLength);
   // create file
   {
     auto response = mds_client_->MkNod(dingofs::kRootIno, file_name);
@@ -287,7 +288,7 @@ TEST_F(MDSTest, FileCreateOpenRelease) {
 TEST_F(MDSTest, LinkUnlinkSymlinkReadlink) {
   std::string src_name =
       "src_file_" +
-      dingofs::mds::Helper::GenerateRandomString(kRandomStringLength);
+      ::dingofs::Helper::GenerateRandomString(kRandomStringLength);
 
   // create a file to link
   {
@@ -306,7 +307,7 @@ TEST_F(MDSTest, LinkUnlinkSymlinkReadlink) {
   // link to new parent (same root) with new name
   std::string link_name =
       "linked_" +
-      dingofs::mds::Helper::GenerateRandomString(kRandomStringLength);
+      ::dingofs::Helper::GenerateRandomString(kRandomStringLength);
   {
     auto response = mds_client_->Link(ino, dingofs::kRootIno, link_name);
     ASSERT_EQ(response.error().errcode(), dingofs::pb::error::OK);
@@ -328,7 +329,7 @@ TEST_F(MDSTest, LinkUnlinkSymlinkReadlink) {
   // symlink and readlink
   std::string symlink_name =
       "symlink_" +
-      dingofs::mds::Helper::GenerateRandomString(kRandomStringLength);
+      ::dingofs::Helper::GenerateRandomString(kRandomStringLength);
   std::string target_path = "/some/target/path";
   auto response =
       mds_client_->Symlink(dingofs::kRootIno, symlink_name, target_path);
@@ -359,7 +360,7 @@ TEST_F(MDSTest, SliceOps) {
   // create a file to write/read slice
   std::string file_name =
       "slice_file_" +
-      dingofs::mds::Helper::GenerateRandomString(kRandomStringLength);
+      ::dingofs::Helper::GenerateRandomString(kRandomStringLength);
   auto response = mds_client_->MkNod(dingofs::kRootIno, file_name);
   ASSERT_EQ(response.error().errcode(), dingofs::pb::error::OK);
 
@@ -382,7 +383,7 @@ TEST_F(MDSTest, SliceOps) {
 TEST_F(MDSTest, AttrOperations) {
   std::string file_name =
       "attr_file_" +
-      dingofs::mds::Helper::GenerateRandomString(kRandomStringLength);
+      ::dingofs::Helper::GenerateRandomString(kRandomStringLength);
 
   // create file
   auto mknod_resp = mds_client_->MkNod(dingofs::kRootIno, file_name);
@@ -416,7 +417,7 @@ TEST_F(MDSTest, AttrOperations) {
 TEST_F(MDSTest, XAttrOperations) {
   std::string file_name =
       "xattr_file_" +
-      dingofs::mds::Helper::GenerateRandomString(kRandomStringLength);
+      ::dingofs::Helper::GenerateRandomString(kRandomStringLength);
   // create file
   auto mknod_resp = mds_client_->MkNod(dingofs::kRootIno, file_name);
   ASSERT_EQ(mknod_resp.error().errcode(), dingofs::pb::error::OK);
@@ -431,7 +432,7 @@ TEST_F(MDSTest, XAttrOperations) {
   ASSERT_EQ(listxattr_resp.error().errcode(), dingofs::pb::error::OK);
 
   // set xattr
-  std::string key = "test.key." + dingofs::mds::Helper::GenerateRandomString(
+  std::string key = "test.key." + ::dingofs::Helper::GenerateRandomString(
                                       kRandomStringLength);
   std::string value = "test_value";
   std::map<std::string, std::string> xattrs = {{key, value}};

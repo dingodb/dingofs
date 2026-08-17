@@ -197,6 +197,22 @@ TEST_F(BlockCacheServiceImplTest, PrefetchReturnsCacheDownWhenNodeIsDown) {
   EXPECT_EQ(done.count, 1);
 }
 
+TEST_F(BlockCacheServiceImplTest, DeleteReturnsCacheDownWhenNodeIsDown) {
+  CacheNode node;
+  BlockCacheServiceImpl service(ServiceType::kBRPC, &node);
+  brpc::Controller controller;
+
+  pb::cache::DeleteRequest request;
+  FillHandle(request.mutable_handle());
+  pb::cache::DeleteResponse response;
+  CountClosure done;
+
+  service.Delete(&controller, &request, &response, &done);
+
+  EXPECT_EQ(response.status(), pb::cache::BlockCacheErrUnknown);
+  EXPECT_EQ(done.count, 1);
+}
+
 TEST_F(BlockCacheServiceImplTest, PingRunsDone) {
   CacheNode node;
   BlockCacheServiceImpl service(ServiceType::kBRPC, &node);

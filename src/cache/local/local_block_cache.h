@@ -51,6 +51,7 @@ class LocalBlockCache final : public BlockCache {
                CacheOption option = {}) override;
   Status Prefetch(BlockHandle handle, size_t length,
                   PrefetchOption option = {}) override;
+  Status Delete(BlockHandle handle, DeleteOption option = {}) override;
 
   void AsyncPut(BlockHandle handle, IOBuffer block, AsyncCallback cb,
                 PutOption option = {}) override;
@@ -61,6 +62,8 @@ class LocalBlockCache final : public BlockCache {
                   CacheOption option = {}) override;
   void AsyncPrefetch(BlockHandle handle, size_t length, AsyncCallback cb,
                      PrefetchOption option = {}) override;
+  void AsyncDelete(BlockHandle handle, AsyncCallback cb,
+                   DeleteOption option = {}) override;
 
   bool IsEnabled() const override { return FLAGS_cache_store != "none"; }
 

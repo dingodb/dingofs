@@ -625,25 +625,9 @@ Status MDSMetaSystem::MkNod(ContextSPtr ctx, Ino parent,
   AssertStop();
 
   AttrEntry attr_entry, parent_attr_entry;
-  if (FLAGS_vfs_meta_batch_operation_enable) {
-    auto operation = std::make_shared<MkNodOperation>(ctx, parent, name, uid,
-                                                      gid, mode, rdev);
-    auto status = RunOperation(operation);
-    if (!status.ok()) return status;
-
-    auto& result = operation->GetResult();
-    attr_entry = result.attr_entry;
-    parent_attr_entry = result.parent_attr_entry;
-
-    LOG_DEBUG << fmt::format("[meta.fs] mknod {}/{} attr({}) parent_attr({})",
-                             parent, name, attr_entry.ShortDebugString(),
-                             parent_attr_entry.ShortDebugString());
-
-  } else {
-    auto status = mds_client_.MkNod(ctx, parent, name, uid, gid, mode, rdev,
-                                    attr_entry, parent_attr_entry);
-    if (!status.ok()) return status;
-  }
+  auto status = mds_client_.MkNod(ctx, parent, name, uid, gid, mode, rdev,
+                                  attr_entry, parent_attr_entry);
+  if (!status.ok()) return status;
 
   PutInodeToCache(parent_attr_entry);
   auto inode = PutInodeToCache(attr_entry);
@@ -865,12 +849,12 @@ DirProfileSPtr MDSMetaSystem::GetDirProfile(Ino ino) {
 }
 
 void MDSMetaSystem::WarmupSmallFiles(const std::vector<Ino>& inoes) {
+  if (inoes.empty()) return;
   if (warmup_manager_ == nullptr) return;
 
-  for (Ino ino : inoes) {
-    LOG_DEBUG << fmt::format("[meta.fs] submit warmup task, ino({}).", ino);
-    warmup_manager_->SubmitTask(WarmupTaskContext(ino));
-  }
+  LOG_DEBUG << fmt::format("[meta.fs] submit warmup task, ino({}).", inoes);
+
+  warmup_manager_->SubmitTask(WarmupTaskContext(inoes));
 }
 
 Status MDSMetaSystem::Flush(ContextSPtr ctx, Ino ino, uint64_t fh) {
@@ -1163,8 +1147,10 @@ Status MDSMetaSystem::Write(ContextSPtr, Ino ino, const char* buf,
   CHECK(file_session != nullptr)
       << fmt::format("file session is nullptr, ino({}) fh({}).", ino, fh);
 
-  auto& chunk_set = file_session->GetChunkSet();
-  chunk_set->SetLastWriteLength(offset, size);
+  {
+    auto& chunk_set = file_session->GetChunkSet();
+    chunk_set->SetLastWriteLength(offset, size);
+  }
 
   // update last modify time
   modify_time_memo_.Remember(ino);
@@ -1178,26 +1164,9 @@ Status MDSMetaSystem::MkDir(ContextSPtr ctx, Ino parent,
   AssertStop();
 
   AttrEntry attr_entry, parent_attr_entry;
-
-  if (FLAGS_vfs_meta_batch_operation_enable) {
-    auto operation =
-        std::make_shared<MkDirOperation>(ctx, parent, name, uid, gid, mode);
-    auto status = RunOperation(operation);
-    if (!status.ok()) return status;
-
-    auto& result = operation->GetResult();
-    attr_entry = result.attr_entry;
-    parent_attr_entry = result.parent_attr_entry;
-
-    LOG_DEBUG << fmt::format("[meta.fs] mkdir {}/{} attr({}) parent_attr({})",
-                             parent, name, attr_entry.ShortDebugString(),
-                             parent_attr_entry.ShortDebugString());
-
-  } else {
-    auto status = mds_client_.MkDir(ctx, parent, name, uid, gid, mode, 0,
-                                    attr_entry, parent_attr_entry);
-    if (!status.ok()) return status;
-  }
+  auto status = mds_client_.MkDir(ctx, parent, name, uid, gid, mode, 0,
+                                  attr_entry, parent_attr_entry);
+  if (!status.ok()) return status;
 
   PutInodeToCache(parent_attr_entry);
   auto inode = PutInodeToCache(attr_entry);
@@ -1348,30 +1317,11 @@ Status MDSMetaSystem::Unlink(ContextSPtr ctx, Ino parent,
   AssertStop();
 
   AttrEntry attr_entry, parent_attr_entry;
-
-  if (FLAGS_vfs_meta_batch_operation_enable) {
-    auto operation = std::make_shared<UnlinkOperation>(ctx, parent, name);
-    auto status = RunOperation(operation);
-    if (!status.ok()) {
-      if (status.IsNotExist()) return Status::OK();
-      return status;
-    }
-
-    auto& result = operation->GetResult();
-    attr_entry = result.attr_entry;
-    parent_attr_entry = result.parent_attr_entry;
-
-    LOG_DEBUG << fmt::format("[meta.fs] unlink {}/{} attr({}) parent_attr({})",
-                             parent, name, attr_entry.ShortDebugString(),
-                             parent_attr_entry.ShortDebugString());
-
-  } else {
-    auto status =
-        mds_client_.UnLink(ctx, parent, name, attr_entry, parent_attr_entry);
-    if (!status.ok()) {
-      if (status.IsNotExist()) return Status::OK();
-      return status;
-    }
+  auto status =
+      mds_client_.UnLink(ctx, parent, name, attr_entry, parent_attr_entry);
+  if (!status.ok()) {
+    if (status.IsNotExist()) return Status::OK();
+    return status;
   }
 
   PutInodeToCache(parent_attr_entry);
@@ -1818,38 +1768,83 @@ void MDSMetaSystem::LaunchWriteSlice(ContextSPtr& ctx, ChunkSetSPtr chunk_set,
   LOG_DEBUG << fmt::format("[meta.fs.{}] launch write slice {}.", ino,
                            task->Describe());
 
-  auto operation = std::make_shared<WriteSliceOperation>(
-      ctx, ino, task,
-      [this, chunk_set, ino](const Status& status, CommitTaskSPtr task,
-                             const MDSClient::WriteSliceResult& result) {
-        task->SetDone(status);
+  struct Params {
+    Ino ino;
+    ContextSPtr ctx;
+    ChunkSetSPtr chunk_set;
+    CommitTaskSPtr task;
+    MDSMetaSystem* meta_system;
+  };
 
-        if (status.ok()) {
-          LOG_DEBUG << fmt::format(
-              "[meta.fs.{}] writeslice done, task({}) status({}).", ino,
-              task->TaskID(), status.ToString());
+  Params* params = new Params({.ino = ino,
+                               .ctx = ctx,
+                               .chunk_set = chunk_set,
+                               .task = task,
+                               .meta_system = this});
 
-          PutInodeToCache(result.attr);
+  bthread_t tid;
+  bthread_attr_t attr = BTHREAD_ATTR_NORMAL;
+  if (bthread_start_background(
+          &tid, &attr,
+          [](void* arg) -> void* {
+            Params* params = reinterpret_cast<Params*>(arg);
+            const Ino ino = params->ino;
+            auto& ctx = params->ctx;
+            auto& chunk_set = params->chunk_set;
+            auto& task = params->task;
+            auto* meta_system = params->meta_system;
+            auto& mds_client = meta_system->mds_client_;
 
-          chunk_set->FinishCommitTask(task->TaskID(), result.chunks);
+            // generate delta slice entries
+            std::vector<mds::DeltaSliceEntry> delta_slice_entries;
+            for (const auto& delta_slice : task->DeltaSlices()) {
+              mds::DeltaSliceEntry delta_slice_entry;
+              delta_slice_entry.set_chunk_index(delta_slice.chunk_index);
+              delta_slice_entry.set_curr_version(delta_slice.version);
 
-          chunk_memo_.Remember(ino, result.chunks);
+              for (const auto& slice : delta_slice.slices) {
+                *delta_slice_entry.add_slices() = Helper::ToSlice(slice);
+              }
 
-        } else {
-          LOG(ERROR) << fmt::format(
-              "[meta.fs.{}] writeslice fail, task({}) retry({}) status({}).",
-              ino, task->TaskID(), task->Retries(), status.ToString());
-        }
-      });
+              delta_slice_entries.push_back(std::move(delta_slice_entry));
+            }
 
-  if (!batch_processor_.AsyncRun(operation)) {
-    LOG(ERROR) << fmt::format("[meta.fs.{}] flush delta slice fail.", ino);
+            MDSClient::WriteSliceResult result;
+            Status status =
+                mds_client.WriteSlice(ctx, ino, delta_slice_entries, result);
+            if (status.ok()) {
+              LOG_DEBUG << fmt::format(
+                  "[meta.fs.{}] writeslice done, task({}) status({}).", ino,
+                  task->TaskID(), status.ToString());
+
+              meta_system->PutInodeToCache(result.attr);
+              chunk_set->FinishCommitTask(task->TaskID(), result.chunks);
+              meta_system->chunk_memo_.Remember(ino, result.chunks);
+
+            } else {
+              LOG(ERROR) << fmt::format(
+                  "[meta.fs.{}] writeslice fail, task({}) retry({}) "
+                  "status({}).",
+                  ino, task->TaskID(), task->Retries(), status.ToString());
+            }
+
+            // Publish completion only after all task-owned state is installed.
+            // A waiter that observes OK must not find the task still pending.
+            task->SetDone(status);
+
+            delete params;
+
+            return nullptr;
+          },
+          params) != 0) {
+    delete params;
     task->SetDone(Status::Internal("launch write slice fail"));
+    LOG(FATAL) << "[meta.batch_processor] start background thread fail.";
   }
 }
 
-void MDSMetaSystem::AsyncFlushSlice(ContextSPtr& ctx, ChunkSetSPtr chunk_set,
-                                    bool is_force, bool is_wait) {
+Status MDSMetaSystem::AsyncFlushSlice(ContextSPtr& ctx, ChunkSetSPtr chunk_set,
+                                      bool is_force, bool is_wait) {
   Ino ino = chunk_set->GetIno();
 
   uint32_t new_task_count = chunk_set->TryCommitSlice(is_force);
@@ -1857,7 +1852,10 @@ void MDSMetaSystem::AsyncFlushSlice(ContextSPtr& ctx, ChunkSetSPtr chunk_set,
   uint32_t launched_count = 0;
   auto tasks = chunk_set->ListCommitTask();
   for (auto& task : tasks) {
-    if (task->MaybeRun()) {
+    // Background writeback launches new tasks but does not reset a completed
+    // failure: doing so could erase the status while a synchronous Flush is
+    // consuming it.  A later explicit Flush owns the retry attempt.
+    if (task->MaybeRun(/*retry_failed=*/is_wait)) {
       ++launched_count;
       LaunchWriteSlice(ctx, chunk_set, task);
     }
@@ -1869,6 +1867,10 @@ void MDSMetaSystem::AsyncFlushSlice(ContextSPtr& ctx, ChunkSetSPtr chunk_set,
 
   if (is_wait) {
     for (auto& task : tasks) task->Wait();
+    for (auto& task : tasks) {
+      auto status = task->GetStatus();
+      if (!status.ok()) return status;
+    }
   }
 
   if (FLAGS_vfs_meta_compact_chunk_enable) {
@@ -1882,6 +1884,8 @@ void MDSMetaSystem::AsyncFlushSlice(ContextSPtr& ctx, ChunkSetSPtr chunk_set,
       }
     }
   }
+
+  return Status::OK();
 }
 
 Status MDSMetaSystem::FlushSliceAndFile(ContextSPtr ctx, Ino ino) {
@@ -1894,6 +1898,11 @@ Status MDSMetaSystem::FlushSliceAndFile(ContextSPtr ctx, Ino ino) {
 
   auto& chunk_set = file_session->GetChunkSet();
 
+  // Freeze this inode's write frontier for the duration of the metadata
+  // flush.  Without this barrier, another writer can keep appending to the
+  // shared ChunkSet and prevent the drain loop from ever reaching empty.
+  auto flush_guard = chunk_set->AcquireFlushGuard();
+
   do {
     bool has_stage = chunk_set->HasStage();
     bool has_committing = chunk_set->HasCommitting();
@@ -1905,7 +1914,8 @@ Status MDSMetaSystem::FlushSliceAndFile(ContextSPtr ctx, Ino ino) {
         "has_commit_task({}).",
         ino, has_stage, has_committing, has_commit_task);
 
-    AsyncFlushSlice(ctx, chunk_set, true, true);
+    auto status = AsyncFlushSlice(ctx, chunk_set, true, true);
+    if (!status.ok()) return status;
 
   } while (true);
 
@@ -1919,31 +1929,19 @@ void MDSMetaSystem::FlushAllFile() {
   LOG_DEBUG << fmt::format("[meta.fs] flush all file, count({}).",
                            file_sessions.size());
 
-  do {
-    for (auto& file_session : file_sessions) {
-      Ino ino = file_session->GetIno();
-      ContextSPtr ctx = std::make_shared<Context>("");
+  for (auto& file_session : file_sessions) {
+    Ino ino = file_session->GetIno();
+    ContextSPtr ctx = std::make_shared<Context>("");
 
-      auto status = FlushSliceAndFile(ctx, ino);
-      if (!status.ok()) {
-        LOG(ERROR) << fmt::format(
-            "[meta.fs.{}] flush all file fail, error({}).", ino,
-            status.ToString());
-      }
+    // FlushSliceAndFile drains all work on success.  On failure it deliberately
+    // leaves the task retryable, but shutdown must not immediately retry it
+    // forever and prevent the remaining components from stopping.
+    auto status = FlushSliceAndFile(ctx, ino);
+    if (!status.ok()) {
+      LOG(ERROR) << fmt::format("[meta.fs.{}] flush all file fail, error({}).",
+                                ino, status.ToString());
     }
-
-    bool has_uncommited = false;
-    for (auto& file_session : file_sessions) {
-      if (file_session->GetChunkSet()->HasUncommitedSlice()) {
-        has_uncommited = true;
-        break;
-      }
-    }
-    if (!has_uncommited) break;
-
-    LOG_DEBUG << "[meta.fs] flush all slice loop, still has uncommited slice.";
-
-  } while (true);
+  }
 }
 
 Status MDSMetaSystem::CorrectAttr(ContextSPtr ctx, uint64_t time_ns, Attr& attr,
