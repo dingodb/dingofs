@@ -59,7 +59,7 @@ namespace dingofs {
 namespace client {
 
 // State file lives under the dingofs runtime data dir (not /tmp), e.g.
-// $DINGOFS_BASE_DIR/data, /var/dingofs/data (root) or $HOME/.dingofs/data.
+// $DINGOFS_BASE_DIR/data, /var/dingo/data (root) or $HOME/.dingo/data.
 // Old (writer) and new (reader) processes resolve the same path as long as
 // they run with the same uid and DINGOFS_BASE_DIR env -- the same assumption
 // already made for the fd-comm socket dir (GetDefaultDir(kSocketDir)).

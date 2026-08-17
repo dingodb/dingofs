@@ -62,12 +62,13 @@ TEST(DirectoryTest, GetBaseDirHonorsEnvOverride) {
   ::unsetenv("DINGOFS_BASE_DIR");
 }
 
-TEST(DirectoryTest, GetBaseDirFallsBackToHomeWhenEnvUnset) {
+TEST(DirectoryTest, GetBaseDirUsesUidSpecificDefaultWhenEnvUnset) {
   ::unsetenv("DINGOFS_BASE_DIR");
   if (::getuid() == 0) {
-    GTEST_SKIP() << "root falls back to /var/dingofs, not $HOME";
+    EXPECT_EQ(GetBaseDir(), "/var/dingo");
+  } else {
+    EXPECT_EQ(GetBaseDir(), Helper::GetHomeDir() + "/.dingo");
   }
-  EXPECT_EQ(GetBaseDir(), Helper::GetHomeDir() + "/.dingofs");
 }
 
 TEST(DirectoryTest, GetDefaultDirAppendsSubDir) {
