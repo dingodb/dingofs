@@ -1950,7 +1950,7 @@ TEST_F(UpdateAttrRunTest, SizeTruncateDownSparseMiddleChunk) {
   EXPECT_EQ(SortedSlices(ino, 2).size(), 2u);  // real + zero
 }
 
-TEST_F(UpdateAttrRunTest, FlushRollbackZerosDroppedRangeAtomically) {
+TEST_F(UpdateAttrRunTest, RollbackFileZerosDroppedRangeAtomically) {
   const Ino ino = 218;
   const uint64_t old_length = 3 * kFallocChunkSize;
   SeedInode(MakeFullInode(ino, old_length));
@@ -1960,12 +1960,11 @@ TEST_F(UpdateAttrRunTest, FlushRollbackZerosDroppedRangeAtomically) {
   SeedChunk(
       ino, MakeSizedChunk(2, {MakeSlice(/*id=*/4002, 0, kFallocChunkSize, 0)}));
 
-  FlushFileOperation::ExtraParam param;
-  param.length = old_length;
-  param.chunk_size = kFallocChunkSize;
-  param.rollback = true;
+  RollbackFileOperation::ExtraParam param;
+  param.last_write_length = old_length;
   param.rollback_to_length = 4096;
-  FlushFileOperation op(trace_, kFallocFsId, ino, param);
+  param.chunk_size = kFallocChunkSize;
+  RollbackFileOperation op(trace_, kFallocFsId, ino, param);
 
   auto txn = storage_->NewTxn();
   ASSERT_TRUE(op.Run(txn).ok());

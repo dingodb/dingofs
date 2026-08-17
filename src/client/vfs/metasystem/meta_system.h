@@ -91,7 +91,7 @@ class MetaSystem {
   // Called when a user-visible data flush fails (ADR-0003): conditionally
   // roll the file length back to the flush checkpoint, abandoning this round
   // of writes. Best-effort; backends without rollback support are a no-op.
-  virtual Status RollbackWriteLength(ContextSPtr ctx, Ino ino, uint64_t fh) {
+  virtual Status RollbackFile(ContextSPtr ctx, Ino ino, uint64_t fh) {
     (void)ctx;
     (void)ino;
     (void)fh;

@@ -738,7 +738,7 @@ Status VFSImpl::Flush(ContextSPtr ctx, Ino ino, uint64_t fh) {
   if (handle->resources.writer != nullptr) {
     s = handle->resources.writer->Flush();
     if (!s.ok()) {
-      RollbackWriteLength(ctx, ino, fh);
+      RollbackFile(ctx, ino, fh);
       return s;
     }
   }
@@ -748,14 +748,14 @@ Status VFSImpl::Flush(ContextSPtr ctx, Ino ino, uint64_t fh) {
   return s;
 }
 
-void VFSImpl::RollbackWriteLength(ContextSPtr ctx, Ino ino, uint64_t fh) {
+void VFSImpl::RollbackFile(ContextSPtr ctx, Ino ino, uint64_t fh) {
   // Data flush failed: this round of writes is abandoned (ADR-0003). Ask the
   // meta system to conditionally shrink the file length back to the flush
   // checkpoint. Best-effort: on failure only log; the caller still returns
   // the original flush error, and a later user-visible failure point
   // (Flush/Release) will try again since the checkpoint condition still
   // holds.
-  auto s = meta_system_->RollbackWriteLength(ctx, ino, fh);
+  auto s = meta_system_->RollbackFile(ctx, ino, fh);
   if (!s.ok()) {
     LOG(ERROR) << fmt::format(
         "[vfs.{}] rollback write length fail, fh({}) error({}).", ino, fh,
@@ -801,7 +801,7 @@ Status VFSImpl::Release(ContextSPtr ctx, Ino ino, uint64_t fh) {
   Status flush_status;
   if (handle->resources.writer != nullptr) {
     flush_status = handle->resources.writer->Flush();
-    if (!flush_status.ok()) RollbackWriteLength(ctx, ino, fh);
+    if (!flush_status.ok()) RollbackFile(ctx, ino, fh);
   }
 
   Status close_status =

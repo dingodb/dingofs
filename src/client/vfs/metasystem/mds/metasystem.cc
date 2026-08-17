@@ -878,8 +878,7 @@ Status MDSMetaSystem::Flush(ContextSPtr ctx, Ino ino, uint64_t fh) {
   return FlushSliceAndFile(ctx, ino);
 }
 
-Status MDSMetaSystem::RollbackWriteLength(ContextSPtr ctx, Ino ino,
-                                          uint64_t fh) {
+Status MDSMetaSystem::RollbackFile(ContextSPtr ctx, Ino ino, uint64_t fh) {
   AssertStop();
 
   auto file_session = file_session_map_.GetSession(ino);
@@ -907,8 +906,8 @@ Status MDSMetaSystem::RollbackWriteLength(ContextSPtr ctx, Ino ino,
 
   AttrEntry attr_entry;
   bool shrink_file = false;
-  auto status = mds_client_.RollbackFileLength(
-      ctx, ino, last_write_length, checkpoint, attr_entry, shrink_file);
+  auto status = mds_client_.RollbackFile(ctx, ino, last_write_length,
+                                         checkpoint, attr_entry, shrink_file);
   // Invalidate even when the response says no shrink: an earlier timed-out
   // attempt may have committed and the RPC retry then observed the checkpoint.
   InvalidateLengthShrinkCache(ino, status, "rollback_write_length");
@@ -1738,9 +1737,7 @@ Status MDSMetaSystem::DoFlushFile(ContextSPtr ctx, InodeSPtr inode,
       last_write_slice_length, last_write_length, file_length);
 
   AttrEntry attr_entry;
-  bool shrink_file;
-  auto status = mds_client_.FlushFile(ctx, ino, last_write_length, attr_entry,
-                                      shrink_file);
+  auto status = mds_client_.FlushFile(ctx, ino, last_write_length, attr_entry);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
         "[meta.fs.{}] flush file fail, length({}) error({}).", ino,
@@ -1752,7 +1749,6 @@ Status MDSMetaSystem::DoFlushFile(ContextSPtr ctx, InodeSPtr inode,
   chunk_set->SetFlushCheckpoint(last_write_length);
 
   modify_time_memo_.Remember(ino);
-  if (shrink_file) InvalidateLengthShrinkCache(ino, false, "flush_file");
 
   PutInodeToCache(attr_entry);
 

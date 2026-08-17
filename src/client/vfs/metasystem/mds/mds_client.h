@@ -147,15 +147,14 @@ class MDSClient {
   Status Release(ContextSPtr& ctx, Ino ino, const std::string& session_id);
 
   Status FlushFile(ContextSPtr& ctx, Ino ino, uint64_t length,
-                   AttrEntry& attr_entry, bool& shrink_file);
+                   AttrEntry& attr_entry);
 
   // conditional length rollback on data-flush failure (ADR-0003): shrink to
   // rollback_to_length iff rollback_to_length < current length <=
-  // last_write_length.
-  Status RollbackFileLength(ContextSPtr& ctx, Ino ino,
-                            uint64_t last_write_length,
-                            uint64_t rollback_to_length, AttrEntry& attr_entry,
-                            bool& shrink_file);
+  // last_write_length. Calls the RollbackFile RPC.
+  Status RollbackFile(ContextSPtr& ctx, Ino ino, uint64_t last_write_length,
+                      uint64_t rollback_to_length, AttrEntry& attr_entry,
+                      bool& shrink_file);
 
   Status Link(ContextSPtr& ctx, Ino ino, Ino new_parent,
               const std::string& new_name, AttrEntry& attr_entry,

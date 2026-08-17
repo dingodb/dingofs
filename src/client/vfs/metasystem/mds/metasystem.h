@@ -112,7 +112,7 @@ class MDSMetaSystem : public vfs::MetaSystem {
 
   Status Flush(ContextSPtr ctx, Ino ino, uint64_t fh) override;
 
-  Status RollbackWriteLength(ContextSPtr ctx, Ino ino, uint64_t fh) override;
+  Status RollbackFile(ContextSPtr ctx, Ino ino, uint64_t fh) override;
 
   Status Close(ContextSPtr ctx, Ino ino, uint64_t fh) override;
 

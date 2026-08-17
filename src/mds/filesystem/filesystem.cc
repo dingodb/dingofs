@@ -1282,10 +1282,8 @@ Status FileSystem::FlushFile(Context& ctx, Ino ino, const FlushFileParam& param,
   FlushFileOperation::ExtraParam extra_param;
   extra_param.length = param.length;
   extra_param.chunk_size = fs_info_->GetChunkSize();
-  extra_param.rollback = param.rollback;
-  extra_param.rollback_to_length = param.rollback_to_length;
 
-  if (!param.rollback && param.length > inode->Length() && inode->Nlink() > 0) {
+  if (param.length > inode->Length() && inode->Nlink() > 0) {
     // check quota
     if (!quota_manager_.CheckQuota(trace, ino, param.length - inode->Length(), 0)) {
       return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
@@ -1316,6 +1314,73 @@ Status FileSystem::FlushFile(Context& ctx, Ino ino, const FlushFileParam& param,
 
   // update quota
   std::string reason = fmt::format("flushfile.{}.{}", request_id, ino);
+  if (delta_bytes != 0 && attr.nlink() > 0) {
+    quota_manager_.AsyncUpdateFsUsage(delta_bytes, 0, reason);
+
+    for (const auto& parent : attr.parents()) {
+      quota_manager_.AsyncUpdateDirUsage(parent, delta_bytes, 0, reason);
+      UpdateDirStat(parent, delta_bytes, 0, 0, reason);
+    }
+  }
+
+  // update chunk cache
+  if (delta_bytes < 0) chunk_cache_.Delete(ino);
+
+  // update cache
+  UpsertInodeCache(attr, reason);
+
+  trace.RecordElapsedTime("post_handle");
+
+  return Status::OK();
+}
+
+Status FileSystem::RollbackFile(Context& ctx, Ino ino, const RollbackFileParam& param,
+                                EntryWithFileChangeOut& entry_out) {
+  if (!CanServe(ctx)) {
+    return Status(pb::error::ENOT_SERVE, "can not serve");
+  }
+
+  auto& trace = ctx.GetTrace();
+  const auto& request_id = ctx.RequestId();
+
+  utils::Duration duration;
+
+  InodeSPtr inode;
+  auto status = GetInode(ctx, ino, inode);
+  if (!status.ok()) return status;
+
+  // update parent memo
+  UpdateParentMemo(ctx.GetAncestors());
+
+  RollbackFileOperation::ExtraParam extra_param;
+  extra_param.last_write_length = param.last_write_length;
+  extra_param.rollback_to_length = param.rollback_to_length;
+  extra_param.chunk_size = fs_info_->GetChunkSize();
+
+  trace.RecordElapsedTime("prepare");
+
+  RollbackFileOperation operation(trace, fs_id_, ino, extra_param);
+
+  status = RunOperation(&operation);
+  trace.RecordElapsedTime("resume");
+
+  if (!status.ok()) return status;
+
+  auto& result = operation.GetResult();
+  auto& attr = result.attr;
+  int64_t delta_bytes = result.delta_bytes;
+
+  LOG_DEBUG << fmt::format("[fs.{}.{}.{}.{}][{}us] rollback file finish, delta_bytes({}) version({}) status({}).",
+                           fs_id_, ino, ctx.RequestId(), trace.GetReqTypeInt(), duration.ElapsedUs(), delta_bytes,
+                           attr.version(), status.error_str());
+
+  // set output
+  entry_out.attr = attr;
+  entry_out.shrink_file = (delta_bytes < 0) ? true : false;
+  entry_out.expand_file = false;
+
+  // update quota
+  std::string reason = fmt::format("rollbackfile.{}.{}", request_id, ino);
   if (delta_bytes != 0 && attr.nlink() > 0) {
     quota_manager_.AsyncUpdateFsUsage(delta_bytes, 0, reason);
 

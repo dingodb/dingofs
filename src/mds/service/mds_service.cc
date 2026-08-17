@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include "mds/service/mds_service.h"
-#include "common/helper.h"
 
 #include <butil/reloadable_flags.h>
 
@@ -25,6 +24,7 @@
 #include <vector>
 
 #include "brpc/controller.h"
+#include "common/helper.h"
 #include "common/logging.h"
 #include "common/options/common.h"
 #include "dingofs/error.pb.h"
@@ -1496,9 +1496,7 @@ void MDSServiceImpl::DoFlushFile(google::protobuf::RpcController*, const pb::mds
 
   Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
-  FileSystem::FlushFileParam param{.length = request->length(),
-                                   .rollback = request->rollback(),
-                                   .rollback_to_length = request->rollback_to_length()};
+  FileSystem::FlushFileParam param{.length = request->length()};
 
   EntryWithFileChangeOut entry_out;
   status = file_system->FlushFile(ctx, request->ino(), param, entry_out);
@@ -1509,8 +1507,6 @@ void MDSServiceImpl::DoFlushFile(google::protobuf::RpcController*, const pb::mds
   }
 
   response->mutable_inode()->Swap(&entry_out.attr);
-  response->set_shrink_file(entry_out.shrink_file);
-
   response->mutable_inode()->clear_shard_boundaries();
 }
 
@@ -1541,6 +1537,69 @@ void MDSServiceImpl::FlushFile(google::protobuf::RpcController* controller, cons
 
   // run in queue.
   RunInQueue(FlushFile, controller, request, response, svr_done, write_worker_set_);
+}
+
+void MDSServiceImpl::DoRollbackFile(google::protobuf::RpcController*, const pb::mds::RollbackFileRequest* request,
+                                    pb::mds::RollbackFileResponse* response, TraceClosure* done) {
+  brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
+
+  auto span = StartSpan("MDSServiceImpl::DoRollbackFile", request->info());
+
+  auto file_system = GetFileSystem(request->fs_id());
+  auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    SpanScope::SetStatus(span, status);
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
+  Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
+
+  FileSystem::RollbackFileParam param{.last_write_length = request->last_write_length(),
+                                      .rollback_to_length = request->rollback_to_length()};
+
+  EntryWithFileChangeOut entry_out;
+  status = file_system->RollbackFile(ctx, request->ino(), param, entry_out);
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    SpanScope::SetStatus(span, status);
+    ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
+  response->mutable_inode()->Swap(&entry_out.attr);
+  response->set_shrink_file(entry_out.shrink_file);
+
+  response->mutable_inode()->clear_shard_boundaries();
+}
+
+void MDSServiceImpl::RollbackFile(google::protobuf::RpcController* controller,
+                                  const pb::mds::RollbackFileRequest* request, pb::mds::RollbackFileResponse* response,
+                                  google::protobuf::Closure* done) {
+  auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  // validate request
+  auto validate_fn = [&]() -> Status {
+    if (request->fs_id() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "fs_id is empty");
+    }
+    if (request->ino() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "ino is empty");
+    }
+
+    return Status::OK();
+  };
+
+  auto status = validate_fn();
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    brpc::ClosureGuard done_guard(svr_done);
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
+  // run in place.
+  RunInPlace(RollbackFile, controller, request, response, svr_done);
+
+  // run in queue.
+  RunInQueue(RollbackFile, controller, request, response, svr_done, write_worker_set_);
 }
 
 void MDSServiceImpl::DoLink(google::protobuf::RpcController*, const pb::mds::LinkRequest* request,
@@ -1641,7 +1700,8 @@ void MDSServiceImpl::DoBatchUnLink(google::protobuf::RpcController*, const pb::m
   Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
   EntriesWithPaOut entry_out;
-  status = file_system->BatchUnLink(ctx, request->parent(), ::dingofs::Helper::PbRepeatedToVector(request->names()), entry_out);
+  status = file_system->BatchUnLink(ctx, request->parent(), ::dingofs::Helper::PbRepeatedToVector(request->names()),
+                                    entry_out);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
@@ -2224,7 +2284,8 @@ void MDSServiceImpl::DoWriteSlice(google::protobuf::RpcController*, const pb::md
   Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
   EntryWithChunkOut entry_out;
-  status = file_system->WriteSlice(ctx, request->ino(), ::dingofs::Helper::PbRepeatedToVector(request->delta_slices()), entry_out);
+  status = file_system->WriteSlice(ctx, request->ino(), ::dingofs::Helper::PbRepeatedToVector(request->delta_slices()),
+                                   entry_out);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     SpanScope::SetStatus(span, status);
@@ -2284,8 +2345,8 @@ void MDSServiceImpl::DoReadSlice(google::protobuf::RpcController* controller, co
   Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
 
   std::vector<ChunkEntry> chunks;
-  status =
-      file_system->ReadSlice(ctx, request->ino(), ::dingofs::Helper::PbRepeatedToVector(request->chunk_descriptors()), chunks);
+  status = file_system->ReadSlice(ctx, request->ino(),
+                                  ::dingofs::Helper::PbRepeatedToVector(request->chunk_descriptors()), chunks);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     SpanScope::SetStatus(span, status);

@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include "client/vfs/metasystem/mds/mds_client.h"
-#include "common/helper.h"
 
 #include <json/value.h>
 
@@ -26,6 +25,7 @@
 #include "client/vfs/metasystem/mds/rpc.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/const.h"
+#include "common/helper.h"
 #include "dingofs/mds.pb.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
@@ -787,7 +787,7 @@ Status MDSClient::Release(ContextSPtr& ctx, Ino ino,
 }
 
 Status MDSClient::FlushFile(ContextSPtr& ctx, Ino ino, uint64_t length,
-                            AttrEntry& attr_entry, bool& shrink_file) {
+                            AttrEntry& attr_entry) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this, ino](bool& is_primary_mds) -> MDSMeta {
@@ -817,37 +817,35 @@ Status MDSClient::FlushFile(ContextSPtr& ctx, Ino ino, uint64_t length,
   parent_memo_.UpsertVersion(ino, response.inode().version());
 
   attr_entry.Swap(response.mutable_inode());
-  shrink_file = response.shrink_file();
 
   return status;
 }
 
-Status MDSClient::RollbackFileLength(ContextSPtr& ctx, Ino ino,
-                                     uint64_t last_write_length,
-                                     uint64_t rollback_to_length,
-                                     AttrEntry& attr_entry, bool& shrink_file) {
+Status MDSClient::RollbackFile(ContextSPtr& ctx, Ino ino,
+                               uint64_t last_write_length,
+                               uint64_t rollback_to_length,
+                               AttrEntry& attr_entry, bool& shrink_file) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this, ino](bool& is_primary_mds) -> MDSMeta {
     return GetMds(ino, is_primary_mds);
   };
 
-  auto span = trace_manager_.StartChildSpan("MDSClient::RollbackFileLength",
+  auto span = trace_manager_.StartChildSpan("MDSClient::RollbackFile",
                                             ctx->GetTraceSpan());
 
-  pb::mds::FlushFileRequest request;
-  pb::mds::FlushFileResponse response;
+  pb::mds::RollbackFileRequest request;
+  pb::mds::RollbackFileResponse response;
 
   SetAncestorInContext(request, ino);
 
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
-  request.set_length(last_write_length);
-  request.set_rollback(true);
+  request.set_last_write_length(last_write_length);
   request.set_rollback_to_length(rollback_to_length);
 
   auto status = SendRequest(SpanScope::GetContext(span, ctx), span, get_mds_fn,
-                            "MDSService", "FlushFile", request, response);
+                            "MDSService", "RollbackFile", request, response);
 
   if (!status.ok()) {
     SpanScope::SetStatus(span, status);
@@ -1195,7 +1193,8 @@ Status MDSClient::SetAttr(ContextSPtr& ctx, Ino ino, const Attr& attr,
   out.attr_entry.Swap(response.mutable_inode());
   out.shrink_file = response.shrink_file();
   out.expand_file = response.expand_file();
-  out.effected_chunks = ::dingofs::Helper::PbRepeatedToVector(response.chunks());
+  out.effected_chunks =
+      ::dingofs::Helper::PbRepeatedToVector(response.chunks());
 
   return Status::OK();
 }
@@ -1458,7 +1457,7 @@ Status MDSClient::ReadSlice(
   request.set_ino(ino);
 
   ::dingofs::Helper::VectorToPbRepeated(chunk_descriptors,
-                                  request.mutable_chunk_descriptors());
+                                        request.mutable_chunk_descriptors());
 
   auto status = SendRequest(SpanScope::GetContext(span, ctx), span, get_mds_fn,
                             "MDSService", "ReadSlice", request, response);
@@ -1493,7 +1492,8 @@ Status MDSClient::WriteSlice(
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
 
-  ::dingofs::Helper::VectorToPbRepeated(delta_slices, request.mutable_delta_slices());
+  ::dingofs::Helper::VectorToPbRepeated(delta_slices,
+                                        request.mutable_delta_slices());
 
   auto status = SendRequest(SpanScope::GetContext(span, ctx), span, get_mds_fn,
                             "MDSService", "WriteSlice", request, response);
@@ -1600,7 +1600,8 @@ Status MDSClient::CopyFileRange(ContextSPtr& ctx,
 
   out.bytes_copied = response.bytes_copied();
   out.attr_entry.Swap(response.mutable_dst_inode());
-  out.effected_chunks = ::dingofs::Helper::PbRepeatedToVector(response.dst_chunks());
+  out.effected_chunks =
+      ::dingofs::Helper::PbRepeatedToVector(response.dst_chunks());
 
   return Status::OK();
 }
@@ -1640,7 +1641,8 @@ Status MDSClient::Fallocate(ContextSPtr& ctx, Ino ino, int32_t mode,
   out.attr_entry.Swap(response.mutable_inode());
   out.shrink_file = response.shrink_file();
   out.expand_file = response.expand_file();
-  out.effected_chunks = ::dingofs::Helper::PbRepeatedToVector(response.chunks());
+  out.effected_chunks =
+      ::dingofs::Helper::PbRepeatedToVector(response.chunks());
 
   return Status::OK();
 }
