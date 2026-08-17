@@ -39,7 +39,6 @@
 #include "client/vfs/vfs_impl.h"
 #include "common/blockaccess/accesser_common.h"
 #include "common/const.h"
-#include "common/file_size.h"
 #include "common/options/client.h"
 #include "common/status.h"
 #include "common/trace/trace_manager.h"
@@ -267,7 +266,7 @@ TEST_F(VFSImplTest, GetAttr_DelegatesToMetaSystem) {
 TEST_F(VFSImplTest, SetAttr_RejectsFileSizeAboveLimitBeforeMetaCall) {
   Attr in;
   Attr out;
-  ASSERT_TRUE(TryGetMaxFileSize(mock_hub_->GetFsInfo().chunk_size, &in.length));
+  in.length = kMaxFileLength;
   ++in.length;
 
   EXPECT_CALL(*mock_meta_system_, SetAttr(_, _, _, _, _)).Times(0);
@@ -278,9 +277,7 @@ TEST_F(VFSImplTest, SetAttr_RejectsFileSizeAboveLimitBeforeMetaCall) {
 }
 
 TEST_F(VFSImplTest, Fallocate_RejectsRangeAboveLimit) {
-  uint64_t max_file_size = 0;
-  ASSERT_TRUE(
-      TryGetMaxFileSize(mock_hub_->GetFsInfo().chunk_size, &max_file_size));
+  uint64_t max_file_size = kMaxFileLength;
 
   Status s = vfs_->Fallocate(ctx_, 55, 0, max_file_size - 1, 2);
 
@@ -289,9 +286,7 @@ TEST_F(VFSImplTest, Fallocate_RejectsRangeAboveLimit) {
 }
 
 TEST_F(VFSImplTest, CopyFileRange_RejectsDestinationAboveLimit) {
-  uint64_t max_file_size = 0;
-  ASSERT_TRUE(
-      TryGetMaxFileSize(mock_hub_->GetFsInfo().chunk_size, &max_file_size));
+  uint64_t max_file_size = kMaxFileLength;
   uint64_t copied = 123;
 
   Status s = vfs_->CopyFileRange(ctx_, 55, 0, 0, 56, max_file_size - 1, 0, 2, 0,
@@ -317,9 +312,7 @@ TEST_F(VFSImplTest, Write_RejectsOffsetAtLimitBeforeBuffering) {
   uint64_t fh = 0;
   ASSERT_TRUE(vfs_->Open(ctx_, kIno, O_WRONLY, &fh, nullptr).ok());
 
-  uint64_t max_file_size = 0;
-  ASSERT_TRUE(
-      TryGetMaxFileSize(mock_hub_->GetFsInfo().chunk_size, &max_file_size));
+  uint64_t max_file_size = kMaxFileLength;
   EXPECT_CALL(*mock_meta_system_, Write(_, _, _, _, _, _)).Times(0);
 
   char byte = 'x';

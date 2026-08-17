@@ -82,6 +82,10 @@ const uint32_t kMaxMDSId = 65535;
 
 constexpr uint32_t kInoShiftBits = 40;
 
+// 1TB
+constexpr uint64_t kMaxFileLength = 1024ULL * 1024 * 1024 * 1024;
+inline bool IsValidFileSize(uint64_t size) { return size <= kMaxFileLength; }
+
 }  // namespace dingofs
 
 #endif  // DINGOFS_SRC_COMMON_CONST_H_

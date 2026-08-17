@@ -26,7 +26,6 @@
 #include <vector>
 
 #include "client/common/const.h"
-#include "client/vfs/common/file_size.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/components/uid_gid_mapper.h"
 #include "client/vfs/components/warmup_manager.h"
@@ -319,8 +318,9 @@ Status VFSImpl::SetAttr(ContextSPtr ctx, Ino ino, int set, const Attr& in_attr,
   // write still buffered here could land *after* the truncate and re-expose the
   // bytes the truncate was meant to drop.
   if (set & kSetAttrSize) {
-    DINGOFS_RETURN_NOT_OK(
-        ValidateFileSize(vfs_hub_->GetFsInfo().chunk_size, in_attr.length));
+    if (!IsValidFileSize(in_attr.length)) {
+      return Status::FileTooLarge("file size too large");
+    }
     Status s = handle_manager_->FlushByIno(ino);
     if (!s.ok()) return s;
   }
@@ -349,8 +349,9 @@ Status VFSImpl::Fallocate(ContextSPtr ctx, Ino ino, int mode, uint64_t offset,
     return Status::NoPermitted("fallocate on internal node");
   }
 
-  DINGOFS_RETURN_NOT_OK(
-      ValidateFileRange(vfs_hub_->GetFsInfo().chunk_size, offset, length));
+  if (!IsValidFileSize(offset + length)) {
+    return Status::FileTooLarge("file size too large");
+  }
 
   // Same ordering requirement as truncate: PUNCH_HOLE / ZERO_RANGE write zero
   // slices that must shadow already-written data, so flush buffered writes
@@ -388,10 +389,9 @@ Status VFSImpl::CopyFileRange(ContextSPtr ctx, Ino src_ino, uint64_t src_off,
   }
   if (len == 0) return Status::OK();
 
-  DINGOFS_RETURN_NOT_OK(
-      ValidateFileRange(vfs_hub_->GetFsInfo().chunk_size, src_off, len));
-  DINGOFS_RETURN_NOT_OK(
-      ValidateFileRange(vfs_hub_->GetFsInfo().chunk_size, dst_off, len));
+  if (!IsValidFileSize(src_off + len) || !IsValidFileSize(dst_off + len)) {
+    return Status::FileTooLarge("file size too large");
+  }
 
   // Same-file overlap is undefined by POSIX; reject before touching MDS.
   if (src_ino == dst_ino) {
@@ -557,7 +557,6 @@ Status VFSImpl::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t* fh,
   }
 
   if (BAIDU_UNLIKELY(ino == kStatsIno)) {
-    // uint64_t gfh = vfs::FhGenerator::GenFh();
     MetricsDumper metrics_dumper;
     bvar::DumpOptions opts;
     int ret = bvar::Variable::dump_exposed(&metrics_dumper, &opts);
@@ -584,6 +583,12 @@ Status VFSImpl::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t* fh,
 
     *fh = handler->fh;
     return Status::OK();
+  }
+
+  // Flush the handle if O_TRUNC flag is set
+  if (flags & O_TRUNC) {
+    Status s = handle_manager_->FlushByIno(ino);
+    if (!s.ok()) return s;
   }
 
   Status s = meta_system_->Open(ctx, TranslateIno(ino), flags, gfh, keep_cache);
@@ -653,8 +658,9 @@ Status VFSImpl::Read(ContextSPtr ctx, Ino ino, DataBuffer* data_buffer,
     return Status::OK();
   }
 
-  DINGOFS_RETURN_NOT_OK(
-      ValidateFileRange(vfs_hub_->GetFsInfo().chunk_size, offset, size));
+  if (!IsValidFileSize(offset + size)) {
+    return Status::FileTooLarge("file size too large");
+  }
 
   if (handle->resources.reader == nullptr) {
     LOG(ERROR) << "reader is null in handle, ino: " << ino << ", fh: " << fh;
@@ -704,8 +710,9 @@ Status VFSImpl::Write(ContextSPtr ctx, Ino ino, const char* buf, uint64_t size,
     return s;
   }
 
-  DINGOFS_RETURN_NOT_OK(
-      ValidateFileRange(vfs_hub_->GetFsInfo().chunk_size, offset, size));
+  if (!IsValidFileSize(offset + size)) {
+    return Status::FileTooLarge("file size too large");
+  }
 
   s = handle->resources.writer->Write(SpanScope::GetContext(span), buf, size,
                                       offset, out_wsize);
