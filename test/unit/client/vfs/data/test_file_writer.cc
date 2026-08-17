@@ -105,33 +105,6 @@ TEST_F(FileWriterTest, Write_CrossingChunkBoundary) {
   FlushCloseAndRelease(w);
 }
 
-// 2b. Cross-chunk pool exhaustion is a POSIX short write: chunk0 succeeds,
-//     chunk1 hits the exhausted pool. FileWriter must return OK with
-//     out_wsize == the chunk0 prefix (not an error that discards it), so the
-//     caller advances and re-issues the rest.
-TEST_F(FileWriterTest, Write_CrossChunk_PoolExhaustion_ShortWrite) {
-  // 1-page pool: chunk0's page fits, chunk1's page then fails.
-  auto tiny = std::make_unique<WriteMemPool>(4096, 4096);
-  ON_CALL(*mock_hub_, GetWriteMemPool()).WillByDefault(Return(tiny.get()));
-
-  auto* w = MakeOpenWriter();
-
-  const uint64_t chunk_size = mock_hub_->GetFsInfo().chunk_size;
-  // 8 bytes straddling the chunk 0/1 boundary: 4 bytes in each chunk.
-  constexpr uint64_t kWriteSize = 8;
-  uint64_t offset = chunk_size - 4;
-
-  std::vector<char> buf(kWriteSize, 'X');
-  uint64_t wsize = 0;
-  Status s = w->Write(ctx_, buf.data(), kWriteSize, offset, &wsize);
-
-  // Short write: OK, only the 4 bytes that landed in chunk 0.
-  EXPECT_TRUE(s.ok()) << s.ToString();
-  EXPECT_EQ(wsize, 4u);
-
-  FlushCloseAndRelease(w);
-}
-
 // 2c. First chunk itself exhausts the pool: zero bytes land, so the write is a
 //     hard failure -- NoSpace + out_wsize == 0 (not a short write).
 TEST_F(FileWriterTest, Write_FirstChunkNoSpace_ReturnsNoSpaceZeroWsize) {

@@ -23,7 +23,6 @@
 
 #include "client/vfs/data/slice/block_data.h"
 #include "client/vfs/data/slice/common.h"
-#include "common/status.h"
 #include "common/trace/trace_manager.h"
 #include "common/writemempool/write_mem_pool.h"
 #include "test/unit/client/vfs/test_base.h"
@@ -35,13 +34,14 @@ namespace vfs {
 using ::testing::AnyNumber;
 using ::testing::Return;
 
-// Small geometry so tests stay cheap: 16 KiB block / 4 KiB page = 4 pages.
-static constexpr int64_t kPageSize = 4096;
-static constexpr int64_t kBlockSize = 4 * kPageSize;  // 4 pages
-static constexpr uint64_t kChunkSize = 64 * 1024 * 1024;
-static constexpr uint64_t kFsId = 1;
-static constexpr uint64_t kIno = 100;
-static constexpr uint64_t kChunkIndex = 0;
+namespace {
+
+constexpr int64_t kPageSize = 4096;
+constexpr int64_t kBlockSize = 4 * kPageSize;
+constexpr uint64_t kChunkSize = 64 * 1024 * 1024;
+constexpr uint64_t kFsId = 1;
+constexpr uint64_t kIno = 100;
+constexpr uint64_t kChunkIndex = 0;
 
 class BlockDataTest : public test::VFSTestBase {
  protected:
@@ -50,162 +50,76 @@ class BlockDataTest : public test::VFSTestBase {
     ON_CALL(*mock_hub_, GetTraceManager())
         .WillByDefault(Return(trace_manager_.get()));
     EXPECT_CALL(*mock_hub_, GetTraceManager()).Times(AnyNumber());
-
     context_ = std::make_unique<SliceDataContext>(
         kFsId, kIno, kChunkIndex, kChunkSize, kBlockSize, kPageSize);
   }
 
-  // Build a pool with `slots` pages of kPageSize.
-  std::unique_ptr<WriteMemPool> MakePool(int slots) {
-    return std::make_unique<WriteMemPool>(
-        static_cast<int64_t>(slots) * kPageSize, kPageSize);
+  std::unique_ptr<WriteMemPool> MakePool(int pages) {
+    return std::make_unique<WriteMemPool>(pages * kPageSize, kPageSize);
   }
 
   std::unique_ptr<BlockData> MakeBlock(WriteMemPool* pool,
                                        int32_t block_offset = 0) {
-    return std::make_unique<BlockData>(*context_, mock_hub_, pool,
-                                       /*block_index=*/0, block_offset);
+    return std::make_unique<BlockData>(*context_, mock_hub_, pool, 0,
+                                       block_offset);
+  }
+
+  WritePageLease Acquire(WriteMemPool* pool, size_t pages) {
+    WritePageLease lease;
+    EXPECT_TRUE(pool->Acquire(pages, &lease).ok());
+    return lease;
   }
 
   std::unique_ptr<TraceManager> trace_manager_;
   std::unique_ptr<SliceDataContext> context_;
 };
 
-// ReservePages allocates the pages a write needs, records the new ones, and
-// leaves len_ untouched (reserve != apply).
-TEST_F(BlockDataTest, ReservePages_Success_RecordsNewPages_NoLenBump) {
+TEST_F(BlockDataTest, ReservePagesConsumesLeaseWithoutChangingLength) {
   auto pool = MakePool(4);
   auto block = MakeBlock(pool.get());
+  auto lease = Acquire(pool.get(), 3);
 
-  std::vector<uint32_t> created;
-  Status s =
-      block->ReservePages(/*size=*/3 * kPageSize, /*block_offset=*/0, &created);
-  ASSERT_TRUE(s.ok()) << s.ToString();
-  EXPECT_EQ(created.size(), 3u);
-  EXPECT_EQ(block->Len(), 0);  // reserve does not bump len_
+  block->ReservePages(3 * kPageSize, 0, &lease);
+
+  EXPECT_TRUE(lease.Empty());
+  EXPECT_EQ(block->Len(), 0);
   EXPECT_EQ(pool->GetUsedBytes(), 3 * kPageSize);
 }
 
-// A reserve that outgrows the pool returns NoSpace; it does NOT self-rollback
-// (the SliceWriter transaction owns cross-block undo), so the pages it managed
-// to take stay recorded for the caller to roll back.
-TEST_F(BlockDataTest, ReservePages_Exhausted_ReturnsNoSpace_NoSelfRollback) {
-  auto pool = MakePool(2);
-  auto block = MakeBlock(pool.get());
-
-  std::vector<uint32_t> created;
-  Status s =
-      block->ReservePages(/*size=*/3 * kPageSize, /*block_offset=*/0, &created);
-  EXPECT_TRUE(s.IsNoSpace()) << s.ToString();
-  EXPECT_EQ(created.size(), 2u);  // took 2 before the 3rd missed
-  EXPECT_EQ(pool->GetUsedBytes(), 2 * kPageSize);  // not self-rolled-back
-}
-
-// Pages already present (e.g. a partially-filled straddle page) are not
-// re-allocated and not recorded, so a later RollbackPages can't free them.
-TEST_F(BlockDataTest, ReservePages_SkipsExistingPages) {
+TEST_F(BlockDataTest, ExistingPageConsumesOnlyMissingLeasePage) {
   auto pool = MakePool(4);
   auto block = MakeBlock(pool.get());
+  auto first = Acquire(pool.get(), 1);
+  block->ReservePages(kPageSize, 0, &first);
+  ASSERT_TRUE(first.Empty());
 
-  std::vector<uint32_t> first;
-  ASSERT_TRUE(block->ReservePages(kPageSize, 0, &first).ok());
-  ASSERT_EQ(first.size(), 1u);
+  auto second = Acquire(pool.get(), 1);
+  block->ReservePages(2 * kPageSize, 0, &second);
 
-  // Reserve [0, 2 pages): page0 already exists -> only page1 is new.
-  std::vector<uint32_t> second;
-  ASSERT_TRUE(block->ReservePages(2 * kPageSize, 0, &second).ok());
-  EXPECT_EQ(second.size(), 1u);
-  EXPECT_EQ(second[0], 1u);
+  EXPECT_TRUE(second.Empty());
   EXPECT_EQ(pool->GetUsedBytes(), 2 * kPageSize);
 }
 
-TEST_F(BlockDataTest, ExistingPagePartialBatchRollbackKeepsExistingPage) {
-  auto pool = MakePool(2);
+TEST_F(BlockDataTest, UnusedLeasePagesReturnAutomatically) {
+  auto pool = MakePool(4);
   auto block = MakeBlock(pool.get());
-
-  std::vector<uint32_t> existing;
-  ASSERT_TRUE(block->ReservePages(kPageSize, 0, &existing).ok());
-  ASSERT_EQ(existing, std::vector<uint32_t>({0}));
-  ASSERT_EQ(pool->GetUsedBytes(), kPageSize);
-
-  // Page 0 already exists. Only one pool page remains, so page 1 is returned
-  // as the successful prefix and page 2 causes a short allocation.
-  std::vector<uint32_t> created;
-  Status status = block->ReservePages(3 * kPageSize, 0, &created);
-  ASSERT_TRUE(status.IsNoSpace()) << status.ToString();
-  ASSERT_EQ(created, std::vector<uint32_t>({1}));
-  EXPECT_EQ(pool->GetUsedBytes(), 2 * kPageSize);
-
-  block->RollbackPages(created);
+  {
+    auto lease = Acquire(pool.get(), 3);
+    block->ReservePages(kPageSize, 0, &lease);
+    EXPECT_EQ(lease.Size(), 2);
+    EXPECT_EQ(pool->GetUsedBytes(), 3 * kPageSize);
+  }
   EXPECT_EQ(pool->GetUsedBytes(), kPageSize);
-
-  // The pre-existing page must remain usable after rolling back the partial
-  // batch, and a same-offset retry must not hit a contiguity CHECK.
-  std::vector<uint32_t> retry_created;
-  ASSERT_TRUE(block->ReservePages(kPageSize, 0, &retry_created).ok());
-  EXPECT_TRUE(retry_created.empty());
-  std::vector<char> data(kPageSize, 'r');
-  block->ApplyWrite(ctx_, data.data(), data.size(), 0);
-  std::vector<char> copied(data.size());
-  block->ToIOBuffer().CopyTo(copied.data(), copied.size());
-  EXPECT_EQ(copied, data);
 }
 
-// RollbackPages frees exactly the named pages and nothing else.
-TEST_F(BlockDataTest, RollbackPages_FreesOnlyNamedPages) {
-  auto pool = MakePool(4);
-  auto block = MakeBlock(pool.get());
-
-  std::vector<uint32_t> created;
-  ASSERT_TRUE(block->ReservePages(3 * kPageSize, 0, &created).ok());
-  ASSERT_EQ(pool->GetUsedBytes(), 3 * kPageSize);
-
-  // Roll back only page index 2 -> 2 pages remain.
-  block->RollbackPages({created.back()});
-  EXPECT_EQ(pool->GetUsedBytes(), 2 * kPageSize);
-
-  // Roll back the rest -> back to empty.
-  block->RollbackPages({created[0], created[1]});
-  EXPECT_EQ(pool->GetUsedBytes(), 0);
-}
-
-TEST_F(BlockDataTest, EmptyRollbackIsNoOp) {
-  auto pool = MakePool(2);
-  auto block = MakeBlock(pool.get());
-
-  block->RollbackPages({});
-  EXPECT_EQ(pool->GetUsedBytes(), 0);
-}
-
-// ApplyWrite memcpys into already-reserved pages and bumps len_, and must NOT
-// allocate -- the pool is drained dry before ApplyWrite and it still succeeds.
-TEST_F(BlockDataTest, ApplyWrite_NoAllocation_AfterReserve) {
-  auto pool = MakePool(2);
-  auto block = MakeBlock(pool.get());
-
-  const int32_t size = 2 * kPageSize;
-  std::vector<uint32_t> created;
-  ASSERT_TRUE(block->ReservePages(size, 0, &created).ok());
-  ASSERT_EQ(pool->GetUsedBytes(), size);  // pool now fully drained
-
-  std::vector<char> buf(size, 'Z');
-  block->ApplyWrite(ctx_, buf.data(), size, 0);
-
-  EXPECT_EQ(block->Len(), size);
-  EXPECT_EQ(pool->GetUsedBytes(), size);  // ApplyWrite did not allocate
-  // Data is durable in the pages.
-  EXPECT_EQ(block->ToIOBuffer().Size(), static_cast<size_t>(size));
-}
-
-TEST_F(BlockDataTest, MultiPageUnalignedWritePreservesByteOrder) {
+TEST_F(BlockDataTest, ApplyWriteUsesReservedPagesAndPreservesBytes) {
   auto pool = MakePool(4);
   constexpr int32_t kStart = 137;
   constexpr int32_t kSize = 2 * kPageSize + 777;
   auto block = MakeBlock(pool.get(), kStart);
-
-  std::vector<uint32_t> created;
-  ASSERT_TRUE(block->ReservePages(kSize, kStart, &created).ok());
-  ASSERT_EQ(created.size(), 3);
+  auto lease = Acquire(pool.get(), 3);
+  block->ReservePages(kSize, kStart, &lease);
+  ASSERT_TRUE(lease.Empty());
 
   std::vector<char> input(kSize);
   for (size_t i = 0; i < input.size(); ++i) {
@@ -213,53 +127,28 @@ TEST_F(BlockDataTest, MultiPageUnalignedWritePreservesByteOrder) {
   }
   block->ApplyWrite(ctx_, input.data(), input.size(), kStart);
 
+  EXPECT_EQ(block->Len(), kSize);
+  EXPECT_EQ(pool->GetUsedBytes(), 3 * kPageSize);
   IOBuffer output = block->ToIOBuffer();
   ASSERT_EQ(output.Size(), input.size());
-  ASSERT_EQ(output.BackingBlockNum(), created.size());
+  ASSERT_EQ(output.BackingBlockNum(), 3);
   std::vector<char> copied(input.size());
   output.CopyTo(copied.data(), copied.size());
   EXPECT_EQ(copied, input);
 }
 
-TEST_F(BlockDataTest, DestructorReturnsAllPagesInOneBatch) {
+TEST_F(BlockDataTest, DestructorReturnsOwnedPages) {
   auto pool = MakePool(4);
   {
     auto block = MakeBlock(pool.get());
-    std::vector<uint32_t> created;
-    ASSERT_TRUE(block->ReservePages(3 * kPageSize, 0, &created).ok());
+    auto lease = Acquire(pool.get(), 3);
+    block->ReservePages(3 * kPageSize, 0, &lease);
     ASSERT_EQ(pool->GetUsedBytes(), 3 * kPageSize);
   }
   EXPECT_EQ(pool->GetUsedBytes(), 0);
 }
 
-// The reserve -> rollback -> reserve+apply sequence (what SliceWriter drives
-// per block) is atomic: a reserve larger than the pool leaves len_==0,
-// RollbackPages returns every page, and a same-offset reserve+apply afterwards
-// is clean (no contiguity CHECK trip).
-TEST_F(BlockDataTest, ReserveRollback_ThenReserveApply_SameOffsetClean) {
-  auto pool = MakePool(2);
-  auto block = MakeBlock(pool.get());
-
-  // Reserve more than the pool holds -> NoSpace, len untouched.
-  std::vector<uint32_t> created;
-  Status s = block->ReservePages(3 * kPageSize, 0, &created);
-  EXPECT_TRUE(s.IsNoSpace()) << s.ToString();
-  EXPECT_EQ(block->Len(), 0);
-
-  // Roll back the partial reservation -> pool fully returned.
-  block->RollbackPages(created);
-  EXPECT_EQ(pool->GetUsedBytes(), 0);
-  EXPECT_EQ(block->Len(), 0);
-
-  // Same offset now reserves + applies cleanly (2 pages fit).
-  std::vector<uint32_t> created2;
-  ASSERT_TRUE(block->ReservePages(2 * kPageSize, 0, &created2).ok());
-  std::vector<char> buf(2 * kPageSize, 'y');
-  block->ApplyWrite(ctx_, buf.data(), 2 * kPageSize, 0);
-  EXPECT_EQ(block->Len(), 2 * kPageSize);
-  EXPECT_EQ(pool->GetUsedBytes(), 2 * kPageSize);
-}
-
+}  // namespace
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs

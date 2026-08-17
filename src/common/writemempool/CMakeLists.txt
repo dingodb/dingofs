@@ -16,6 +16,7 @@
 add_library(dingofs_write_mempool
     cpu_local.cc
     write_page_pool.cc
+    write_page_lease.cc
     write_mem_pool.cc
 )
 target_link_libraries(dingofs_write_mempool

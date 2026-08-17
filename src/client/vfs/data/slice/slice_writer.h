@@ -51,8 +51,9 @@ class SliceWriter : public std::enable_shared_from_this<SliceWriter> {
 
   ~SliceWriter() = default;
 
-  Status Write(ContextSPtr ctx, const char* buf, int32_t size,
-               int32_t chunk_offset);
+  // The lease must own every page needed by this write.
+  void Write(ContextSPtr ctx, const char* buf, int32_t size,
+             int32_t chunk_offset, WritePageLease* lease);
 
   // Should be called only once (protected by ChunkWriter).
   void FlushAsync(StatusCallback cb);

@@ -45,6 +45,7 @@ WritePagePool::WritePagePool(char* base, size_t page_size, size_t page_count)
       next_(std::make_unique<uint32_t[]>(page_count)) {
   cache_count_ = CpuLocalCacheCount();
   caches_ = std::make_unique<Cache[]>(cache_count_);
+  materializer_slots_ = std::make_unique<MaterializerSlot[]>(cache_count_);
   for (uint32_t i = 0; i < cache_count_; ++i) {
     caches_[i].next_refill_shard = i % kNumShards;
   }
@@ -124,6 +125,79 @@ bool WritePagePool::RefillCache(Cache* cache) {
 size_t WritePagePool::RequireBatch(char** pages, size_t count) {
   return RequireBatchFromCache(pages, count,
                                CurrentCpuLocalCache(cache_count_));
+}
+
+uint32_t WritePagePool::EnterMaterializer() {
+  const uint32_t slot = CurrentCpuLocalCache(cache_count_);
+  for (;;) {
+    WaitUntilMaterializationUnblocked();
+    materializer_slots_[slot].active.fetch_add(1, std::memory_order_acq_rel);
+    if (!materialization_blocked_.load(std::memory_order_acquire)) {
+      return slot;
+    }
+    ExitMaterializer(slot);
+  }
+}
+
+void WritePagePool::ExitMaterializer(uint32_t slot) {
+  const uint32_t old =
+      materializer_slots_[slot].active.fetch_sub(1, std::memory_order_acq_rel);
+  CHECK_GT(old, 0);
+  if (old == 1 && materialization_blocked_.load(std::memory_order_acquire)) {
+    std::lock_guard<std::mutex> lock(materialization_wait_mutex_);
+    materialization_cv_.notify_all();
+  }
+}
+
+bool WritePagePool::AllMaterializersIdle() const {
+  for (uint32_t slot = 0; slot < cache_count_; ++slot) {
+    if (materializer_slots_[slot].active.load(std::memory_order_acquire) != 0) {
+      return false;
+    }
+  }
+  return true;
+}
+
+void WritePagePool::WaitUntilMaterializationUnblocked() {
+  if (!materialization_blocked_.load(std::memory_order_acquire)) {
+    return;
+  }
+  std::unique_lock<std::mutex> lock(materialization_wait_mutex_);
+  materialization_cv_.wait(lock, [this] {
+    return !materialization_blocked_.load(std::memory_order_acquire);
+  });
+}
+
+size_t WritePagePool::RequireBatchAfterQuiesce(char** pages, size_t count,
+                                               size_t acquired) {
+  std::lock_guard<std::mutex> fallback_lock(materialization_fallback_mutex_);
+  std::unique_lock<std::mutex> wait_lock(materialization_wait_mutex_);
+  materialization_blocked_.store(true, std::memory_order_release);
+  materialization_cv_.wait(wait_lock,
+                           [this] { return AllMaterializersIdle(); });
+  wait_lock.unlock();
+
+  acquired += RequireBatchFromCache(pages + acquired, count - acquired,
+                                    CurrentCpuLocalCache(cache_count_));
+
+  wait_lock.lock();
+  materialization_blocked_.store(false, std::memory_order_release);
+  wait_lock.unlock();
+  materialization_cv_.notify_all();
+  return acquired;
+}
+
+size_t WritePagePool::RequireBatchExact(char** pages, size_t count) {
+  if (count == 0) return 0;
+  CHECK_NOTNULL(pages);
+
+  const uint32_t slot = EnterMaterializer();
+  size_t acquired = RequireBatchFromCache(pages, count, slot);
+  ExitMaterializer(slot);
+  if (acquired == count) {
+    return acquired;
+  }
+  return RequireBatchAfterQuiesce(pages, count, acquired);
 }
 
 size_t WritePagePool::RequireBatchFromCache(char** pages, size_t count,

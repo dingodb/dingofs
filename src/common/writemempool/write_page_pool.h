@@ -18,6 +18,8 @@
 #define DINGOFS_SRC_COMMON_WRITEMEMPOOL_WRITE_PAGE_POOL_H_
 
 #include <array>
+#include <atomic>
+#include <condition_variable>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -36,6 +38,12 @@ class WritePagePool {
   // Acquires up to `count` pages and stores them in pages[0..return_value).
   // A short result is allowed; only the returned prefix becomes outstanding.
   size_t RequireBatch(char** pages, size_t count);
+
+  // Materializes exactly `count` pages already reserved by an external
+  // admission controller. Concurrent cache movement may force a quiescent
+  // retry; a short result after that retry means the reservation invariant is
+  // broken, and only the returned prefix becomes outstanding.
+  size_t RequireBatchExact(char** pages, size_t count);
 
   // Returns exactly `count` outstanding pages to this pool. Every entry must
   // have been returned by this pool, entries must be pairwise distinct, and
@@ -71,6 +79,10 @@ class WritePagePool {
     uint32_t size{0};
     uint32_t next_refill_shard{0};
     std::array<uint32_t, kCacheCapacity> entries{};
+  };
+
+  struct alignas(64) MaterializerSlot {
+    std::atomic<uint32_t> active{0};
   };
 
   struct Chain {
@@ -111,6 +123,11 @@ class WritePagePool {
   size_t TakeFromCache(Cache* cache, char** pages, size_t count);
   size_t RequireBatchFromCache(char** pages, size_t count,
                                uint32_t cache_index);
+  uint32_t EnterMaterializer();
+  void ExitMaterializer(uint32_t slot);
+  bool AllMaterializersIdle() const;
+  void WaitUntilMaterializationUnblocked();
+  size_t RequireBatchAfterQuiesce(char** pages, size_t count, size_t acquired);
 
   char* base_;
   size_t page_size_;
@@ -120,6 +137,11 @@ class WritePagePool {
   std::array<Shard, kNumShards> shards_;
   uint32_t cache_count_{0};
   std::unique_ptr<Cache[]> caches_;
+  std::unique_ptr<MaterializerSlot[]> materializer_slots_;
+  std::atomic<bool> materialization_blocked_{false};
+  std::mutex materialization_fallback_mutex_;
+  std::mutex materialization_wait_mutex_;
+  std::condition_variable materialization_cv_;
 };
 
 }  // namespace dingofs

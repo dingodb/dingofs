@@ -287,7 +287,7 @@ TEST(WritePagePoolTest, ConcurrentBatchReleasePreservesAllPages) {
   EXPECT_EQ(WritePagePoolTestPeer::FreePages(pool.get()), kPageCount);
 }
 
-TEST(WritePagePoolTest, CrossThreadAllocateAndReleasePreservesInventory) {
+TEST(WritePagePoolTest, ExactCrossThreadAllocateAndReleasePreservesInventory) {
   constexpr size_t kPageSize = 64;
   constexpr size_t kPageCount = 4096;
   constexpr size_t kPairs = 2;
@@ -318,7 +318,7 @@ TEST(WritePagePoolTest, CrossThreadAllocateAndReleasePreservesInventory) {
         }
         const size_t requested =
             kBatchSizes[(iteration + pair) % kBatchSizes.size()];
-        slot.count = pool->RequireBatch(slot.pages.data(), requested);
+        slot.count = pool->RequireBatchExact(slot.pages.data(), requested);
         if (slot.count != requested) {
           short_allocation.store(true, std::memory_order_relaxed);
         }
@@ -339,6 +339,23 @@ TEST(WritePagePoolTest, CrossThreadAllocateAndReleasePreservesInventory) {
   for (auto& worker : workers) worker.join();
 
   EXPECT_FALSE(short_allocation.load(std::memory_order_relaxed));
+  EXPECT_EQ(WritePagePoolTestPeer::FreePages(pool.get()), kPageCount);
+}
+
+TEST(WritePagePoolTest, ExactReportsStableShortAfterQuiesce) {
+  constexpr size_t kPageCount = 16;
+  auto pool = WritePagePool::Create(/*page_size=*/64, kPageCount);
+  ASSERT_NE(pool, nullptr);
+
+  std::array<char*, kPageCount - 1> held{};
+  ASSERT_EQ(pool->RequireBatch(held.data(), held.size()), held.size());
+
+  std::array<char*, 2> exact{};
+  const size_t acquired = pool->RequireBatchExact(exact.data(), exact.size());
+  ASSERT_EQ(acquired, 1);
+
+  pool->ReleaseBatch(exact.data(), acquired);
+  pool->ReleaseBatch(held.data(), held.size());
   EXPECT_EQ(WritePagePoolTestPeer::FreePages(pool.get()), kPageCount);
 }
 

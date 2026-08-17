@@ -110,37 +110,31 @@ void SliceWriter::StartPrepareSliceId() {
 
 // --- Write with streaming upload ---
 
-Status SliceWriter::Write(ContextSPtr ctx, const char* buf, int32_t size,
-                          int32_t chunk_offset) {
+void SliceWriter::Write(ContextSPtr ctx, const char* buf, int32_t size,
+                        int32_t chunk_offset, WritePageLease* lease) {
   auto span = vfs_hub_->GetTraceManager()->StartChildSpan("SliceWriter::Write",
                                                           ctx->GetTraceSpan());
 
-  int32_t end_in_chunk = chunk_offset + size;
-
+  const int32_t end_in_chunk = chunk_offset + size;
   VLOG(4) << fmt::format("{} Start writing chunk_range: [{}-{}] len: {}",
                          UUID(), chunk_offset, end_in_chunk, size);
 
   CHECK_GT(size, 0);
+  CHECK_NOTNULL(lease);
   CHECK_EQ(chunk_offset, End()) << fmt::format(
       "{} Unexpected chunk offset: {}, End(): {}, chunk_offset_: {}",
       ToString(), chunk_offset, End(), chunk_offset_);
 
-  int32_t block_size = context_.block_size;
-  int32_t slice_internal_offset = chunk_offset - chunk_offset_;
-  uint32_t block_index = slice_internal_offset / block_size;
-  int32_t block_offset = slice_internal_offset % block_size;
+  const int32_t block_size = context_.block_size;
+  const int32_t slice_internal_offset = chunk_offset - chunk_offset_;
+  const uint32_t block_index = slice_internal_offset / block_size;
+  const int32_t block_offset = slice_internal_offset % block_size;
 
-  // One memcpy unit in phase 2: which block, where in it, from where in buf.
   struct BlockApply {
     BlockData* block;
     const char* buf;
     int32_t size;
     int32_t block_offset;
-  };
-  // Pages this call newly reserved in a block -- the rollback unit.
-  struct Reserved {
-    BlockData* block;
-    std::vector<uint32_t> pages;
   };
 
   {
@@ -149,84 +143,39 @@ Status SliceWriter::Write(ContextSPtr ctx, const char* buf, int32_t size,
         "{} Write called after FlushAsync closed the write epoch", UUID());
 
     std::vector<BlockApply> applies;
-    std::vector<Reserved> reserved;        // every block's new pages this call
-    std::vector<uint32_t> created_blocks;  // BlockData newly created this call
+    uint32_t bi = block_index;
+    int32_t bo = block_offset;
+    const char* p = buf;
+    int32_t remain_len = size;
 
-    // ---- Phase 1: reserve pages across ALL blocks (allocate only) ----
-    // Nothing is memcpy'd and len_ is untouched, so any pool miss can be fully
-    // rolled back, leaving zero visible state -- a same-offset retry stays
-    // clean (no contiguity CHECK trip) and flush can't pick up a half-write.
-    Status fail_status;
-    bool failed = false;
-    {
-      uint32_t bi = block_index;
-      int32_t bo = block_offset;
-      const char* p = buf;
-      int32_t remain_len = size;
-      while (remain_len > 0) {
-        int32_t write_size = std::min(remain_len, block_size - bo);
-
-        BlockData* block = FindBlockDataUnlocked(bi);
-        if (block == nullptr) {
-          block = CreateBlockDataUnlocked(bi, bo);
-          created_blocks.push_back(bi);
-        }
-
-        std::vector<uint32_t> pages;
-        Status s = block->ReservePages(write_size, bo, &pages);
-        reserved.push_back({block, std::move(pages)});
-        if (!s.ok()) {
-          fail_status = s;
-          failed = true;
-          break;
-        }
-        applies.push_back({block, p, write_size, bo});
-
-        remain_len -= write_size;
-        p += write_size;
-        bo = 0;
-        ++bi;
+    // Admission happened before entering any writer lock. Phase 1 only
+    // transfers already-owned pages from the lease; it cannot wait or fail.
+    while (remain_len > 0) {
+      const int32_t write_size = std::min(remain_len, block_size - bo);
+      BlockData* block = FindBlockDataUnlocked(bi);
+      if (block == nullptr) {
+        block = CreateBlockDataUnlocked(bi, bo);
       }
+
+      block->ReservePages(write_size, bo, lease);
+      applies.push_back({block, p, write_size, bo});
+
+      remain_len -= write_size;
+      p += write_size;
+      bo = 0;
+      ++bi;
     }
 
-    // ---- Rollback: free this call's new pages, drop this call's new blocks
-    // ----
-    if (failed) {
-      for (auto it = reserved.rbegin(); it != reserved.rend(); ++it) {
-        it->block->RollbackPages(it->pages);
-      }
-      for (auto it = created_blocks.rbegin(); it != created_blocks.rend();
-           ++it) {
-        block_datas_.erase(*it);
-      }
-      // Page pool could not back this slice; record the rolled-back range so
-      // the locality is visible by default (the VFSImpl boundary log only knows
-      // the whole-write offset/size, not which slice failed).
-      LOG(INFO) << fmt::format(
-          "{} Write reserve failed, rolled back chunk_range: [{}-{}], "
-          "status: {}",
-          UUID(), chunk_offset, end_in_chunk, fail_status.ToString());
-      return fail_status;
+    for (const auto& apply : applies) {
+      apply.block->ApplyWrite(SpanScope::GetContext(span), apply.buf,
+                              apply.size, apply.block_offset);
     }
 
-    // ---- Phase 2: every page exists -- memcpy + bump each BlockData::len_
-    // ----
-    for (const auto& a : applies) {
-      a.block->ApplyWrite(SpanScope::GetContext(span), a.buf, a.size,
-                          a.block_offset);
-    }
-
-    // ---- Publish slice len (only after full success) ----
-    // chunk_offset_ is const (forward-append only); only len_ grows.
-    int32_t old_len = len_;
+    const int32_t old_len = len_;
     len_ += size;
     VLOG(4) << fmt::format("{} Update slice data, old_len: {}, updated: {}",
                            UUID(), old_len, ToStringUnlocked());
 
-    // ---- Trigger streaming upload ----
-    // flush_requested_ was checked under this same lock, so this writer still
-    // belongs to its write epoch. ChunkWriter normally enforces the same
-    // ownership transition; the local CHECK makes violations fail loudly.
     if (len_ >= context_.block_size) {
       FlushUpTo(len_);
     }
@@ -234,8 +183,6 @@ Status SliceWriter::Write(ContextSPtr ctx, const char* buf, int32_t size,
 
   VLOG(4) << fmt::format("{} End writing chunk_range: [{}-{}], len: {}", UUID(),
                          chunk_offset, end_in_chunk, size);
-
-  return Status::OK();
 }
 
 // --- FlushUpTo: upload all blocks with end <= written_len ---

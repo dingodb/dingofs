@@ -42,7 +42,7 @@ void BlockData::FreePageData() {
                             Helper::Char2Addr(page_data->page));
   }
   pages_.clear();
-  write_buffer_manager_->DeAllocateBatch(pages.data(), pages.size());
+  write_buffer_manager_->Release(pages.data(), pages.size());
 }
 
 PageData* BlockData::FindPageData(uint32_t page_index) {
@@ -50,8 +50,8 @@ PageData* BlockData::FindPageData(uint32_t page_index) {
   return iter == pages_.end() ? nullptr : iter->second.get();
 }
 
-Status BlockData::ReservePages(int32_t size, int32_t block_offset,
-                               std::vector<uint32_t>* created_pages) {
+void BlockData::ReservePages(int32_t size, int32_t block_offset,
+                             WritePageLease* lease) {
   CHECK_GT(size, 0);
   CHECK_GE(block_offset, 0);
   CHECK_LE(block_offset + size, context_.block_size);
@@ -77,14 +77,13 @@ Status BlockData::ReservePages(int32_t size, int32_t block_offset,
     ++page_index;
   }
 
-  if (missing_indexes.empty()) return Status::OK();
+  if (missing_indexes.empty()) return;
   std::vector<char*> allocated(missing_indexes.size());
-  const size_t allocated_count = write_buffer_manager_->TryAllocateBatch(
-      allocated.size(), allocated.data());
+  lease->Take(allocated.size(), allocated.data());
   const uint32_t first_page_index =
       static_cast<uint32_t>(block_offset / page_size);
   const int32_t first_page_offset = block_offset % page_size;
-  for (size_t i = 0; i < allocated_count; ++i) {
+  for (size_t i = 0; i < allocated.size(); ++i) {
     const uint32_t new_page_index = missing_indexes[i];
     auto [iter, inserted] = pages_.emplace(
         new_page_index,
@@ -92,40 +91,16 @@ Status BlockData::ReservePages(int32_t size, int32_t block_offset,
             vfs_hub_, new_page_index, context_.page_size, allocated[i],
             new_page_index == first_page_index ? first_page_offset : 0));
     CHECK(inserted);
-    created_pages->push_back(new_page_index);
     VLOG(12) << fmt::format("{} Reserved new page_data: {} for page index: {}",
                             UUID(), iter->second->ToString(), new_page_index);
   }
-  return allocated_count == missing_indexes.size()
-             ? Status::OK()
-             : Status::NoSpace("write page pool exhausted");
 }
 
-void BlockData::RollbackPages(const std::vector<uint32_t>& created_pages) {
-  std::vector<char*> pages;
-  pages.reserve(created_pages.size());
-  for (uint32_t idx : created_pages) {
-    auto it = pages_.find(idx);
-    if (it != pages_.end()) {
-      if (it->second->page != nullptr) {
-        pages.push_back(it->second->page);
-      }
-      pages_.erase(it);
-    }
-  }
-  write_buffer_manager_->DeAllocateBatch(pages.data(), pages.size());
-  VLOG(6) << fmt::format("{} RollbackPages freed {} pages", UUID(),
-                         created_pages.size());
-}
-
-// INVARIANT: ApplyWrite must be infallible -- SliceWriter's two-phase
-// atomicity relies on it (all fallible work, i.e. allocation, lives in
-// ReservePages/phase 1; phase 2 only memcpys). It is infallible only because
-// writes are append-only (SliceWriter gates on CHECK_EQ(chunk_offset, End())):
-// PageData::Write then always sees a contiguous append/prepend and never its
-// "illegal range" CHECK. If a random-overwrite write path is ever added, that
-// CHECK can fire mid-apply -- after other blocks were already reserved/applied
-// -- and abort the process, breaking the transaction. Revisit this split then.
+// INVARIANT: ApplyWrite must be infallible. All capacity admission happens
+// before writer locks, and ReservePages only transfers owned pages. This split
+// remains safe because writes are append-only (SliceWriter gates on
+// CHECK_EQ(chunk_offset, End())). If random overwrite is added, revisit the
+// PageData contiguity contract before allowing a partial phase-2 apply.
 void BlockData::ApplyWrite(ContextSPtr ctx, const char* buf, int32_t size,
                            int32_t block_offset) {
   auto span = vfs_hub_->GetTraceManager()->StartChildSpan(

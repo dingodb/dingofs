@@ -15,18 +15,26 @@
  */
 
 #include <fcntl.h>
+#include <gflags/gflags.h>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include <chrono>
+#include <condition_variable>
+#include <future>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "client/vfs/components/uid_gid_mapper.h"
+#include "client/vfs/data/write_pressure_controller.h"
+#include "client/vfs/data/writer/file_writer.h"
 #include "client/vfs/data/writer_table.h"
 #include "client/vfs/data_buffer.h"
+#include "client/vfs/hub/vfs_hub.h"
 #include "client/vfs/metasystem/mds/rpc.h"
 #include "client/vfs/vfs_impl.h"
 #include "common/blockaccess/accesser_common.h"
@@ -86,6 +94,79 @@ class FakePasswdSource : public PasswdSource {
 };
 
 }  // namespace
+
+TEST(VFSHubImplTest, StartRejectsMisalignedWritePageSize) {
+  constexpr uint32_t kMisalignedPageSize = 8 * 1024 * 1024;
+  const uint32_t previous_page_size = FLAGS_vfs_write_buffer_page_size;
+  FLAGS_vfs_write_buffer_page_size = kMisalignedPageSize;
+  auto restore_page_size = MakeScopedCleanup(
+      [&]() { FLAGS_vfs_write_buffer_page_size = previous_page_size; });
+
+  VFSConfig config;
+  config.fs_name = "write-page-geometry-test";
+  config.metasystem_type = MetaSystemType::MEMORY;
+  TraceManager trace_manager;
+  VFSHubImpl hub(config, ClientId(), trace_manager);
+
+  Status status = hub.Start(/*skip_mount=*/true);
+  EXPECT_TRUE(status.IsInvalidParam()) << status.ToString();
+  EXPECT_NE(
+      status.ToString().find("must be a multiple of write buffer page size"),
+      std::string::npos);
+}
+
+TEST(VFSHubImplTest, StartRejectsNonIntegralWritePoolCapacity) {
+  constexpr uint64_t kNonIntegralTotalMb = 65;
+  constexpr uint32_t kPageSize = 4 * 1024 * 1024;
+  const uint64_t previous_total_mb = FLAGS_vfs_write_buffer_total_mb;
+  const uint32_t previous_page_size = FLAGS_vfs_write_buffer_page_size;
+  FLAGS_vfs_write_buffer_total_mb = kNonIntegralTotalMb;
+  FLAGS_vfs_write_buffer_page_size = kPageSize;
+  auto restore_flags = MakeScopedCleanup([&]() {
+    FLAGS_vfs_write_buffer_total_mb = previous_total_mb;
+    FLAGS_vfs_write_buffer_page_size = previous_page_size;
+  });
+
+  VFSConfig config;
+  config.fs_name = "write-pool-geometry-test";
+  config.metasystem_type = MetaSystemType::MEMORY;
+  TraceManager trace_manager;
+  VFSHubImpl hub(config, ClientId(), trace_manager);
+
+  Status status = hub.Start(/*skip_mount=*/true);
+  EXPECT_TRUE(status.IsInvalidParam()) << status.ToString();
+  EXPECT_NE(status.ToString().find(
+                "write buffer total size (68157440) must be a multiple of "
+                "page size (4194304)"),
+            std::string::npos);
+}
+
+TEST(VFSHubImplTest, StartRejectsChunkLargerThanWritePoolCapacity) {
+  constexpr uint64_t kWriteBufferTotalMb = 32;
+  constexpr uint32_t kPageSize = 4 * 1024 * 1024;
+  const uint64_t previous_total_mb = FLAGS_vfs_write_buffer_total_mb;
+  const uint32_t previous_page_size = FLAGS_vfs_write_buffer_page_size;
+  FLAGS_vfs_write_buffer_total_mb = kWriteBufferTotalMb;
+  FLAGS_vfs_write_buffer_page_size = kPageSize;
+  auto restore_flags = MakeScopedCleanup([&]() {
+    FLAGS_vfs_write_buffer_total_mb = previous_total_mb;
+    FLAGS_vfs_write_buffer_page_size = previous_page_size;
+  });
+
+  VFSConfig config;
+  config.fs_name = "write-pool-chunk-capacity-test";
+  config.metasystem_type = MetaSystemType::MEMORY;
+  TraceManager trace_manager;
+  VFSHubImpl hub(config, ClientId(), trace_manager);
+
+  Status status = hub.Start(/*skip_mount=*/true);
+  EXPECT_TRUE(status.IsInvalidParam()) << status.ToString();
+  EXPECT_NE(status.ToString().find(
+                "filesystem chunk size (67108864) requires up to 16 write "
+                "buffer pages, exceeding write buffer capacity (8 pages, "
+                "33554432 bytes)"),
+            std::string::npos);
+}
 
 class VFSImplTest : public test::VFSTestBase {
  protected:
@@ -251,53 +332,6 @@ TEST_F(VFSImplTest, Write_RejectsOffsetAtLimitBeforeBuffering) {
   vfs_->Release(ctx_, kIno, fh);
 }
 
-// --- 4b. Write short-write: metadata gets out_wsize, not the requested size.
-// On a cross-chunk write where the page pool is exhausted after chunk0, the
-// writer short-writes; VFSImpl must extend the inode length by only the durable
-// prefix (MetaSystem::Write sets length to offset+len), else reads past the
-// prefix would see a phantom hole. ---
-TEST_F(VFSImplTest, Write_ShortWrite_MetaGetsOutWsizeNotSize) {
-  // Locals ordered so writer_table (and the writer it owns) is destroyed before
-  // `tiny`: vfs_->Release below already tears the writer down synchronously,
-  // but this keeps the ordering safe regardless.
-  auto tiny = std::make_unique<WriteMemPool>(4096, 4096);  // 1 page
-  auto writer_table = std::make_unique<WriterTable>(mock_hub_);
-
-  ON_CALL(*mock_hub_, GetWriteMemPool()).WillByDefault(Return(tiny.get()));
-  EXPECT_CALL(*mock_hub_, GetWriteMemPool()).Times(AnyNumber());
-  ON_CALL(*mock_hub_, GetWriterTable())
-      .WillByDefault(Return(writer_table.get()));
-  EXPECT_CALL(*mock_hub_, GetWriterTable()).Times(AnyNumber());
-
-  const uint64_t ino = 300;
-  ON_CALL(*mock_meta_system_, Open(_, ino, _, _, _))
-      .WillByDefault(Return(Status::OK()));
-  ON_CALL(*mock_meta_system_, Close(_, ino, _))
-      .WillByDefault(Return(Status::OK()));
-
-  uint64_t fh = 0;
-  ASSERT_TRUE(vfs_->Open(ctx_, ino, O_WRONLY, &fh, nullptr).ok());
-
-  // Capture the size MetaSystem::Write receives (arg index 4).
-  uint64_t meta_size = 0;
-  EXPECT_CALL(*mock_meta_system_, Write(_, ino, _, _, _, _))
-      .WillOnce(DoAll(SaveArg<4>(&meta_size), Return(Status::OK())));
-
-  const uint64_t chunk_size = mock_hub_->GetFsInfo().chunk_size;
-  const uint64_t offset = chunk_size - 4;  // 4 bytes chunk0, 4 bytes chunk1
-  std::vector<char> buf(8, 'X');
-  uint64_t wsize = 0;
-  Status s = vfs_->Write(ctx_, ino, buf.data(), buf.size(), offset, fh, &wsize);
-
-  EXPECT_TRUE(s.ok()) << s.ToString();
-  EXPECT_EQ(wsize, 4u);
-  EXPECT_EQ(meta_size, 4u)
-      << "metadata must extend by out_wsize (4), not the requested size (8)";
-
-  // Synchronously releases the handle -> writer -> frees pages into `tiny`.
-  vfs_->Release(ctx_, ino, fh);
-}
-
 // --- 4c. Metadata write fails after the data was already buffered. The writer
 // accepts the full write (out_wsize == size, data now dirty in its buffer), but
 // the inode metadata update fails, so VFSImpl::Write returns the error. The
@@ -334,6 +368,189 @@ TEST_F(VFSImplTest, Write_MetaWriteFails_ReturnsErrorAfterDataBuffered) {
                                   "metadata failed (data buffered)";
 
   vfs_->Release(ctx_, ino, fh);
+}
+
+// --- 4d. Cross-chunk write whose second chunk blocks on write-pool pressure
+// and whose pressure flush then fails asynchronously. Covers the full chain:
+// VFSImpl::Write -> FileWriter chunk loop (prefix chunk completes and
+// publishes its dirty generation) -> FIFO admission blocks the next chunk ->
+// real pressure chain (pool -> observer -> controller -> WriterTable) flushes
+// the dirty chunk -> block upload fails -> POSIX short write: Status OK with
+// out_wsize == completed prefix only. The unfinished chunk must never upload
+// or commit slice/metadata, the failure must be sticky for later Write/Flush,
+// and after Release every write-pool page, FIFO waiter, and pressure callback
+// must be drained. ---
+TEST_F(VFSImplTest, Write_PressureFlushFails_CrossChunkWriteReturnsShortWrite) {
+  // Geometry: 4KB pages, 8KB blocks, 16KB chunks, and a 4-page pool. A donor
+  // writer pins 2 pages with one sub-block write (6144 < 8192, so nothing
+  // streams and no page returns early). The cross-chunk write needs 1 page
+  // for the chunk-0 tail (granted, published) and 3 pages for the chunk-1
+  // head (blocked with 1 page free -> pressure).
+  constexpr int64_t kPage = 4096;
+  constexpr uint64_t kChunk = 4 * kPage;
+  constexpr uint64_t kBlock = 2 * kPage;
+  constexpr int64_t kPoolPages = 4;
+  constexpr uint64_t kPrefixSize = 2048;       // chunk-0 tail, 1 page
+  constexpr uint64_t kSuffixSize = 3 * kPage;  // chunk-1 head, 3 pages
+  constexpr uint64_t kCrossOffset = kChunk - kPrefixSize;
+  constexpr Ino kIno = 601;
+  constexpr Ino kInoDonor = 600;
+
+  gflags::FlagSaver flag_saver;
+  FLAGS_vfs_periodic_flush_interval_ms =
+      3600 * 1000;  // keep periodic flush out
+
+  // Local table + tiny pool + the real pressure-controller chain.
+  auto writer_table = std::make_unique<WriterTable>(mock_hub_);
+  ASSERT_TRUE(writer_table->Start().ok());
+  ON_CALL(*mock_hub_, GetWriterTable())
+      .WillByDefault(Return(writer_table.get()));
+  ON_CALL(*mock_hub_, GetFsInfo())
+      .WillByDefault(Return(test::MakeTestFsInfo(kChunk, kBlock)));
+
+  WriteMemPool tiny_pool(kPoolPages * kPage, kPage);
+  ON_CALL(*mock_hub_, GetWriteMemPool()).WillByDefault(Return(&tiny_pool));
+
+  ExecutorImpl pressure_executor("test_pressure_flush_fail", 1);
+  ASSERT_TRUE(pressure_executor.Start());
+  WritePressureController controller(writer_table.get(), &pressure_executor);
+  tiny_pool.SetPressureObserver(&controller);
+
+  // Every block upload completes inline with the same error (deterministic,
+  // no background timing). The cv turns "the pressure round reached the data
+  // plane" into an event the test can wait for.
+  std::mutex put_mutex;
+  std::condition_variable put_cv;
+  int put_async_calls = 0;
+  const Status kUploadError = Status::IoError("block store down");
+  ON_CALL(*mock_block_store_, PutAsync)
+      .WillByDefault([&](ContextSPtr, PutReq, StatusCallback cb) {
+        {
+          std::lock_guard<std::mutex> lock(put_mutex);
+          ++put_async_calls;
+        }
+        put_cv.notify_all();
+        cb(kUploadError);
+      });
+
+  ON_CALL(*mock_meta_system_, Open(_, kIno, _, _, _))
+      .WillByDefault(Return(Status::OK()));
+  ON_CALL(*mock_meta_system_, Close(_, kIno, _))
+      .WillByDefault(Return(Status::OK()));
+  // A failed flush must not commit slices -- in particular never for the
+  // unfinished chunk 1.
+  EXPECT_CALL(*mock_meta_system_, WriteSlice(_, _, _, _, _)).Times(0);
+
+  uint64_t fh = 0;
+  ASSERT_TRUE(vfs_->Open(ctx_, kIno, O_WRONLY, &fh, nullptr).ok());
+  // Metadata must record exactly the accepted prefix (WillOnce: exactly one
+  // call, with the short count as its size).
+  EXPECT_CALL(*mock_meta_system_,
+              Write(_, kIno, _, kCrossOffset, kPrefixSize, _))
+      .WillOnce(Return(Status::OK()));
+  EXPECT_CALL(*mock_meta_system_, RollbackWriteLength(_, kIno, fh))
+      .Times(2)
+      .WillRepeatedly(Return(Status::OK()));
+
+  // Donor writer: standalone (NOT in WriterTable). The pressure round waits
+  // for every table writer, so a table resident would stop StopAndDrain from
+  // proving the sticky status landed. It holds 2 dirty pages until the test
+  // explicitly fails its flush below.
+  auto* donor = new FileWriter(mock_hub_, kInoDonor);
+  donor->AcquireRef();
+  ASSERT_TRUE(donor->Open().ok());
+  std::vector<char> donor_buf(6144, 'd');
+  uint64_t donor_wsize = 0;
+  ASSERT_TRUE(
+      donor->Write(ctx_, donor_buf.data(), donor_buf.size(), 0, &donor_wsize)
+          .ok());
+  ASSERT_EQ(donor_wsize, donor_buf.size());
+  ASSERT_EQ(tiny_pool.GetUsedBytes(), 2 * kPage);
+
+  // The cross-chunk write under test.
+  std::vector<char> cross_buf(kPrefixSize + kSuffixSize, 'x');
+  auto write_result = std::async(std::launch::async, [&] {
+    uint64_t wsize = 0;
+    Status s = vfs_->Write(ctx_, kIno, cross_buf.data(), cross_buf.size(),
+                           kCrossOffset, fh, &wsize);
+    return std::make_pair(s, wsize);
+  });
+
+  // Phase 1: the pressure round flushed the blocked writer's dirty chunk 0
+  // and its upload failed. Waiting on the PutAsync event proves the pool ->
+  // observer -> controller -> WriterTable chain reached the data plane (the
+  // wait is bounded only as a deadlock guard; Close keeps the failing path
+  // tear-down-safe, mirroring the writer-table pressure tests).
+  bool round_reached_data_plane = false;
+  {
+    std::unique_lock<std::mutex> lock(put_mutex);
+    round_reached_data_plane = put_cv.wait_for(
+        lock, std::chrono::seconds(5), [&] { return put_async_calls >= 1; });
+  }
+  if (!round_reached_data_plane) tiny_pool.Close();
+  EXPECT_TRUE(round_reached_data_plane)
+      << "pressure round never flushed the dirty chunk-0 prefix";
+
+  // Phase 2: retire the round (and any coalesced follow-up round). The round
+  // callback runs strictly after FileWriter::FileFlushTaskDone called
+  // SetStatusIfBroken on the same thread, so returning here proves the sticky
+  // error is published while the write is still blocked: chunk-0's released
+  // page alone (2 free of 3 needed) cannot grant the FIFO waiter yet.
+  controller.StopAndDrain();
+
+  // Phase 3: fail the donor's flush. Its 2 pages return inside the upload
+  // completion on the single-threaded callback executor, which grants the
+  // blocked write before this synchronous Flush returns. The freshly granted
+  // lease must observe the sticky error and bail out without touching
+  // chunk 1 (the unused pages go back through the lease).
+  Status donor_flush_status = donor->Flush();
+  ASSERT_TRUE(donor_flush_status.IsIoError()) << donor_flush_status.ToString();
+  EXPECT_EQ(donor_flush_status.ToString(), kUploadError.ToString());
+
+  ASSERT_EQ(write_result.wait_for(std::chrono::seconds(5)),
+            std::future_status::ready);
+  auto [write_status, wsize] = write_result.get();
+  EXPECT_TRUE(write_status.ok()) << write_status.ToString();
+  EXPECT_EQ(wsize, kPrefixSize) << "short write: only the completed prefix";
+
+  // Sticky error: a later write fast-fails with zero bytes ...
+  char again = 'y';
+  uint64_t again_wsize = 12345;  // poison: fast-fail must reset it to 0
+  Status again_s =
+      vfs_->Write(ctx_, kIno, &again, 1, /*offset=*/0, fh, &again_wsize);
+  EXPECT_TRUE(again_s.IsIoError()) << again_s.ToString();
+  EXPECT_EQ(again_s.ToString(), kUploadError.ToString());
+  EXPECT_EQ(again_wsize, 0u);
+
+  // ... and Flush surfaces the original writeback failure, triggers length
+  // rollback, and does not retry uploads.
+  Status flush_s = vfs_->Flush(ctx_, kIno, fh);
+  EXPECT_TRUE(flush_s.IsIoError()) << flush_s.ToString();
+  EXPECT_EQ(flush_s.ToString(), kUploadError.ToString());
+
+  // Release triggers the second rollback and returns the same sticky failure,
+  // but the handle must still go away and the writer leave the table.
+  Status release_s = vfs_->Release(ctx_, kIno, fh);
+  EXPECT_TRUE(release_s.IsIoError()) << release_s.ToString();
+  EXPECT_EQ(release_s.ToString(), kUploadError.ToString());
+  EXPECT_EQ(writer_table->Size(), 0u);
+
+  donor->Close();
+  donor->ReleaseRef();
+
+  // Pool drained: pages returned, no queued FIFO waiter, no in-flight
+  // pressure callback (SetPressureObserver(nullptr) waits for them). Two
+  // uploads total means chunk 1 never uploaded a block.
+  EXPECT_EQ(tiny_pool.GetUsedBytes(), 0);
+  EXPECT_FALSE(tiny_pool.IsPressured());
+  {
+    std::lock_guard<std::mutex> lock(put_mutex);
+    EXPECT_EQ(put_async_calls, 2) << "chunk 1 must never upload a block";
+  }
+  tiny_pool.Close();
+  tiny_pool.SetPressureObserver(nullptr);
+  controller.StopAndDrain();
+  ASSERT_TRUE(pressure_executor.Stop());
 }
 
 // --- 5. GetAttr on .stats inode returns virtual attr ---

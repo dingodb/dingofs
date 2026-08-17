@@ -45,6 +45,14 @@ DEFINE_uint32(vfs_compact_cleanup_batch_size, 100,
 // own, so clamp here (same bound as mds gc kBatchDeleteObjectSize).
 constexpr size_t kMaxCleanupBatchSize = 1000;
 
+size_t CompactionPageNeed(int32_t offset_in_chunk, int64_t len,
+                          int64_t page_size) {
+  CHECK_GT(page_size, 0);
+  CHECK_GT(len, 0);
+  return static_cast<size_t>(
+      ((offset_in_chunk % page_size) + len + page_size - 1) / page_size);
+}
+
 Status CompactorImpl::Start() {
   LOG(INFO) << "CompactorImpl started";
   return Status::OK();
@@ -103,6 +111,16 @@ Status CompactorImpl::DoCompact(ContextSPtr ctx, Ino ino, int64_t chunk_index,
   int32_t offset_in_chunk =
       static_cast<int32_t>(file_range.offset % chunk_size);
 
+  // Compaction is best-effort and must never queue behind foreground writes.
+  // Reserve before allocating/filling the dense read buffer so a capacity miss
+  // does not add heap pressure or backend read work.
+  WriteMemPool* write_pool = vfs_hub_->GetWriteMemPool();
+  WritePageLease lease;
+  DINGOFS_RETURN_NOT_OK(
+      write_pool->TryAcquire(CompactionPageNeed(offset_in_chunk, file_range.len,
+                                                write_pool->GetPageSize()),
+                             &lease));
+
   ChunkReq req(ino, chunk_index, offset_in_chunk, file_range);
 
   VLOG(9) << "Start comaction for req: " << req.ToString();
@@ -134,25 +152,15 @@ Status CompactorImpl::DoCompact(ContextSPtr ctx, Ino ino, int64_t chunk_index,
   Slice compacted;
 
   {
-    auto page_size = vfs_hub_->GetWriteMemPool()->GetPageSize();
-
+    const auto page_size = write_pool->GetPageSize();
     SliceDataContext ctx(fs_info.id, ino, chunk_index, chunk_size,
                          fs_info.block_size, page_size);
 
     auto writer = std::make_shared<SliceWriter>(ctx, vfs_hub_, offset_in_chunk);
 
-    Status ret =
-        writer->Write(SpanScope::GetContext(span), to_write.data(),
-                      static_cast<int32_t>(to_write.size()), offset_in_chunk);
-    if (!ret.ok()) {
-      // Compaction is best-effort: a write failure (e.g. NoSpace when the write
-      // page pool is under back-pressure) must abort this compaction and be
-      // retried later, never crash the client. Propagate like the read/flush
-      // failures above; the caller (CompactChunkTask::Run) just logs it.
-      LOG(WARNING) << "Fail compaction because write failed: " << ret.ToString()
-                   << ", ino: " << ino << ", chunk_index: " << chunk_index;
-      return ret;
-    }
+    writer->Write(SpanScope::GetContext(span), to_write.data(),
+                  static_cast<int32_t>(to_write.size()), offset_in_chunk,
+                  &lease);
 
     Status s;
     BSynchronizer sync;

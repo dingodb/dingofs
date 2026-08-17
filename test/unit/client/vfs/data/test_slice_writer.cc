@@ -93,6 +93,21 @@ class SliceWriterTest : public test::VFSTestBase {
     return std::vector<char>(size, '\0');
   }
 
+  Status Write(const SliceWriterPtr& writer, const char* buf, int32_t size,
+               int32_t chunk_offset) {
+    WriteMemPool* pool = mock_hub_->GetWriteMemPool();
+    const uint64_t page_size = pool->GetPageSize();
+    const size_t page_need =
+        static_cast<size_t>(((static_cast<uint64_t>(chunk_offset) % page_size) +
+                             static_cast<uint64_t>(size) + page_size - 1) /
+                            page_size);
+    WritePageLease lease;
+    Status status = pool->Acquire(page_need, &lease);
+    if (!status.ok()) return status;
+    writer->Write(ctx_, buf, size, chunk_offset, &lease);
+    return Status::OK();
+  }
+
   std::unique_ptr<TraceManager> trace_manager_;
   std::unique_ptr<SliceDataContext> context_;
   SliceWriterPtr sw_;
@@ -101,7 +116,7 @@ class SliceWriterTest : public test::VFSTestBase {
 // 1. Write 4096 bytes at offset 0; verify Len() == 4096.
 TEST_F(SliceWriterTest, Write_Basic_LengthUpdated) {
   auto buf = MakeBuf(4096);
-  Status s = sw_->Write(ctx_, buf.data(), 4096, 0);
+  Status s = Write(sw_, buf.data(), 4096, 0);
   EXPECT_TRUE(s.ok());
   EXPECT_EQ(sw_->Len(), 4096u);
 }
@@ -112,19 +127,17 @@ TEST_F(SliceWriterTest, Write_MultiBlock_BoundaryAlignment) {
   // block boundary and should touch two blocks.
   uint64_t write_size = kBlockSize + 1024;
   auto buf = MakeBuf(write_size);
-  Status s = sw_->Write(ctx_, buf.data(), write_size, 0);
+  Status s = Write(sw_, buf.data(), write_size, 0);
   EXPECT_TRUE(s.ok());
   EXPECT_EQ(sw_->Len(), write_size);
   // End should be chunk_offset + write_size
   EXPECT_EQ(sw_->End(), write_size);
 }
 
-// 2b. Cross-block pool exhaustion: SliceWriter::Write must be atomic. A write
-//     spanning two blocks where the pool only covers the first must roll back
-//     fully (Len() unchanged, zero leak), and a same-offset retry must not trip
-//     BlockData's contiguity CHECK (the pre-fix half-write crash).
-TEST_F(SliceWriterTest, Write_CrossBlock_PoolExhaustion_AtomicRollback) {
-  // Pool holds exactly one block's pages; block0 takes them all, block1 fails.
+// 2b. An oversized request is rejected by admission before SliceWriter sees
+// it. The slice remains untouched and a later fitting write can use offset 0.
+TEST_F(SliceWriterTest, Write_OversizedAdmissionLeavesSliceUntouched) {
+  // Pool holds exactly one block's pages.
   const int64_t block_pages = kBlockSize / kPageSize;
   auto tiny =
       std::make_unique<WriteMemPool>(block_pages * kPageSize, kPageSize);
@@ -134,24 +147,24 @@ TEST_F(SliceWriterTest, Write_CrossBlock_PoolExhaustion_AtomicRollback) {
   auto sw = std::make_shared<SliceWriter>(*context_, mock_hub_,
                                           /*chunk_offset=*/0);
 
-  // block_size + 1 page spans block0 (full) + block1 (1 page) -> 1 page short.
+  // block_size + 1 page cannot be admitted atomically.
   const int32_t write_size = static_cast<int32_t>(kBlockSize + kPageSize);
   auto buf = MakeBuf(write_size);
 
-  Status s1 = sw->Write(ctx_, buf.data(), write_size, 0);
+  Status s1 = Write(sw, buf.data(), write_size, 0);
   EXPECT_TRUE(s1.IsNoSpace()) << s1.ToString();
-  EXPECT_EQ(sw->Len(), 0u) << "failed write must not bump slice len";
-  EXPECT_EQ(tiny->GetUsedBytes(), 0) << "block0's reserved pages must be freed";
+  EXPECT_EQ(sw->Len(), 0u);
+  EXPECT_EQ(tiny->GetUsedBytes(), 0);
 
   // Retry same offset: clean, no abort.
-  Status s2 = sw->Write(ctx_, buf.data(), write_size, 0);
+  Status s2 = Write(sw, buf.data(), write_size, 0);
   EXPECT_TRUE(s2.IsNoSpace());
   EXPECT_EQ(sw->Len(), 0u);
   EXPECT_EQ(tiny->GetUsedBytes(), 0);
 
   // A fitting 1-page write at the same offset now succeeds (state consistent).
   auto small = MakeBuf(kPageSize);
-  Status s3 = sw->Write(ctx_, small.data(), kPageSize, 0);
+  Status s3 = Write(sw, small.data(), kPageSize, 0);
   EXPECT_TRUE(s3.ok()) << s3.ToString();
   EXPECT_EQ(sw->Len(), kPageSize);
 }
@@ -167,7 +180,7 @@ TEST_F(SliceWriterTest, FlushAsync_BasicSuccess) {
           [](ContextSPtr, PutReq, StatusCallback cb) { cb(Status::OK()); }));
 
   auto buf = MakeBuf(4096);
-  ASSERT_TRUE(sw_->Write(ctx_, buf.data(), 4096, 0).ok());
+  ASSERT_TRUE(Write(sw_, buf.data(), 4096, 0).ok());
 
   test::AsyncWaiter waiter;
   waiter.Expect(1);
@@ -206,11 +219,10 @@ TEST_F(SliceWriterTest, FlushAsync_PutPayloadPreservesCrossBlockByteOrder) {
         cb(Status::OK());
       }));
 
-  ASSERT_TRUE(sw_->Write(ctx_, input.data(), first_size, 0).ok());
-  ASSERT_TRUE(sw_
-                  ->Write(ctx_, input.data() + first_size,
-                          total_size - first_size, first_size)
-                  .ok());
+  ASSERT_TRUE(Write(sw_, input.data(), first_size, 0).ok());
+  ASSERT_TRUE(
+      Write(sw_, input.data() + first_size, total_size - first_size, first_size)
+          .ok());
 
   test::AsyncWaiter waiter;
   waiter.Expect(1);
@@ -224,7 +236,8 @@ TEST_F(SliceWriterTest, FlushAsync_PutPayloadPreservesCrossBlockByteOrder) {
   ASSERT_EQ(uploaded.size(), 2);
   ASSERT_EQ(uploaded[0].size(), kBlockSize);
   ASSERT_EQ(uploaded[1].size(), input.size() - kBlockSize);
-  EXPECT_TRUE(std::equal(uploaded[0].begin(), uploaded[0].end(), input.begin()));
+  EXPECT_TRUE(
+      std::equal(uploaded[0].begin(), uploaded[0].end(), input.begin()));
   EXPECT_TRUE(std::equal(uploaded[1].begin(), uploaded[1].end(),
                          input.begin() + kBlockSize));
 }
@@ -253,7 +266,7 @@ TEST_F(SliceWriterTest, FlushAsync_PagesLiveUntilUploadCallback) {
   for (size_t i = 0; i < input.size(); ++i) {
     input[i] = static_cast<char>((i * 29 + 7) % 253);
   }
-  ASSERT_TRUE(sw_->Write(ctx_, input.data(), input.size(), 0).ok());
+  ASSERT_TRUE(Write(sw_, input.data(), input.size(), 0).ok());
   ASSERT_GT(write_buf_mgr_->GetUsedBytes(), 0);
 
   test::AsyncWaiter waiter;
@@ -295,7 +308,7 @@ TEST_F(SliceWriterTest, FlushAsync_CommitSlice_CorrectFields) {
 
   uint64_t write_size = 8192;
   auto buf = MakeBuf(write_size);
-  ASSERT_TRUE(sw_->Write(ctx_, buf.data(), write_size, 0).ok());
+  ASSERT_TRUE(Write(sw_, buf.data(), write_size, 0).ok());
 
   test::AsyncWaiter waiter;
   waiter.Expect(1);
@@ -320,7 +333,7 @@ TEST_F(SliceWriterTest, FlushAsync_NewSliceId_Fails) {
       .WillOnce(Return(Status::IoError("id allocation failed")));
 
   auto buf = MakeBuf(4096);
-  ASSERT_TRUE(sw_->Write(ctx_, buf.data(), 4096, 0).ok());
+  ASSERT_TRUE(Write(sw_, buf.data(), 4096, 0).ok());
 
   test::AsyncWaiter waiter;
   waiter.Expect(1);
@@ -341,7 +354,7 @@ TEST_F(SliceWriterTest, FlushAsync_BlockStore_PutAsync_Fails) {
       }));
 
   auto buf = MakeBuf(4096);
-  ASSERT_TRUE(sw_->Write(ctx_, buf.data(), 4096, 0).ok());
+  ASSERT_TRUE(Write(sw_, buf.data(), 4096, 0).ok());
 
   test::AsyncWaiter waiter;
   waiter.Expect(1);
@@ -364,7 +377,7 @@ TEST_F(SliceWriterTest, FlushAsync_OnlyCalledOnce) {
           [](ContextSPtr, PutReq, StatusCallback cb) { cb(Status::OK()); }));
 
   auto buf = MakeBuf(4096);
-  ASSERT_TRUE(sw_->Write(ctx_, buf.data(), 4096, 0).ok());
+  ASSERT_TRUE(Write(sw_, buf.data(), 4096, 0).ok());
 
   test::AsyncWaiter waiter;
   waiter.Expect(1);
@@ -391,7 +404,7 @@ TEST_F(SliceWriterTest, Write_ZeroData_FlushSucceeds) {
           [](ContextSPtr, PutReq, StatusCallback cb) { cb(Status::OK()); }));
 
   auto buf = MakeZeroBuf(4096);
-  ASSERT_TRUE(sw_->Write(ctx_, buf.data(), 4096, 0).ok());
+  ASSERT_TRUE(Write(sw_, buf.data(), 4096, 0).ok());
 
   test::AsyncWaiter waiter;
   waiter.Expect(1);
@@ -412,8 +425,8 @@ TEST_F(SliceWriterTest, GetWrittenLength_CorrectValue) {
   auto buf1 = MakeBuf(first, 'X');
   auto buf2 = MakeBuf(second, 'Y');
 
-  ASSERT_TRUE(sw_->Write(ctx_, buf1.data(), first, 0).ok());
-  ASSERT_TRUE(sw_->Write(ctx_, buf2.data(), second, first).ok());
+  ASSERT_TRUE(Write(sw_, buf1.data(), first, 0).ok());
+  ASSERT_TRUE(Write(sw_, buf2.data(), second, first).ok());
 
   EXPECT_EQ(sw_->Len(), first + second);
   EXPECT_EQ(sw_->End(), first + second);
@@ -454,6 +467,21 @@ class SliceWriterSliceRelativeTest : public test::VFSTestBase {
     return std::vector<char>(size, val);
   }
 
+  Status Write(const SliceWriterPtr& writer, const char* buf, int32_t size,
+               int32_t chunk_offset) {
+    WriteMemPool* pool = mock_hub_->GetWriteMemPool();
+    const uint64_t page_size = pool->GetPageSize();
+    const size_t page_need =
+        static_cast<size_t>(((static_cast<uint64_t>(chunk_offset) % page_size) +
+                             static_cast<uint64_t>(size) + page_size - 1) /
+                            page_size);
+    WritePageLease lease;
+    Status status = pool->Acquire(page_need, &lease);
+    if (!status.ok()) return status;
+    writer->Write(ctx_, buf, size, chunk_offset, &lease);
+    return Status::OK();
+  }
+
   std::unique_ptr<TraceManager> trace_manager_;
   std::unique_ptr<SliceDataContext> context_;
 };
@@ -481,7 +509,7 @@ TEST_F(SliceWriterSliceRelativeTest, Write_SliceRelative_StartsFromZero) {
       .WillOnce(DoAll(SetArgPointee<2>(100u), Return(Status::OK())));
 
   auto buf = MakeBuf(kWriteSize);
-  ASSERT_TRUE(sw->Write(ctx_, buf.data(), kWriteSize, kStartOffset).ok());
+  ASSERT_TRUE(Write(sw, buf.data(), kWriteSize, kStartOffset).ok());
 
   test::AsyncWaiter waiter;
   waiter.Expect(1);
@@ -520,7 +548,7 @@ TEST_F(SliceWriterSliceRelativeTest, Write_MultiBlock_Sequential) {
       .WillOnce(DoAll(SetArgPointee<2>(101u), Return(Status::OK())));
 
   auto buf = MakeBuf(kWriteSize);
-  ASSERT_TRUE(sw->Write(ctx_, buf.data(), kWriteSize, kStartOffset).ok());
+  ASSERT_TRUE(Write(sw, buf.data(), kWriteSize, kStartOffset).ok());
 
   test::AsyncWaiter waiter;
   waiter.Expect(1);
@@ -543,7 +571,7 @@ TEST_F(SliceWriterSliceRelativeTest, Write_MultipleSmallWrites_SameBlock) {
 
   for (int i = 0; i < 4; ++i) {
     auto buf = MakeBuf(kSmallSize, 'A' + i);
-    ASSERT_TRUE(sw->Write(ctx_, buf.data(), kSmallSize, i * kSmallSize).ok());
+    ASSERT_TRUE(Write(sw, buf.data(), kSmallSize, i * kSmallSize).ok());
   }
   EXPECT_EQ(sw->Len(), static_cast<int32_t>(4 * kSmallSize));
 
@@ -581,8 +609,8 @@ TEST_F(SliceWriterSliceRelativeTest, Write_SmallWrites_CrossBoundary) {
 
   auto buf1 = MakeBuf(k3MB, 'X');
   auto buf2 = MakeBuf(k2MB, 'Y');
-  ASSERT_TRUE(sw->Write(ctx_, buf1.data(), k3MB, 0).ok());
-  ASSERT_TRUE(sw->Write(ctx_, buf2.data(), k2MB, k3MB).ok());
+  ASSERT_TRUE(Write(sw, buf1.data(), k3MB, 0).ok());
+  ASSERT_TRUE(Write(sw, buf2.data(), k2MB, k3MB).ok());
   EXPECT_EQ(sw->Len(), k3MB + k2MB);
 
   std::vector<uint32_t> captured_indices;
@@ -633,7 +661,7 @@ TEST_F(SliceWriterSliceRelativeTest, Flush_LastBlock_ActualSize) {
       .WillOnce(DoAll(SetArgPointee<2>(104u), Return(Status::OK())));
 
   auto buf = MakeBuf(kWriteSize);
-  ASSERT_TRUE(sw->Write(ctx_, buf.data(), kWriteSize, kStartOffset).ok());
+  ASSERT_TRUE(Write(sw, buf.data(), kWriteSize, kStartOffset).ok());
 
   test::AsyncWaiter waiter;
   waiter.Expect(1);
@@ -664,7 +692,7 @@ TEST_F(SliceWriterSliceRelativeTest, Write_SingleBlockLessThanBlockSize) {
       .WillOnce(DoAll(SetArgPointee<2>(105u), Return(Status::OK())));
 
   auto buf = MakeBuf(100, 'Z');
-  ASSERT_TRUE(sw->Write(ctx_, buf.data(), 100, 0).ok());
+  ASSERT_TRUE(Write(sw, buf.data(), 100, 0).ok());
   EXPECT_EQ(sw->Len(), 100);
 
   test::AsyncWaiter waiter;
@@ -687,12 +715,11 @@ TEST_F(SliceWriterSliceRelativeTest, Write_ReverseWrite_CheckFails) {
 
   // First write at offset 4MB (the starting chunk_offset).
   auto buf1 = MakeBuf(k4MB);
-  ASSERT_TRUE(sw->Write(ctx_, buf1.data(), k4MB, k4MB).ok());
+  ASSERT_TRUE(Write(sw, buf1.data(), k4MB, k4MB).ok());
 
   // Reverse write: [2MB, 4MB) prepends to the slice — target rejects this.
   auto buf2 = MakeBuf(2 * 1024 * 1024);
-  EXPECT_DEATH(sw->Write(ctx_, buf2.data(), 2 * 1024 * 1024, 2 * 1024 * 1024),
-               "");
+  EXPECT_DEATH(Write(sw, buf2.data(), 2 * 1024 * 1024, 2 * 1024 * 1024), "");
 }
 
 // Forward-gap write should be rejected: SliceWriter enforces
@@ -702,10 +729,10 @@ TEST_F(SliceWriterSliceRelativeTest, Write_ForwardGap_CheckFails) {
   auto sw = MakeSliceWriter(k4MB);
 
   auto buf1 = MakeBuf(k4MB);
-  ASSERT_TRUE(sw->Write(ctx_, buf1.data(), k4MB, k4MB).ok());
+  ASSERT_TRUE(Write(sw, buf1.data(), k4MB, k4MB).ok());
   // End() is now 8MB. Writing at 10MB leaves a 2MB hole -> reject.
   auto buf2 = MakeBuf(k4MB);
-  EXPECT_DEATH(sw->Write(ctx_, buf2.data(), k4MB, 10 * 1024 * 1024), "");
+  EXPECT_DEATH(Write(sw, buf2.data(), k4MB, 10 * 1024 * 1024), "");
 }
 
 // First Write at wrong starting offset should be rejected
@@ -716,7 +743,7 @@ TEST_F(SliceWriterSliceRelativeTest, Write_WrongStartOffset_CheckFails) {
 
   // Slice starts at 4MB; writing at 0 / 2MB / 6MB are all != End() -> reject.
   auto buf = MakeBuf(k4MB);
-  EXPECT_DEATH(sw->Write(ctx_, buf.data(), k4MB, 0), "");
+  EXPECT_DEATH(Write(sw, buf.data(), k4MB, 0), "");
 }
 
 // ChunkOffset() is const after construction: multiple forward writes never
@@ -731,7 +758,7 @@ TEST_F(SliceWriterSliceRelativeTest, ChunkOffset_StableAfterWrites) {
   int32_t off = kStart;
   for (int i = 0; i < 8; ++i) {
     auto buf = MakeBuf(k1MB, 'A' + i);
-    ASSERT_TRUE(sw->Write(ctx_, buf.data(), k1MB, off).ok());
+    ASSERT_TRUE(Write(sw, buf.data(), k1MB, off).ok());
     off += k1MB;
     EXPECT_EQ(sw->ChunkOffset(), kStart) << "after write " << i;
     EXPECT_EQ(sw->End(), off) << "after write " << i;
@@ -752,7 +779,7 @@ TEST_F(SliceWriterSliceRelativeTest, GetCommitSlice_CorrectFields) {
           [](ContextSPtr, PutReq, StatusCallback cb) { cb(Status::OK()); }));
 
   auto buf = MakeBuf(kWriteSize);
-  ASSERT_TRUE(sw->Write(ctx_, buf.data(), kWriteSize, kStartOffset).ok());
+  ASSERT_TRUE(Write(sw, buf.data(), kWriteSize, kStartOffset).ok());
 
   test::AsyncWaiter waiter;
   waiter.Expect(1);
@@ -819,6 +846,21 @@ class SliceWriterStreamingTest : public test::VFSTestBase {
     return std::vector<char>(size, val);
   }
 
+  Status Write(const SliceWriterPtr& writer, const char* buf, int32_t size,
+               int32_t chunk_offset) {
+    WriteMemPool* pool = mock_hub_->GetWriteMemPool();
+    const uint64_t page_size = pool->GetPageSize();
+    const size_t page_need =
+        static_cast<size_t>(((static_cast<uint64_t>(chunk_offset) % page_size) +
+                             static_cast<uint64_t>(size) + page_size - 1) /
+                            page_size);
+    WritePageLease lease;
+    Status status = pool->Acquire(page_need, &lease);
+    if (!status.ok()) return status;
+    writer->Write(ctx_, buf, size, chunk_offset, &lease);
+    return Status::OK();
+  }
+
   std::unique_ptr<TraceManager> trace_manager_;
   std::unique_ptr<SliceDataContext> context_;
 };
@@ -845,7 +887,7 @@ TEST_F(SliceWriterStreamingTest, UT1_FlushUpTo_OnlyFullBlocks) {
 
   // Write 10MB = 2 full blocks (4MB each) + 2MB partial
   auto buf = MakeBuf(10 * 1024 * 1024);
-  ASSERT_TRUE(sw->Write(ctx_, buf.data(), 10 * 1024 * 1024, 0).ok());
+  ASSERT_TRUE(Write(sw, buf.data(), 10 * 1024 * 1024, 0).ok());
   WaitCBExecutorIdle();
 
   // After Write: streaming uploaded block[0] and block[1]
@@ -905,7 +947,7 @@ TEST_F(SliceWriterStreamingTest, UT2_SliceId_DelayedArrival_CatchUp) {
 
   // Write 8MB = 2 full blocks. slice_id_==0, FlushUpTo skips.
   auto buf1 = MakeBuf(8 * 1024 * 1024);
-  ASSERT_TRUE(sw->Write(ctx_, buf1.data(), 8 * 1024 * 1024, 0).ok());
+  ASSERT_TRUE(Write(sw, buf1.data(), 8 * 1024 * 1024, 0).ok());
 
   {
     std::lock_guard<std::mutex> lk(mu);
@@ -919,8 +961,7 @@ TEST_F(SliceWriterStreamingTest, UT2_SliceId_DelayedArrival_CatchUp) {
   // Write 4MB more. FlushUpTo(12MB) catches up: block[0](end=4<=12),
   // block[1](end=8<=12), block[2](end=12<=12) — all uploaded.
   auto buf2 = MakeBuf(4 * 1024 * 1024);
-  ASSERT_TRUE(
-      sw->Write(ctx_, buf2.data(), 4 * 1024 * 1024, 8 * 1024 * 1024).ok());
+  ASSERT_TRUE(Write(sw, buf2.data(), 4 * 1024 * 1024, 8 * 1024 * 1024).ok());
   WaitCBExecutorIdle();
 
   {
@@ -964,7 +1005,7 @@ TEST_F(SliceWriterStreamingTest, UT3_UploadError_Propagation) {
 
   // Write 8MB = 2 blocks. block[0] OK, block[1] fails.
   auto buf = MakeBuf(8 * 1024 * 1024);
-  ASSERT_TRUE(sw->Write(ctx_, buf.data(), 8 * 1024 * 1024, 0).ok());
+  ASSERT_TRUE(Write(sw, buf.data(), 8 * 1024 * 1024, 0).ok());
   WaitCBExecutorIdle();
 
   test::AsyncWaiter waiter;
@@ -994,7 +1035,7 @@ TEST_F(SliceWriterStreamingTest, UT5_SmallFile_NoStreamingUpload) {
   WaitWriteBackgroundExecutorIdle();
 
   auto buf = MakeBuf(100 * 1024);  // 100KB
-  ASSERT_TRUE(sw->Write(ctx_, buf.data(), 100 * 1024, 0).ok());
+  ASSERT_TRUE(Write(sw, buf.data(), 100 * 1024, 0).ok());
   WaitCBExecutorIdle();
 
   // No PutAsync during Write (len_ < block_size)
@@ -1038,7 +1079,7 @@ TEST_F(SliceWriterStreamingTest, UT6_MultipleWrites_StreamingOneByOne) {
   const int32_t kBSize = 4 * 1024 * 1024;
   for (int i = 0; i < 4; i++) {
     auto buf = MakeBuf(kBSize, 'A' + i);
-    ASSERT_TRUE(sw->Write(ctx_, buf.data(), kBSize, i * kBSize).ok());
+    ASSERT_TRUE(Write(sw, buf.data(), kBSize, i * kBSize).ok());
     WaitCBExecutorIdle();
     // Each Write should trigger exactly one streaming upload
     EXPECT_EQ(put_count.load(), i + 1) << "After Write #" << i;
@@ -1088,7 +1129,7 @@ TEST_F(SliceWriterStreamingTest, UT7_SliceId_PreallocFail_SyncFallback) {
 
   // Write 8MB = 2 blocks. FlushUpTo skips (alloc_failed).
   auto buf = MakeBuf(8 * 1024 * 1024);
-  ASSERT_TRUE(sw->Write(ctx_, buf.data(), 8 * 1024 * 1024, 0).ok());
+  ASSERT_TRUE(Write(sw, buf.data(), 8 * 1024 * 1024, 0).ok());
   WaitCBExecutorIdle();
 
   {
@@ -1138,7 +1179,7 @@ TEST_F(SliceWriterStreamingTest, UT8_SingleWrite_MultiBlockFlushUpTo) {
 
   // 10MB = 2 full blocks (4MB each) + 2MB partial
   auto buf = MakeBuf(10 * 1024 * 1024);
-  ASSERT_TRUE(sw->Write(ctx_, buf.data(), 10 * 1024 * 1024, 0).ok());
+  ASSERT_TRUE(Write(sw, buf.data(), 10 * 1024 * 1024, 0).ok());
   WaitCBExecutorIdle();
 
   {
@@ -1182,7 +1223,7 @@ TEST_F(SliceWriterStreamingTest, UT9_ConcurrentCallbacks_ThreadSafe) {
 
   // 20MB = 4 full blocks + 4MB partial. FlushUpTo uploads block[0..3].
   auto buf = MakeBuf(20 * 1024 * 1024);
-  ASSERT_TRUE(sw->Write(ctx_, buf.data(), 20 * 1024 * 1024, 0).ok());
+  ASSERT_TRUE(Write(sw, buf.data(), 20 * 1024 * 1024, 0).ok());
 
   // Wait for 4 PutAsync callbacks to be held
   while (true) {
@@ -1244,7 +1285,7 @@ TEST_F(SliceWriterStreamingTest, UT10_MixedStreamAndFlushResidual) {
 
   // 6MB = 1 full block (4MB) + 2MB partial
   auto buf = MakeBuf(6 * 1024 * 1024);
-  ASSERT_TRUE(sw->Write(ctx_, buf.data(), 6 * 1024 * 1024, 0).ok());
+  ASSERT_TRUE(Write(sw, buf.data(), 6 * 1024 * 1024, 0).ok());
   WaitCBExecutorIdle();
 
   // block[0] streamed during Write
@@ -1294,7 +1335,7 @@ TEST_F(SliceWriterStreamingTest, UT12_WaitingAllLateErrorPropagates) {
   WaitWriteBackgroundExecutorIdle();
 
   auto buf = MakeBuf(100 * 1024);
-  ASSERT_TRUE(sw->Write(ctx_, buf.data(), buf.size(), 0).ok());
+  ASSERT_TRUE(Write(sw, buf.data(), buf.size(), 0).ok());
 
   test::AsyncWaiter flush_waiter;
   flush_waiter.Expect(1);
@@ -1349,7 +1390,7 @@ TEST_F(SliceWriterStreamingTest,
   WaitWriteBackgroundExecutorIdle();
 
   auto buf = MakeBuf(8 * 1024 * 1024);
-  ASSERT_TRUE(sw->Write(ctx_, buf.data(), buf.size(), 0).ok());
+  ASSERT_TRUE(Write(sw, buf.data(), buf.size(), 0).ok());
 
   StatusCallback failed = take_callback(0);
   ASSERT_TRUE(static_cast<bool>(failed));
@@ -1401,7 +1442,7 @@ TEST_F(SliceWriterStreamingTest,
   std::weak_ptr<SliceWriter> weak_writer = sw;
   WaitWriteBackgroundExecutorIdle();
   auto buf = MakeBuf(100 * 1024);
-  ASSERT_TRUE(sw->Write(ctx_, buf.data(), buf.size(), 0).ok());
+  ASSERT_TRUE(Write(sw, buf.data(), buf.size(), 0).ok());
 
   test::AsyncWaiter callback_waiter;
   callback_waiter.Expect(1);

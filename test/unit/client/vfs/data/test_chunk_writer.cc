@@ -19,8 +19,12 @@
 
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
+#include <functional>
 #include <future>
+#include <mutex>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #include "client/vfs/data/writer/chunk_writer.h"
@@ -29,6 +33,7 @@
 #include "common/writemempool/write_mem_pool.h"
 #include "test/unit/client/vfs/test_base.h"
 #include "test/unit/client/vfs/test_common.h"
+#include "utils/scoped_cleanup.h"
 
 namespace dingofs {
 namespace client {
@@ -38,8 +43,10 @@ using dingofs::client::vfs::test::AsyncWaiter;
 using dingofs::client::vfs::test::VFSTestBase;
 using ::testing::_;
 using ::testing::AnyNumber;
+using ::testing::DoAll;
 using ::testing::Invoke;
 using ::testing::Return;
+using ::testing::SetArgPointee;
 
 class ChunkWriterTest : public VFSTestBase {
  protected:
@@ -57,6 +64,21 @@ class ChunkWriterTest : public VFSTestBase {
                                           uint64_t chunk_index = 0,
                                           uint64_t fh = 1) {
     return std::make_unique<ChunkWriter>(mock_hub_, ino, chunk_index);
+  }
+
+  Status Write(const std::unique_ptr<ChunkWriter>& writer, const char* buf,
+               int32_t size, int32_t chunk_offset) {
+    WriteMemPool* pool = mock_hub_->GetWriteMemPool();
+    const uint64_t page_size = pool->GetPageSize();
+    const size_t page_need =
+        static_cast<size_t>(((static_cast<uint64_t>(chunk_offset) % page_size) +
+                             static_cast<uint64_t>(size) + page_size - 1) /
+                            page_size);
+    WritePageLease lease;
+    Status status = pool->Acquire(page_need, &lease);
+    if (!status.ok()) return status;
+    writer->Write(ctx_, buf, size, chunk_offset, &lease);
+    return Status::OK();
   }
 
   const uint64_t kIno = 100;
@@ -78,7 +100,7 @@ TEST_F(ChunkWriterTest, SingleWrite_WriteSliceCalled) {
   auto writer = MakeWriter();
 
   const char buf[] = "hello";
-  Status s = writer->Write(ctx_, buf, sizeof(buf), /*chunk_offset=*/0);
+  Status s = Write(writer, buf, sizeof(buf), /*chunk_offset=*/0);
   EXPECT_TRUE(s.ok());
 
   AsyncWaiter waiter;
@@ -106,8 +128,8 @@ TEST_F(ChunkWriterTest, ContiguousWrites_AppendToSlice) {
 
   const char data[8] = "abcdefg";
   // Write two contiguous 4-byte chunks: [0,4) then [4,8).
-  Status s1 = writer->Write(ctx_, data, 4, 0);
-  Status s2 = writer->Write(ctx_, data + 4, 4, 4);
+  Status s1 = Write(writer, data, 4, 0);
+  Status s2 = Write(writer, data + 4, 4, 4);
   EXPECT_TRUE(s1.ok());
   EXPECT_TRUE(s2.ok());
 
@@ -138,8 +160,8 @@ TEST_F(ChunkWriterTest, NonContiguousWrites_MultipleSlices) {
 
   const char data[4] = "abc";
   // Gap of 4 MiB between writes forces separate slices.
-  Status s1 = writer->Write(ctx_, data, 4, 0);
-  Status s2 = writer->Write(ctx_, data, 4, 8 * 1024 * 1024);
+  Status s1 = Write(writer, data, 4, 0);
+  Status s2 = Write(writer, data, 4, 8 * 1024 * 1024);
   EXPECT_TRUE(s1.ok());
   EXPECT_TRUE(s2.ok());
 
@@ -175,7 +197,7 @@ TEST_F(ChunkWriterTest, FlushAsync_WriteSliceError_Propagated) {
   auto writer = MakeWriter();
 
   const char buf[] = "data";
-  writer->Write(ctx_, buf, sizeof(buf), 0);
+  Write(writer, buf, sizeof(buf), 0);
 
   AsyncWaiter waiter;
   waiter.Expect(1);
@@ -199,7 +221,7 @@ TEST_F(ChunkWriterTest, ErrorStatus_Sticky_AfterFirstError) {
   auto writer = MakeWriter();
 
   const char buf[] = "test";
-  writer->Write(ctx_, buf, sizeof(buf), 0);
+  Write(writer, buf, sizeof(buf), 0);
 
   // First flush fails.
   AsyncWaiter waiter1;
@@ -228,7 +250,7 @@ TEST_F(ChunkWriterTest, MultipleFlushAsync_AllComplete) {
   auto writer = MakeWriter();
 
   const char buf[] = "x";
-  writer->Write(ctx_, buf, 1, 0);
+  Write(writer, buf, 1, 0);
 
   constexpr int kFlushes = 3;
   AsyncWaiter waiter;
@@ -261,7 +283,7 @@ TEST_F(ChunkWriterTest, ConcurrentWrites_NoDeadlock) {
       // Stay within chunk bounds.
       if (offset + kWriteSize > kChunkSz) return;
       std::vector<char> buf(kWriteSize, static_cast<char>('a' + i));
-      Status s = writer->Write(ctx_, buf.data(), kWriteSize, offset);
+      Status s = Write(writer, buf.data(), kWriteSize, offset);
       if (s.ok()) {
         success_count.fetch_add(1, std::memory_order_relaxed);
       }
@@ -304,7 +326,7 @@ TEST_F(ChunkWriterTest, Stop_WaitsForFlush) {
   auto writer = MakeWriter();
 
   const char buf[] = "stop test";
-  ASSERT_TRUE(writer->Write(ctx_, buf, sizeof(buf), 0).ok());
+  ASSERT_TRUE(Write(writer, buf, sizeof(buf), 0).ok());
 
   AsyncWaiter waiter;
   waiter.Expect(1);
@@ -334,6 +356,150 @@ TEST_F(ChunkWriterTest, Stop_WaitsForFlush) {
   stop.get();
 }
 
+// A failed flush makes DoSyncFlush return without enqueueing its FIFO sentinel.
+// Stop must still wait for an older in-flight task, then wake on queue drain
+// rather than on the old one-second polling interval.
+TEST_F(ChunkWriterTest, Stop_FailedFlushWaitsForInflightTaskAndWakesOnDrain) {
+#ifdef NDEBUG
+  GTEST_SKIP() << "Deterministic Stop staging requires TEST_SYNC_POINT.";
+#else
+  std::mutex mutex;
+  std::condition_variable cv;
+  bool first_put_held = false;
+  bool second_put_held = false;
+  bool first_flush_done = false;
+  bool second_flush_done = false;
+  bool stop_wait_entered = false;
+  int put_calls = 0;
+  int write_slice_calls = 0;
+  Status first_flush_status;
+  Status second_flush_status;
+  StatusCallback first_put_callback;
+  StatusCallback second_put_callback;
+
+  ON_CALL(*mock_block_store_, PutAsync)
+      .WillByDefault(Invoke([&](ContextSPtr, PutReq, StatusCallback cb) {
+        bool unexpected = false;
+        {
+          std::lock_guard<std::mutex> lock(mutex);
+          ++put_calls;
+          if (put_calls == 1) {
+            first_put_callback = std::move(cb);
+            first_put_held = true;
+          } else if (put_calls == 2) {
+            second_put_callback = std::move(cb);
+            second_put_held = true;
+          } else {
+            unexpected = true;
+          }
+          cv.notify_all();
+        }
+        if (unexpected) {
+          ADD_FAILURE() << "Unexpected extra PutAsync call";
+          cb(Status::OK());
+        }
+      }));
+
+  ON_CALL(*mock_meta_system_, WriteSlice)
+      .WillByDefault([&](auto, auto, auto, auto, const std::vector<Slice>&) {
+        std::lock_guard<std::mutex> lock(mutex);
+        ++write_slice_calls;
+        if (write_slice_calls == 1) {
+          return Status::Internal("first flush failed");
+        }
+        return Status::OK();
+      });
+
+  auto writer = MakeWriter();
+  const char first[] = "first";
+  ASSERT_TRUE(Write(writer, first, sizeof(first), 0).ok());
+  writer->FlushAsync([&](Status status) {
+    std::lock_guard<std::mutex> lock(mutex);
+    first_flush_status = std::move(status);
+    first_flush_done = true;
+    cv.notify_all();
+  });
+
+  {
+    std::unique_lock<std::mutex> lock(mutex);
+    ASSERT_TRUE(cv.wait_for(lock, std::chrono::seconds(5),
+                            [&] { return first_put_held; }));
+  }
+
+  const char second[] = "second";
+  ASSERT_TRUE(Write(writer, second, sizeof(second), 4096).ok());
+  writer->FlushAsync([&](Status status) {
+    std::lock_guard<std::mutex> lock(mutex);
+    second_flush_status = std::move(status);
+    second_flush_done = true;
+    cv.notify_all();
+  });
+
+  StatusCallback fail_first_flush;
+  {
+    std::unique_lock<std::mutex> lock(mutex);
+    ASSERT_TRUE(cv.wait_for(lock, std::chrono::seconds(5),
+                            [&] { return second_put_held; }));
+    fail_first_flush = std::move(first_put_callback);
+  }
+  ASSERT_TRUE(static_cast<bool>(fail_first_flush));
+  fail_first_flush(Status::OK());
+
+  {
+    std::unique_lock<std::mutex> lock(mutex);
+    ASSERT_TRUE(cv.wait_for(lock, std::chrono::seconds(5),
+                            [&] { return first_flush_done; }));
+    ASSERT_FALSE(first_flush_status.ok());
+  }
+
+  SyncPoint::GetInstance()->SetCallBack(
+      "ChunkWriter::Stop:before_wait_flush_queue", [&](void*) {
+        std::lock_guard<std::mutex> lock(mutex);
+        stop_wait_entered = true;
+        cv.notify_all();
+      });
+  SyncPoint::GetInstance()->EnableProcessing();
+  auto sync_point_cleanup = MakeScopedCleanup([] {
+    SyncPoint::GetInstance()->DisableProcessing();
+    SyncPoint::GetInstance()->ClearAllCallBacks();
+  });
+
+  auto stop = std::async(std::launch::async, [&writer] { writer->Stop(); });
+  {
+    std::unique_lock<std::mutex> lock(mutex);
+    const bool reached_wait = cv.wait_for(lock, std::chrono::seconds(5),
+                                          [&] { return stop_wait_entered; });
+    EXPECT_TRUE(reached_wait);
+  }
+  EXPECT_EQ(stop.wait_for(std::chrono::milliseconds(0)),
+            std::future_status::timeout);
+
+  StatusCallback release_put;
+  {
+    std::lock_guard<std::mutex> lock(mutex);
+    release_put = std::move(second_put_callback);
+  }
+  ASSERT_TRUE(static_cast<bool>(release_put));
+  release_put(Status::OK());
+
+  // All async stages are synchronized above. This 750 ms bound only
+  // distinguishes notification from the former fixed one-second sleep.
+  EXPECT_EQ(stop.wait_for(std::chrono::milliseconds(750)),
+            std::future_status::ready)
+      << "Stop was not notified when flush_queue_ became empty";
+  ASSERT_EQ(stop.wait_for(std::chrono::seconds(5)), std::future_status::ready);
+  stop.get();
+
+  {
+    std::unique_lock<std::mutex> lock(mutex);
+    ASSERT_TRUE(cv.wait_for(lock, std::chrono::seconds(5),
+                            [&] { return second_flush_done; }));
+    EXPECT_FALSE(second_flush_status.ok());
+  }
+
+#endif
+}
+
 // 10. TriggerFlush (called automatically when a slice fills up) does not crash
 //     and invokes WriteSlice.
 TEST_F(ChunkWriterTest, TriggerFlush_NoCrash) {
@@ -348,7 +514,7 @@ TEST_F(ChunkWriterTest, TriggerFlush_NoCrash) {
 
   // Write a modest amount and then explicitly trigger flush.
   const char buf[] = "trigger";
-  writer->Write(ctx_, buf, sizeof(buf), 0);
+  Write(writer, buf, sizeof(buf), 0);
   writer->TriggerFlush();
 
   // Allow async tasks to drain.
@@ -394,7 +560,7 @@ TEST_F(ChunkWriterTest, ConcurrentWriteAndFlush_SeqOrdered) {
     for (int i = 0; i < kRounds; ++i) {
       uint64_t offset = static_cast<uint64_t>(i) * kWriteSize;
       std::vector<char> buf(kWriteSize, static_cast<char>('A' + i % 26));
-      Status s = writer->Write(ctx_, buf.data(), kWriteSize, offset);
+      Status s = Write(writer, buf.data(), kWriteSize, offset);
       EXPECT_TRUE(s.ok()) << "Write failed at round " << i;
     }
   });
@@ -466,12 +632,11 @@ TEST_F(ChunkWriterTest, FindWritable_Reverse_CreatesNew) {
   std::vector<char> buf2(2 * 1024 * 1024, 'B');
 
   // Forward write [4MB, 8MB).
-  Status s1 = writer->Write(ctx_, buf1.data(), k4MB, k4MB);
+  Status s1 = Write(writer, buf1.data(), k4MB, k4MB);
   EXPECT_TRUE(s1.ok());
 
   // Reverse adjacent write [2MB, 4MB) — target creates a new slice.
-  Status s2 =
-      writer->Write(ctx_, buf2.data(), 2 * 1024 * 1024, 2 * 1024 * 1024);
+  Status s2 = Write(writer, buf2.data(), 2 * 1024 * 1024, 2 * 1024 * 1024);
   EXPECT_TRUE(s2.ok());
 
   AsyncWaiter waiter;
@@ -504,11 +669,11 @@ TEST_F(ChunkWriterTest, FindWritable_Forward_Reuses) {
   std::vector<char> buf2(k4MB, 'B');
 
   // Forward write [0, 4MB).
-  Status s1 = writer->Write(ctx_, buf1.data(), k4MB, 0);
+  Status s1 = Write(writer, buf1.data(), k4MB, 0);
   EXPECT_TRUE(s1.ok());
 
   // Forward adjacent write [4MB, 8MB) — should reuse the same slice.
-  Status s2 = writer->Write(ctx_, buf2.data(), k4MB, k4MB);
+  Status s2 = Write(writer, buf2.data(), k4MB, k4MB);
   EXPECT_TRUE(s2.ok());
 
   AsyncWaiter waiter;
@@ -567,7 +732,7 @@ TEST_F(ChunkWriterTest, ConcurrentFlush_HoldsSliceMutexUntilQueuePush) {
 
   auto writer = MakeWriter();
   const char buf[] = "race-data";
-  ASSERT_TRUE(writer->Write(ctx_, buf, sizeof(buf), 0).ok());
+  ASSERT_TRUE(Write(writer, buf, sizeof(buf), 0).ok());
 
   // Coordinate T1 in the sync point.
   std::promise<void> t1_in_section;
@@ -639,155 +804,165 @@ TEST_F(ChunkWriterTest, ConcurrentFlush_HoldsSliceMutexUntilQueuePush) {
 #endif  // NDEBUG
 }
 
-// --- P2 failure-path: pool exhaustion (TryAllocateBatch returns short)
-// ---
+namespace {
 
-// A tiny pool makes exhaustion deterministic (TryAllocate never waits). A write
-// needing more pages than the pool has must fail with NoSpace AND roll back
-// every page it briefly took (BlockData reserve rollback) -- no leak.
-TEST_F(ChunkWriterTest, PoolExhaustion_WriteReturnsNoSpaceAndRollsBack) {
-  auto tiny_pool = std::make_unique<WriteMemPool>(4 * 4096, 4096);  // 4 slots
-  ON_CALL(*mock_hub_, GetWriteMemPool()).WillByDefault(Return(tiny_pool.get()));
+// Test-only executor: every Execute call runs on its own thread. This lets
+// a test control the RELATIVE order of two independently submitted callbacks
+// (a single-threaded FIFO executor would serialize them and hide the race).
+class ThreadPerTaskExecutor : public Executor {
+ public:
+  bool Start() override { return true; }
+  ~ThreadPerTaskExecutor() override { Stop(); }
 
-  auto writer = MakeWriter();
-
-  // 8 pages (32 KiB) > 4-slot pool: BlockData::Write pass-1 fails on the 5th
-  // page, rolls back the 4 it took, and NoSpace propagates up the chain.
-  std::string buf(8 * 4096, 'x');
-  Status s = writer->Write(ctx_, buf.data(), static_cast<int32_t>(buf.size()),
-                           /*chunk_offset=*/0);
-  EXPECT_TRUE(s.IsNoSpace()) << "expected NoSpace, got: " << s.ToString();
-  EXPECT_EQ(tiny_pool->GetUsedBytes(), 0)
-      << "rollback leaked pages: used=" << tiny_pool->GetUsedBytes();
-}
-
-// Concurrent writers all hit the exhausted pool. The batch leader fails, and
-// EVERY queued writer must be woken with the batch status -- if batch wakeup is
-// broken a waiter blocks forever and join() hangs (test times out). Reaching
-// the assertions proves no deadlock and no lost writer.
-TEST_F(ChunkWriterTest, PoolExhaustion_ConcurrentWritersAllWokenNoDeadlock) {
-  auto tiny_pool = std::make_unique<WriteMemPool>(4 * 4096, 4096);
-  ON_CALL(*mock_hub_, GetWriteMemPool()).WillByDefault(Return(tiny_pool.get()));
-
-  auto writer = MakeWriter();
-
-  constexpr int kThreads = 8;
-  std::atomic<int> nospace{0};
-  std::atomic<int> okcnt{0};
-  std::vector<std::thread> ts;
-  ts.reserve(kThreads);
-  for (int i = 0; i < kThreads; ++i) {
-    // Distinct 8 MiB-apart offsets -> independent slices, no contiguity clash.
-    ts.emplace_back([&, i] {
-      std::string buf(8 * 4096, 'x');
-      Status s =
-          writer->Write(ctx_, buf.data(), static_cast<int32_t>(buf.size()),
-                        /*chunk_offset=*/i * 8 * 1024 * 1024);
-      if (s.IsNoSpace()) {
-        nospace.fetch_add(1, std::memory_order_relaxed);
-      } else if (s.ok()) {
-        okcnt.fetch_add(1, std::memory_order_relaxed);
+  bool Stop() override {
+    std::vector<std::thread> threads;
+    {
+      std::lock_guard<std::mutex> lg(mutex_);
+      threads.swap(threads_);
+    }
+    for (auto& thread : threads) {
+      if (thread.joinable()) {
+        thread.join();
       }
-    });
+    }
+    return true;
   }
-  for (auto& t : ts) t.join();  // must not hang -- proves all writers woken
 
-  EXPECT_GT(nospace.load(), 0) << "expected writers to hit NoSpace";
-  EXPECT_EQ(nospace.load() + okcnt.load(), kThreads) << "a writer was lost";
-  EXPECT_EQ(tiny_pool->GetUsedBytes(), 0) << "rollback leaked pages";
-}
+  bool Execute(std::function<void()> func) override {
+    std::lock_guard<std::mutex> lg(mutex_);
+    threads_.emplace_back(std::move(func));
+    return true;
+  }
 
-// Per-writer regression: in a batch where early writers succeed and a later one
-// exhausts the pool, the successful writers MUST return OK -- their data
-// already landed in the buffer. A single shared batch status would clobber them
-// with NoSpace, the caller would retry the same range and double-write. 8
-// writers each take 1 page from a 4-slot pool: exactly 4 fit (and stay, nothing
-// is flushed), the rest get NoSpace. The fix keeps okcnt > 0; the pre-fix bug
-// made it 0 for any batch that mixed success + failure.
-TEST_F(ChunkWriterTest, PoolExhaustion_PartialBatch_SuccessfulWritersReturnOK) {
-  auto tiny_pool = std::make_unique<WriteMemPool>(4 * 4096, 4096);  // 4 slots
-  ON_CALL(*mock_hub_, GetWriteMemPool()).WillByDefault(Return(tiny_pool.get()));
+  bool Schedule(std::function<void()> func, int delay_ms) override {
+    (void)func;
+    (void)delay_ms;
+    return false;
+  }
+
+  int ThreadNum() const override { return 0; }
+  int TaskNum() const override { return 0; }
+  std::string Name() const override { return "thread_per_task"; }
+
+ private:
+  std::mutex mutex_;
+  std::vector<std::thread> threads_;
+};
+
+}  // namespace
+
+// 12. Regression (ASAN): the post-commit dispatch lambda in
+//     TryCommitFlushTasks runs on the CBExecutor and may execute AFTER the
+//     ChunkWriter has been deleted (Stop's DoSyncFlush returns when its own
+//     task's cb fires; an earlier batch's lambda can still be mid-flight).
+//     Pre-fix the lambda captured `this` ([&]) and called GetErrorStatus()
+//     per task -- a use-after-free once the writer is freed. Post-fix the
+//     batch status is snapshotted before dispatch and captured by value.
+//
+//     Determinism strategy: ThreadPerTaskExecutor lets the test hold the
+//     FIRST task's user cb inside the earlier batch's lambda while Stop's
+//     own batch (empty slices -> direct cb, no executor dependency)
+//     completes and deletes the writer. Releasing the held cb then resumes
+//     the earlier lambda post-destruction.
+TEST_F(ChunkWriterTest, PostCommitLambda_RunsAfterDestroy_NoUseAfterFree) {
+  ON_CALL(*mock_meta_system_, NewSliceId(_, _, _))
+      .WillByDefault(DoAll(SetArgPointee<2>(71u), Return(Status::OK())));
+  ON_CALL(*mock_meta_system_, WriteSlice).WillByDefault(Return(Status::OK()));
+
+  std::mutex held_mtx;
+  std::condition_variable held_cv;
+  std::vector<StatusCallback> held_puts;
+  ON_CALL(*mock_block_store_, PutAsync(_, _, _))
+      .WillByDefault(Invoke([&](ContextSPtr, PutReq, StatusCallback cb) {
+        std::lock_guard<std::mutex> lg(held_mtx);
+        held_puts.push_back(std::move(cb));
+        held_cv.notify_all();
+      }));
+
+  ThreadPerTaskExecutor async_executor;
+  ON_CALL(*mock_hub_, GetCBExecutor()).WillByDefault(Return(&async_executor));
 
   auto writer = MakeWriter();
+  const char buf[] = "uaf-regression";
+  ASSERT_TRUE(Write(writer, buf, sizeof(buf), 0).ok());
 
-  constexpr int kThreads = 8;
-  std::atomic<int> nospace{0};
-  std::atomic<int> okcnt{0};
-  std::vector<std::thread> ts;
-  ts.reserve(kThreads);
-  for (int i = 0; i < kThreads; ++i) {
-    // 1 page each, distinct 8 MiB-apart offsets (independent slices).
-    ts.emplace_back([&, i] {
-      std::string buf(4096, 'x');
-      Status s =
-          writer->Write(ctx_, buf.data(), static_cast<int32_t>(buf.size()),
-                        /*chunk_offset=*/i * 8 * 1024 * 1024);
-      if (s.IsNoSpace()) {
-        nospace.fetch_add(1, std::memory_order_relaxed);
-      } else if (s.ok()) {
-        okcnt.fetch_add(1, std::memory_order_relaxed);
-      }
-    });
+  std::promise<void> first_cb_entered;
+  std::promise<void> release_first_cb;
+  auto release_shared = release_first_cb.get_future().share();
+  auto entered_future = first_cb_entered.get_future();
+  std::promise<void> second_cb_done;
+  auto second_future = second_cb_done.get_future();
+  bool first_cb_released = false;
+  auto async_cleanup = MakeScopedCleanup([&] {
+    if (!first_cb_released) {
+      release_first_cb.set_value();
+      first_cb_released = true;
+    }
+    std::vector<StatusCallback> pending_puts;
+    {
+      std::lock_guard<std::mutex> lg(held_mtx);
+      pending_puts.swap(held_puts);
+    }
+    for (auto& cb : pending_puts) {
+      cb(Status::OK());
+    }
+    async_executor.Stop();
+  });
+
+  // Batch member 1: blocks inside its user cb while the writer is deleted.
+  writer->FlushAsync([&](Status) {
+    first_cb_entered.set_value();
+    release_shared.wait();
+  });
+
+  // Batch member 2: empty-slice task, completes inline (its FlushTaskDone
+  // only marks done; it joins member 1's commit batch later).
+  writer->FlushAsync([&](Status) { second_cb_done.set_value(); });
+
+  // Both flush tasks are queued; the upload of the single slice is held.
+  {
+    std::unique_lock<std::mutex> lg(held_mtx);
+    ASSERT_TRUE(held_cv.wait_for(lg, std::chrono::seconds(5), [&] {
+      return !held_puts.empty();
+    })) << "PutAsync was never called";
   }
-  for (auto& t : ts) t.join();
 
-  EXPECT_GT(okcnt.load(), 0)
-      << "successful writers were clobbered with the batch failure status";
-  EXPECT_GT(nospace.load(), 0) << "expected some writers to hit NoSpace";
-  EXPECT_EQ(okcnt.load() + nospace.load(), kThreads) << "a writer was lost";
-  // Successful writers each hold exactly 1 page (not flushed); failed writers
-  // rolled back cleanly -- so used is precisely okcnt pages, nothing leaked.
-  EXPECT_EQ(tiny_pool->GetUsedBytes(),
-            static_cast<int64_t>(okcnt.load()) * 4096)
-      << "used should equal successful writers' pages with no leak";
-}
+  // Release the upload: member 1's batch [task1, task2] commits and its
+  // dispatch lambda blocks in member 1's user cb.
+  std::vector<StatusCallback> puts;
+  {
+    std::lock_guard<std::mutex> lg(held_mtx);
+    puts.swap(held_puts);
+  }
+  for (auto& cb : puts) {
+    cb(Status::OK());
+  }
+  ASSERT_EQ(entered_future.wait_for(std::chrono::seconds(5)),
+            std::future_status::ready)
+      << "first batch's post-commit lambda never entered its user cb";
 
-// Cross-block atomicity regression. A single SliceWriter::Write that spans two
-// blocks where block0 reserves fully but block1 hits the exhausted pool must
-// roll back EVERYTHING (no half-write). Pre-fix, block0 was applied + len_ left
-// unbumped, so retrying the same offset re-entered an inconsistent BlockData
-// and tripped its contiguity CHECK (client abort). This asserts: NoSpace, zero
-// pool leak, AND that a retry at the same offset neither crashes nor wedges.
-TEST_F(ChunkWriterTest,
-       PoolExhaustion_CrossBlock_AtomicRollback_NoCrashOnRetry) {
-  // Derive geometry so the test follows the harness page size (and the fs block
-  // size) instead of hard-coding the pages-per-block count. context_.page_size
-  // == this pool's page (ChunkWriter takes it from GetWriteMemPool), so the
-  // page here is what BlockData actually allocates in.
-  constexpr int64_t kPage = 4096;
-  constexpr int64_t kBlockSize = 4 * 1024 * 1024;  // MakeTestFsInfo default
-  constexpr int64_t kBlockPages = kBlockSize / kPage;
+  // Destroy the writer: Stop's DoSyncFlush batch dispatches its own lambda
+  // (independent thread), its sync cb fires, Stop returns, writer freed.
+  // This must not hang: the queue-empty CV was notified before dispatch.
+  auto destroyed = std::async(std::launch::async, [&] { writer.reset(); });
+  const auto destroyed_while_callback_blocked =
+      destroyed.wait_for(std::chrono::seconds(5));
+  EXPECT_EQ(destroyed_while_callback_blocked, std::future_status::ready)
+      << "Stop hung while an earlier post-commit lambda was still parked";
 
-  // Pool holds exactly one block: block0 takes every page, block1's first page
-  // then fails.
-  auto pool = std::make_unique<WriteMemPool>(kBlockPages * kPage, kPage);
-  ON_CALL(*mock_hub_, GetWriteMemPool()).WillByDefault(Return(pool.get()));
+  // Always release the parked callback before any fatal assertion or future
+  // destruction, so a failing regression test cannot hang or terminate.
+  release_first_cb.set_value();
+  first_cb_released = true;
+  ASSERT_EQ(destroyed.wait_for(std::chrono::seconds(5)),
+            std::future_status::ready);
+  ASSERT_EQ(destroyed_while_callback_blocked, std::future_status::ready);
 
-  auto writer = MakeWriter();
-
-  // block_size + 1 page spans block0 (full) + block1 (1 page) -> one page more
-  // than the pool has.
-  const int32_t kWriteSize = static_cast<int32_t>(kBlockSize + kPage);
-  std::string buf(kWriteSize, 'x');
-
-  Status s1 = writer->Write(ctx_, buf.data(), kWriteSize, /*chunk_offset=*/0);
-  EXPECT_TRUE(s1.IsNoSpace()) << "expected NoSpace, got: " << s1.ToString();
-  EXPECT_EQ(pool->GetUsedBytes(), 0)
-      << "cross-block rollback must free block0's reserved pages";
-
-  // Retry SAME offset: must not abort (the pre-fix crash) and must fail
-  // cleanly.
-  Status s2 = writer->Write(ctx_, buf.data(), kWriteSize, /*chunk_offset=*/0);
-  EXPECT_TRUE(s2.IsNoSpace());
-  EXPECT_EQ(pool->GetUsedBytes(), 0);
-
-  // A write that fits (1 page) at the same offset now succeeds, proving slice
-  // state stayed consistent (End() == 0, no phantom len_).
-  std::string small(kPage, 'y');
-  Status s3 = writer->Write(ctx_, small.data(), static_cast<int32_t>(kPage),
-                            /*chunk_offset=*/0);
-  EXPECT_TRUE(s3.ok()) << s3.ToString();
-  EXPECT_EQ(pool->GetUsedBytes(), kPage);
+  // The parked lambda now continues past the writer's death. The second
+  // task's cb must still fire with the snapshotted batch status.
+  ASSERT_EQ(second_future.wait_for(std::chrono::seconds(5)),
+            std::future_status::ready)
+      << "second task's user cb never fired after the writer was deleted";
 }
 
 }  // namespace vfs

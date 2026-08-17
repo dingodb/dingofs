@@ -24,7 +24,6 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
-#include <unordered_map>
 #include <utility>
 
 #include "client/vfs/common/async_util.h"
@@ -61,38 +60,33 @@ void ChunkWriter::Stop() {
     return;
   }
 
-  int64_t writers_count = WritersCount();
-  while (writers_count > 0) {
-    LOG(INFO) << fmt::format(
-        "{} Stop ChunkWriter waiting writers to finish, writers_count: {}",
-        UUID(), writers_count);
-    sleep(1);
-    writers_count = WritersCount();
-  }
+  CHECK_EQ(WritersCount(), 0) << fmt::format(
+      "{} Stop requires the caller to close the write entry "
+      "and drain all FileWriter writes first",
+      UUID());
 
   DoSyncFlush();
 
-  int64_t flush_tasks_count = FlushTasksCount();
-  while (flush_tasks_count > 0) {
-    LOG(INFO) << fmt::format(
-        "{} Stop ChunkWriter waiting flush tasks to finish, "
-        "flush_tasks_count: {}",
-        UUID(), flush_tasks_count);
-    sleep(1);
-    flush_tasks_count = FlushTasksCount();
+  {
+    // A prior flush failure makes DoSyncFlush return without enqueueing its
+    // FIFO sentinel, so an older task may still be in flight.
+    std::unique_lock<std::mutex> lg(flush_mutex_);
+    TEST_SYNC_POINT("ChunkWriter::Stop:before_wait_flush_queue");
+    flush_cv_.wait(lg, [this] { return flush_queue_.empty(); });
   }
 
   stopped_.store(true, std::memory_order_relaxed);
 }
 
-Status ChunkWriter::Write(ContextSPtr ctx, const char* buf, int32_t size,
-                          int32_t chunk_offset) {
+void ChunkWriter::Write(ContextSPtr ctx, const char* buf, int32_t size,
+                        int32_t chunk_offset, WritePageLease* lease) {
   CHECK(!stopped_.load(std::memory_order_relaxed));
+  CHECK_NOTNULL(lease);
   auto span = hub_->GetTraceManager()->StartChildSpan("ChunkWriter::Write",
                                                       ctx->GetTraceSpan());
 
   int64_t write_file_offset = chunk_.chunk_start + chunk_offset;
-  ChunkWriteInfo info(buf, size, chunk_offset, write_file_offset);
+  ChunkWriteInfo info(buf, size, chunk_offset, write_file_offset, lease);
   Writer writer;
   writer.write_info = &info;
 
@@ -102,21 +96,6 @@ Status ChunkWriter::Write(ContextSPtr ctx, const char* buf, int32_t size,
 
   // TODO: check mem ratio, sleep when mem is near full
   bool has_full = false;
-  // Per-writer result of the batch the leader drives below. Each write_info the
-  // leader actually wrote records its own status (OK, or the NoSpace that
-  // stopped the batch); write_infos past the failure point aren't inserted and
-  // fall back to batch_fail_status. This must be per-writer: a late failure
-  // must NOT clobber writers whose data already landed in the buffer -- they
-  // have to return OK, otherwise the caller retries the same range and
-  // double-writes (or trips a downstream CHECK).
-  std::unordered_map<const ChunkWriteInfo*, Status> batch_results;
-  Status batch_fail_status = Status::OK();
-  // A writer's status is its own write_info result if the leader reached it,
-  // else the batch failure (its data was never written -> must not return OK).
-  auto status_for = [&](const ChunkWriteInfo* wi) -> Status {
-    auto it = batch_results.find(wi);
-    return it != batch_results.end() ? it->second : batch_fail_status;
-  };
 
   {
     std::unique_lock<std::mutex> lg(writer_mutex_);
@@ -132,7 +111,7 @@ Status ChunkWriter::Write(ContextSPtr ctx, const char* buf, int32_t size,
       VLOG(4) << fmt::format(
           "{} BufferWrite End, writer already done, writer: {}", UUID(),
           writer.ToString());
-      return writer.status;
+      return;
     }
 
     // only the first writer can go here
@@ -177,16 +156,9 @@ Status ChunkWriter::Write(ContextSPtr ctx, const char* buf, int32_t size,
 
         CHECK_NOTNULL(slice);
 
-        Status s = slice->Write(SpanScope::GetContext(span), write_info->buf,
-                                write_info->size, write_info->chunk_offset);
-        batch_results[write_info] = s;
-        if (!s.ok()) {
-          // Pool exhausted. Stop the batch here; write_infos already processed
-          // keep their own (OK) status, the rest fall back to this failure in
-          // the wakeup loop below so none blocks forever (fills former TODO).
-          batch_fail_status = s;
-          break;
-        }
+        slice->Write(SpanScope::GetContext(span), write_info->buf,
+                     write_info->size, write_info->chunk_offset,
+                     write_info->lease);
 
         if (slice->Len() == chunk_.chunk_size) {
           has_full = true;
@@ -202,7 +174,6 @@ Status ChunkWriter::Write(ContextSPtr ctx, const char* buf, int32_t size,
       Writer* ready = writers_.front();
       writers_.pop_front();
       if (ready != &writer) {
-        ready->status = status_for(ready->write_info);
         ready->done = true;
         ready->cv.notify_all();
       }
@@ -218,8 +189,6 @@ Status ChunkWriter::Write(ContextSPtr ctx, const char* buf, int32_t size,
   if (has_full) {
     TriggerFlush();
   }
-
-  return status_for(&info);
 }
 
 SliceWriter* ChunkWriter::GetSliceUnlocked(int32_t chunk_pos, int32_t size) {
@@ -371,14 +340,16 @@ void ChunkWriter::TryCommitFlushTasks(ContextSPtr ctx) {
             "commit, fake header is removed, cur_commit_seq: {},"
             " remain flush_queue_size: {}",
             uuid, commit_seq, flush_queue_.size());
+        // Removing the fake header only shrinks the queue; notify Stop only
+        // when this removal actually makes the queue empty.
         flush_queue_.pop_front();
+        if (flush_queue_.empty()) {
+          flush_cv_.notify_all();
+        }
         return;
       }
 
     }  //  end lock_guard
-
-    CHECK(!to_commit.empty());
-
     std::vector<Slice> batch_commit_slices;
     for (FlushTask* task : to_commit) {
       if (task->status.ok()) {
@@ -452,10 +423,16 @@ void ChunkWriter::TryCommitFlushTasks(ContextSPtr ctx) {
       }
     }  // end if commit_slices not empty
 
-    hub_->GetCBExecutor()->Execute([&, uuid, commit_ctx] {
+    // Snapshot the batch error status and capture by value: this lambda may
+    // still sit in the CBExecutor queue when the ChunkWriter is deleted by
+    // FileWriter::Close, so it must not dereference `this`. Snapshotting here
+    // is also more precise: every task failure in the batch was already
+    // folded into the sticky status above.
+    Status batch_status = GetErrorStatus();
+    hub_->GetCBExecutor()->Execute([uuid, commit_ctx, batch_status] {
       for (FlushTask* task : commit_ctx->flush_tasks) {
         // if one task fail, all task fail
-        task->cb(GetErrorStatus());
+        task->cb(batch_status);
         VLOG(6) << fmt::format(
             "{} TryCommitFlushTasks delete chunk_flush_task: {}", uuid,
             task->ToString());
