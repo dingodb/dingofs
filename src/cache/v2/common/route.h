@@ -21,13 +21,26 @@
 #include <utility>
 
 #include "cache/v2/common/block_handle.h"
-#include "cache/v2/core/net/types.h"
 #include "cache/v2/core/runtime/smp.h"
 #include "cache/v2/utils/hash.h"
 
 namespace dingofs {
 namespace cache {
 namespace v2 {
+
+inline unsigned ShardOf(uint64_t route_hint, unsigned shards) {
+  return static_cast<unsigned>(
+      (static_cast<__uint128_t>(route_hint) * shards) >> 64);
+}
+
+inline uint64_t HintForShard(unsigned shard, unsigned shards) {
+  if (shards <= 1) {
+    return 0;
+  }
+  return static_cast<uint64_t>((static_cast<__uint128_t>(shard) << 64) /
+                               shards) +
+         1;
+}
 
 inline uint64_t RouteHintOf(const BlockHandle& handle) {
   return Mix64(handle.id);

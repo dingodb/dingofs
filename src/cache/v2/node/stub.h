@@ -17,6 +17,8 @@
 #ifndef DINGOFS_CACHE_V2_NODE_STUB_H_
 #define DINGOFS_CACHE_V2_NODE_STUB_H_
 
+#include <memory>
+
 #include "cache/v2/core/server/stub.h"
 #include "dingofs/cache.pb.h"
 
@@ -79,6 +81,8 @@ class CacheStub : public Stub {
           Resolve<pb::cache::v2::GetNodeInfoRequest,
                   pb::cache::v2::GetNodeInfoResponse>("GetNodeInfo");
 };
+
+using CacheStubUPtr = std::unique_ptr<CacheStub>;
 
 }  // namespace v2
 }  // namespace cache

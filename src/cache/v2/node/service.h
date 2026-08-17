@@ -45,6 +45,12 @@ class CacheService : public ProtoService {
                        pb::cache::v2::GetNodeInfoResponse* response);
 
  private:
+  struct AlignedRange {
+    uint64_t offset;
+    uint32_t length;
+  };
+  static AlignedRange AlignRequest(uint64_t offset, uint32_t length);
+
   static Status CheckHandle(const pb::cache::v2::BlockHandle& handle);
   static Status CheckAttachment(const pb::cache::v2::BlockHandle& handle,
                                 uint32_t attachment_size);

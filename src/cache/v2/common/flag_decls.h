@@ -71,14 +71,19 @@ DECLARE_uint32(max_range_size_kb);
 
 // tier/tier_cache.cc
 DECLARE_bool(fill_group_cache);
+DECLARE_string(cache_store);
 
 // remote/remote_cache.cc
+DECLARE_string(cache_group);
 DECLARE_bool(remote_rdma);
+DECLARE_string(remote_rdma_device);
+DECLARE_uint32(remote_rdma_port_num);
+DECLARE_uint32(remote_rdma_max_connections);
 DECLARE_uint32(remote_rpc_timeout_ms);
 DECLARE_uint32(remote_connect_timeout_ms);
 
-// remote/watcher.cc
-DECLARE_uint32(group_sync_interval_ms);
+// remote/members.cc
+DECLARE_uint32(periodic_sync_members_ms);
 
 // remote/circuit_breaker.cc
 DECLARE_uint32(remote_breaker_failures);

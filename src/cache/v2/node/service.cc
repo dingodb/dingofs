@@ -22,7 +22,8 @@
 #include "cache/v2/core/memory/buffer_view.h"
 #include "cache/v2/core/net/body.h"
 #include "cache/v2/core/runtime/smp.h"
-#include "cache/v2/store/block_io.h"
+#include "cache/v2/store/local_filesystem.h"
+#include "cache/v2/utils/align.h"
 
 namespace dingofs {
 namespace cache {
@@ -125,6 +126,14 @@ Future<> CacheService::GetNodeInfo(
   response->set_shards(ShardCount());
   response->set_rdma_enabled(FLAGS_rdma);
   co_return;
+}
+
+CacheService::AlignedRange CacheService::AlignRequest(uint64_t offset,
+                                                      uint32_t length) {
+  const uint64_t start = AlignDown<uint64_t>(offset, kBlockAlign);
+  return {.offset = start,
+          .length = static_cast<uint32_t>(
+              AlignUp<uint64_t>(offset - start + length, kBlockAlign))};
 }
 
 Status CacheService::CheckHandle(const pb::cache::v2::BlockHandle& handle) {
