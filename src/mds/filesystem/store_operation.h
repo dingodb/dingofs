@@ -203,6 +203,8 @@ class Operation {
       case OpType::kUpsertChunk:
       case OpType::kOpenFile:
       case OpType::kFallocate:
+      case OpType::kFlushFile:
+      case OpType::kRollbackFile:
         return true;
 
       default:
@@ -225,8 +227,11 @@ class Operation {
       case OpType::kUpdateXAttr:
       case OpType::kRemoveXAttr:
       case OpType::kUpdateShardBoundaries:
+      case OpType::kUpsertChunk:
       case OpType::kOpenFile:
       case OpType::kFallocate:
+      case OpType::kFlushFile:
+      case OpType::kRollbackFile:
         return true;
 
       default:
@@ -922,13 +927,11 @@ class UpdateShardBoundariesOperation : public Operation {
   Result result_;
 };
 
-using CheckQuotaFn = std::function<Status(Trace& trace, Ino ino, uint64_t delta_bytes)>;
-
 class UpsertChunkOperation : public Operation {
  public:
   UpsertChunkOperation(Trace& trace, const FsInfoEntry fs_info, uint64_t ino,
-                       const std::vector<DeltaSliceEntry>& delta_slices, const CheckQuotaFn& check_quota_fn)
-      : Operation(trace), fs_info_(fs_info), ino_(ino), delta_slices_(delta_slices), check_quota_fn_(check_quota_fn) {};
+                       const std::vector<DeltaSliceEntry>& delta_slices)
+      : Operation(trace), fs_info_(fs_info), ino_(ino), delta_slices_(delta_slices) {};
   ~UpsertChunkOperation() override = default;
 
   struct Result {
@@ -942,7 +945,11 @@ class UpsertChunkOperation : public Operation {
   uint32_t GetFsId() const override { return fs_info_.fs_id(); }
   Ino GetIno() const override { return ino_; }
 
-  Status Run(TxnUPtr& txn) override;
+  void PrefetchKey(std::vector<std::string>& keys) override;
+
+  Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
+
+  void SetResultAttr(BatchSharedParam& shared_param) override { result_.attr = shared_param.attr; }
 
   Result& GetResult() { return result_; }
 
@@ -951,8 +958,6 @@ class UpsertChunkOperation : public Operation {
   const uint64_t ino_;
 
   const std::vector<DeltaSliceEntry> delta_slices_;
-
-  CheckQuotaFn check_quota_fn_;
 
   Result result_;
 };
@@ -1232,7 +1237,9 @@ class FlushFileOperation : public Operation {
   uint32_t GetFsId() const override { return fs_id_; }
   Ino GetIno() const override { return ino_; }
 
-  Status Run(TxnUPtr& txn) override;
+  Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
+
+  void SetResultAttr(BatchSharedParam& shared_param) override { result_.attr = shared_param.attr; }
 
   Result& GetResult() { return result_; }
 
@@ -1269,7 +1276,9 @@ class RollbackFileOperation : public Operation {
   uint32_t GetFsId() const override { return fs_id_; }
   Ino GetIno() const override { return ino_; }
 
-  Status Run(TxnUPtr& txn) override;
+  Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
+
+  void SetResultAttr(BatchSharedParam& shared_param) override { result_.attr = shared_param.attr; }
 
   Result& GetResult() { return result_; }
 

@@ -1966,9 +1966,13 @@ TEST_F(UpdateAttrRunTest, RollbackFileZerosDroppedRangeAtomically) {
   param.chunk_size = kFallocChunkSize;
   RollbackFileOperation op(trace_, kFallocFsId, ino, param);
 
+  Operation::BatchSharedParam shared_param;
+  shared_param.attr = MakeFullInode(ino, old_length);
+
   auto txn = storage_->NewTxn();
-  ASSERT_TRUE(op.Run(txn).ok());
+  ASSERT_TRUE(op.RunInBatch(txn, shared_param).ok());
   ASSERT_TRUE(txn->Commit().ok());
+  op.SetResultAttr(shared_param);
 
   EXPECT_EQ(op.GetResult().attr.length(), 4096u);
   EXPECT_EQ(op.GetResult().delta_bytes,
@@ -1987,8 +1991,9 @@ TEST_F(UpdateAttrRunTest, RollbackFileZerosDroppedRangeAtomically) {
 
   // Re-running after an ambiguous first response sees the checkpoint and is a
   // no-op; result state must not retain the first attempt's negative delta.
+  shared_param.attr = MakeFullInode(ino, 4096);
   auto retry_txn = storage_->NewTxn();
-  ASSERT_TRUE(op.Run(retry_txn).ok());
+  ASSERT_TRUE(op.RunInBatch(retry_txn, shared_param).ok());
   ASSERT_TRUE(retry_txn->Commit().ok());
   EXPECT_EQ(op.GetResult().delta_bytes, 0);
   EXPECT_EQ(SortedSlices(ino, 0).size(), chunk0_slices.size());

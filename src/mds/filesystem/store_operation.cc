@@ -113,16 +113,6 @@ static std::string FindValue(const absl::flat_hash_map<std::string_view, std::st
   return it != index.end() ? std::string(it->second) : std::string();
 }
 
-static std::string FindValue(const std::vector<KeyValue>& kvs, const std::string& key) {
-  for (const auto& kv : kvs) {
-    if (kv.key == key) {
-      return kv.value;
-    }
-  }
-
-  return "";
-}
-
 static void AddParentIno(AttrEntry& attr, Ino parent) {
   attr.add_parents(parent);
   // auto it = std::find(attr.parents().begin(), attr.parents().end(), parent);
@@ -1370,25 +1360,18 @@ Status UpdateShardBoundariesOperation::RunInBatch(TxnUPtr&, BatchSharedParam& sh
   return Status::OK();
 }
 
-Status UpsertChunkOperation::Run(TxnUPtr& txn) {
+void UpsertChunkOperation::PrefetchKey(std::vector<std::string>& keys) {
+  for (const auto& delta_slices : delta_slices_) {
+    keys.push_back(MetaCodec::EncodeChunkKey(fs_info_.fs_id(), ino_, delta_slices.chunk_index()));
+  }
+}
+
+Status UpsertChunkOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) {
   const uint32_t fs_id = fs_info_.fs_id();
   const uint64_t now_ms = utils::TimestampMs();
 
-  const std::string inode_key = MetaCodec::EncodeInodeKey(fs_id, ino_);
-  std::set<std::string> keys;
-  keys.insert(inode_key);
-  for (const auto& delta_slices : delta_slices_) {
-    keys.insert(MetaCodec::EncodeChunkKey(fs_id, ino_, delta_slices.chunk_index()));
-  }
-
-  std::vector<KeyValue> kvs;
-  auto status = txn->BatchGet(std::vector<std::string>(keys.begin(), keys.end()), kvs);
-  if (!status.ok()) return status;
-
-  // inode
-  auto value = FindValue(kvs, inode_key);
-  AttrEntry attr;
-  if (!value.empty()) attr = MetaCodec::DecodeInodeValue(value);
+  auto& attr = shared_param.attr;
+  const auto& prefetch_index = shared_param.prefetch_index;
   if (attr.ino() != ino_) {
     return Status(pb::error::ENOT_FOUND, fmt::format("not found inode({})", ino_));
   }
@@ -1402,12 +1385,12 @@ Status UpsertChunkOperation::Run(TxnUPtr& txn) {
     const uint64_t chunk_index = delta_slices.chunk_index();
 
     const std::string key = MetaCodec::EncodeChunkKey(fs_id, ino_, chunk_index);
-    auto value = FindValue(kvs, key);
+    std::string value = FindValue(prefetch_index, key);
     if (!value.empty()) chunk = MetaCodec::DecodeChunkValue(value);
 
     LOG_DEBUG << fmt::format(
-        "[operation.{}.{}] upsert chunk, chunk_index({}), keys({}) kvs({}) value({}) old_chunk({}).", fs_id, ino_,
-        chunk_index, keys.size(), kvs.size(), value.size(), chunk.ShortDebugString());
+        "[operation.{}.{}] upsert chunk, chunk_index({}) value({}) old_chunk({}).", fs_id, ino_, chunk_index,
+        value.size(), chunk.ShortDebugString());
 
     bool has_update = false;
     // not exist chunk, create a new one
@@ -1482,16 +1465,7 @@ Status UpsertChunkOperation::Run(TxnUPtr& txn) {
     }
     attr.set_mtime(std::max(attr.mtime(), GetTime()));
     attr.set_ctime(std::max(attr.ctime(), GetTime()));
-    attr.set_version(attr.version() + 1);
-    txn->Put(inode_key, MetaCodec::EncodeInodeValue(attr));
   }
-
-  if (result_.delta_bytes > 0) {
-    status = check_quota_fn_(GetTrace(), ino_, result_.delta_bytes);
-    if (!status.ok()) return status;
-  }
-
-  result_.attr = attr;
 
   return Status::OK();
 }
@@ -1726,27 +1700,11 @@ Status CloseFileOperation::Run(TxnUPtr& txn) {
   return Status::OK();
 }
 
-Status FlushFileOperation::Run(TxnUPtr& txn) {
+Status FlushFileOperation::RunInBatch(TxnUPtr&, BatchSharedParam& shared_param) {
   CHECK(param_.chunk_size != 0) << "chunk_size not should be 0.";
   result_.delta_bytes = 0;
 
-  const std::string key = MetaCodec::EncodeInodeKey(fs_id_, ino_);
-  std::vector<std::string> keys = {key};
-  std::vector<KeyValue> kvs;
-  auto status = txn->BatchGet(keys, kvs);
-  if (!status.ok()) return status;
-
-  AttrEntry attr;
-  for (auto& kv : kvs) {
-    if (kv.key == key) {
-      attr = MetaCodec::DecodeInodeValue(kv.value);
-
-    } else {
-      LOG(FATAL) << fmt::format("[operation.{}.{}] invalid key({}).", fs_id_, ino_,
-                                ::dingofs::Helper::StringToHex(kv.key));
-    }
-  }
-
+  auto& attr = shared_param.attr;
   if (attr.ino() == 0) {
     return Status(pb::error::ENOT_FOUND, fmt::format("not found inode({})", ino_));
   }
@@ -1757,36 +1715,15 @@ Status FlushFileOperation::Run(TxnUPtr& txn) {
   }
   attr.set_mtime(std::max(attr.mtime(), GetTime()));
   attr.set_ctime(std::max(attr.ctime(), GetTime()));
-  attr.set_version(attr.version() + 1);
-
-  txn->Put(key, MetaCodec::EncodeInodeValue(attr));
-
-  result_.attr = attr;
 
   return Status::OK();
 }
 
-Status RollbackFileOperation::Run(TxnUPtr& txn) {
+Status RollbackFileOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) {
   CHECK(param_.chunk_size != 0) << "chunk_size not should be 0.";
   result_.delta_bytes = 0;
 
-  const std::string key = MetaCodec::EncodeInodeKey(fs_id_, ino_);
-  std::vector<std::string> keys = {key};
-  std::vector<KeyValue> kvs;
-  auto status = txn->BatchGet(keys, kvs);
-  if (!status.ok()) return status;
-
-  AttrEntry attr;
-  for (auto& kv : kvs) {
-    if (kv.key == key) {
-      attr = MetaCodec::DecodeInodeValue(kv.value);
-
-    } else {
-      LOG(FATAL) << fmt::format("[operation.{}.{}] invalid key({}).", fs_id_, ino_,
-                                ::dingofs::Helper::StringToHex(kv.key));
-    }
-  }
-
+  auto& attr = shared_param.attr;
   if (attr.ino() == 0) {
     return Status(pb::error::ENOT_FOUND, fmt::format("not found inode({})", ino_));
   }
@@ -1799,19 +1736,15 @@ Status RollbackFileOperation::Run(TxnUPtr& txn) {
     result_.delta_bytes = static_cast<int64_t>(param_.rollback_to_length) - static_cast<int64_t>(attr.length());
 
     std::vector<ChunkEntry> effected_chunks;
-    status = AppendZeroSlices(txn, attr.fs_id(), attr.ino(), param_.rollback_to_length, attr.length(),
-                              param_.chunk_size, effected_chunks);
+    auto status = AppendZeroSlices(txn, attr.fs_id(), attr.ino(), param_.rollback_to_length, attr.length(),
+                                   param_.chunk_size, effected_chunks);
     if (!status.ok()) return status;
 
     attr.set_length(param_.rollback_to_length);
     attr.set_mtime(std::max(attr.mtime(), GetTime()));
     attr.set_ctime(std::max(attr.ctime(), GetTime()));
-    attr.set_version(attr.version() + 1);
-
-    txn->Put(key, MetaCodec::EncodeInodeValue(attr));
   }
 
-  result_.attr = attr;
   return Status::OK();
 }
 

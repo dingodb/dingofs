@@ -2886,17 +2886,23 @@ Status FileSystem::WriteSlice(Context& ctx, Ino ino, const std::vector<DeltaSlic
 
   utils::Duration duration;
 
-  auto check_quota_fn = [this](Trace& trace, Ino ino, uint64_t delta_bytes) -> Status {
-    // check quota
-    if (!quota_manager_.CheckQuota(trace, ino, delta_bytes, 0)) {
+  // Check quota before writing (mirrors SetAttr/FlushFile pre-check); the
+  // authoritative delta is still accounted asynchronously after the operation.
+  uint64_t max_length = inode->Length();
+  const uint64_t chunk_size = fs_info_->GetChunkSize();
+  for (const auto& delta_slice : delta_slices) {
+    for (const auto& slice : delta_slice.slices()) {
+      max_length = std::max(max_length, delta_slice.chunk_index() * chunk_size + slice.pos() + slice.len());
+    }
+  }
+  if (max_length > inode->Length()) {
+    if (!quota_manager_.CheckQuota(trace, ino, max_length - inode->Length(), 0)) {
       return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
     }
-
-    return Status::OK();
-  };
+  }
 
   // update backend store
-  UpsertChunkOperation operation(trace, GetFsInfo(), ino, delta_slices, check_quota_fn);
+  UpsertChunkOperation operation(trace, GetFsInfo(), ino, delta_slices);
 
   trace.RecordElapsedTime("prepare");
 
