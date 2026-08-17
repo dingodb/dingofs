@@ -29,12 +29,10 @@
 #include "absl/container/flat_hash_set.h"
 #include "client/vfs/metasystem/mds/helper.h"
 #include "client/vfs/vfs_meta.h"
-#include "common/options/client.h"
 #include "json/value.h"
 #include "mds/common/synchronization.h"
 #include "mds/common/type.h"
 #include "utils/concurrent/concurrent.h"
-#include "utils/shards.h"
 #include "utils/time.h"
 
 namespace dingofs {
@@ -160,14 +158,16 @@ class CommitTask {
     std::vector<Slice> slices;
   };
 
-  CommitTask(uint64_t task_id, std::vector<DeltaSlice>&& delta_slices,
-             uint32_t chunk_size)
+  CommitTask(uint64_t task_id, uint64_t epoch,
+             std::vector<DeltaSlice>&& delta_slices, uint32_t chunk_size)
       : task_id_(task_id),
+        epoch_(epoch),
         delta_slices_(std::move(delta_slices)),
         chunk_size_(chunk_size),
         cond(1) {}
 
   uint64_t TaskID() const { return task_id_; }
+  uint64_t Epoch() const { return epoch_; }
   const std::vector<DeltaSlice>& DeltaSlices() const { return delta_slices_; }
 
   std::vector<uint32_t> GetChunkIndexs() const {
@@ -279,6 +279,7 @@ class CommitTask {
   mutable utils::RWLock lock_;
 
   const uint64_t task_id_;
+  const uint64_t epoch_;
   const std::vector<DeltaSlice> delta_slices_;
 
   const uint32_t chunk_size_{0};
@@ -304,6 +305,7 @@ class ChunkSet {
   }
 
   Ino GetIno() const { return ino_; }
+  uint64_t Epoch() const;
 
   // Serializes a metadata flush against new writes for this inode, so the set
   // being drained cannot grow indefinitely under a sustained concurrent
@@ -311,52 +313,20 @@ class ChunkSet {
   using FlushGuard = std::unique_lock<bthread_mutex_t>;
   FlushGuard AcquireFlushGuard() { return FlushGuard(write_flush_mutex_); }
 
-  uint64_t GetLastWriteSliceLength() const {
-    utils::ReadLockGuard guard(lock_);
-    return last_write_slice_length_;
-  }
-
-  // write memo operationsm
-  void SetLastWriteLength(uint64_t offset, uint64_t size) {
-    std::lock_guard<bthread_mutex_t> flush_guard(write_flush_mutex_);
-    utils::WriteLockGuard lk(lock_);
-    last_write_length_ = std::max(last_write_length_, offset + size);
-    last_write_time_ns_ = utils::TimestampNs();
-  }
-  void ResetLastWriteLength() {
-    utils::WriteLockGuard lk(lock_);
-    last_write_length_ = 0;
-  }
+  uint64_t GetLastWriteSliceLength() const;
+  void SetLastWriteLength(uint64_t offset, uint64_t size);
+  void ResetLastWriteLength();
 
   // flush checkpoint (ADR-0003): file length at open, advanced on each
   // successful data+length flush; rollback target on data-flush failure.
   // InitFlushCheckpoint only takes effect once per ChunkSet lifetime so a
   // later open (e.g. a reader) cannot move the writer's rollback target.
-  void InitFlushCheckpoint(uint64_t length) {
-    utils::WriteLockGuard lk(lock_);
-    if (!flush_checkpoint_inited_) {
-      flush_checkpoint_inited_ = true;
-      flush_checkpoint_length_ = length;
-    }
-  }
-  void SetFlushCheckpoint(uint64_t length) {
-    utils::WriteLockGuard lk(lock_);
-    flush_checkpoint_inited_ = true;
-    flush_checkpoint_length_ = length;
-  }
-  uint64_t GetFlushCheckpoint() const {
-    utils::ReadLockGuard guard(lock_);
-    return flush_checkpoint_length_;
-  }
-  uint64_t GetLastWriteLength() const {
-    utils::ReadLockGuard guard(lock_);
-    return last_write_length_;
-  }
+  void InitFlushCheckpoint(uint64_t length);
+  void SetFlushCheckpoint(uint64_t length);
+  uint64_t GetFlushCheckpoint() const;
 
-  uint64_t GetLastWriteTimeNs() const {
-    utils::ReadLockGuard guard(lock_);
-    return last_write_time_ns_;
-  }
+  uint64_t GetLastWriteLength() const;
+  uint64_t GetLastWriteTimeNs() const;
 
   // chunk operations
   void Append(uint32_t index, const std::vector<Slice>& slices);
@@ -364,23 +334,10 @@ class ChunkSet {
 
   void InvalidateReadCache();
 
-  size_t GetChunkSize() const {
-    utils::ReadLockGuard guard(lock_);
-    return chunk_map_.size();
-  }
+  size_t GetChunkSize() const;
 
-  bool Exist(uint32_t index) {
-    utils::ReadLockGuard guard(lock_);
-    return chunk_map_.find(index) != chunk_map_.end();
-  }
-
-  ChunkSPtr Get(uint32_t index) {
-    utils::ReadLockGuard guard(lock_);
-
-    auto it = chunk_map_.find(index);
-    return (it != chunk_map_.end()) ? it->second : nullptr;
-  }
-
+  bool Exist(uint32_t index);
+  ChunkSPtr Get(uint32_t index);
   std::vector<ChunkSPtr> GetAll();
 
   uint64_t GetVersion(uint32_t index);
@@ -388,27 +345,16 @@ class ChunkSet {
 
   bool HasStage();
   bool HasCommitting();
-
-  // task operations
-  bool HasCommitTask() {
-    utils::ReadLockGuard guard(lock_);
-    return !commit_task_map_.empty();
-  }
+  bool HasCommitTask();
 
   uint32_t TryCommitSlice(bool is_force);
 
-  void FinishCommitTask(uint64_t task_id,
-                        const std::vector<ChunkEntry>& chunks);
+  Status FinishCommitTask(CommitTaskSPtr& task,
+                          const std::vector<ChunkEntry>& chunks);
   std::vector<CommitTaskSPtr> ListCommitTask();
 
-  size_t GetCommitTaskSize() const {
-    utils::ReadLockGuard guard(lock_);
-    return commit_task_map_.size();
-  }
-
+  size_t GetCommitTaskSize() const;
   bool HasUncommitedSlice();
-
-  uint64_t GetLastActiveTimeS() const;
 
   size_t Size() const { return GetChunkSize(); }
   size_t Bytes() const;
@@ -432,6 +378,9 @@ class ChunkSet {
   mutable bthread_mutex_t write_flush_mutex_;
   mutable utils::RWLock lock_;
 
+  // truncate/setattr(length) operation epoch
+  uint64_t epoch_{0};
+
   // record write file length by writeslice operation
   uint64_t last_write_slice_length_{0};
 
@@ -451,8 +400,6 @@ class ChunkSet {
   absl::flat_hash_set<uint32_t> committing_chunk_index_set_;
 
   std::atomic<uint64_t> last_commit_ms_{0};
-
-  uint64_t last_active_s_{0};
 };
 
 }  // namespace meta

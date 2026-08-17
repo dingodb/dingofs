@@ -59,7 +59,7 @@ class MDSMetaSystemTestPeer {
   }
 
   static void CompleteForCleanup(MDSMetaSystem& metasystem, Ino ino,
-                                 const CommitTaskSPtr& task) {
+                                 CommitTaskSPtr task) {
     auto file_session = metasystem.file_session_map_.GetSession(ino);
     ASSERT_NE(file_session, nullptr);
 
@@ -70,7 +70,7 @@ class MDSMetaSystemTestPeer {
       chunk->set_version(1);
       chunk->set_just_descriptor(true);
     }
-    file_session->GetChunkSet()->FinishCommitTask(task->TaskID(), chunks);
+    file_session->GetChunkSet()->FinishCommitTask(task, chunks);
     task->SetDone(Status::OK());
   }
 

@@ -1816,8 +1816,10 @@ void MDSMetaSystem::LaunchWriteSlice(ContextSPtr& ctx, ChunkSetSPtr chunk_set,
                   task->TaskID(), status.ToString());
 
               meta_system->PutInodeToCache(result.attr);
-              chunk_set->FinishCommitTask(task->TaskID(), result.chunks);
-              meta_system->chunk_memo_.Remember(ino, result.chunks);
+              auto status = chunk_set->FinishCommitTask(task, result.chunks);
+              if (status.ok()) {
+                meta_system->chunk_memo_.Remember(ino, result.chunks);
+              }
 
             } else {
               LOG(ERROR) << fmt::format(

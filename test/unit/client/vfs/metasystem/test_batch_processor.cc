@@ -59,7 +59,8 @@ class BatchProcessorTest : public ::testing::Test {
 
     std::vector<CommitTask::DeltaSlice> deltas;
     deltas.push_back(std::move(delta));
-    return std::make_shared<CommitTask>(task_id, std::move(deltas), 1 << 20);
+    return std::make_shared<CommitTask>(task_id, /*epoch=*/0, std::move(deltas),
+                                       1 << 20);
   }
 
   WriteSliceOperationSPtr NewOperation(CommitTaskSPtr task,
