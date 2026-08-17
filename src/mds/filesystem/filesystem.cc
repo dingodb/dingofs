@@ -391,9 +391,10 @@ Status FileSystem::GetPartitionFromStore(Context& ctx, Ino parent, const std::st
 
   UpsertInodeCache(attr_with_mutation, reason);
 
-  LOG_DEBUG << fmt::format("[fs.{}.{}.{}.{}][{}us] fetch partition, version({}) shard_boundaries({}) reason({}).",
-                           fs_id_, parent, method_name, request_id, duration.ElapsedUs(), attr.version(),
-                           ::dingofs::Helper::VectorToString(::dingofs::Helper::PbRepeatedToVector(attr.shard_boundaries())), reason);
+  LOG_DEBUG << fmt::format(
+      "[fs.{}.{}.{}.{}][{}us] fetch partition, version({}) shard_boundaries({}) reason({}).", fs_id_, parent,
+      method_name, request_id, duration.ElapsedUs(), attr.version(),
+      ::dingofs::Helper::VectorToString(::dingofs::Helper::PbRepeatedToVector(attr.shard_boundaries())), reason);
 
   return Status::OK();
 }
@@ -2820,8 +2821,17 @@ Status FileSystem::WriteSlice(Context& ctx, Ino ino, const std::vector<DeltaSlic
 
   utils::Duration duration;
 
+  auto check_quota_fn = [this](Trace& trace, Ino ino, uint64_t delta_bytes) -> Status {
+    // check quota
+    if (!quota_manager_.CheckQuota(trace, ino, delta_bytes, 0)) {
+      return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
+    }
+
+    return Status::OK();
+  };
+
   // update backend store
-  UpsertChunkOperation operation(trace, GetFsInfo(), ino, delta_slices);
+  UpsertChunkOperation operation(trace, GetFsInfo(), ino, delta_slices, check_quota_fn);
 
   trace.RecordElapsedTime("prepare");
 

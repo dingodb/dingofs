@@ -161,6 +161,8 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
     return fs_info_->GetPartitionType() == pb::mds::PartitionType::PARENT_ID_HASH_PARTITION;
   }
 
+  uint32_t ChunkSize() const { return fs_info_->GetChunkSize(); }
+
   bool CanServe(Context& ctx) { return ctx.IsBypassCache() ? true : can_serve_.load(std::memory_order_acquire); }
 
   // create root directory

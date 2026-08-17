@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <fmt/format.h>
-#include "common/helper.h"
 #include <glog/logging.h>
 
 #include <string>
@@ -21,6 +20,7 @@
 
 #include "common/const.h"
 #include "common/flag.h"
+#include "common/helper.h"
 #include "gflags/gflags.h"
 #include "mds/common/codec.h"
 #include "mds/common/helper.h"
@@ -72,7 +72,7 @@ DEFINE_string(
     "header is degraded; alternative to --ino");
 DEFINE_uint64(parent, 0, "parent");
 DEFINE_string(parents, "", "parents");
-DEFINE_uint32(num, 1, "num");
+DEFINE_uint32(num, 3, "num");
 
 DEFINE_uint64(max_bytes, 1024 * 1024 * 1024, "max bytes");
 DEFINE_uint64(max_inodes, 1000000, "max inodes");
