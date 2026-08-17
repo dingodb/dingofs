@@ -255,7 +255,7 @@ static void test_log_dir_from_conf_file() {
 
 /* Case 3: neither config.log_dir nor conf_file sets log_dir.
  * Expected: logs go to /tmp, matching glog's own default.
- * We must NOT see logs in ~/.dingofs/log/. */
+ * We must NOT see logs in ~/.dingo/log/. */
 static void test_log_dir_default_tmp() {
     const char* name = "log_dir: not set  →  logs in /tmp (glog default)";
 
@@ -273,10 +273,10 @@ static void test_log_dir_default_tmp() {
 
         ASSERT(name, check_log_file_in("/tmp", "dingofs-binding.info.log.", name));
 
-        /* DingoFS default dir (~/.dingofs/log/) must NOT have been used. */
+        /* DingoFS default dir (~/.dingo/log/) must NOT have been used. */
         const char* dingofs_default = getenv("HOME");
         if (dingofs_default) {
-            std::string default_log = std::string(dingofs_default) + "/.dingofs/log";
+            std::string default_log = std::string(dingofs_default) + "/.dingo/log";
             ASSERT(name, !dir_has_file_with_prefix(default_log,
                                                    "dingofs-binding.info.log."));
         }

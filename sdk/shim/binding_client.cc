@@ -57,7 +57,7 @@ Status BindingClient::Start(const BindingConfig& config) {
 
   // Remember whether log_dir was set by conf_file before step 2 runs.
   // ResetBrpcFlagDefaultValue() (step 2) will overwrite an empty FLAGS_log_dir
-  // with ~/.dingofs/log, so we must capture the state beforehand.
+  // with ~/.dingo/log, so we must capture the state beforehand.
   const bool conf_file_set_log_dir = !FLAGS_log_dir.empty();
 
   // 2. Apply dingofs-preferred brpc defaults for flags the user didn't set.
@@ -71,7 +71,7 @@ Status BindingClient::Start(const BindingConfig& config) {
     } else if (!conf_file_set_log_dir) {
       // Neither config.log_dir nor conf_file specified a log directory.
       // Use the system temp dir to match glog's own default behaviour,
-      // rather than letting Logger::Init() redirect to ~/.dingofs/log/.
+      // rather than letting Logger::Init() redirect to ~/.dingo/log/.
       FLAGS_log_dir = P_tmpdir;
     }
     // else: conf_file set log_dir — keep the value it loaded.

@@ -292,7 +292,7 @@ class Helper {
     return home_dir;
   }
 
-  // parse ~/.dingofs/path to /home/user/.dingofs/path
+  // parse ~/.dingo/path to /home/user/.dingo/path
   static std::string ExpandPath(const std::string& path) {
     // only expand a leading "~" (i.e. "~" or "~/..."), do not touch '~'
     // appearing elsewhere in the path.

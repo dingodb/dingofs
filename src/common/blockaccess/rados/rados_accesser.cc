@@ -55,7 +55,7 @@ DEFINE_bool(rados_enable_admin_socket, true,
             "enable librados admin socket for objecter_requests/perf dump "
             "introspection; socket goes to the dingofs run dir alongside "
             "fd_comm_socket: GetDefaultDir(run)/rados.<pid>.asok "
-            "(root -> /var/dingofs/run, non-root -> $HOME/.dingofs/run)");
+            "(root -> /var/dingo/run, non-root -> $HOME/.dingo/run)");
 
 namespace {
 
@@ -169,8 +169,8 @@ bool RadosAccesser::Init() {
   }
 
   // librados admin socket (default on): same dir as dingofs fd_comm_socket via
-  // GetDefaultDir(kSocketDir) -- root -> /var/dingofs/run, non-root ->
-  // $HOME/.dingofs/run -- so it follows whoever runs the process. Keyed by pid.
+  // GetDefaultDir(kSocketDir) -- root -> /var/dingo/run, non-root ->
+  // $HOME/.dingo/run -- so it follows whoever runs the process. Keyed by pid.
   // Non-fatal: a failure here only loses introspection, never blocks mount.
   if (FLAGS_rados_enable_admin_socket) {
     const std::string socket_dir = GetDefaultDir(kSocketDir);
