@@ -1,11 +1,11 @@
 # DingoFS 文件操作测试用例
 
-针对 DingoFS 挂载点的文件操作测试集，共 52 个用例，每个用例一个独立 Python 脚本。
+针对 DingoFS 挂载点的文件操作测试集，共 62 个用例，每个用例一个独立 Python 脚本。
 
 ## 文件结构
 
 - `common.py` — 公共辅助模块（测试目录解析、随机数据、md5 校验、Checker、run_case 框架）
-- `test_01_*.py` ~ `test_52_*.py` — 每个用例一个独立脚本
+- `test_01_*.py` ~ `test_62_*.py` — 每个用例一个独立脚本
 - `run_all.py` — 批量运行器，汇总 PASS/FAIL 报表
 
 ## 使用方式
@@ -17,7 +17,7 @@ python3 test_39_concurrent_append.py /mnt/dingofs/testdir
 # 全部运行
 python3 run_all.py /mnt/dingofs/testdir
 
-# 跳过慢用例（05 大文件 / 27 万文件 / 51 混沌 / 52 压测）
+# 跳过慢用例（05 大文件 / 27 万文件 / 51 混沌 / 52 压测 / 53 并发 O_TRUNC 重写）
 python3 run_all.py /mnt/dingofs/testdir --skip-slow
 
 # 只跑指定用例
@@ -41,6 +41,7 @@ python3 run_all.py /mnt/dingofs/testdir --only 05,37,39
 | `DINGOFS_CHAOS_OPS` | 2000 | 用例 51 混沌测试操作次数 |
 | `DINGOFS_CHAOS_SEED` | 51 | 用例 51 随机种子（复现问题用） |
 | `DINGOFS_STRESS_MB` | 128 | 用例 52 每个 worker 大文件大小（MB） |
+| `DINGOFS_OTRUNC_ROUNDS` | 3000 | 用例 53 每个进程 O_TRUNC 重写轮数 |
 
 ## 行为说明
 
@@ -106,3 +107,13 @@ python3 run_all.py /mnt/dingofs/testdir --only 05,37,39
 | 50 | 边界异常 | statvfs 空间统计合理性 |
 | 51 | 压力 | 混沌测试：随机操作 + 内存期望状态比对（slow） |
 | 52 | 压力 | 大文件 + 小文件 + 元数据混合并发压力（slow） |
+| 53 | 并发 | 多进程并发 O_TRUNC 重写同一文件（FATAL 复现，slow） |
+| 54 | 打开模式 | open 各种模式：r / a / w / x / t / b |
+| 55 | 并发 | 读线程并发下另一线程写（追加写 + 截断写） |
+| 56 | 并发 | 读线程并发下另一线程截断（不同偏移） |
+| 57 | 并发 | 读线程并发下另一线程 fallocate（不同模式） |
+| 58 | 并发 | 写线程并发下另一线程截断（不同偏移） |
+| 59 | 并发 | 写线程并发下另一线程写（追加写 + 截断写） |
+| 60 | 并发 | 写线程并发下另一线程 fallocate（不同模式） |
+| 61 | 并发 | 多线程并发读/写（追加+截断）/截断（不同偏移） |
+| 62 | 并发 | 多线程并发读/写（追加+截断）/截断（不同偏移）/fallocate |

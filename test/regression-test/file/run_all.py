@@ -12,7 +12,7 @@ import subprocess
 import sys
 import time
 
-SLOW = {"05", "27", "51", "52"}
+SLOW = {"05", "27", "51", "52", "53"}
 
 
 def main():
