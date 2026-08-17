@@ -296,11 +296,8 @@ class CommitTask {
 // chunk set per file
 class ChunkSet {
  public:
-  ChunkSet(Ino ino, uint32_t chunk_size)
-      : ino_(ino),
-        chunk_size_(chunk_size),
-        last_active_s_(utils::Timestamp()) {}
-  ~ChunkSet() = default;
+  ChunkSet(Ino ino, uint32_t chunk_size);
+  ~ChunkSet();
 
   static ChunkSetSPtr New(Ino ino, uint32_t chunk_size) {
     return std::make_shared<ChunkSet>(ino, chunk_size);
@@ -311,7 +308,7 @@ class ChunkSet {
   // Serializes a metadata flush against new writes for this inode, so the set
   // being drained cannot grow indefinitely under a sustained concurrent
   // writer. Write operations take this mutex before updating the set.
-  using FlushGuard = std::unique_lock<std::mutex>;
+  using FlushGuard = std::unique_lock<bthread_mutex_t>;
   FlushGuard AcquireFlushGuard() { return FlushGuard(write_flush_mutex_); }
 
   uint64_t GetLastWriteSliceLength() const {
@@ -321,7 +318,7 @@ class ChunkSet {
 
   // write memo operationsm
   void SetLastWriteLength(uint64_t offset, uint64_t size) {
-    std::lock_guard<std::mutex> flush_guard(write_flush_mutex_);
+    std::lock_guard<bthread_mutex_t> flush_guard(write_flush_mutex_);
     utils::WriteLockGuard lk(lock_);
     last_write_length_ = std::max(last_write_length_, offset + size);
     last_write_time_ns_ = utils::TimestampNs();
@@ -432,7 +429,7 @@ class ChunkSet {
   const Ino ino_;
   const uint32_t chunk_size_;
 
-  mutable std::mutex write_flush_mutex_;
+  mutable bthread_mutex_t write_flush_mutex_;
   mutable utils::RWLock lock_;
 
   // record write file length by writeslice operation
