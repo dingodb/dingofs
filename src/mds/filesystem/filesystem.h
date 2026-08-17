@@ -199,12 +199,16 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
 
   struct FlushFileParam {
     uint64_t length{0};
-    // when rollback is true, conditionally shrink length to rollback_to_length
-    // iff rollback_to_length < current length <= length (ADR-0003).
-    bool rollback{false};
-    uint64_t rollback_to_length{0};
   };
   Status FlushFile(Context& ctx, Ino ino, const FlushFileParam& param, EntryWithFileChangeOut& entry_out);
+
+  struct RollbackFileParam {
+    // conditional length rollback (ADR-0003): shrink to rollback_to_length iff
+    // rollback_to_length < current length <= last_write_length.
+    uint64_t last_write_length{0};
+    uint64_t rollback_to_length{0};
+  };
+  Status RollbackFile(Context& ctx, Ino ino, const RollbackFileParam& param, EntryWithFileChangeOut& entry_out);
   using FileSessionParam = pb::mds::HeartbeatRequest::FileSession;
   void AsyncKeepAliveFileSession(const std::vector<FileSessionParam>& file_sessions);
 

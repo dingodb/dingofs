@@ -100,6 +100,7 @@ class Operation {
     kBatchTrashUnlink = 40,
     kCleanTrashBucket = 41,
     kRestoreFromTrash = 42,
+    kRollbackFile = 43,
 
     kCompactChunk = 50,
     kUpsertChunk = 51,
@@ -1215,10 +1216,6 @@ class FlushFileOperation : public Operation {
   struct ExtraParam {
     uint64_t length;
     uint64_t chunk_size{0};
-    // conditional length rollback (ADR-0003): shrink to rollback_to_length iff
-    // rollback_to_length < current length <= length.
-    bool rollback{false};
-    uint64_t rollback_to_length{0};
   };
 
   FlushFileOperation(Trace& trace, uint32_t fs_id, Ino ino, ExtraParam& param)
@@ -1231,6 +1228,43 @@ class FlushFileOperation : public Operation {
   };
 
   OpType GetOpType() const override { return OpType::kFlushFile; }
+
+  uint32_t GetFsId() const override { return fs_id_; }
+  Ino GetIno() const override { return ino_; }
+
+  Status Run(TxnUPtr& txn) override;
+
+  Result& GetResult() { return result_; }
+
+ private:
+  const uint32_t fs_id_;
+  const Ino ino_;
+  ExtraParam& param_;
+
+  Result result_;
+};
+
+// Conditional length rollback (ADR-0003): shrink to rollback_to_length iff
+// rollback_to_length < current length <= last_write_length. Otherwise it is a
+// no-op (conservative for concurrent writers) and the current inode is kept.
+class RollbackFileOperation : public Operation {
+ public:
+  struct ExtraParam {
+    uint64_t last_write_length{0};
+    uint64_t rollback_to_length{0};
+    uint64_t chunk_size{0};
+  };
+
+  RollbackFileOperation(Trace& trace, uint32_t fs_id, Ino ino, ExtraParam& param)
+      : Operation(trace), fs_id_(fs_id), ino_(ino), param_(param) {};
+  ~RollbackFileOperation() override = default;
+
+  struct Result {
+    AttrEntry attr;
+    int64_t delta_bytes{0};
+  };
+
+  OpType GetOpType() const override { return OpType::kRollbackFile; }
 
   uint32_t GetFsId() const override { return fs_id_; }
   Ino GetIno() const override { return ino_; }

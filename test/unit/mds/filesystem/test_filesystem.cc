@@ -1210,11 +1210,10 @@ TEST_F(FileSystemTest, CalcDirStatSameDirHardlink) {
   EXPECT_EQ(st.length(), 7777 * 2);  // length charged once per dentry
 }
 
-// ADR-0003: FlushFile with rollback conditionally shrinks the length back to
-// the flush checkpoint -- only when checkpoint < current length <= the
-// session's last write length. Otherwise it is a no-op (conservative for
-// concurrent writers).
-TEST_F(FileSystemTest, FlushFileRollbackConditionalShrink) {
+// ADR-0003: RollbackFile conditionally shrinks the length back to the flush
+// checkpoint -- only when checkpoint < current length <= the session's last
+// write length. Otherwise it is a no-op (conservative for concurrent writers).
+TEST_F(FileSystemTest, RollbackFileConditionalShrink) {
   auto fs = Fs();
   Context ctx;
 
@@ -1241,24 +1240,22 @@ TEST_F(FileSystemTest, FlushFileRollbackConditionalShrink) {
 
   // rollback: checkpoint=1000, last write=5000 -> shrink to 1000.
   {
-    FileSystem::FlushFileParam fp;
-    fp.length = 5000;
-    fp.rollback = true;
-    fp.rollback_to_length = 1000;
+    FileSystem::RollbackFileParam rp;
+    rp.last_write_length = 5000;
+    rp.rollback_to_length = 1000;
     EntryWithFileChangeOut fo;
-    ASSERT_TRUE(fs->FlushFile(ctx, f, fp, fo).ok());
+    ASSERT_TRUE(fs->RollbackFile(ctx, f, rp, fo).ok());
     EXPECT_EQ(fo.attr.length(), 1000);
     EXPECT_TRUE(fo.shrink_file);
   }
 
   // repeated rollback is a no-op: current length (1000) == checkpoint.
   {
-    FileSystem::FlushFileParam fp;
-    fp.length = 5000;
-    fp.rollback = true;
-    fp.rollback_to_length = 1000;
+    FileSystem::RollbackFileParam rp;
+    rp.last_write_length = 5000;
+    rp.rollback_to_length = 1000;
     EntryWithFileChangeOut fo;
-    ASSERT_TRUE(fs->FlushFile(ctx, f, fp, fo).ok());
+    ASSERT_TRUE(fs->RollbackFile(ctx, f, rp, fo).ok());
     EXPECT_EQ(fo.attr.length(), 1000);
     EXPECT_FALSE(fo.shrink_file);
   }
@@ -1267,12 +1264,11 @@ TEST_F(FileSystemTest, FlushFileRollbackConditionalShrink) {
   // rollback must give up (no shrink).
   flush_to(9000);
   {
-    FileSystem::FlushFileParam fp;
-    fp.length = 5000;  // this session's last write
-    fp.rollback = true;
-    fp.rollback_to_length = 1000;
+    FileSystem::RollbackFileParam rp;
+    rp.last_write_length = 5000;  // this session's last write
+    rp.rollback_to_length = 1000;
     EntryWithFileChangeOut fo;
-    ASSERT_TRUE(fs->FlushFile(ctx, f, fp, fo).ok());
+    ASSERT_TRUE(fs->RollbackFile(ctx, f, rp, fo).ok());
     EXPECT_EQ(fo.attr.length(), 9000);
     EXPECT_FALSE(fo.shrink_file);
   }

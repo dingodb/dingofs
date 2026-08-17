@@ -325,6 +325,9 @@ const char* Operation::OpName() const {
     case OpType::kCleanTrashBucket:
       return "CleanTrashBucket";
 
+    case OpType::kRollbackFile:
+      return "RollbackFile";
+
     case OpType::kCompactChunk:
       return "CompactChunk";
 
@@ -1748,31 +1751,6 @@ Status FlushFileOperation::Run(TxnUPtr& txn) {
     return Status(pb::error::ENOT_FOUND, fmt::format("not found inode({})", ino_));
   }
 
-  if (param_.rollback) {
-    // Conditional length rollback (ADR-0003): only shrink when the current
-    // persisted length still lies within the range this write session pushed,
-    // i.e. rollback_to_length < length <= last write length. Otherwise another
-    // writer moved the length legitimately -- give up conservatively.
-    if (attr.length() > param_.rollback_to_length && attr.length() <= param_.length) {
-      result_.delta_bytes = static_cast<int64_t>(param_.rollback_to_length) - static_cast<int64_t>(attr.length());
-
-      std::vector<ChunkEntry> effected_chunks;
-      status = AppendZeroSlices(txn, attr.fs_id(), attr.ino(), param_.rollback_to_length, attr.length(),
-                                param_.chunk_size, effected_chunks);
-      if (!status.ok()) return status;
-
-      attr.set_length(param_.rollback_to_length);
-      attr.set_mtime(std::max(attr.mtime(), GetTime()));
-      attr.set_ctime(std::max(attr.ctime(), GetTime()));
-      attr.set_version(attr.version() + 1);
-
-      txn->Put(key, MetaCodec::EncodeInodeValue(attr));
-    }
-
-    result_.attr = attr;
-    return Status::OK();
-  }
-
   if (param_.length > attr.length()) {
     result_.delta_bytes = static_cast<int64_t>(param_.length) - static_cast<int64_t>(attr.length());
     attr.set_length(param_.length);
@@ -1785,6 +1763,55 @@ Status FlushFileOperation::Run(TxnUPtr& txn) {
 
   result_.attr = attr;
 
+  return Status::OK();
+}
+
+Status RollbackFileOperation::Run(TxnUPtr& txn) {
+  CHECK(param_.chunk_size != 0) << "chunk_size not should be 0.";
+  result_.delta_bytes = 0;
+
+  const std::string key = MetaCodec::EncodeInodeKey(fs_id_, ino_);
+  std::vector<std::string> keys = {key};
+  std::vector<KeyValue> kvs;
+  auto status = txn->BatchGet(keys, kvs);
+  if (!status.ok()) return status;
+
+  AttrEntry attr;
+  for (auto& kv : kvs) {
+    if (kv.key == key) {
+      attr = MetaCodec::DecodeInodeValue(kv.value);
+
+    } else {
+      LOG(FATAL) << fmt::format("[operation.{}.{}] invalid key({}).", fs_id_, ino_,
+                                ::dingofs::Helper::StringToHex(kv.key));
+    }
+  }
+
+  if (attr.ino() == 0) {
+    return Status(pb::error::ENOT_FOUND, fmt::format("not found inode({})", ino_));
+  }
+
+  // Conditional length rollback (ADR-0003): only shrink when the current
+  // persisted length still lies within the range this write session pushed,
+  // i.e. rollback_to_length < length <= last_write_length. Otherwise another
+  // writer moved the length legitimately -- give up conservatively.
+  if (attr.length() > param_.rollback_to_length && attr.length() <= param_.last_write_length) {
+    result_.delta_bytes = static_cast<int64_t>(param_.rollback_to_length) - static_cast<int64_t>(attr.length());
+
+    std::vector<ChunkEntry> effected_chunks;
+    status = AppendZeroSlices(txn, attr.fs_id(), attr.ino(), param_.rollback_to_length, attr.length(),
+                              param_.chunk_size, effected_chunks);
+    if (!status.ok()) return status;
+
+    attr.set_length(param_.rollback_to_length);
+    attr.set_mtime(std::max(attr.mtime(), GetTime()));
+    attr.set_ctime(std::max(attr.ctime(), GetTime()));
+    attr.set_version(attr.version() + 1);
+
+    txn->Put(key, MetaCodec::EncodeInodeValue(attr));
+  }
+
+  result_.attr = attr;
   return Status::OK();
 }
 
