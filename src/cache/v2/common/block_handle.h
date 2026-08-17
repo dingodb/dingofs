@@ -73,9 +73,13 @@ struct BlockHandle {
     return Mix64(Mix64(id) ^ ((static_cast<uint64_t>(index) << 32) | size));
   }
 
+  std::string Filename() const {
+    return fmt::format("{}_{}_{}", id, index, size);
+  }
+
   std::string StoreKey() const {
-    return fmt::format("blocks/{}/{}/{}_{}_{}", id / 1000 / 1000, id / 1000, id,
-                       index, size);
+    return fmt::format("blocks/{}/{}/{}", id / 1000 / 1000, id / 1000,
+                       Filename());
   }
 
   uint64_t fs_id{0};

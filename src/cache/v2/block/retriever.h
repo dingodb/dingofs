@@ -27,7 +27,7 @@
 #include <vector>
 
 #include "cache/v2/core/memory/buffer_view.h"
-#include "cache/v2/core/utils/status.h"
+#include "cache/v2/common/status.h"
 #include "cache/v2/object/object.h"
 #include "cache/v2/utils/align.h"
 #include "cache/v2/utils/gate.h"
