@@ -335,8 +335,21 @@ bool CommitTask::Dump(Json::Value& value) {
   return true;
 }
 
+ChunkSet::ChunkSet(Ino ino, uint32_t chunk_size)
+    : ino_(ino),
+      chunk_size_(chunk_size),
+      last_active_s_(utils::Timestamp()) {
+  CHECK(bthread_mutex_init(&write_flush_mutex_, nullptr) == 0)
+      << "init write_flush_mutex_ fail.";
+}
+
+ChunkSet::~ChunkSet() {
+  CHECK(bthread_mutex_destroy(&write_flush_mutex_) == 0)
+      << "destroy write_flush_mutex_ fail.";
+}
+
 void ChunkSet::Append(uint32_t index, const std::vector<Slice>& slices) {
-  std::lock_guard<std::mutex> flush_guard(write_flush_mutex_);
+  std::lock_guard<bthread_mutex_t> flush_guard(write_flush_mutex_);
   utils::WriteLockGuard guard(lock_);
 
   auto it = chunk_map_.find(index);

@@ -926,7 +926,7 @@ using CheckQuotaFn = std::function<Status(Trace& trace, Ino ino, uint64_t delta_
 class UpsertChunkOperation : public Operation {
  public:
   UpsertChunkOperation(Trace& trace, const FsInfoEntry fs_info, uint64_t ino,
-                       const std::vector<DeltaSliceEntry>& delta_slices, CheckQuotaFn& check_quota_fn)
+                       const std::vector<DeltaSliceEntry>& delta_slices, const CheckQuotaFn& check_quota_fn)
       : Operation(trace), fs_info_(fs_info), ino_(ino), delta_slices_(delta_slices), check_quota_fn_(check_quota_fn) {};
   ~UpsertChunkOperation() override = default;
 
