@@ -12,7 +12,6 @@
 // limitations under the License.
 
 #include "mds/filesystem/store_operation.h"
-#include "common/helper.h"
 
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -36,6 +35,7 @@
 #include "bthread/bthread.h"
 #include "bthread/types.h"
 #include "common/const.h"
+#include "common/helper.h"
 #include "common/logging.h"
 #include "common/meta.h"
 #include "dingofs/error.pb.h"
@@ -1483,6 +1483,11 @@ Status UpsertChunkOperation::Run(TxnUPtr& txn) {
     txn->Put(inode_key, MetaCodec::EncodeInodeValue(attr));
   }
 
+  if (result_.delta_bytes > 0) {
+    status = check_quota_fn_(GetTrace(), ino_, result_.delta_bytes);
+    if (!status.ok()) return status;
+  }
+
   result_.attr = attr;
 
   return Status::OK();
@@ -1734,7 +1739,8 @@ Status FlushFileOperation::Run(TxnUPtr& txn) {
       attr = MetaCodec::DecodeInodeValue(kv.value);
 
     } else {
-      LOG(FATAL) << fmt::format("[operation.{}.{}] invalid key({}).", fs_id_, ino_, ::dingofs::Helper::StringToHex(kv.key));
+      LOG(FATAL) << fmt::format("[operation.{}.{}] invalid key({}).", fs_id_, ino_,
+                                ::dingofs::Helper::StringToHex(kv.key));
     }
   }
 
@@ -1867,7 +1873,8 @@ Status RmDirOperation::Run(TxnUPtr& txn) {
     } else if (kv.key == bucket_dentry_key) {
       trash_bucket_exist = true;
     } else {
-      LOG(FATAL) << fmt::format("[operation.{}.{}] invalid key({}).", fs_id, parent, ::dingofs::Helper::StringToHex(kv.key));
+      LOG(FATAL) << fmt::format("[operation.{}.{}] invalid key({}).", fs_id, parent,
+                                ::dingofs::Helper::StringToHex(kv.key));
     }
   }
   if (parent_attr.ino() == 0) {
@@ -2407,7 +2414,8 @@ Status RenameOperation::Run(TxnUPtr& txn) {
       trash_bucket_exist = true;
 
     } else {
-      LOG(FATAL) << fmt::format("[operation.{}.{}] invalid key({}).", fs_id_, old_parent_, ::dingofs::Helper::StringToHex(kv.key));
+      LOG(FATAL) << fmt::format("[operation.{}.{}] invalid key({}).", fs_id_, old_parent_,
+                                ::dingofs::Helper::StringToHex(kv.key));
     }
   }
   // kTrashInodeId is a virtual directory: no inode key in KV. Synthesize the

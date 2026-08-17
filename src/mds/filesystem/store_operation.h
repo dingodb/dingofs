@@ -921,11 +921,13 @@ class UpdateShardBoundariesOperation : public Operation {
   Result result_;
 };
 
+using CheckQuotaFn = std::function<Status(Trace& trace, Ino ino, uint64_t delta_bytes)>;
+
 class UpsertChunkOperation : public Operation {
  public:
   UpsertChunkOperation(Trace& trace, const FsInfoEntry fs_info, uint64_t ino,
-                       const std::vector<DeltaSliceEntry>& delta_slices)
-      : Operation(trace), fs_info_(fs_info), ino_(ino), delta_slices_(delta_slices) {};
+                       const std::vector<DeltaSliceEntry>& delta_slices, CheckQuotaFn& check_quota_fn)
+      : Operation(trace), fs_info_(fs_info), ino_(ino), delta_slices_(delta_slices), check_quota_fn_(check_quota_fn) {};
   ~UpsertChunkOperation() override = default;
 
   struct Result {
@@ -948,6 +950,8 @@ class UpsertChunkOperation : public Operation {
   const uint64_t ino_;
 
   const std::vector<DeltaSliceEntry> delta_slices_;
+
+  CheckQuotaFn check_quota_fn_;
 
   Result result_;
 };

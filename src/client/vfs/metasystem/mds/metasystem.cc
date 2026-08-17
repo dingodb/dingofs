@@ -672,15 +672,15 @@ Status MDSMetaSystem::DoOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
 
   if (!status.ok()) return status;
 
+  // update inode cache
+  InodeSPtr inode = PutInodeToCache(attr_entry);
+  file_session->SetInode(inode);
+
   if (mds::IsDeleted(attr_entry)) {
     LOG(WARNING) << fmt::format(
         "[meta.fs.{}.{}] open file skipped, file is deleted.", ino, fh);
     return Status::NotExist("file is deleted");
   }
-
-  // update inode cache
-  InodeSPtr inode = PutInodeToCache(attr_entry);
-  file_session->SetInode(inode);
 
   // truncate file, forget chunk memo and delete chunk cache
   // update chunk cache
@@ -1147,10 +1147,8 @@ Status MDSMetaSystem::Write(ContextSPtr, Ino ino, const char* buf,
   CHECK(file_session != nullptr)
       << fmt::format("file session is nullptr, ino({}) fh({}).", ino, fh);
 
-  {
-    auto& chunk_set = file_session->GetChunkSet();
-    chunk_set->SetLastWriteLength(offset, size);
-  }
+  auto& chunk_set = file_session->GetChunkSet();
+  chunk_set->SetLastWriteLength(offset, size);
 
   // update last modify time
   modify_time_memo_.Remember(ino);
