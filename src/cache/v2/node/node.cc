@@ -43,10 +43,6 @@ DEFINE_uint32(listen_port, 9300, "port to listen on");
 DEFINE_string(bind_ip, "0.0.0.0", "ip to bind");
 DEFINE_bool(rdma, false, "enable rdma transport");
 DEFINE_string(rdma_device, "", "rdma device");
-DEFINE_uint32(shards, 0, "reactor shards, 0 means one per core");
-DEFINE_string(cpuset, "", "cores the shards run on, e.g. 0-31");
-DEFINE_bool(poll_mode, false, "busy-poll the reactors");
-DEFINE_uint64(buffer_pool_mb, 256, "buffer pool per shard in MiB");
 DEFINE_bool(daemonize, false, "run in background");
 
 CacheNode::CacheNode() : CacheNode(std::make_unique<MDSClientImpl>()) {}

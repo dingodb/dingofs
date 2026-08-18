@@ -34,7 +34,12 @@ namespace v2 {
 DEFINE_bool(fill_group_cache, true,
             "also send a written block to the cache group");
 
+static bool DiskOrNone(const char* /*name*/, const std::string& value) {
+  return value == "disk" || value == "none";
+}
+
 DEFINE_string(cache_store, "disk", "local disk cache: disk | none");
+DEFINE_validator(cache_store, DiskOrNone);
 
 TierCache::TierCache(ObjectStorage* storage, MDSClient* mds_client)
     : TierCache(storage, MakeLocal(storage), MakeRemote(mds_client)) {}

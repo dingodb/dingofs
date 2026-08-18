@@ -30,11 +30,16 @@ DECLARE_uint32(listen_port);
 DECLARE_string(bind_ip);
 DECLARE_bool(rdma);
 DECLARE_string(rdma_device);
+DECLARE_bool(daemonize);
+
+// core/runtime/runtime.cc
 DECLARE_uint32(shards);
 DECLARE_string(cpuset);
+DECLARE_bool(pin_cpu);
 DECLARE_bool(poll_mode);
+
+// core/memory/buffer.cc
 DECLARE_uint64(buffer_pool_mb);
-DECLARE_bool(daemonize);
 
 // node/membership.cc
 DECLARE_string(group_name);
@@ -52,6 +57,7 @@ DECLARE_uint32(cache_mds_request_retry_times);
 // core/runtime/worker_pool.cc
 DECLARE_uint32(offload_threads);
 DECLARE_uint32(offload_queue_capacity);
+DECLARE_uint32(offload_cpu_spin_us);
 
 // object/client.cc
 DECLARE_uint32(storage_put_tries);
@@ -72,6 +78,9 @@ DECLARE_uint32(max_range_size_kb);
 // tier/tier_cache.cc
 DECLARE_bool(fill_group_cache);
 DECLARE_string(cache_store);
+
+// api/cache.cc
+DECLARE_uint32(queue_depth);
 
 // remote/remote_cache.cc
 DECLARE_string(cache_group);
