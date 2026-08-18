@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_executable(cache-bench
+add_executable(cb-v2
     benchmarker.cc
     collector.cc
     factory.cc
@@ -21,10 +21,8 @@ add_executable(cache-bench
     reporter.cc
     worker.cc
 )
-
-target_compile_features(cache-bench PRIVATE cxx_std_20)
-
-target_link_libraries(cache-bench
+target_compile_features(cb-v2 PRIVATE cxx_std_20)
+target_link_libraries(cb-v2
     ibverbs::ibverbs
 
     cache_v2_api
@@ -36,5 +34,8 @@ target_link_libraries(cache-bench
     gflags::gflags
     glog::glog
 )
-
-cache_tune(cache-bench)
+set_target_properties(cb-v2 PROPERTIES
+    OUTPUT_NAME cb
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin/v2
+)
+cache_tune(cb-v2)

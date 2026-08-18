@@ -28,7 +28,8 @@ namespace v2 {
 inline const std::vector<FlagSection> kSections = {
     {"NODE OPTIONS",
      {"id", "listen_ip", "listen_port", "bind_ip", "rdma", "rdma_device",
-      "shards", "cpuset", "poll_mode", "buffer_pool_mb", "daemonize", "conf",
+      "shards", "cpuset", "pin_cpu", "poll_mode", "buffer_pool_mb",
+      "daemonize", "conf",
       "group_name", "group_weight"}},
     {"MDS OPTIONS",
      {"mds_addrs", "cache_mds_rpc_timeout_ms", "cache_mds_rpc_retry_times",
