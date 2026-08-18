@@ -1,6 +1,6 @@
 # DingoFS 文件操作测试用例
 
-针对 DingoFS 挂载点的文件操作测试集，共 63 个用例，每个用例一个独立 Python 脚本。
+针对 DingoFS 挂载点的文件操作测试集，共 64 个用例，每个用例一个独立 Python 脚本。
 
 ## 文件结构
 
@@ -118,3 +118,4 @@ python3 run_all.py /mnt/dingofs/testdir --only 05,37,39
 | 61 | 并发 | 多线程并发读/写（追加+截断）/截断（不同偏移） |
 | 62 | 并发 | 多线程并发读/写（追加+截断）/截断（不同偏移）/fallocate |
 | 63 | fallocate | 基础分配、KEEP_SIZE、PUNCH_HOLE、ZERO_RANGE、边界、错误参数和 fd 语义 |
+| 64 | 文件操作 | copy_file_range：跨文件/同文件、偏移、EOF、稀疏文件、边界、错误参数、隔离和并发 |
