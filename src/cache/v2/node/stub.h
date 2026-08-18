@@ -49,6 +49,12 @@ class CacheStub : public Stub {
     return Call(prefetch_, request, response, cntl);
   }
 
+  Future<Status> Delete(Controller* cntl,
+                        const pb::cache::v2::DeleteRequest* request,
+                        pb::cache::v2::DeleteResponse* response) {
+    return Call(delete_, request, response, cntl);
+  }
+
   Future<Status> Ping(Controller* cntl,
                       const pb::cache::v2::PingRequest* request,
                       pb::cache::v2::PingResponse* response) {
@@ -71,6 +77,10 @@ class CacheStub : public Stub {
   MethodRef<pb::cache::v2::PrefetchRequest, pb::cache::v2::PrefetchResponse>
       prefetch_ = Resolve<pb::cache::v2::PrefetchRequest,
                           pb::cache::v2::PrefetchResponse>("Prefetch");
+
+  MethodRef<pb::cache::v2::DeleteRequest, pb::cache::v2::DeleteResponse>
+      delete_ = Resolve<pb::cache::v2::DeleteRequest,
+                        pb::cache::v2::DeleteResponse>("Delete");
 
   MethodRef<pb::cache::v2::PingRequest, pb::cache::v2::PingResponse> ping_ =
       Resolve<pb::cache::v2::PingRequest, pb::cache::v2::PingResponse>("Ping");

@@ -54,6 +54,8 @@ class BlockCacheImpl {
                 char* buffer, AsyncCallback cb, GetOption option = {});
   bool AsyncPrefetch(BlockHandle handle, AsyncCallback cb,
                      PrefetchOption option = {});
+  bool AsyncDelete(BlockHandle handle, AsyncCallback cb,
+                   DeleteOption option = {});
   CacheStats GetStats();
 
   Status RegisterBuffers(void* base, size_t bytes);

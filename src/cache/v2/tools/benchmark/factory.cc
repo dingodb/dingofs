@@ -82,11 +82,22 @@ bool GetTaskFactory::SubmitTask(Slot* slot, AsyncCallback cb) {
 
 uint64_t GetTaskFactory::BytesPerOp() const { return FLAGS_length; }
 
+DeleteTaskFactory::DeleteTaskFactory(BlockCacheImpl* block_cache)
+    : block_cache_(block_cache) {}
+
+bool DeleteTaskFactory::SubmitTask(Slot* slot, AsyncCallback cb) {
+  return block_cache_->AsyncDelete(slot->key, std::move(cb));
+}
+
+uint64_t DeleteTaskFactory::BytesPerOp() const { return 0; }
+
 TaskFactoryUPtr NewFactory(BlockCacheImpl* block_cache, const std::string& op) {
   if (op == "put") {
     return std::make_unique<PutTaskFactory>(block_cache);
   } else if (op == "get") {
     return std::make_unique<GetTaskFactory>(block_cache);
+  } else if (op == "delete") {
+    return std::make_unique<DeleteTaskFactory>(block_cache);
   }
 
   CHECK(false) << "Unknown operation: " << op;

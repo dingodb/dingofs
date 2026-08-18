@@ -62,6 +62,16 @@ Future<Status> PrefetchTask::RunOnShard(ShardedTierCache& cache) {
 
 void PrefetchTask::RunOnWorker(Status status) { cb_(std::move(status)); }
 
+DeleteTask::DeleteTask(BlockHandle handle, AsyncCallback cb,
+                       DeleteOption option)
+    : handle_(handle), cb_(std::move(cb)), option_(option) {}
+
+Future<Status> DeleteTask::RunOnShard(ShardedTierCache& cache) {
+  return cache.Delete(handle_, option_);
+}
+
+void DeleteTask::RunOnWorker(Status status) { cb_(std::move(status)); }
+
 }  // namespace v2
 }  // namespace cache
 }  // namespace dingofs

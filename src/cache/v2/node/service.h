@@ -38,6 +38,9 @@ class CacheService : public ProtoService {
   Future<> Prefetch(Controller* cntl,
                     const pb::cache::v2::PrefetchRequest* request,
                     pb::cache::v2::PrefetchResponse* response);
+  Future<> Delete(Controller* cntl,
+                  const pb::cache::v2::DeleteRequest* request,
+                  pb::cache::v2::DeleteResponse* response);
   Future<> Ping(Controller* cntl, const pb::cache::v2::PingRequest* request,
                 pb::cache::v2::PingResponse* response);
   Future<> GetNodeInfo(Controller* cntl,

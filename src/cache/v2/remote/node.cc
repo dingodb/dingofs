@@ -105,6 +105,13 @@ Future<Status> RemoteNode::Prefetch(BlockHandle handle) {
                      std::move(request), Attachment{});
 }
 
+Future<Status> RemoteNode::Delete(BlockHandle handle) {
+  pb::cache::v2::DeleteRequest request;
+  handle.ToPb(request.mutable_handle());
+  return SendRequest(&CacheStub::Delete, RouteHintOf(handle),
+                     std::move(request), Attachment{});
+}
+
 template <typename Method, typename Request>
 Future<Status> RemoteNode::SendRequest(Method method, uint64_t key,
                                        Request request, Attachment attachment) {

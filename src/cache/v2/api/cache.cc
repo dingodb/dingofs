@@ -173,6 +173,15 @@ bool BlockCacheImpl::AsyncPrefetch(BlockHandle handle, AsyncCallback cb,
   return SubmitTask<PrefetchTask>(shard, handle, std::move(cb), option);
 }
 
+bool BlockCacheImpl::AsyncDelete(BlockHandle handle, AsyncCallback cb,
+                                 DeleteOption option) {
+  unsigned shard;
+  if (!Check(handle, &shard)) {
+    return false;
+  }
+  return SubmitTask<DeleteTask>(shard, handle, std::move(cb), option);
+}
+
 CacheStats BlockCacheImpl::GetStats() {
   CHECK(!HasReactor()) << "GetStats on a shard thread";
   ShardedTierCache* tier_cache = tier_cache_.get();

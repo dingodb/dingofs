@@ -44,6 +44,7 @@ class DiskCacheGroup final : public CacheStore {
   Future<Status> Cache(BlockHandle handle, BufferViews block) override;
   Future<Status> Load(BlockHandle handle, uint64_t offset, uint32_t length,
                       char* buffer) override;
+  Future<Status> Delete(BlockHandle handle) override;
   Future<bool> Exists(BlockHandle handle) override;
   Future<CacheStats> GetStats() override;
 

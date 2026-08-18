@@ -219,6 +219,28 @@ Future<Status> DiskCache::Load(BlockHandle handle, uint64_t offset,
   co_return status;
 }
 
+Future<Status> DiskCache::Delete(BlockHandle handle) {
+  const Status check = Check(kWantExec);
+  if (!check.ok()) {
+    co_return check;
+  }
+
+  const std::optional<CacheManager::Entry> entry = manager_->Find(handle);
+  if (!entry) {
+    if (loader_->IsLoading()) {
+      const Status status = co_await localfs_->Unlink(GetCachePath(handle));
+      co_return status.IsNotExist() ? Status::OK() : status;
+    }
+    co_return Status::OK();
+  } else if (entry->staged) {
+    co_return Status::OK();
+  }
+
+  manager_->EraseCache(handle);
+  const Status status = co_await localfs_->Unlink(GetCachePath(handle));
+  co_return status.IsNotExist() ? Status::OK() : status;
+}
+
 Future<bool> DiskCache::Exists(BlockHandle handle) {
   if (manager_->Exist(handle)) {
     co_return true;

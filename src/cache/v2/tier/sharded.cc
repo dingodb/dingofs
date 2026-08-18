@@ -86,6 +86,12 @@ Future<Status> ShardedTierCache::Prefetch(BlockHandle handle,
       handle, [=](TierCache& tier) { return tier.Prefetch(handle, option); });
 }
 
+Future<Status> ShardedTierCache::Delete(BlockHandle handle,
+                                        DeleteOption option) {
+  return InvokeOnOwner(
+      handle, [=](TierCache& tier) { return tier.Delete(handle, option); });
+}
+
 Future<CacheStats> ShardedTierCache::GetStats() {
   return tiers_.MapReduce(
       CacheStats{}, [](TierCache& tier) { return tier.GetStats(); },

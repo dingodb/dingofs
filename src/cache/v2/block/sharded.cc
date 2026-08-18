@@ -93,6 +93,13 @@ Future<Status> ShardedLocalCache::Prefetch(BlockHandle handle,
   });
 }
 
+Future<Status> ShardedLocalCache::Delete(BlockHandle handle,
+                                         DeleteOption option) {
+  return InvokeOnOwner(handle, [=](LocalCache& cache) {
+    return cache.Delete(handle, option);
+  });
+}
+
 Future<CacheStats> ShardedLocalCache::GetStats() {
   return block_cache_.MapReduce(
       CacheStats{}, [](LocalCache& cache) { return cache.GetStats(); },

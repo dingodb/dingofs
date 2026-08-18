@@ -175,6 +175,14 @@ Future<Status> RemoteCache::Prefetch(BlockHandle handle, PrefetchOption) {
   co_return co_await node.value()->Prefetch(handle);
 }
 
+Future<Status> RemoteCache::Delete(BlockHandle handle, DeleteOption) {
+  StatusOr<RemoteNode*> node = nodes_->GetNode(handle.Hash());
+  if (!node.ok()) {
+    co_return node.status();
+  }
+  co_return co_await node.value()->Delete(handle);
+}
+
 Future<CacheStats> RemoteCache::GetStats() {
   return MakeReadyFuture<CacheStats>(
       CacheStats{.hits = hits_, .misses = misses_});

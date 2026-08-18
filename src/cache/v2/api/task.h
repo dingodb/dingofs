@@ -87,6 +87,19 @@ class PrefetchTask final : public AsyncTask {
   PrefetchOption option_;
 };
 
+class DeleteTask final : public AsyncTask {
+ public:
+  DeleteTask(BlockHandle handle, AsyncCallback cb, DeleteOption option);
+
+  Future<Status> RunOnShard(ShardedTierCache& cache) override;
+  void RunOnWorker(Status status) override;
+
+ private:
+  BlockHandle handle_;
+  AsyncCallback cb_;
+  DeleteOption option_;
+};
+
 }  // namespace v2
 }  // namespace cache
 }  // namespace dingofs
