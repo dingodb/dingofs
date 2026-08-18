@@ -28,8 +28,12 @@ class Timer {
 
   virtual bool Start() = 0;
 
+  // Stops task admission and destroys pending functions without invoking
+  // them. Function destruction completes before Stop returns.
   virtual bool Stop() = 0;
 
+  // Returns true only when the timer accepts ownership of func. The timer does
+  // not retain a rejected function.
   virtual bool Add(std::function<void()> func, int delay_ms) = 0;
 
   virtual bool IsStopped() = 0;

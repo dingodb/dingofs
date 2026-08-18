@@ -32,6 +32,7 @@ namespace client {
 namespace vfs {
 
 class VFSHub;
+class FileWriterTestPeer;
 
 class FileWriter {
  public:
@@ -66,6 +67,14 @@ class FileWriter {
   void SetStatusIfBroken(const Status& s);
 
  private:
+  friend class FileWriterTestPeer;
+  friend void intrusive_ptr_add_ref(FileWriter* writer) {
+    writer->AcquireRef();
+  }
+  friend void intrusive_ptr_release(FileWriter* writer) {
+    writer->ReleaseRef();
+  }
+
   int32_t GetChunkSize() const;
 
   void AsyncFlush(StatusCallback cb);

@@ -17,8 +17,9 @@
 #include <atomic>
 #include <chrono>              // NOLINT
 #include <condition_variable>  // NOLINT
-#include <mutex>               // NOLINT
-#include <thread>              // NOLINT
+#include <memory>
+#include <mutex>   // NOLINT
+#include <thread>  // NOLINT
 
 #include "utils/executor/bthread/bthread_executor.h"
 #include "utils/executor/thread/executor_impl.h"
@@ -83,6 +84,42 @@ TEST(BthreadExecutorTest, ScheduleRunsTaskAfterDelay) {
   executor.Stop();
 }
 
+TEST(BthreadExecutorTest, StopDestroysPendingScheduledTask) {
+  BthreadExecutor executor(1);
+  ASSERT_TRUE(executor.Start());
+
+  std::atomic<bool> ran{false};
+  auto lifetime = std::make_shared<int>(1);
+  std::weak_ptr<int> weak_lifetime = lifetime;
+  ASSERT_TRUE(executor.Schedule(
+      [lifetime, &ran] { ran.store(true, std::memory_order_release); },
+      60 * 60 * 1000));
+  lifetime.reset();
+
+  ASSERT_FALSE(weak_lifetime.expired());
+  ASSERT_TRUE(executor.Stop());
+  EXPECT_FALSE(ran.load(std::memory_order_acquire));
+  EXPECT_TRUE(weak_lifetime.expired());
+}
+
+TEST(BthreadExecutorTest, ScheduleAfterStopRejectsAndDestroysTask) {
+  BthreadExecutor executor(1);
+  ASSERT_TRUE(executor.Start());
+  ASSERT_TRUE(executor.Stop());
+
+  std::atomic<bool> ran{false};
+  auto lifetime = std::make_shared<int>(1);
+  std::weak_ptr<int> weak_lifetime = lifetime;
+  std::function<void()> task = [lifetime, &ran] {
+    ran.store(true, std::memory_order_release);
+  };
+  lifetime.reset();
+
+  EXPECT_FALSE(executor.Schedule(std::move(task), 1));
+  EXPECT_FALSE(ran.load(std::memory_order_acquire));
+  EXPECT_TRUE(weak_lifetime.expired());
+}
+
 TEST(ExecutorImplTest, StartStopReportsThreadCount) {
   ExecutorImpl executor("unit_test_exec", 3);
 
@@ -123,6 +160,42 @@ TEST(ExecutorImplTest, ScheduleRunsTaskAfterDelay) {
   EXPECT_TRUE(ran.load());
 
   executor.Stop();
+}
+
+TEST(ExecutorImplTest, StopDestroysPendingScheduledTask) {
+  ExecutorImpl executor("unit_test_exec", 1);
+  ASSERT_TRUE(executor.Start());
+
+  std::atomic<bool> ran{false};
+  auto lifetime = std::make_shared<int>(1);
+  std::weak_ptr<int> weak_lifetime = lifetime;
+  ASSERT_TRUE(executor.Schedule(
+      [lifetime, &ran] { ran.store(true, std::memory_order_release); },
+      60 * 60 * 1000));
+  lifetime.reset();
+
+  ASSERT_FALSE(weak_lifetime.expired());
+  ASSERT_TRUE(executor.Stop());
+  EXPECT_FALSE(ran.load(std::memory_order_acquire));
+  EXPECT_TRUE(weak_lifetime.expired());
+}
+
+TEST(ExecutorImplTest, ScheduleAfterStopRejectsAndDestroysTask) {
+  ExecutorImpl executor("unit_test_exec", 1);
+  ASSERT_TRUE(executor.Start());
+  ASSERT_TRUE(executor.Stop());
+
+  std::atomic<bool> ran{false};
+  auto lifetime = std::make_shared<int>(1);
+  std::weak_ptr<int> weak_lifetime = lifetime;
+  std::function<void()> task = [lifetime, &ran] {
+    ran.store(true, std::memory_order_release);
+  };
+  lifetime.reset();
+
+  EXPECT_FALSE(executor.Schedule(std::move(task), 1));
+  EXPECT_FALSE(ran.load(std::memory_order_acquire));
+  EXPECT_TRUE(weak_lifetime.expired());
 }
 
 }  // namespace unit_test

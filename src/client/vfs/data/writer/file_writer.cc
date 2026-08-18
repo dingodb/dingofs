@@ -22,6 +22,7 @@
 #include <unistd.h>
 
 #include <atomic>
+#include <boost/intrusive_ptr.hpp>
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -372,13 +373,9 @@ void FileWriter::SchedulePeriodicFlush() {
     }
   }
 
-  AcquireRef();
-
+  boost::intrusive_ptr<FileWriter> self(this);
   vfs_hub_->GetWriteBackgroundExecutor()->Schedule(
-      [this] {
-        RunPeriodicFlush();
-        ReleaseRef();
-      },
+      [self = std::move(self)] { self->RunPeriodicFlush(); },
       FLAGS_vfs_periodic_flush_interval_ms);
 }
 

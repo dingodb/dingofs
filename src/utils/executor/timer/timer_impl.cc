@@ -29,12 +29,9 @@ namespace dingofs {
 
 using namespace std::chrono;
 
-TimerImpl::TimerImpl(ThreadPool* thread_pool)
-    : thread_pool_(thread_pool) {}
+TimerImpl::TimerImpl(ThreadPool* thread_pool) : thread_pool_(thread_pool) {}
 
-TimerImpl::~TimerImpl() {
-  Stop();
-}
+TimerImpl::~TimerImpl() { Stop(); }
 
 bool TimerImpl::Start() {
   std::lock_guard<std::mutex> lk(mutex_);
@@ -49,6 +46,7 @@ bool TimerImpl::Start() {
 }
 
 bool TimerImpl::Stop() {
+  decltype(heap_) cancelled;
   {
     std::lock_guard<std::mutex> lk(mutex_);
     if (!running_) {
@@ -56,11 +54,7 @@ bool TimerImpl::Stop() {
     }
 
     running_ = false;
-    while (!heap_.empty()) {
-      // TODO: add debug log
-      heap_.pop();
-    }
-
+    heap_.swap(cancelled);
     cv_.notify_all();
   }
 
@@ -68,6 +62,8 @@ bool TimerImpl::Stop() {
     thread_->join();
   }
 
+  // Destroy cancelled functions after releasing mutex_. Their captures may
+  // release the last reference to objects with non-trivial destructors.
   return true;
 }
 

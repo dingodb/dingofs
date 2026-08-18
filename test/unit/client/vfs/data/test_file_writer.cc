@@ -42,6 +42,13 @@ using ::testing::AnyNumber;
 using ::testing::Invoke;
 using ::testing::Return;
 
+class FileWriterTestPeer {
+ public:
+  static int64_t RefCount(FileWriter* writer) {
+    return writer->refs_.load(std::memory_order_acquire);
+  }
+};
+
 class FileWriterTest : public VFSTestBase {
  protected:
   void SetUp() override {
@@ -70,6 +77,20 @@ class FileWriterTest : public VFSTestBase {
     w->ReleaseRef();
   }
 };
+
+TEST_F(FileWriterTest, StopReleasesPendingPeriodicTaskRef) {
+  gflags::FlagSaver flag_saver;
+  FLAGS_vfs_periodic_flush_interval_ms = 60 * 60 * 1000;
+
+  auto* writer = MakeOpenWriter();
+  ASSERT_EQ(FileWriterTestPeer::RefCount(writer), 2);
+
+  writer->Close();
+  ASSERT_TRUE(write_background_executor_->Stop());
+  EXPECT_EQ(FileWriterTestPeer::RefCount(writer), 1);
+
+  writer->ReleaseRef();
+}
 
 // 1. Write() for a simple in-chunk write succeeds and returns the correct
 //    written size.

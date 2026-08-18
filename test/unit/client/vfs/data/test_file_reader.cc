@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <gflags/gflags.h>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
@@ -99,6 +100,10 @@ class FileReaderTest : public test::VFSTestBase {
 // progress with sleep_for().
 class FileReaderTestPeer {
  public:
+  static int64_t RefCount(FileReader* reader) {
+    return reader->refs_.load(std::memory_order_acquire);
+  }
+
   static bool WaitForRequest(
       FileReader* reader, int64_t offset, ReadRequestState state,
       int32_t min_readers,
@@ -120,6 +125,20 @@ class FileReaderTestPeer {
     return false;
   }
 };
+
+TEST_F(FileReaderTest, StopReleasesPendingPeriodicTaskRef) {
+  gflags::FlagSaver flag_saver;
+  FLAGS_vfs_periodic_flush_interval_ms = 60 * 60 * 1000;
+
+  auto* reader = MakeOpenReader();
+  ASSERT_EQ(FileReaderTestPeer::RefCount(reader), 2);
+
+  reader->Close();
+  ASSERT_TRUE(read_cleanup_executor_->Stop());
+  EXPECT_EQ(FileReaderTestPeer::RefCount(reader), 1);
+
+  reader->ReleaseRef();
+}
 
 // 1. Read() of a zero-length range returns 0 bytes.
 TEST_F(FileReaderTest, Read_ZeroSize_ReturnsZero) {
