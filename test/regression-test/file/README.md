@@ -1,11 +1,11 @@
 # DingoFS 文件操作测试用例
 
-针对 DingoFS 挂载点的文件操作测试集，共 62 个用例，每个用例一个独立 Python 脚本。
+针对 DingoFS 挂载点的文件操作测试集，共 63 个用例，每个用例一个独立 Python 脚本。
 
 ## 文件结构
 
 - `common.py` — 公共辅助模块（测试目录解析、随机数据、md5 校验、Checker、run_case 框架）
-- `test_01_*.py` ~ `test_62_*.py` — 每个用例一个独立脚本
+- `test_01_*.py` ~ `test_63_*.py` — 每个用例一个独立脚本
 - `run_all.py` — 批量运行器，汇总 PASS/FAIL 报表
 
 ## 使用方式
@@ -117,3 +117,4 @@ python3 run_all.py /mnt/dingofs/testdir --only 05,37,39
 | 60 | 并发 | 写线程并发下另一线程 fallocate（不同模式） |
 | 61 | 并发 | 多线程并发读/写（追加+截断）/截断（不同偏移） |
 | 62 | 并发 | 多线程并发读/写（追加+截断）/截断（不同偏移）/fallocate |
+| 63 | fallocate | 基础分配、KEEP_SIZE、PUNCH_HOLE、ZERO_RANGE、边界、错误参数和 fd 语义 |
