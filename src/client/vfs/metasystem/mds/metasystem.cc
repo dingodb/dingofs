@@ -1484,23 +1484,30 @@ Status MDSMetaSystem::Fallocate(ContextSPtr ctx, Ino ino, int mode,
 
   MDSClient::AttrWithChunkOut out;
   status = mds_client_.Fallocate(ctx, ino, mode, offset, length, out);
-  if (!status.ok()) return status;
-
-  // Invalidate caches on success OR ambiguous net error (server may have
-  // committed the txn but the response was lost — cache TTL is 3600s, so
-  // stale could persist that long). Business errors (EQUOTA / EALLOC_ID /
-  // EINTERNAL / EPERM) roll the txn back atomically on the server side —
-  // cache stays consistent, skip.
-  if (status.ok() || status.IsNetError()) {
-    chunk_memo_.Forget(ino);
+  auto file_session = file_session_map_.GetSession(ino);
+  const bool collapse = mode == FALLOC_FL_COLLAPSE_RANGE;
+  if (!status.ok()) {
+    if (status.IsNetError()) {
+      chunk_memo_.Forget(ino);
+      if (collapse && file_session != nullptr)
+        file_session->GetChunkSet()->Reset();
+    }
+    return status;
   }
 
+  chunk_memo_.Forget(ino);
   modify_time_memo_.Remember(ino);
   PutInodeToCache(out.attr_entry);
 
-  auto file_session = file_session_map_.GetSession(ino);
-  if (file_session != nullptr && !out.effected_chunks.empty()) {
-    file_session->GetChunkSet()->Put(out.effected_chunks, "fallocate");
+  if (file_session != nullptr) {
+    if (collapse) {
+      // Every cached index at and after offset may now refer to a different
+      // chunk. Reset rather than trying to delete and renumber individual
+      // entries.
+      file_session->GetChunkSet()->Reset();
+    } else if (!out.effected_chunks.empty()) {
+      file_session->GetChunkSet()->Put(out.effected_chunks, "fallocate");
+    }
   }
 
   return status;

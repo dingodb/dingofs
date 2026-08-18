@@ -1185,6 +1185,7 @@ class FallocateOperation : public Operation {
  private:
   void PreAlloc(AttrEntry& attr, uint64_t offset, uint64_t len, bool keep_size);
   void SetZero(BatchSharedParam& shared_param, AttrEntry& attr, uint64_t offset, uint64_t len, bool keep_size);
+  Status CollapseRange(TxnUPtr& txn, BatchSharedParam& shared_param, AttrEntry& attr);
 
   Param param_;
 
