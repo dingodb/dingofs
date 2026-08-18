@@ -441,7 +441,7 @@ TEST_F(VFSImplTest, Write_PressureFlushFails_CrossChunkWriteReturnsShortWrite) {
   EXPECT_CALL(*mock_meta_system_,
               Write(_, kIno, _, kCrossOffset, kPrefixSize, _))
       .WillOnce(Return(Status::OK()));
-  EXPECT_CALL(*mock_meta_system_, RollbackWriteLength(_, kIno, fh))
+  EXPECT_CALL(*mock_meta_system_, RollbackFile(_, kIno, fh))
       .Times(2)
       .WillRepeatedly(Return(Status::OK()));
 

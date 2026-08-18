@@ -196,7 +196,7 @@ class VFSTestBase : public ::testing::Test {
           return Status::OK();
         });
     ON_CALL(*mock_meta_system_, Flush).WillByDefault(Return(Status::OK()));
-    ON_CALL(*mock_meta_system_, RollbackWriteLength)
+    ON_CALL(*mock_meta_system_, RollbackFile)
         .WillByDefault(Return(Status::OK()));
     ON_CALL(*mock_meta_system_, Close).WillByDefault(Return(Status::OK()));
     ON_CALL(*mock_meta_system_, Open).WillByDefault(Return(Status::OK()));
@@ -204,7 +204,7 @@ class VFSTestBase : public ::testing::Test {
     EXPECT_CALL(*mock_meta_system_, WriteSlice).Times(AnyNumber());
     EXPECT_CALL(*mock_meta_system_, ReadSlice).Times(AnyNumber());
     EXPECT_CALL(*mock_meta_system_, Flush).Times(AnyNumber());
-    EXPECT_CALL(*mock_meta_system_, RollbackWriteLength).Times(AnyNumber());
+    EXPECT_CALL(*mock_meta_system_, RollbackFile).Times(AnyNumber());
     EXPECT_CALL(*mock_meta_system_, Close).Times(AnyNumber());
     EXPECT_CALL(*mock_meta_system_, Open).Times(AnyNumber());
 
