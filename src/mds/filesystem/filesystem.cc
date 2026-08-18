@@ -3122,6 +3122,16 @@ Status FileSystem::Fallocate(Context& ctx, Ino ino, int32_t mode, uint64_t offse
     return Status(pb::error::ENOT_SUPPORT, "cannot fallocate on trashed inode");
   }
 
+  if (mode & FALLOC_FL_COLLAPSE_RANGE) {
+    const uint64_t chunk_size = fs_info_->GetChunkSize();
+    const bool valid_range = mode == FALLOC_FL_COLLAPSE_RANGE && chunk_size != 0 && len != 0 &&
+                             offset % chunk_size == 0 && len % chunk_size == 0 && offset < inode->Length() &&
+                             len < inode->Length() - offset;
+    if (!valid_range) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "invalid collapse range");
+    }
+  }
+
   auto parse_mode_fn = [](int32_t mode) -> const char* {
     if (mode == 0) {
       return "PreAlloc";
@@ -3129,7 +3139,8 @@ Status FileSystem::Fallocate(Context& ctx, Ino ino, int32_t mode, uint64_t offse
       return "PunchHole";
     } else if (mode & FALLOC_FL_ZERO_RANGE) {
       return (mode & FALLOC_FL_KEEP_SIZE) ? "ZeroRangeKeepSize" : "ZeroRange";
-
+    } else if (mode == FALLOC_FL_COLLAPSE_RANGE) {
+      return "CollapseRange";
     } else {
       return "Unknown";
     }
@@ -3191,7 +3202,9 @@ Status FileSystem::Fallocate(Context& ctx, Ino ino, int32_t mode, uint64_t offse
   std::string reason = fmt::format("fallocate.{}.{}", request_id, ino);
   UpsertInodeCache(attr, reason);
 
-  // update chunk cache
+  // A collapse changes the meaning of every cached chunk index at and after
+  // offset. Drop the whole inode cache before installing the shifted entries.
+  if (mode == FALLOC_FL_COLLAPSE_RANGE) chunk_cache_.Delete(ino);
   for (auto& chunk : effected_chunks) chunk_cache_.PutIf(ino, chunk);
 
   // update quota

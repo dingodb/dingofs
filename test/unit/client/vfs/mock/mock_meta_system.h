@@ -92,6 +92,10 @@ class MockMetaSystem : public MetaSystem {
               (ContextSPtr ctx, Ino ino, int set, const Attr& in_attr,
                Attr* out_attr),
               (override));
+  MOCK_METHOD(Status, Fallocate,
+              (ContextSPtr ctx, Ino ino, int mode, uint64_t offset,
+               uint64_t length),
+              (override));
   MOCK_METHOD(Status, SetXattr,
               (ContextSPtr ctx, Ino ino, const std::string& name,
                const std::string& value, int flags),

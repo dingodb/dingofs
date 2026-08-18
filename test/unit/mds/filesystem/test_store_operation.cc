@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <tuple>
 #include <vector>
 
 #include "common/meta.h"
@@ -974,7 +975,7 @@ TEST_F(CopyFileRangeRunTest, SrcOffsetBeyondEofReturnsError) {
 //   - mode == 0                 -> PreAlloc (extend size only, no chunk write)
 //   - FALLOC_FL_PUNCH_HOLE      -> SetZero, keep_size = true
 //   - FALLOC_FL_ZERO_RANGE      -> SetZero, keep_size = (mode & KEEP_SIZE)
-//   - FALLOC_FL_COLLAPSE_RANGE  -> ENOT_SUPPORT
+//   - FALLOC_FL_COLLAPSE_RANGE  -> shift chunk metadata and shrink size
 // ---------------------------------------------------------------------------
 
 namespace {
@@ -1483,21 +1484,93 @@ TEST_F(FallocateRunTest, PunchHoleBumpsExistingChunkVersionFromNonZero) {
   EXPECT_EQ(GetChunk(ino, 0).version(), 6u);
 }
 
-// FALLOC_FL_COLLAPSE_RANGE is rejected with ENOT_SUPPORT.
-TEST_F(FallocateRunTest, CollapseRangeNotSupported) {
+TEST_F(FallocateRunTest, CollapseRangeShiftsChunksAndReclaimsDeletedSlices) {
   const Ino ino = 110;
-  AttrEntry attr = MakeFallocInode(ino, 4096);
+  const uint64_t length = 4 * kFallocChunkSize;
+  AttrEntry attr = MakeFallocInode(ino, length);
+
+  for (uint32_t index = 0; index < 4; ++index) {
+    auto chunk = MakeSizedChunk(
+        index, {MakeSlice(1000 + index, 0, kFallocChunkSize, 0)});
+    chunk.set_version(index + 1);
+    SeedChunk(ino, chunk);
+  }
 
   FallocateOperation op(trace_,
                         MakeParam(ino, FALLOC_FL_COLLAPSE_RANGE,
-                                  /*offset=*/0, /*len=*/1024, /*slice_num=*/1));
+                                  /*offset=*/kFallocChunkSize,
+                                  /*len=*/kFallocChunkSize, /*slice_num=*/4));
   Operation::BatchSharedParam shared_param;
   shared_param.attr = attr;
 
-  auto txn = storage_->NewTxn();
-  auto status = op.RunInBatch(txn, shared_param);
-  ASSERT_FALSE(status.ok());
-  EXPECT_EQ(status.error_code(), pb::error::ENOT_SUPPORT);
+  ASSERT_TRUE(RunBatchOperation(storage_, op, shared_param).ok());
+
+  EXPECT_EQ(shared_param.attr.length(), 3 * kFallocChunkSize);
+  EXPECT_EQ(op.GetResult().delta_bytes,
+            -static_cast<int64_t>(kFallocChunkSize));
+  EXPECT_FALSE(ChunkExists(ino, 3));
+  EXPECT_EQ(GetChunk(ino, 1).slices(0).id(), 1002u);
+  EXPECT_EQ(GetChunk(ino, 2).slices(0).id(), 1003u);
+  EXPECT_EQ(GetChunk(ino, 1).version(), 4u);  // max(source v=3, target v=2)+1
+  EXPECT_EQ(GetChunk(ino, 2).version(), 5u);
+
+  std::string value;
+  ASSERT_TRUE(
+      storage_
+          ->Get(MetaCodec::EncodeDelSliceKey(kFallocFsId, ino, 1, op.GetTime()),
+                value)
+          .ok());
+  auto trash = MetaCodec::DecodeDelSliceValue(value);
+  ASSERT_EQ(trash.slices_size(), 1);
+  EXPECT_EQ(trash.slices(0).slice().id(), 1001u);
+  ASSERT_EQ(op.GetResult().effected_chunks.size(), 2u);
+}
+
+TEST_F(FallocateRunTest, CollapseRangeLeavesSparseChunksSparse) {
+  const Ino ino = 118;
+  AttrEntry attr = MakeFallocInode(ino, 4 * kFallocChunkSize);
+  SeedChunk(ino, MakeSizedChunk(0, {MakeSlice(2000, 0, kFallocChunkSize, 0)}));
+  SeedChunk(ino, MakeSizedChunk(3, {MakeSlice(2003, 0, kFallocChunkSize, 0)}));
+
+  FallocateOperation op(trace_,
+                        MakeParam(ino, FALLOC_FL_COLLAPSE_RANGE,
+                                  /*offset=*/kFallocChunkSize,
+                                  /*len=*/kFallocChunkSize, /*slice_num=*/4));
+  Operation::BatchSharedParam shared_param;
+  shared_param.attr = attr;
+
+  ASSERT_TRUE(RunBatchOperation(storage_, op, shared_param).ok());
+
+  EXPECT_EQ(shared_param.attr.length(), 3 * kFallocChunkSize);
+  EXPECT_TRUE(ChunkExists(ino, 0));
+  EXPECT_FALSE(ChunkExists(ino, 1));
+  EXPECT_FALSE(ChunkExists(ino, 3));
+  EXPECT_EQ(GetChunk(ino, 2).slices(0).id(), 2003u);
+}
+
+TEST_F(FallocateRunTest, CollapseRangeRejectsInvalidRanges) {
+  const Ino ino = 119;
+  AttrEntry attr = MakeFallocInode(ino, 3 * kFallocChunkSize);
+
+  const std::vector<std::tuple<int32_t, uint64_t, uint64_t>> cases = {
+      {FALLOC_FL_COLLAPSE_RANGE | FALLOC_FL_KEEP_SIZE, kFallocChunkSize,
+       kFallocChunkSize},
+      {FALLOC_FL_COLLAPSE_RANGE, 1, kFallocChunkSize},
+      {FALLOC_FL_COLLAPSE_RANGE, kFallocChunkSize, 0},
+      {FALLOC_FL_COLLAPSE_RANGE, 2 * kFallocChunkSize, kFallocChunkSize},
+  };
+
+  for (const auto& [mode, offset, len] : cases) {
+    FallocateOperation op(trace_, MakeParam(ino, mode, offset, len, 0));
+    Operation::BatchSharedParam shared_param;
+    shared_param.attr = attr;
+    auto txn = storage_->NewTxn();
+    auto status = op.PreProcess(txn, shared_param);
+    ASSERT_TRUE(status.ok());
+    status = op.RunInBatch(txn, shared_param);
+    ASSERT_FALSE(status.ok());
+    EXPECT_EQ(status.error_code(), pb::error::EILLEGAL_PARAMTETER);
+  }
 }
 
 // ---------------------------------------------------------------------------

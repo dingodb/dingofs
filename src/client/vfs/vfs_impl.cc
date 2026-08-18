@@ -349,6 +349,14 @@ Status VFSImpl::Fallocate(ContextSPtr ctx, Ino ino, int mode, uint64_t offset,
     return Status::NoPermitted("fallocate on internal node");
   }
 
+  if (mode & FALLOC_FL_COLLAPSE_RANGE) {
+    const uint64_t chunk_size = vfs_hub_->GetFsInfo().chunk_size;
+    if (mode != FALLOC_FL_COLLAPSE_RANGE || chunk_size == 0 || length == 0 ||
+        offset % chunk_size != 0 || length % chunk_size != 0) {
+      return Status::InvalidParam("invalid collapse range");
+    }
+  }
+
   if (!IsValidFileSize(offset + length)) {
     return Status::FileTooLarge("file size too large");
   }
@@ -360,13 +368,14 @@ Status VFSImpl::Fallocate(ContextSPtr ctx, Ino ino, int mode, uint64_t offset,
   if (!s.ok()) return s;
 
   s = meta_system_->Fallocate(ctx, TranslateIno(ino), mode, offset, length);
-  // Mirror the SetAttr(size) path: PUNCH_HOLE / ZERO_RANGE / extending the
-  // file all change byte contents in [offset, offset+length); cached readahead
-  // buffers in FileReader::requests_ on the same fd would otherwise serve
-  // stale bytes for the affected range.
-  if (s.ok()) {
+  // Collapse shifts every byte after offset, so invalidate the rest of the
+  // read cache. Other fallocate modes only change the requested range.
+  if (s.ok() || s.IsNetError()) {
+    const int64_t invalidate_length = mode == FALLOC_FL_COLLAPSE_RANGE
+                                          ? std::numeric_limits<int64_t>::max()
+                                          : static_cast<int64_t>(length);
     reader_registry_->InvalidateByIno(ino, static_cast<int64_t>(offset),
-                                      static_cast<int64_t>(length));
+                                      invalidate_length);
   }
 
   return s;
