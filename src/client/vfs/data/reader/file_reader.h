@@ -64,6 +64,12 @@ class FileReader {
 
  private:
   friend class FileReaderTestPeer;
+  friend void intrusive_ptr_add_ref(FileReader* reader) {
+    reader->AcquireRef();
+  }
+  friend void intrusive_ptr_release(FileReader* reader) {
+    reader->ReleaseRef();
+  }
 
   Status GetAttr(ContextSPtr ctx, Attr* attr);
 

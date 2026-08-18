@@ -31,19 +31,18 @@ bool ExecutorImpl::Start() {
   pool_->Start();
   timer_ = std::make_unique<TimerImpl>(pool_.get());
   CHECK(timer_->Start());
-  running_.store(true);
+  running_.store(true, std::memory_order_release);
   return true;
 }
 
 bool ExecutorImpl::Stop() {
-  if (running_.load()) {
-    CHECK(timer_->Stop());
-    pool_->Stop();
-    running_ = false;
-    return true;
-  } else {
+  if (!running_.exchange(false, std::memory_order_acq_rel)) {
     return false;
   }
+
+  CHECK(timer_->Stop());
+  pool_->Stop();
+  return true;
 }
 
 bool ExecutorImpl::Execute(std::function<void()> func) {
@@ -53,9 +52,10 @@ bool ExecutorImpl::Execute(std::function<void()> func) {
 }
 
 bool ExecutorImpl::Schedule(std::function<void()> func, int delay_ms) {
-  CHECK(running_);
-  timer_->Add(std::move(func), delay_ms);
-  return true;
+  if (!running_.load(std::memory_order_acquire)) {
+    return false;
+  }
+  return timer_->Add(std::move(func), delay_ms);
 }
 
 }  // namespace dingofs

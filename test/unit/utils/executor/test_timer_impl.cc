@@ -14,7 +14,12 @@
 
 #include <unistd.h>
 
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
 #include <memory>
+#include <mutex>
+#include <thread>
 
 #include "glog/logging.h"
 #include "gtest/gtest.h"
@@ -22,6 +27,25 @@
 #include "utils/executor/timer/timer_impl.h"
 
 namespace dingofs {
+class TimerImplTestPeer {
+ public:
+  static bool CanAcquireMutex(TimerImpl* timer) {
+    std::atomic<bool> acquired{false};
+    std::thread checker([&] {
+      for (int i = 0; i < 100; ++i) {
+        if (timer->mutex_.try_lock()) {
+          acquired.store(true, std::memory_order_release);
+          timer->mutex_.unlock();
+          return;
+        }
+        std::this_thread::yield();
+      }
+    });
+    checker.join();
+    return acquired.load(std::memory_order_acquire);
+  }
+};
+
 namespace utils {
 namespace unit_test {
 
@@ -35,6 +59,23 @@ class TimerImplTest : public ::testing::Test {
   ~TimerImplTest() override = default;
 
   std::unique_ptr<ThreadPoolImpl> pool{nullptr};
+};
+struct TimerCaptureProbe {
+  TimerImpl* timer;
+  std::atomic<bool>* destroyed;
+  std::atomic<bool>* destroyed_outside_mutex;
+
+  TimerCaptureProbe(TimerImpl* timer, std::atomic<bool>* destroyed,
+                    std::atomic<bool>* destroyed_outside_mutex)
+      : timer(timer),
+        destroyed(destroyed),
+        destroyed_outside_mutex(destroyed_outside_mutex) {}
+
+  ~TimerCaptureProbe() {
+    destroyed_outside_mutex->store(TimerImplTestPeer::CanAcquireMutex(timer),
+                                   std::memory_order_release);
+    destroyed->store(true, std::memory_order_release);
+  }
 };
 
 TEST_F(TimerImplTest, BaseTest) {
@@ -78,6 +119,25 @@ TEST_F(TimerImplTest, Add) {
   }
 
   EXPECT_EQ(count.load(), 0);
+}
+
+TEST_F(TimerImplTest, StopDestroysPendingFunctionsOutsideMutex) {
+  auto timer = std::make_unique<TimerImpl>(pool.get());
+  ASSERT_TRUE(timer->Start());
+
+  std::atomic<bool> ran{false};
+  std::atomic<bool> destroyed{false};
+  std::atomic<bool> destroyed_outside_mutex{false};
+  auto probe = std::make_shared<TimerCaptureProbe>(timer.get(), &destroyed,
+                                                   &destroyed_outside_mutex);
+
+  ASSERT_TRUE(timer->Add([probe, &ran] { ran.store(true); }, 60 * 60 * 1000));
+  probe.reset();
+
+  ASSERT_TRUE(timer->Stop());
+  EXPECT_FALSE(ran.load());
+  EXPECT_TRUE(destroyed.load(std::memory_order_acquire));
+  EXPECT_TRUE(destroyed_outside_mutex.load(std::memory_order_acquire));
 }
 
 }  // namespace unit_test

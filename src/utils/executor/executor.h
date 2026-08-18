@@ -31,6 +31,8 @@ class Executor {
 
   virtual bool Execute(std::function<void()> func) = 0;
 
+  // Returns true only when the delayed task is accepted. The executor does not
+  // retain a rejected task.
   virtual bool Schedule(std::function<void()> func, int delay_ms) = 0;
 
   virtual int ThreadNum() const = 0;

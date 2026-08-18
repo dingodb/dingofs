@@ -24,8 +24,8 @@
 #include "utils/executor/thread_pool.h"
 #include "utils/executor/timer/timer.h"
 
-
 namespace dingofs {
+class TimerImplTestPeer;
 
 class TimerImpl : public Timer {
  public:
@@ -43,6 +43,8 @@ class TimerImpl : public Timer {
   bool IsStopped() override;
 
  private:
+  friend class TimerImplTestPeer;
+
   void Run();
 
   struct FunctionInfo {

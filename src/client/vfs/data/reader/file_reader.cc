@@ -28,6 +28,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <boost/intrusive_ptr.hpp>
 #include <boost/range/algorithm/find.hpp>
 #include <boost/range/algorithm/sort.hpp>
 #include <cmath>
@@ -220,12 +221,9 @@ void FileReader::SchedulePeriodicShrink() {
     return;
   }
 
-  AcquireRef();
+  boost::intrusive_ptr<FileReader> self(this);
   vfs_hub_->GetReadCleanupExecutor()->Schedule(
-      [this] {
-        RunPeriodicShrink();
-        ReleaseRef();
-      },
+      [self = std::move(self)] { self->RunPeriodicShrink(); },
       FLAGS_vfs_periodic_flush_interval_ms);
 }
 
