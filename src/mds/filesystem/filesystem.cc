@@ -1212,13 +1212,8 @@ Status FileSystem::Open(Context& ctx, Ino ino, const OpenParam& param, EntryOutF
   // update cache
   UpsertInodeCache(attr, reason);
 
-  // clean chunk cache if O_TRUNC
-  if (flags & O_TRUNC) {
-    chunk_cache_.Delete(ino);
-
-  } else {
-    for (auto& chunk : chunks) chunk_cache_.PutIf(ino, std::move(chunk));
-  }
+  // update chunk cache
+  for (auto& chunk : chunks) chunk_cache_.PutIf(ino, std::move(chunk));
 
   trace.RecordElapsedTime("post_handle");
 
@@ -1309,7 +1304,6 @@ Status FileSystem::FlushFile(Context& ctx, Ino ino, const FlushFileParam& param,
 
   // set output
   entry_out.attr = attr;
-  entry_out.shrink_file = (delta_bytes < 0) ? true : false;
   entry_out.expand_file = (delta_bytes > 0) ? true : false;
 
   // update quota
@@ -1322,9 +1316,6 @@ Status FileSystem::FlushFile(Context& ctx, Ino ino, const FlushFileParam& param,
       UpdateDirStat(parent, delta_bytes, 0, 0, reason);
     }
   }
-
-  // update chunk cache
-  if (delta_bytes < 0) chunk_cache_.Delete(ino);
 
   // update cache
   UpsertInodeCache(attr, reason);
@@ -1369,6 +1360,7 @@ Status FileSystem::RollbackFile(Context& ctx, Ino ino, const RollbackFileParam& 
   auto& result = operation.GetResult();
   auto& attr = result.attr;
   int64_t delta_bytes = result.delta_bytes;
+  auto& effected_chunks = result.effected_chunks;
 
   LOG_DEBUG << fmt::format("[fs.{}.{}.{}.{}][{}us] rollback file finish, delta_bytes({}) version({}) status({}).",
                            fs_id_, ino, ctx.RequestId(), trace.GetReqTypeInt(), duration.ElapsedUs(), delta_bytes,
@@ -1377,7 +1369,6 @@ Status FileSystem::RollbackFile(Context& ctx, Ino ino, const RollbackFileParam& 
   // set output
   entry_out.attr = attr;
   entry_out.shrink_file = (delta_bytes < 0) ? true : false;
-  entry_out.expand_file = false;
 
   // update quota
   std::string reason = fmt::format("rollbackfile.{}.{}", request_id, ino);
@@ -1391,7 +1382,7 @@ Status FileSystem::RollbackFile(Context& ctx, Ino ino, const RollbackFileParam& 
   }
 
   // update chunk cache
-  if (delta_bytes < 0) chunk_cache_.Delete(ino);
+  for (auto& chunk : effected_chunks) chunk_cache_.PutIf(ino, std::move(chunk));
 
   // update cache
   UpsertInodeCache(attr, reason);
@@ -2891,8 +2882,9 @@ Status FileSystem::WriteSlice(Context& ctx, Ino ino, const std::vector<DeltaSlic
   uint64_t max_length = inode->Length();
   const uint64_t chunk_size = fs_info_->GetChunkSize();
   for (const auto& delta_slice : delta_slices) {
+    uint64_t chunk_offset = delta_slice.chunk_index() * chunk_size;
     for (const auto& slice : delta_slice.slices()) {
-      max_length = std::max(max_length, delta_slice.chunk_index() * chunk_size + slice.pos() + slice.len());
+      max_length = std::max(max_length, chunk_offset + slice.pos() + slice.len());
     }
   }
   if (max_length > inode->Length()) {
@@ -3195,22 +3187,9 @@ Status FileSystem::Fallocate(Context& ctx, Ino ino, int32_t mode, uint64_t offse
   int64_t delta_bytes = result.delta_bytes;
   auto& effected_chunks = result.effected_chunks;
 
+  // update inode cache
   std::string reason = fmt::format("fallocate.{}.{}", request_id, ino);
   UpsertInodeCache(attr, reason);
-
-  // Preallocate / ZERO_RANGE-without-KEEP_SIZE may have extended the file; charge
-  // the growth to quota and the parent directories' dir-stat, mirroring the other
-  // length-mutating paths (Open/O_TRUNC, FlushFile, SetAttr, CopyFileRange). Use
-  // the delta computed inside the operation's txn from the authoritative
-  // pre-image: re-reading inode->Length() here is wrong because UpsertInodeCache
-  // above mutates the cached inode in-place, which would zero the delta.
-  if (delta_bytes > 0) {
-    quota_manager_.UpdateFsUsage(delta_bytes, 0, reason);
-    quota_manager_.AsyncUpdateDirUsage(ino, delta_bytes, 0, reason);
-    for (const auto& parent : attr.parents()) {
-      UpdateDirStat(parent, delta_bytes, 0, 0, reason);
-    }
-  }
 
   // update chunk cache
   for (auto& chunk : effected_chunks) chunk_cache_.PutIf(ino, chunk);
@@ -3226,6 +3205,7 @@ Status FileSystem::Fallocate(Context& ctx, Ino ino, int32_t mode, uint64_t offse
 
     for (const auto& parent : attr.parents()) {
       quota_manager_.AsyncUpdateDirUsage(parent, delta_bytes, 0, reason);
+      UpdateDirStat(parent, delta_bytes, 0, 0, reason);
     }
   }
 
