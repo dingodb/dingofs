@@ -358,13 +358,9 @@ uint64_t ChunkSet::GetLastWriteSliceLength() const {
 void ChunkSet::SetLastWriteLength(uint64_t offset, uint64_t size) {
   std::lock_guard<bthread_mutex_t> flush_guard(write_flush_mutex_);
   utils::WriteLockGuard lk(lock_);
+
   last_write_length_ = std::max(last_write_length_, offset + size);
   last_write_time_ns_ = utils::TimestampNs();
-}
-
-void ChunkSet::ResetLastWriteLength() {
-  utils::WriteLockGuard lk(lock_);
-  last_write_length_ = 0;
 }
 
 void ChunkSet::InitFlushCheckpoint(uint64_t length) {
@@ -649,6 +645,23 @@ bool ChunkSet::HasUncommitedSlice() {
   return false;
 }
 
+void ChunkSet::Reset() {
+  std::lock_guard<bthread_mutex_t> flush_guard(write_flush_mutex_);
+  utils::WriteLockGuard guard(lock_);
+
+  chunk_map_.clear();
+  commit_task_map_.clear();
+  committing_chunk_index_set_.clear();
+
+  last_write_length_ = 0;
+  last_write_time_ns_ = 0;
+  last_write_slice_length_ = 0;
+  flush_checkpoint_inited_ = false;
+  flush_checkpoint_length_ = 0;
+
+  ++epoch_;
+}
+
 size_t ChunkSet::Bytes() const {
   utils::ReadLockGuard guard(lock_);
 
@@ -663,6 +676,7 @@ size_t ChunkSet::Bytes() const {
 // output json format string
 bool ChunkSet::Dump(Json::Value& value, bool is_summary) {
   value["ino"] = ino_;
+  value["epoch"] = epoch_;
   value["last_write_length"] = last_write_length_;
   value["last_write_time_ns"] = last_write_time_ns_;
 
@@ -703,6 +717,8 @@ bool ChunkSet::Load(const Json::Value& value) {
     LOG(ERROR) << "[meta.chunkset] chunkset is not object.";
     return false;
   }
+
+  epoch_ = value["epoch"].isNull() ? 0 : value["epoch"].asUInt64();
 
   // load last_write_length and last_time_ns
   last_write_length_ = value["last_write_length"].asUInt64();

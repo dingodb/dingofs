@@ -315,7 +315,6 @@ class ChunkSet {
 
   uint64_t GetLastWriteSliceLength() const;
   void SetLastWriteLength(uint64_t offset, uint64_t size);
-  void ResetLastWriteLength();
 
   // flush checkpoint (ADR-0003): file length at open, advanced on each
   // successful data+length flush; rollback target on data-flush failure.
@@ -355,6 +354,8 @@ class ChunkSet {
 
   size_t GetCommitTaskSize() const;
   bool HasUncommitedSlice();
+
+  void Reset();
 
   size_t Size() const { return GetChunkSize(); }
   size_t Bytes() const;

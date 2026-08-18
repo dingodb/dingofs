@@ -647,28 +647,25 @@ Status MDSMetaSystem::DoOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
 
   // check whether prefetch chunk
   // prepare chunk descriptors for expect chunk version
-  bool is_prefetch_chunk = true;
   std::vector<mds::ChunkDescriptor> chunk_descriptors;
-  if (is_prefetch_chunk) {
-    auto versions = chunk_memo_.GetVersion(ino);
-    for (auto& [chunk_index, version] : versions) {
-      mds::ChunkDescriptor chunk_descriptor;
-      chunk_descriptor.set_index(chunk_index);
-      chunk_descriptor.set_version(version);
-      chunk_descriptors.push_back(chunk_descriptor);
-    }
+  auto versions = chunk_memo_.GetVersion(ino);
+  for (auto& [chunk_index, version] : versions) {
+    mds::ChunkDescriptor chunk_descriptor;
+    chunk_descriptor.set_index(chunk_index);
+    chunk_descriptor.set_version(version);
+    chunk_descriptors.push_back(chunk_descriptor);
   }
 
   AttrEntry attr_entry;
   std::vector<mds::ChunkEntry> chunks;
-  auto status = mds_client_.Open(ctx, ino, flags, session_id, is_prefetch_chunk,
+  auto status = mds_client_.Open(ctx, ino, flags, session_id, true,
                                  chunk_descriptors, attr_entry, chunks);
 
   LOG_DEBUG << fmt::format(
       "[meta.fs.{}.{}] open file flags({:o}:{}) session_id({}) "
-      "chunks({}:{}) status({}).",
+      "chunks({}) status({}).",
       ino, fh, flags, dingofs::Helper::DescOpenFlags(flags), session_id,
-      is_prefetch_chunk, chunks.size(), status.ToString());
+      chunks.size(), status.ToString());
 
   if (!status.ok()) return status;
 
@@ -686,9 +683,7 @@ Status MDSMetaSystem::DoOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
   // update chunk cache
   auto& chunk_set = file_session->GetChunkSet();
   if (flags & O_TRUNC) {
-    InvalidateLengthShrinkCache(ino, false, "open_trunc");
-    chunk_set->ResetLastWriteLength();
-    chunk_set->SetFlushCheckpoint(0);
+    ResetFileChunkSet(ino, "open");
   } else {
     chunk_set->InitFlushCheckpoint(inode->Length());
   }
@@ -786,8 +781,8 @@ Status MDSMetaSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
   const std::string session_id = utils::GenerateUUID();
   auto file_session = file_session_map_.Put(ino, fh, session_id, flags);
   if (file_session->HasMultipleWriters()) {
-    LOG(ERROR) << fmt::format("[meta.fs.{}.{}] open file has multiple writers.",
-                              ino, fh);
+    LOG(WARNING) << fmt::format(
+        "[meta.fs.{}.{}] open file has multiple writers.", ino, fh);
   }
 
   auto inode = GetInodeFromCache(ino);
@@ -817,14 +812,12 @@ Status MDSMetaSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
   if (!status.ok()) {
     LOG(ERROR) << fmt::format("[meta.fs.{}.{}] open file fail, error({}).", ino,
                               fh, status.ToString());
-    if (flags & O_TRUNC) {
-      InvalidateLengthShrinkCache(ino, status, "open_trunc");
-      if (status.IsNetError()) *keep_cache = false;
-    }
+    if ((flags & O_TRUNC) && status.IsNetError()) *keep_cache = false;
     file_session_map_.Delete(ino, fh);
 
   } else {
     if (flags & O_TRUNC) *keep_cache = false;
+
     auto inode = GetInodeFromCache(ino);
     if (inode == nullptr ||
         inode->Mtime() > modify_time_memo_.GetKernelMtime(ino)) {
@@ -868,13 +861,6 @@ Status MDSMetaSystem::Flush(ContextSPtr ctx, Ino ino, uint64_t fh) {
 
   uint32_t flags = file_session->GetFlags(fh);
 
-  // only flush when file opened with write flag
-  if (!(flags & O_WRONLY || flags & O_RDWR)) {
-    LOG_DEBUG << fmt::format(
-        "[meta.fs.{}.{}] flush skipped, file opened with read flag.", ino, fh);
-    return Status::OK();
-  }
-
   return FlushSliceAndFile(ctx, ino);
 }
 
@@ -908,9 +894,6 @@ Status MDSMetaSystem::RollbackFile(ContextSPtr ctx, Ino ino, uint64_t fh) {
   bool shrink_file = false;
   auto status = mds_client_.RollbackFile(ctx, ino, last_write_length,
                                          checkpoint, attr_entry, shrink_file);
-  // Invalidate even when the response says no shrink: an earlier timed-out
-  // attempt may have committed and the RPC retry then observed the checkpoint.
-  InvalidateLengthShrinkCache(ino, status, "rollback_write_length");
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
         "[meta.fs.{}.{}] rollback write length fail, checkpoint({}) "
@@ -919,11 +902,9 @@ Status MDSMetaSystem::RollbackFile(ContextSPtr ctx, Ino ino, uint64_t fh) {
     return status;
   }
 
-  // discard the write memo so GetAttr no longer inflates the kernel-visible
-  // length with abandoned writes.
-  chunk_set->ResetLastWriteLength();
-
   PutInodeToCache(attr_entry);
+
+  if (shrink_file) ResetFileChunkSet(ino, "rollback");
 
   return Status::OK();
 }
@@ -1130,7 +1111,7 @@ Status MDSMetaSystem::WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
   CHECK(file_session != nullptr)
       << fmt::format("file session is nullptr, ino({}) fh({}).", ino, fh);
 
-  auto chunk_set = file_session->GetChunkSet();
+  auto& chunk_set = file_session->GetChunkSet();
   chunk_set->Append(index, slices);
 
   AsyncFlushSlice(ctx, chunk_set, false, false);
@@ -1138,7 +1119,7 @@ Status MDSMetaSystem::WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
   return Status::OK();
 }
 
-Status MDSMetaSystem::Write(ContextSPtr, Ino ino, const char* buf,
+Status MDSMetaSystem::Write(ContextSPtr, Ino ino, const char* /*buf*/,
                             uint64_t offset, uint64_t size, uint64_t fh) {
   AssertStop();
 
@@ -1146,8 +1127,7 @@ Status MDSMetaSystem::Write(ContextSPtr, Ino ino, const char* buf,
   CHECK(file_session != nullptr)
       << fmt::format("file session is nullptr, ino({}) fh({}).", ino, fh);
 
-  auto& chunk_set = file_session->GetChunkSet();
-  chunk_set->SetLastWriteLength(offset, size);
+  file_session->GetChunkSet()->SetLastWriteLength(offset, size);
 
   // update last modify time
   modify_time_memo_.Remember(ino);
@@ -1467,27 +1447,18 @@ Status MDSMetaSystem::SetAttr(ContextSPtr ctx, Ino ino, int set,
 
   MDSClient::AttrWithChunkOut out;
   auto status = mds_client_.SetAttr(ctx, ino, attr, set, out);
-  // Invalidate on every successful size setattr (a timed-out attempt may have
-  // committed a shrink while the successful retry reports it as a no-op) and
-  // on commit-ambiguous network errors.
-  if (set & kSetAttrSize)
-    InvalidateLengthShrinkCache(ino, status, "setattr_length");
-  if (!status.ok()) {
-    return status;
-  }
+  if (!status.ok()) return status;
 
   auto inode = PutInodeToCache(out.attr_entry);
   *out_attr = inode->ToAttr();
 
   // update file length, need update local chunk cache write length
   if (set & kSetAttrSize) {
-    auto file_session = file_session_map_.GetSession(ino);
-    if (file_session != nullptr) {
-      auto& chunk_set = file_session->GetChunkSet();
-      chunk_set->ResetLastWriteLength();
+    ResetFileChunkSet(ino, "setattr");
 
-      if (!out.effected_chunks.empty())
-        chunk_set->Put(out.effected_chunks, "setattr");
+    auto file_session = file_session_map_.GetSession(ino);
+    if (file_session != nullptr && !out.effected_chunks.empty()) {
+      file_session->GetChunkSet()->Put(out.effected_chunks, "setattr");
     }
   }
 
@@ -1513,6 +1484,7 @@ Status MDSMetaSystem::Fallocate(ContextSPtr ctx, Ino ino, int mode,
 
   MDSClient::AttrWithChunkOut out;
   status = mds_client_.Fallocate(ctx, ino, mode, offset, length, out);
+  if (!status.ok()) return status;
 
   // Invalidate caches on success OR ambiguous net error (server may have
   // committed the txn but the response was lost — cache TTL is 3600s, so
@@ -1522,20 +1494,13 @@ Status MDSMetaSystem::Fallocate(ContextSPtr ctx, Ino ino, int mode,
   if (status.ok() || status.IsNetError()) {
     chunk_memo_.Forget(ino);
   }
-  if (status.ok()) {
-    modify_time_memo_.Remember(ino);
-    PutInodeToCache(out.attr_entry);
 
-    auto file_session = file_session_map_.GetSession(ino);
-    if (file_session != nullptr) {
-      auto& chunk_set = file_session->GetChunkSet();
-      if (out.shrink_file || out.expand_file) {
-        chunk_set->ResetLastWriteLength();
-      }
+  modify_time_memo_.Remember(ino);
+  PutInodeToCache(out.attr_entry);
 
-      if (!out.effected_chunks.empty())
-        chunk_set->Put(out.effected_chunks, "fallocate");
-    }
+  auto file_session = file_session_map_.GetSession(ino);
+  if (file_session != nullptr && !out.effected_chunks.empty()) {
+    file_session->GetChunkSet()->Put(out.effected_chunks, "fallocate");
   }
 
   return status;
@@ -1749,7 +1714,6 @@ Status MDSMetaSystem::DoFlushFile(ContextSPtr ctx, InodeSPtr inode,
   chunk_set->SetFlushCheckpoint(last_write_length);
 
   modify_time_memo_.Remember(ino);
-
   PutInodeToCache(attr_entry);
 
   return Status::OK();
@@ -1886,9 +1850,10 @@ Status MDSMetaSystem::AsyncFlushSlice(ContextSPtr& ctx, ChunkSetSPtr chunk_set,
 
 Status MDSMetaSystem::FlushSliceAndFile(ContextSPtr ctx, Ino ino) {
   auto file_session = file_session_map_.GetSession(ino);
-  if (file_session == nullptr) {
-    LOG(WARNING) << fmt::format(
-        "[meta.fs.{}] flush file skip cause no file session.", ino);
+  if (file_session == nullptr || !file_session->HasWriter()) {
+    LOG_DEBUG << fmt::format(
+        "[meta.fs.{}] flush file skip cause no file session or no writer.",
+        ino);
     return Status::OK();
   }
 
@@ -1985,37 +1950,19 @@ bool MDSMetaSystem::CorrectAttrLength(Attr& attr, const std::string& caller) {
   return false;
 }
 
+void MDSMetaSystem::ResetFileChunkSet(Ino ino, const std::string& reason) {
+  LOG_DEBUG << fmt::format("[meta.fs.{}] reset file chunkset, reason({}).", ino,
+                           reason);
+
+  auto file_session = file_session_map_.GetSession(ino);
+  if (file_session != nullptr) file_session->GetChunkSet()->Reset();
+
+  chunk_memo_.Forget(ino);
+}
+
 void MDSMetaSystem::InvalidateFileSessionReadCache(Ino ino) {
   auto file_session = file_session_map_.GetSession(ino);
   if (file_session != nullptr) file_session->InvalidateReadCache(true);
-}
-
-void MDSMetaSystem::InvalidateLengthShrinkCache(Ino ino, bool invalidate_inode,
-                                                const std::string& reason) {
-  LOG_DEBUG << fmt::format(
-      "[meta.fs.{}] invalidate length shrink cache, invalidate_inode({}) "
-      "reason({}).",
-      ino, invalidate_inode, reason);
-
-  chunk_memo_.Forget(ino);
-
-  auto file_session = file_session_map_.GetSession(ino);
-  if (file_session != nullptr) file_session->InvalidateReadCache(false);
-
-  if (invalidate_inode) DeleteInodeFromCache(ino);
-}
-
-// Status-based policy shared by shrink paths: on success invalidate
-// conservatively but keep the inode (caller refreshes it from the RPC attr);
-// on a commit-ambiguous network error also drop the cached inode since the
-// shrink may have committed server-side. Other errors need no invalidation.
-void MDSMetaSystem::InvalidateLengthShrinkCache(Ino ino, const Status& status,
-                                                const std::string& reason) {
-  if (status.ok()) {
-    InvalidateLengthShrinkCache(ino, /*invalidate_inode=*/false, reason);
-  } else if (status.IsNetError()) {
-    InvalidateLengthShrinkCache(ino, /*invalidate_inode=*/true, reason);
-  }
 }
 
 Status MDSMetaSystem::Compact(ContextSPtr ctx, Ino ino, uint32_t chunk_index,

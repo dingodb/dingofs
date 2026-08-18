@@ -228,11 +228,10 @@ class MDSMetaSystem : public vfs::MetaSystem {
   Status CorrectAttr(ContextSPtr ctx, uint64_t time_ns, Attr& attr,
                      bool& is_amend, const std::string& caller);
   bool CorrectAttrLength(Attr& attr, const std::string& caller);
+
+  void ResetFileChunkSet(Ino ino, const std::string& reason);
+  // invalidate file session's read cache, called when mtime changed
   void InvalidateFileSessionReadCache(Ino ino);
-  void InvalidateLengthShrinkCache(Ino ino, bool invalidate_inode,
-                                   const std::string& reason);
-  void InvalidateLengthShrinkCache(Ino ino, const Status& status,
-                                   const std::string& reason);
 
   Status DoOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
                 const std::string& session_id, FileSessionSPtr file_session);

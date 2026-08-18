@@ -1149,7 +1149,7 @@ class FallocateOperation : public Operation {
   Result& GetResult() { return result_; }
 
  private:
-  Status PreAlloc(AttrEntry& attr, uint64_t offset, uint64_t len);
+  void PreAlloc(AttrEntry& attr, uint64_t offset, uint64_t len, bool keep_size);
   Status SetZero(TxnUPtr& txn, AttrEntry& attr, uint64_t offset, uint64_t len, bool keep_size);
 
   Param param_;
