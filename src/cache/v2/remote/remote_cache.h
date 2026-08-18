@@ -46,6 +46,7 @@ class RemoteCache final : public BlockCache {
                      char* buffer, GetOption option = {}) override;
   Future<Status> Prefetch(BlockHandle handle,
                           PrefetchOption option = {}) override;
+  Future<Status> Delete(BlockHandle handle, DeleteOption option = {}) override;
   Future<CacheStats> GetStats() override;
 
   static Members GetMembers();

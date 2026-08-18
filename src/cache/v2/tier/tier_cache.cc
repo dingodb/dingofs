@@ -175,6 +175,21 @@ Future<Status> TierCache::Prefetch(BlockHandle handle, PrefetchOption option) {
   co_return Status::NotSupport("there is no cache tier to prefetch into");
 }
 
+Future<Status> TierCache::Delete(BlockHandle handle, DeleteOption option) {
+  Status result = Status::OK();
+  if (HasLocal()) {
+    result = co_await local_cache_->Delete(handle, option);
+  }
+
+  if (HasRemote()) {
+    const Status status = co_await remote_cache_->Delete(handle, option);
+    if (result.ok()) {
+      result = status;
+    }
+  }
+  co_return result;
+}
+
 Future<CacheStats> TierCache::GetStats() {
   CacheStats stats;
   if (HasLocal()) {

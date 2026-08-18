@@ -24,7 +24,7 @@ namespace v2 {
 
 DEFINE_uint32(threads, 1, "submitting threads");
 DEFINE_uint32(iodepth, 1, "in-flight requests per thread");
-DEFINE_string(op, "put", "put | get");
+DEFINE_string(op, "put", "put | get | delete");
 DEFINE_uint64(fsid, 1, "fs the blocks belong to");
 DEFINE_uint64(blksize, 4194304, "block size in bytes");
 DEFINE_uint64(blocks, 1, "blocks per thread");

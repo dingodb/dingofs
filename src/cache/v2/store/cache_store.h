@@ -45,6 +45,7 @@ class CacheStore {
   virtual Future<Status> Cache(BlockHandle handle, BufferViews block) = 0;
   virtual Future<Status> Load(BlockHandle handle, uint64_t offset,
                               uint32_t length, char* buffer) = 0;
+  virtual Future<Status> Delete(BlockHandle handle) = 0;
   virtual Future<bool> Exists(BlockHandle handle) = 0;
   virtual Future<CacheStats> GetStats() = 0;
 };

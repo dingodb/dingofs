@@ -49,6 +49,7 @@ class RemoteNode {
   Future<Status> Get(BlockHandle handle, uint64_t offset, uint32_t length,
                      char* buffer);
   Future<Status> Prefetch(BlockHandle handle);
+  Future<Status> Delete(BlockHandle handle);
 
   const CacheGroupMember& member() const { return member_; }
 

@@ -78,6 +78,10 @@ Future<Status> DiskCacheGroup::Load(BlockHandle handle, uint64_t offset,
   return GetStore(handle).Load(handle, offset, length, buffer);
 }
 
+Future<Status> DiskCacheGroup::Delete(BlockHandle handle) {
+  return GetStore(handle).Delete(handle);
+}
+
 Future<bool> DiskCacheGroup::Exists(BlockHandle handle) {
   return GetStore(handle).Exists(handle);
 }

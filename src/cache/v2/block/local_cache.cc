@@ -174,6 +174,13 @@ Future<Status> LocalCache::Prefetch(BlockHandle handle,
   co_return co_await object_retriever_->Prefetch(handle);
 }
 
+Future<Status> LocalCache::Delete(BlockHandle handle, DeleteOption /*option*/) {
+  if (!running_) {
+    co_return Status::CacheDown("LocalCache is down");
+  }
+  co_return co_await store_->Delete(handle);
+}
+
 Future<CacheStats> LocalCache::GetStats() {
   if (!running_) {
     return MakeReadyFuture<CacheStats>(CacheStats{});

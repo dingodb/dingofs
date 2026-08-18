@@ -43,6 +43,8 @@ struct GetOption {
 
 struct PrefetchOption {};
 
+struct DeleteOption {};
+
 class BlockCache {
  public:
   virtual ~BlockCache() = default;
@@ -57,6 +59,8 @@ class BlockCache {
                              GetOption option = {}) = 0;
   virtual Future<Status> Prefetch(BlockHandle handle,
                                   PrefetchOption option = {}) = 0;
+  virtual Future<Status> Delete(BlockHandle handle,
+                                DeleteOption option = {}) = 0;
   virtual Future<CacheStats> GetStats() = 0;
 };
 

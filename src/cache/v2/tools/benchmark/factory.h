@@ -92,6 +92,17 @@ class GetTaskFactory final : public TaskFactory {
   BlockCacheImpl* block_cache_;
 };
 
+class DeleteTaskFactory final : public TaskFactory {
+ public:
+  explicit DeleteTaskFactory(BlockCacheImpl* block_cache);
+
+  bool SubmitTask(Slot* slot, AsyncCallback cb) override;
+  uint64_t BytesPerOp() const override;
+
+ private:
+  BlockCacheImpl* block_cache_;
+};
+
 TaskFactoryUPtr NewFactory(BlockCacheImpl* block_cache, const std::string& op);
 
 }  // namespace v2

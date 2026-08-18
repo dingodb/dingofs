@@ -35,6 +35,7 @@ CacheService::CacheService(ShardedLocalCache* block_cache)
   AddMethod("Put", &CacheService::Put);
   AddMethod("Get", &CacheService::Get);
   AddMethod("Prefetch", &CacheService::Prefetch);
+  AddMethod("Delete", &CacheService::Delete);
   AddMethod("Ping", &CacheService::Ping);
   AddMethod("GetNodeInfo", &CacheService::GetNodeInfo);
 }
@@ -107,6 +108,22 @@ Future<> CacheService::Prefetch(Controller* /*cntl*/,
 
   const BlockHandle handle = BlockHandle::FromPb(request->handle());
   status = co_await block_cache_->Prefetch(handle);
+
+  response->set_status(ToErrno(status));
+  co_return;
+}
+
+Future<> CacheService::Delete(Controller* /*cntl*/,
+                              const pb::cache::v2::DeleteRequest* request,
+                              pb::cache::v2::DeleteResponse* response) {
+  Status status = CheckHandle(request->handle());
+  if (!status.ok()) {
+    response->set_status(ToErrno(status));
+    co_return;
+  }
+
+  const BlockHandle handle = BlockHandle::FromPb(request->handle());
+  status = co_await block_cache_->Delete(handle);
 
   response->set_status(ToErrno(status));
   co_return;

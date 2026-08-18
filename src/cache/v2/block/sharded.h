@@ -47,6 +47,7 @@ class ShardedLocalCache {
   Future<Status> Get(BlockHandle handle, uint64_t offset, uint32_t length,
                      char* buffer, GetOption option = {});
   Future<Status> Prefetch(BlockHandle handle, PrefetchOption option = {});
+  Future<Status> Delete(BlockHandle handle, DeleteOption option = {});
   Future<CacheStats> GetStats();
 
  private:
