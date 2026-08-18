@@ -1388,9 +1388,8 @@ Status UpsertChunkOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_p
     std::string value = FindValue(prefetch_index, key);
     if (!value.empty()) chunk = MetaCodec::DecodeChunkValue(value);
 
-    LOG_DEBUG << fmt::format(
-        "[operation.{}.{}] upsert chunk, chunk_index({}) value({}) old_chunk({}).", fs_id, ino_, chunk_index,
-        value.size(), chunk.ShortDebugString());
+    LOG_DEBUG << fmt::format("[operation.{}.{}] upsert chunk, chunk_index({}) value({}) old_chunk({}).", fs_id, ino_,
+                             chunk_index, value.size(), chunk.ShortDebugString());
 
     bool has_update = false;
     // not exist chunk, create a new one
@@ -1568,19 +1567,18 @@ Status ScanSliceRefOperation::Run(TxnUPtr& txn) {
   });
 }
 
-Status FallocateOperation::PreAlloc(AttrEntry& attr, uint64_t offset, uint64_t len) {
+void FallocateOperation::PreAlloc(AttrEntry& attr, uint64_t offset, uint64_t len, bool keep_size) {
   // ponytail: mode=0 only extends the file length, exactly like truncate-up.
   // It must NOT touch chunks: appending zero slices over [offset, offset+len)
   // shadows already-written data (slices are append-ordered), which turned
   // plain fallocate into a punch-hole and corrupted data. Bytes past the old
   // EOF are a hole and already read as zero without any slice.
-  attr.set_length(std::max(attr.length(), offset + len));
+
+  if (!keep_size) attr.set_length(std::max(attr.length(), offset + len));
   attr.set_ctime(std::max(attr.ctime(), GetTime()));
   attr.set_mtime(std::max(attr.mtime(), GetTime()));
 
   result_.effected_chunks.clear();
-
-  return Status::OK();
 }
 
 // |---------file length--------|
@@ -1616,12 +1614,7 @@ Status FallocateOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_par
   const uint64_t file_length = attr.length();
 
   if (mode_ == 0) {
-    // pre allocate
-    auto status = PreAlloc(attr, offset, len);
-    if (!status.ok()) {
-      return Status(pb::error::EINTERNAL,
-                    fmt::format("pre allocate file length({}) fail, {}", offset + len, status.error_str()));
-    }
+    PreAlloc(attr, offset, len, false);
 
   } else if (mode_ & FALLOC_FL_PUNCH_HOLE) {
     auto status = SetZero(txn, attr, offset, len, true);
@@ -1637,6 +1630,9 @@ Status FallocateOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_par
       return Status(pb::error::EINTERNAL,
                     fmt::format("set range[{},{}) to zero fail, {}", offset, offset + len, status.error_str()));
     }
+
+  } else if (mode_ & FALLOC_FL_KEEP_SIZE) {
+    PreAlloc(attr, offset, len, true);
 
   } else if (mode_ & FALLOC_FL_COLLAPSE_RANGE) {
     return Status(pb::error::ENOT_SUPPORT, "not support FALLOC_FL_COLLAPSE_RANGE");

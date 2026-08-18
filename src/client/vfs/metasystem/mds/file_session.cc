@@ -85,6 +85,18 @@ uint32_t FileSession::DeleteSession(uint64_t fh) {
   return DecRef();
 }
 
+bool FileSession::HasWriter() {
+  utils::ReadLockGuard lk(lock_);
+
+  for (const auto& [_, session_info] : session_id_map_) {
+    if ((session_info.flags & O_ACCMODE) != O_RDONLY) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 bool FileSession::HasMultipleWriters() {
   utils::ReadLockGuard lk(lock_);
 
