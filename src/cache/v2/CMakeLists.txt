@@ -1,4 +1,4 @@
-# Copyright (c) 2025 dingodb.com, Inc. All Rights Reserved
+# Copyright (c) 2026 dingodb.com, Inc. All Rights Reserved
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,40 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+function(cache_tune target)
+    target_compile_options(${target} PRIVATE -O3 -march=native -falign-functions=64)
+    set_property(TARGET ${target} PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
+endfunction()
+
+add_subdirectory(api)
+add_subdirectory(block)
 add_subdirectory(common)
-add_subdirectory(iutil)
-add_subdirectory(infiniband)
-add_subdirectory(local)
+add_subdirectory(core)
 add_subdirectory(node)
+add_subdirectory(object)
 add_subdirectory(remote)
+add_subdirectory(store)
 add_subdirectory(tier)
 add_subdirectory(tools)
-
-if(BUILD_CACHE_V2)
-    add_subdirectory(v2)
-endif()
-
-file(GLOB CACHE_LIB_SRCS
-    "node/dingo_cache.cc"
-)
-add_library(cache_lib ${CACHE_LIB_SRCS})
-target_link_libraries(cache_lib
-    cache_common
-    cache_iutil
-    cache_infiniband
-    cache_local
-    cache_node
-    cache_remote
-    cache_tier
-    dingofs_options
-)
-
-add_executable(dingo-cache node/main.cc)
-target_link_libraries(dingo-cache
-    ibverbs::ibverbs
-
-    cache_lib
-)
-target_link_options(dingo-cache PRIVATE
-    "-Wl,--allow-multiple-definition"
-)
+add_subdirectory(utils)
