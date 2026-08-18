@@ -41,6 +41,7 @@
 #include "dingofs/error.pb.h"
 #include "dingofs/mds.pb.h"
 #include "fmt/format.h"
+#include "fmt/ranges.h"
 #include "glog/logging.h"
 #include "inode.h"
 #include "mds/common/codec.h"
@@ -1182,7 +1183,8 @@ Status SymLinkOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param
   return Status::OK();
 }
 
-static Status ScanChunk(TxnUPtr& txn, uint32_t fs_id, Ino ino, std::map<uint64_t, ChunkEntry>& chunks) {
+static Status ScanChunk(TxnUPtr& txn, uint32_t fs_id, Ino ino, const std::string& reason,
+                        std::map<uint64_t, ChunkEntry>& chunks) {
   Range range = MetaCodec::GetChunkRange(fs_id, ino);
 
   auto status = txn->Scan(range, [&](const std::string& key, const std::string& value) -> bool {
@@ -1193,6 +1195,9 @@ static Status ScanChunk(TxnUPtr& txn, uint32_t fs_id, Ino ino, std::map<uint64_t
 
     return true;
   });
+
+  LOG_DEBUG << fmt::format("[operation.{}.{}] scan chunk, reason({}), status({}).", fs_id, ino, reason,
+                           status.error_str());
 
   return status;
 }
@@ -1205,19 +1210,19 @@ static Status ScanChunk(TxnUPtr& txn, uint32_t fs_id, Ino ino, std::map<uint64_t
 // without removing old slices. Touched chunks are written to txn and collected
 // into effected_chunks. Shared by length shrink and fallocate
 // PUNCH_HOLE/ZERO_RANGE.
-static Status AppendZeroSlices(TxnUPtr& txn, uint32_t fs_id, Ino ino, uint64_t offset, uint64_t end_offset,
-                               uint64_t chunk_size, std::vector<ChunkEntry>& effected_chunks) {
+static void AppendZeroSlices(Operation::BatchSharedParam& shared_param, uint32_t fs_id, Ino ino, uint64_t offset,
+                             uint64_t end_offset, uint64_t chunk_size, const std::string& reason) {
   // Reset so a txn retry (which re-runs this op) doesn't accumulate duplicates.
-  effected_chunks.clear();
-  if (offset >= end_offset) return Status::OK();
+  if (offset >= end_offset) return;
 
-  std::map<uint64_t, ChunkEntry> chunks;
-  auto status = ScanChunk(txn, fs_id, ino, chunks);
-  if (!status.ok()) return status;
+  auto& chunk_map = shared_param.chunk_map;
+  auto& changed_chunk_indexes = shared_param.changed_chunk_indexes;
+
+  CHECK(shared_param.is_prefetched_chunk) << "is_prefetched_chunk is false.";
 
   const uint64_t first_chunk = offset / chunk_size;
   const uint64_t last_chunk = (end_offset - 1) / chunk_size;
-  for (auto it = chunks.lower_bound(first_chunk); it != chunks.end() && it->first <= last_chunk; ++it) {
+  for (auto it = chunk_map.lower_bound(first_chunk); it != chunk_map.end() && it->first <= last_chunk; ++it) {
     auto& chunk = it->second;
     const uint64_t chunk_offset = it->first * chunk_size;
     const uint64_t zero_start = std::max(offset, chunk_offset);
@@ -1234,17 +1239,40 @@ static Status AppendZeroSlices(TxnUPtr& txn, uint32_t fs_id, Ino ino, uint64_t o
     // Bump version so ChunkCache::PutIf accepts the updated slice list.
     chunk.set_version(chunk.version() + 1);
 
-    LOG_DEBUG << fmt::format("[operation.{}.{}] update chunk, range[{},{}) version({}), value({}).", fs_id, ino,
-                             zero_start, zero_end, chunk.version(), chunk.ShortDebugString());
+    LOG_DEBUG << fmt::format("[operation.{}.{}] update chunk, reason({}), range[{},{}) version({}), value({}).", fs_id,
+                             ino, reason, zero_start, zero_end, chunk.version(), chunk.ShortDebugString());
 
-    txn->Put(MetaCodec::EncodeChunkKey(fs_id, ino, it->first), MetaCodec::EncodeChunkValue(chunk));
-    effected_chunks.push_back(chunk);
+    changed_chunk_indexes.insert(chunk.index());
   }
-
-  return Status::OK();
 }
 
-Status UpdateAttrOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) {
+Status UpdateAttrOperation::PreProcess(TxnUPtr& txn, BatchSharedParam& shared_param) {
+  if (!(to_set_ & kSetAttrSize)) return Status::OK();
+  if (shared_param.is_prefetched_chunk) return Status::OK();
+
+  const uint32_t fs_id = attr_.fs_id();
+
+  auto status = ScanChunk(txn, fs_id, ino_, "updateattr", shared_param.chunk_map);
+  if (!status.ok()) return status;
+
+  shared_param.is_prefetched_chunk = true;
+
+  return status;
+}
+
+void UpdateAttrOperation::PostProcess(BatchSharedParam& shared_param) {
+  if (!shared_param.is_prefetched_chunk) return;
+  if (shared_param.changed_chunk_indexes.empty()) return;
+
+  for (const auto& chunk_index : shared_param.changed_chunk_indexes) {
+    auto it = shared_param.chunk_map.find(chunk_index);
+    if (it != shared_param.chunk_map.end()) {
+      result_.effected_chunks.push_back(it->second);
+    }
+  }
+}
+
+Status UpdateAttrOperation::RunInBatch(TxnUPtr&, BatchSharedParam& shared_param) {
   auto& attr = shared_param.attr;
   result_.delta_bytes = 0;
   result_.effected_chunks.clear();
@@ -1281,9 +1309,8 @@ Status UpdateAttrOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_pa
     // slices are append-ordered and the stale slice still sits in the chunk.
     // Mirror fallocate ZERO_RANGE: zero [new_length, old_length).
     if (new_length < old_length) {
-      auto status = AppendZeroSlices(txn, attr.fs_id(), attr.ino(), new_length, old_length, extra_param_.chunk_size,
-                                     result_.effected_chunks);
-      if (!status.ok()) return status;
+      AppendZeroSlices(shared_param, attr.fs_id(), attr.ino(), new_length, old_length, extra_param_.chunk_size,
+                       "updateattr");
     }
 
     // Update the operation-local inode only after zero-slice preparation
@@ -1366,7 +1393,18 @@ void UpsertChunkOperation::PrefetchKey(std::vector<std::string>& keys) {
   }
 }
 
-Status UpsertChunkOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) {
+void UpsertChunkOperation::PostProcess(BatchSharedParam& shared_param) {
+  if (shared_param.changed_chunk_indexes.empty()) return;
+
+  for (const auto& chunk_index : shared_param.changed_chunk_indexes) {
+    auto it = shared_param.chunk_map.find(chunk_index);
+    if (it != shared_param.chunk_map.end()) {
+      result_.effected_chunks.push_back(it->second);
+    }
+  }
+}
+
+Status UpsertChunkOperation::RunInBatch(TxnUPtr& /*txn*/, BatchSharedParam& shared_param) {
   const uint32_t fs_id = fs_info_.fs_id();
   const uint64_t now_ms = utils::TimestampMs();
 
@@ -1449,11 +1487,12 @@ Status UpsertChunkOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_p
 
       LOG_DEBUG << fmt::format("[operation.{}.{}] update chunk, version({}), value({}).", fs_id, ino_, chunk.version(),
                                chunk.ShortDebugString());
-      txn->Put(key, MetaCodec::EncodeChunkValue(chunk));
+
+      shared_param.changed_chunk_indexes.insert(chunk.index());
+      shared_param.chunk_map[chunk.index()] = chunk;
+
       has_update_chunk = true;
     }
-
-    result_.effected_chunks.push_back(std::move(chunk));
   }
 
   // update inode length if needed
@@ -1586,28 +1625,54 @@ void FallocateOperation::PreAlloc(AttrEntry& attr, uint64_t offset, uint64_t len
 // 1. [offset, len)    |-----|
 // 2. [offset, len)    |-------------|
 // 3. [offset, len)                |-----|
-Status FallocateOperation::SetZero(TxnUPtr& txn, AttrEntry& attr, uint64_t offset, uint64_t len, bool keep_size) {
+void FallocateOperation::SetZero(BatchSharedParam& shared_param, AttrEntry& attr, uint64_t offset, uint64_t len,
+                                 bool keep_size) {
   uint64_t end_offset = keep_size ? std::min(attr.length(), offset + len) : (offset + len);
 
-  auto status =
-      AppendZeroSlices(txn, attr.fs_id(), attr.ino(), offset, end_offset, param_.chunk_size, result_.effected_chunks);
-  if (!status.ok()) return status;
-
+  AppendZeroSlices(shared_param, attr.fs_id(), attr.ino(), offset, end_offset, param_.chunk_size, "fallocate");
   if (!keep_size && end_offset > attr.length()) {
     attr.set_length(end_offset);
   }
 
   attr.set_ctime(std::max(attr.ctime(), GetTime()));
   attr.set_mtime(std::max(attr.mtime(), GetTime()));
-
-  return Status::OK();
 }
 
-Status FallocateOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) {
+Status FallocateOperation::PreProcess(TxnUPtr& txn, BatchSharedParam& shared_param) {
+  if (!(param_.mode & FALLOC_FL_PUNCH_HOLE || param_.mode & FALLOC_FL_ZERO_RANGE)) return Status::OK();
+  if (shared_param.is_prefetched_chunk) return Status::OK();
+
+  const uint32_t fs_id = param_.fs_id;
+  const Ino ino = param_.ino;
+
+  auto status = ScanChunk(txn, fs_id, ino, "fallocate", shared_param.chunk_map);
+  if (!status.ok()) return status;
+
+  shared_param.is_prefetched_chunk = true;
+
+  return status;
+}
+
+void FallocateOperation::PostProcess(BatchSharedParam& shared_param) {
+  if (!shared_param.is_prefetched_chunk) return;
+  if (shared_param.changed_chunk_indexes.empty()) return;
+
+  for (const auto& chunk_index : shared_param.changed_chunk_indexes) {
+    auto it = shared_param.chunk_map.find(chunk_index);
+    if (it != shared_param.chunk_map.end()) {
+      result_.effected_chunks.push_back(it->second);
+    }
+  }
+}
+
+Status FallocateOperation::RunInBatch(TxnUPtr&, BatchSharedParam& shared_param) {
   auto& attr = shared_param.attr;
   const int32_t mode_ = param_.mode;
   const uint64_t offset = param_.offset;
   const uint64_t len = param_.len;
+
+  result_.delta_bytes = 0;
+  result_.effected_chunks.clear();
 
   // Pre-image length, before PreAlloc/SetZero mutate attr. The growth is charged
   // to quota and dir-stat by the caller via result_.delta_bytes.
@@ -1617,19 +1682,11 @@ Status FallocateOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_par
     PreAlloc(attr, offset, len, false);
 
   } else if (mode_ & FALLOC_FL_PUNCH_HOLE) {
-    auto status = SetZero(txn, attr, offset, len, true);
-    if (!status.ok()) {
-      return Status(pb::error::EINTERNAL,
-                    fmt::format("punch hole range[{},{}) fail, {}", offset, offset + len, status.error_str()));
-    }
+    SetZero(shared_param, attr, offset, len, true);
 
   } else if (mode_ & FALLOC_FL_ZERO_RANGE) {
     // set range to zero
-    auto status = SetZero(txn, attr, offset, len, mode_ & FALLOC_FL_KEEP_SIZE);
-    if (!status.ok()) {
-      return Status(pb::error::EINTERNAL,
-                    fmt::format("set range[{},{}) to zero fail, {}", offset, offset + len, status.error_str()));
-    }
+    SetZero(shared_param, attr, offset, len, mode_ & FALLOC_FL_KEEP_SIZE);
 
   } else if (mode_ & FALLOC_FL_KEEP_SIZE) {
     PreAlloc(attr, offset, len, true);
@@ -1651,23 +1708,59 @@ void OpenFileOperation::PrefetchKey(std::vector<std::string>& keys) {
   }
 }
 
+Status OpenFileOperation::PreProcess(TxnUPtr& txn, BatchSharedParam& shared_param) {
+  if (!(flags_ & O_TRUNC)) return Status::OK();
+  if (shared_param.is_prefetched_chunk) return Status::OK();
+
+  const uint32_t fs_id = file_session_.fs_id();
+  const Ino ino = file_session_.ino();
+
+  auto status = ScanChunk(txn, fs_id, ino, "openfile_truncate", shared_param.chunk_map);
+  if (!status.ok()) return status;
+
+  shared_param.is_prefetched_chunk = true;
+
+  return status;
+}
+
+void OpenFileOperation::PostProcess(BatchSharedParam& shared_param) {
+  if (!shared_param.is_prefetched_chunk) return;
+  if (shared_param.changed_chunk_indexes.empty()) return;
+
+  std::map<uint64_t, ChunkEntry> lastest_chunk_map;
+  for (auto& chunk : result_.chunks) {
+    lastest_chunk_map.insert({chunk.index(), std::move(chunk)});
+  }
+
+  // override the chunk in result_ with the latest chunk in shared_param.chunk_map
+  for (const auto& chunk_index : shared_param.changed_chunk_indexes) {
+    auto it = shared_param.chunk_map.find(chunk_index);
+    if (it != shared_param.chunk_map.end()) lastest_chunk_map[chunk_index] = it->second;
+  }
+
+  result_.chunks.clear();
+  for (auto& [_, chunk] : lastest_chunk_map) {
+    result_.chunks.push_back(std::move(chunk));
+  }
+}
+
 Status OpenFileOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) {
   auto& attr = shared_param.attr;
-  result_.delta_bytes = 0;
   const auto& prefetch_kvs = shared_param.prefetch_kvs;
 
   if (IsDeleted(attr)) {
     return Status(pb::error::EDELETED, "file is deleted");
   }
 
+  result_.delta_bytes = 0;
   result_.chunks.clear();
   if (flags_ & O_TRUNC) {
+    CHECK(shared_param.is_prefetched_chunk) << "should prefetch chunk before truncate file.";
+
     const uint64_t old_length = attr.length();
     result_.delta_bytes = -static_cast<int64_t>(old_length);
 
-    std::vector<ChunkEntry> effected_chunks;
-    auto status = AppendZeroSlices(txn, attr.fs_id(), attr.ino(), 0, old_length, chunk_size_, effected_chunks);
-    if (!status.ok()) return status;
+    AppendZeroSlices(shared_param, attr.fs_id(), attr.ino(), 0, old_length, chunk_size_, "openfile_truncate");
 
     attr.set_length(0);
     attr.set_ctime(std::max(attr.ctime(), GetTime()));
@@ -1715,9 +1808,33 @@ Status FlushFileOperation::RunInBatch(TxnUPtr&, BatchSharedParam& shared_param) 
   return Status::OK();
 }
 
-Status RollbackFileOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) {
+Status RollbackFileOperation::PreProcess(TxnUPtr& txn, BatchSharedParam& shared_param) {
+  if (shared_param.is_prefetched_chunk) return Status::OK();
+
+  auto status = ScanChunk(txn, fs_id_, ino_, "rollbackfile", shared_param.chunk_map);
+  if (!status.ok()) return status;
+
+  shared_param.is_prefetched_chunk = true;
+
+  return status;
+}
+
+void RollbackFileOperation::PostProcess(BatchSharedParam& shared_param) {
+  if (!shared_param.is_prefetched_chunk) return;
+  if (shared_param.changed_chunk_indexes.empty()) return;
+
+  auto& lastest_chunk_map = shared_param.chunk_map;
+  for (auto& chunk : result_.effected_chunks) {
+    auto it = lastest_chunk_map.find(chunk.index());
+    if (it != lastest_chunk_map.end()) chunk = it->second;
+  }
+}
+
+Status RollbackFileOperation::RunInBatch(TxnUPtr&, BatchSharedParam& shared_param) {
   CHECK(param_.chunk_size != 0) << "chunk_size not should be 0.";
+
   result_.delta_bytes = 0;
+  result_.effected_chunks.clear();
 
   auto& attr = shared_param.attr;
   if (attr.ino() == 0) {
@@ -1731,10 +1848,8 @@ Status RollbackFileOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_
   if (attr.length() > param_.rollback_to_length && attr.length() <= param_.last_write_length) {
     result_.delta_bytes = static_cast<int64_t>(param_.rollback_to_length) - static_cast<int64_t>(attr.length());
 
-    std::vector<ChunkEntry> effected_chunks;
-    auto status = AppendZeroSlices(txn, attr.fs_id(), attr.ino(), param_.rollback_to_length, attr.length(),
-                                   param_.chunk_size, effected_chunks);
-    if (!status.ok()) return status;
+    AppendZeroSlices(shared_param, attr.fs_id(), attr.ino(), param_.rollback_to_length, attr.length(),
+                     param_.chunk_size, "rollbackfile");
 
     attr.set_length(param_.rollback_to_length);
     attr.set_mtime(std::max(attr.mtime(), GetTime()));
@@ -4295,6 +4410,43 @@ static void GenPrefetchKey(BatchOperation& batch_operation, std::vector<std::str
   }
 }
 
+void Operation::DeduplicatePrefetchKeys(std::vector<std::string>& keys) {
+  absl::flat_hash_set<std::string> seen;
+  seen.reserve(keys.size());
+
+  std::vector<std::string> unique_keys;
+  unique_keys.reserve(keys.size());
+  for (const auto& key : keys) {
+    if (seen.insert(key).second) unique_keys.push_back(key);
+  }
+  keys.swap(unique_keys);
+}
+
+static Status PreProcess(BatchOperation& batch_operation, TxnUPtr& txn, Operation::BatchSharedParam& shared_param) {
+  Status status;
+  for (auto* operation : batch_operation.create_operations) {
+    status = operation->PreProcess(txn, shared_param);
+    if (!status.ok()) return status;
+  }
+
+  for (auto* operation : batch_operation.setattr_operations) {
+    status = operation->PreProcess(txn, shared_param);
+    if (!status.ok()) return status;
+  }
+
+  return status;
+}
+
+static void PostProcess(BatchOperation& batch_operation, Operation::BatchSharedParam& shared_param) {
+  for (auto* operation : batch_operation.create_operations) {
+    operation->PostProcess(shared_param);
+  }
+
+  for (auto* operation : batch_operation.setattr_operations) {
+    operation->PostProcess(shared_param);
+  }
+}
+
 static bool IsNeedParentKey(const BatchOperation& batch_operation) {
   for (auto* operation : batch_operation.create_operations) {
     if (!operation->IsDirMutationOperation()) return true;
@@ -4338,6 +4490,7 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
     prefetch_keys.push_back(parent_mutation_key);
   }
   GenPrefetchKey(batch_operation, prefetch_keys);
+  Operation::DeduplicatePrefetchKeys(prefetch_keys);
 
   Operation::BatchSharedParam shared_param;
   Status status;
@@ -4348,11 +4501,7 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
   do {
     utils::Duration once_duration;
 
-    if (retry > 0) {
-      shared_param.attr.Clear();
-      shared_param.attr_mutation.Clear();
-      shared_param.prefetch_kvs.clear();
-    }
+    if (retry > 0) shared_param.Reset();
 
     auto txn = kv_storage_->NewTxn();
     if (txn == nullptr) {
@@ -4371,6 +4520,16 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
       break;
     }
     shared_param.RebuildIndex();
+
+    status = PreProcess(batch_operation, txn, shared_param);
+    if (!status.ok()) {
+      if (status.error_code() == pb::error::ESTORE_MAYBE_RETRY) {
+        LOG(WARNING) << fmt::format("[operation.{}.{}][{}][{}us] batch run {} pre-process fail, retry({}) status({}).",
+                                    fs_id, ino, txn_id, once_duration.ElapsedUs(), op_names, retry, status.error_str());
+        continue;
+      }
+      break;
+    }
 
     if (need_parent_key) {
       std::string value = FindValue(shared_param.prefetch_index, parent_key);
@@ -4411,6 +4570,15 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
       txn->Put(parent_mutation_key, MetaCodec::EncodeDirInodeMutationValue(shared_param.attr_mutation));
     }
 
+    // put chunk
+    for (const auto chunk_index : shared_param.changed_chunk_indexes) {
+      auto it = shared_param.chunk_map.find(chunk_index);
+      CHECK(it != shared_param.chunk_map.end()) << fmt::format("not found chunk({}/{}/{})", fs_id, ino, chunk_index);
+
+      const auto& chunk = it->second;
+      txn->Put(MetaCodec::EncodeChunkKey(fs_id, ino, chunk_index), MetaCodec::EncodeChunkValue(chunk));
+    }
+
     status = txn->Commit();
 
     auto txn_trace = txn->GetTrace();
@@ -4442,14 +4610,16 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
 
   LOG_DEBUG << fmt::format(
       "[operation.{}.{}][{}][{}us] batch run ({}) finish, count({}) parent_key({},{}) txn({}) retry({}) status({}) "
-      "attr({}).",
+      "attr({}) chunks({}).",
       fs_id, ino, txn_id, duration.ElapsedUs(), op_names, count, need_parent_key, mutation_index, commit_type, retry,
       status.error_str(),
-      need_parent_key ? DescribeAttr(shared_param.attr) : DescribeAttrMutation(shared_param.attr_mutation));
+      need_parent_key ? DescribeAttr(shared_param.attr) : DescribeAttrMutation(shared_param.attr_mutation),
+      shared_param.changed_chunk_indexes);
 
   if (status.ok()) {
     SetResultAttr(batch_operation, shared_param);
     UpdateParentInode(batch_operation, shared_param);
+    PostProcess(batch_operation, shared_param);
 
     if (count > 1) SetBatchIndex(batch_operation);
 

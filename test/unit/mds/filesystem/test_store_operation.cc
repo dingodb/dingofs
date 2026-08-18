@@ -73,7 +73,63 @@ void SortByPos(std::vector<SliceEntry>& slices) {
             });
 }
 
+Status RunBatchOperation(const KVStorageSPtr& storage, Operation& operation,
+                         Operation::BatchSharedParam& shared_param) {
+  auto txn = storage->NewTxn();
+  auto status = operation.PreProcess(txn, shared_param);
+  if (!status.ok()) return status;
+
+  status = operation.RunInBatch(txn, shared_param);
+  if (!status.ok()) return status;
+
+  for (const auto chunk_index : shared_param.changed_chunk_indexes) {
+    auto it = shared_param.chunk_map.find(chunk_index);
+    if (it == shared_param.chunk_map.end()) {
+      return Status(pb::error::EINTERNAL,
+                    "changed chunk missing from shared chunk map");
+    }
+    status = txn->Put(MetaCodec::EncodeChunkKey(
+                          operation.GetFsId(), operation.GetIno(), chunk_index),
+                      MetaCodec::EncodeChunkValue(it->second));
+    if (!status.ok()) return status;
+  }
+
+  status = txn->Commit();
+  if (!status.ok()) return status;
+  operation.PostProcess(shared_param);
+  return Status::OK();
+}
+
 }  // namespace
+
+TEST(PrefetchKeysTest, DeduplicatesChunkKeysFromBatchedOpens) {
+  constexpr uint32_t fs_id = 1;
+  constexpr Ino ino = 2;
+  constexpr uint64_t chunk_size = 4096;
+  const std::vector<uint32_t> prefetch_chunks = {0, 1};
+
+  FileSessionEntry session;
+  session.set_fs_id(fs_id);
+  session.set_ino(ino);
+  session.set_session_id("session");
+  Trace trace1;
+  Trace trace2;
+  OpenFileOperation first(trace1, O_RDONLY, session, chunk_size,
+                          prefetch_chunks);
+  OpenFileOperation second(trace2, O_RDONLY, session, chunk_size,
+                           prefetch_chunks);
+
+  std::vector<std::string> keys = {MetaCodec::EncodeInodeKey(fs_id, ino)};
+  first.PrefetchKey(keys);
+  second.PrefetchKey(keys);
+  Operation::DeduplicatePrefetchKeys(keys);
+
+  EXPECT_EQ(keys, (std::vector<std::string>{
+                      MetaCodec::EncodeInodeKey(fs_id, ino),
+                      MetaCodec::EncodeChunkKey(fs_id, ino, 0),
+                      MetaCodec::EncodeChunkKey(fs_id, ino, 1),
+                  }));
+}
 
 class CopyFileRangeCloneSliceTest : public ::testing::Test {
  protected:
@@ -911,8 +967,8 @@ TEST_F(CopyFileRangeRunTest, SrcOffsetBeyondEofReturnsError) {
 // ---------------------------------------------------------------------------
 // FallocateOperation::RunInBatch against DummyStorage. Fallocate runs through
 // the batch path: the framework loads the inode into shared_param.attr and the
-// operation mutates that attr in place while reading/writing chunks via the
-// txn. We drive RunInBatch directly with a hand-built shared_param.
+// operation mutates that attr in place while prefetching and writing chunks.
+// RunBatchOperation provides that lifecycle for these focused tests.
 //
 // Four mode families are covered:
 //   - mode == 0                 -> PreAlloc (extend size only, no chunk write)
@@ -1016,9 +1072,7 @@ TEST_F(FallocateRunTest, PreAllocExtendsEmptyFile) {
   Operation::BatchSharedParam shared_param;
   shared_param.attr = attr;
 
-  auto txn = storage_->NewTxn();
-  ASSERT_TRUE(op.RunInBatch(txn, shared_param).ok());
-  ASSERT_TRUE(txn->Commit().ok());
+  ASSERT_TRUE(RunBatchOperation(storage_, op, shared_param).ok());
 
   EXPECT_EQ(shared_param.attr.length(), 4096u);
   op.SetResultAttr(shared_param);
@@ -1042,9 +1096,7 @@ TEST_F(FallocateRunTest, PreAllocNoOpWhenWithinLength) {
   Operation::BatchSharedParam shared_param;
   shared_param.attr = attr;
 
-  auto txn = storage_->NewTxn();
-  ASSERT_TRUE(op.RunInBatch(txn, shared_param).ok());
-  ASSERT_TRUE(txn->Commit().ok());
+  ASSERT_TRUE(RunBatchOperation(storage_, op, shared_param).ok());
 
   EXPECT_EQ(shared_param.attr.length(), kFallocChunkSize);
   EXPECT_EQ(op.GetResult().delta_bytes, 0);
@@ -1071,9 +1123,7 @@ TEST_F(FallocateRunTest, PreAllocOverlappingDataKeepsSlices) {
   Operation::BatchSharedParam shared_param;
   shared_param.attr = attr;
 
-  auto txn = storage_->NewTxn();
-  ASSERT_TRUE(op.RunInBatch(txn, shared_param).ok());
-  ASSERT_TRUE(txn->Commit().ok());
+  ASSERT_TRUE(RunBatchOperation(storage_, op, shared_param).ok());
 
   EXPECT_EQ(shared_param.attr.length(), 6144u);
   EXPECT_EQ(op.GetResult().delta_bytes, 2048);
@@ -1095,9 +1145,7 @@ TEST_F(FallocateRunTest, PreAllocAcrossMultipleChunksWritesNoChunk) {
   Operation::BatchSharedParam shared_param;
   shared_param.attr = attr;
 
-  auto txn = storage_->NewTxn();
-  ASSERT_TRUE(op.RunInBatch(txn, shared_param).ok());
-  ASSERT_TRUE(txn->Commit().ok());
+  ASSERT_TRUE(RunBatchOperation(storage_, op, shared_param).ok());
 
   EXPECT_EQ(shared_param.attr.length(), len);
   EXPECT_EQ(op.GetResult().delta_bytes, static_cast<int64_t>(len));
@@ -1121,9 +1169,7 @@ TEST_F(FallocateRunTest, PunchHoleKeepsSizeAndZerosToChunkEnd) {
   Operation::BatchSharedParam shared_param;
   shared_param.attr = attr;
 
-  auto txn = storage_->NewTxn();
-  ASSERT_TRUE(op.RunInBatch(txn, shared_param).ok());
-  ASSERT_TRUE(txn->Commit().ok());
+  ASSERT_TRUE(RunBatchOperation(storage_, op, shared_param).ok());
 
   // PUNCH_HOLE never changes the file size.
   EXPECT_EQ(shared_param.attr.length(), kFallocChunkSize);
@@ -1158,9 +1204,7 @@ TEST_F(FallocateRunTest, PunchHoleClampedToFileLength) {
   Operation::BatchSharedParam shared_param;
   shared_param.attr = attr;
 
-  auto txn = storage_->NewTxn();
-  ASSERT_TRUE(op.RunInBatch(txn, shared_param).ok());
-  ASSERT_TRUE(txn->Commit().ok());
+  ASSERT_TRUE(RunBatchOperation(storage_, op, shared_param).ok());
 
   EXPECT_EQ(shared_param.attr.length(), 4096u);
   EXPECT_EQ(op.GetResult().delta_bytes, 0);
@@ -1193,9 +1237,7 @@ TEST_F(FallocateRunTest, PunchHoleSpansMultipleChunks) {
   Operation::BatchSharedParam shared_param;
   shared_param.attr = attr;
 
-  auto txn = storage_->NewTxn();
-  ASSERT_TRUE(op.RunInBatch(txn, shared_param).ok());
-  ASSERT_TRUE(txn->Commit().ok());
+  ASSERT_TRUE(RunBatchOperation(storage_, op, shared_param).ok());
 
   EXPECT_EQ(shared_param.attr.length(), length);  // size preserved
   EXPECT_EQ(op.GetResult().delta_bytes, 0);
@@ -1233,9 +1275,7 @@ TEST_F(FallocateRunTest, ZeroRangeWithKeepSizeKeepsLength) {
   Operation::BatchSharedParam shared_param;
   shared_param.attr = attr;
 
-  auto txn = storage_->NewTxn();
-  ASSERT_TRUE(op.RunInBatch(txn, shared_param).ok());
-  ASSERT_TRUE(txn->Commit().ok());
+  ASSERT_TRUE(RunBatchOperation(storage_, op, shared_param).ok());
 
   EXPECT_EQ(shared_param.attr.length(), kFallocChunkSize);
   EXPECT_EQ(op.GetResult().delta_bytes, 0);
@@ -1264,9 +1304,7 @@ TEST_F(FallocateRunTest, ZeroRangeWithoutKeepSizeExtendsFile) {
   Operation::BatchSharedParam shared_param;
   shared_param.attr = attr;
 
-  auto txn = storage_->NewTxn();
-  ASSERT_TRUE(op.RunInBatch(txn, shared_param).ok());
-  ASSERT_TRUE(txn->Commit().ok());
+  ASSERT_TRUE(RunBatchOperation(storage_, op, shared_param).ok());
 
   EXPECT_EQ(shared_param.attr.length(), 12288u);
   EXPECT_EQ(op.GetResult().delta_bytes, static_cast<int64_t>(kFallocChunkSize));
@@ -1300,9 +1338,7 @@ TEST_F(FallocateRunTest, ZeroRangeWithoutKeepSizeWithinFileKeepsLength) {
   Operation::BatchSharedParam shared_param;
   shared_param.attr = attr;
 
-  auto txn = storage_->NewTxn();
-  ASSERT_TRUE(op.RunInBatch(txn, shared_param).ok());
-  ASSERT_TRUE(txn->Commit().ok());
+  ASSERT_TRUE(RunBatchOperation(storage_, op, shared_param).ok());
 
   EXPECT_EQ(shared_param.attr.length(), kFallocChunkSize);  // unchanged
   EXPECT_EQ(op.GetResult().delta_bytes, 0);
@@ -1326,9 +1362,7 @@ TEST_F(FallocateRunTest, UnrecognizedModeIsNoOp) {
   Operation::BatchSharedParam shared_param;
   shared_param.attr = attr;
 
-  auto txn = storage_->NewTxn();
-  ASSERT_TRUE(op.RunInBatch(txn, shared_param).ok());
-  ASSERT_TRUE(txn->Commit().ok());
+  ASSERT_TRUE(RunBatchOperation(storage_, op, shared_param).ok());
 
   EXPECT_EQ(shared_param.attr.length(), 4096u);
   EXPECT_EQ(op.GetResult().delta_bytes, 0);
@@ -1355,9 +1389,7 @@ TEST_F(FallocateRunTest, PunchHoleAtEofIsNoOp) {
   Operation::BatchSharedParam shared_param;
   shared_param.attr = attr;
 
-  auto txn = storage_->NewTxn();
-  ASSERT_TRUE(op.RunInBatch(txn, shared_param).ok());
-  ASSERT_TRUE(txn->Commit().ok());
+  ASSERT_TRUE(RunBatchOperation(storage_, op, shared_param).ok());
 
   EXPECT_EQ(shared_param.attr.length(), kFallocChunkSize);
   EXPECT_EQ(op.GetResult().delta_bytes, 0);
@@ -1385,9 +1417,7 @@ TEST_F(FallocateRunTest, PunchHoleZeroLengthIsNoOp) {
   Operation::BatchSharedParam shared_param;
   shared_param.attr = attr;
 
-  auto txn = storage_->NewTxn();
-  ASSERT_TRUE(op.RunInBatch(txn, shared_param).ok());
-  ASSERT_TRUE(txn->Commit().ok());
+  ASSERT_TRUE(RunBatchOperation(storage_, op, shared_param).ok());
 
   EXPECT_TRUE(op.GetResult().effected_chunks.empty());
   ChunkEntry chunk = GetChunk(ino, 0);
@@ -1415,7 +1445,9 @@ TEST_F(FallocateRunTest, PunchHoleReRunDoesNotAccumulateEffectedChunks) {
     Operation::BatchSharedParam shared_param;
     shared_param.attr = attr;
     auto txn = storage_->NewTxn();
+    ASSERT_TRUE(op.PreProcess(txn, shared_param).ok());
     ASSERT_TRUE(op.RunInBatch(txn, shared_param).ok());
+    op.PostProcess(shared_param);
     EXPECT_EQ(op.GetResult().effected_chunks.size(), 1u);
   }
   // Retry on the same op with a fresh txn + freshly reloaded attr. Storage is
@@ -1423,9 +1455,7 @@ TEST_F(FallocateRunTest, PunchHoleReRunDoesNotAccumulateEffectedChunks) {
   {
     Operation::BatchSharedParam shared_param;
     shared_param.attr = attr;
-    auto txn = storage_->NewTxn();
-    ASSERT_TRUE(op.RunInBatch(txn, shared_param).ok());
-    ASSERT_TRUE(txn->Commit().ok());
+    ASSERT_TRUE(RunBatchOperation(storage_, op, shared_param).ok());
     EXPECT_EQ(op.GetResult().effected_chunks.size(), 1u);
   }
 }
@@ -1448,9 +1478,7 @@ TEST_F(FallocateRunTest, PunchHoleBumpsExistingChunkVersionFromNonZero) {
   Operation::BatchSharedParam shared_param;
   shared_param.attr = attr;
 
-  auto txn = storage_->NewTxn();
-  ASSERT_TRUE(op.RunInBatch(txn, shared_param).ok());
-  ASSERT_TRUE(txn->Commit().ok());
+  ASSERT_TRUE(RunBatchOperation(storage_, op, shared_param).ok());
 
   EXPECT_EQ(GetChunk(ino, 0).version(), 6u);
 }
@@ -1508,6 +1536,7 @@ AttrEntry MakeFullInode(Ino ino, uint64_t length) {
 // copy of an unrequested field is detectable.
 AttrEntry MakeNewValues() {
   AttrEntry attr;
+  attr.set_fs_id(kFallocFsId);
   attr.set_mode(0755);
   attr.set_uid(2000);
   attr.set_gid(3000);
@@ -1591,9 +1620,7 @@ class UpdateAttrRunTest : public ::testing::Test {
     Operation::BatchSharedParam shared_param;
     shared_param.attr = current;
 
-    auto txn = storage_->NewTxn();
-    EXPECT_TRUE(op.RunInBatch(txn, shared_param).ok());
-    EXPECT_TRUE(txn->Commit().ok());
+    EXPECT_TRUE(RunBatchOperation(storage_, op, shared_param).ok());
 
     if (delta_bytes != nullptr) *delta_bytes = op.GetResult().delta_bytes;
     if (effected != nullptr) *effected = op.GetResult().effected_chunks.size();
@@ -1969,9 +1996,7 @@ TEST_F(UpdateAttrRunTest, RollbackFileZerosDroppedRangeAtomically) {
   Operation::BatchSharedParam shared_param;
   shared_param.attr = MakeFullInode(ino, old_length);
 
-  auto txn = storage_->NewTxn();
-  ASSERT_TRUE(op.RunInBatch(txn, shared_param).ok());
-  ASSERT_TRUE(txn->Commit().ok());
+  ASSERT_TRUE(RunBatchOperation(storage_, op, shared_param).ok());
   op.SetResultAttr(shared_param);
 
   EXPECT_EQ(op.GetResult().attr.length(), 4096u);
@@ -2000,7 +2025,7 @@ TEST_F(UpdateAttrRunTest, RollbackFileZerosDroppedRangeAtomically) {
   EXPECT_EQ(SortedSlices(ino, 2).size(), chunk2_slices.size());
 }
 
-TEST_F(UpdateAttrRunTest, OpenTruncZerosExistingChunksAndReturnsNoPrefetch) {
+TEST_F(UpdateAttrRunTest, OpenTruncZerosExistingChunksAndReturnsChangedChunks) {
   const Ino ino = 219;
   const uint64_t old_length = 2 * kFallocChunkSize;
   auto attr = MakeFullInode(ino, old_length);
@@ -2021,13 +2046,12 @@ TEST_F(UpdateAttrRunTest, OpenTruncZerosExistingChunksAndReturnsNoPrefetch) {
 
   Operation::BatchSharedParam shared_param;
   shared_param.attr = attr;
-  auto txn = storage_->NewTxn();
-  ASSERT_TRUE(op.RunInBatch(txn, shared_param).ok());
-  ASSERT_TRUE(txn->Commit().ok());
+  ASSERT_TRUE(RunBatchOperation(storage_, op, shared_param).ok());
 
   EXPECT_EQ(shared_param.attr.length(), 0u);
   EXPECT_EQ(op.GetResult().delta_bytes, -static_cast<int64_t>(old_length));
-  EXPECT_TRUE(op.GetResult().chunks.empty());
+  ASSERT_EQ(op.GetResult().chunks.size(), 1u);
+  EXPECT_EQ(op.GetResult().chunks[0].index(), 0u);
   auto slices = SortedSlices(ino, 0);
   EXPECT_TRUE(
       std::any_of(slices.begin(), slices.end(), [](const SliceEntry& slice) {
@@ -2050,9 +2074,7 @@ TEST_F(UpdateAttrRunTest, SetResultAttrCopiesMutatedAttr) {
   Operation::BatchSharedParam shared_param;
   shared_param.attr = baseline;
 
-  auto txn = storage_->NewTxn();
-  ASSERT_TRUE(op.RunInBatch(txn, shared_param).ok());
-  ASSERT_TRUE(txn->Commit().ok());
+  ASSERT_TRUE(RunBatchOperation(storage_, op, shared_param).ok());
 
   op.SetResultAttr(shared_param);
   EXPECT_EQ(op.GetResult().attr.mode(), new_vals.mode());

@@ -15,6 +15,7 @@
 #define DINGOFS_MDS_FILESYSTEM_STORE_OPERATION_H_
 
 #include <absl/container/flat_hash_map.h>
+#include <absl/container/flat_hash_set.h>
 
 #include <cstdint>
 #include <functional>
@@ -308,6 +309,7 @@ class Operation {
   virtual InodeSPtr GetParentInode() const { return nullptr; }
 
   virtual void PrefetchKey(std::vector<std::string>& keys) {}
+  static void DeduplicatePrefetchKeys(std::vector<std::string>& keys);
 
   struct BatchSharedParam {
     AttrEntry attr;
@@ -319,6 +321,12 @@ class Operation {
     // (re)populates prefetch_kvs (including transaction retries).
     absl::flat_hash_map<std::string_view, std::string_view> prefetch_index;
 
+    // Map from chunk index to ChunkEntry for O(1) lookup. The ChunkEntry
+    // key: chunk index, value: ChunkEntry.
+    bool is_prefetched_chunk{false};
+    std::map<uint64_t, ChunkEntry> chunk_map;
+    std::set<uint64_t> changed_chunk_indexes;
+
     bool UseMutation() const { return attr.ino() == 0; }
 
     void RebuildIndex() {
@@ -328,7 +336,23 @@ class Operation {
         prefetch_index.emplace(kv.key, kv.value);
       }
     }
+
+    void Reset() {
+      attr.Clear();
+      attr_mutation.Clear();
+      prefetch_kvs.clear();
+
+      is_prefetched_chunk = false;
+      chunk_map.clear();
+      changed_chunk_indexes.clear();
+    }
   };
+
+  // for openfile|setattr prefetch all chunks
+  virtual Status PreProcess(TxnUPtr&, BatchSharedParam&) { return Status::OK(); }
+  // for fill chunks of result
+  virtual void PostProcess(BatchSharedParam&) {}
+
   virtual Status RunInBatch(TxnUPtr&, BatchSharedParam&) { return Status(pb::error::ENOT_SUPPORT, "not support."); }
   virtual Status Run(TxnUPtr&) { return Status(pb::error::ENOT_SUPPORT, "not support."); }
 
@@ -824,6 +848,11 @@ class UpdateAttrOperation : public Operation {
   uint32_t GetFsId() const override { return attr_.fs_id(); }
   Ino GetIno() const override { return ino_; }
 
+  // for openfile|setattr prefetch all chunks
+  Status PreProcess(TxnUPtr&, BatchSharedParam&) override;
+  // for fill chunks of result
+  void PostProcess(BatchSharedParam&) override;
+
   Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
 
   void SetResultAttr(BatchSharedParam& shared_param) override { result_.attr = shared_param.attr; }
@@ -946,6 +975,8 @@ class UpsertChunkOperation : public Operation {
   Ino GetIno() const override { return ino_; }
 
   void PrefetchKey(std::vector<std::string>& keys) override;
+
+  void PostProcess(BatchSharedParam& shared_param) override;
 
   Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
 
@@ -1142,6 +1173,9 @@ class FallocateOperation : public Operation {
   uint32_t GetFsId() const override { return param_.fs_id; }
   Ino GetIno() const override { return param_.ino; }
 
+  Status PreProcess(TxnUPtr& txn, BatchSharedParam&) override;
+  void PostProcess(BatchSharedParam&) override;
+
   Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
 
   void SetResultAttr(BatchSharedParam& shared_param) override { result_.attr = shared_param.attr; }
@@ -1150,7 +1184,7 @@ class FallocateOperation : public Operation {
 
  private:
   void PreAlloc(AttrEntry& attr, uint64_t offset, uint64_t len, bool keep_size);
-  Status SetZero(TxnUPtr& txn, AttrEntry& attr, uint64_t offset, uint64_t len, bool keep_size);
+  void SetZero(BatchSharedParam& shared_param, AttrEntry& attr, uint64_t offset, uint64_t len, bool keep_size);
 
   Param param_;
 
@@ -1180,6 +1214,9 @@ class OpenFileOperation : public Operation {
   Ino GetIno() const override { return file_session_.ino(); }
 
   void PrefetchKey(std::vector<std::string>& keys) override;
+
+  Status PreProcess(TxnUPtr& txn, BatchSharedParam&) override;
+  void PostProcess(BatchSharedParam&) override;
 
   Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
 
@@ -1269,12 +1306,16 @@ class RollbackFileOperation : public Operation {
   struct Result {
     AttrEntry attr;
     int64_t delta_bytes{0};
+    std::vector<ChunkEntry> effected_chunks;
   };
 
   OpType GetOpType() const override { return OpType::kRollbackFile; }
 
   uint32_t GetFsId() const override { return fs_id_; }
   Ino GetIno() const override { return ino_; }
+
+  Status PreProcess(TxnUPtr& txn, BatchSharedParam&) override;
+  void PostProcess(BatchSharedParam&) override;
 
   Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
 
