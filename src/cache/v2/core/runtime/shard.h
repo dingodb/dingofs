@@ -14,17 +14,18 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_CACHE_CORE_RUNTIME_SHARD_H_
-#define DINGOFS_CACHE_CORE_RUNTIME_SHARD_H_
+#ifndef DINGOFS_CACHE_V2_CORE_RUNTIME_SHARD_H_
+#define DINGOFS_CACHE_V2_CORE_RUNTIME_SHARD_H_
 
-#include "cache/v1/core/io/io_ring.h"
-#include "cache/v1/core/reactor/poller.h"
-#include "cache/v1/core/reactor/reactor.h"
-#include "cache/v1/core/runtime/runtime.h"
-#include "cache/v1/core/runtime/shard_inbox.h"
+#include "cache/v2/core/fs/io_ring.h"
+#include "cache/v2/core/reactor/poller.h"
+#include "cache/v2/core/reactor/reactor.h"
+#include "cache/v2/core/runtime/runtime.h"
+#include "cache/v2/core/runtime/shard_inbox.h"
 
 namespace dingofs {
 namespace cache {
+namespace v2 {
 
 void BecomeShardThread(unsigned shard, int cpu);
 
@@ -37,7 +38,7 @@ class Shard {
   Shard(const Shard&) = delete;
   Shard& operator=(const Shard&) = delete;
 
-  void Run(LifecycleGate& gate);
+  void Run(LifecycleBarrier& gate);
 
  private:
   void RegisterPollers();
@@ -50,7 +51,8 @@ class Shard {
   IoRing io_ring_;
 };
 
+}  // namespace v2
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_CACHE_CORE_RUNTIME_SHARD_H_
+#endif  // DINGOFS_CACHE_V2_CORE_RUNTIME_SHARD_H_

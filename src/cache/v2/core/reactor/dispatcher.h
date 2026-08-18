@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_CACHE_CORE_REACTOR_DISPATCHER_H_
-#define DINGOFS_CACHE_CORE_REACTOR_DISPATCHER_H_
+#ifndef DINGOFS_CACHE_V2_CORE_REACTOR_DISPATCHER_H_
+#define DINGOFS_CACHE_V2_CORE_REACTOR_DISPATCHER_H_
 
 #include <glog/logging.h>
 #include <liburing.h>
@@ -23,10 +23,11 @@
 #include <chrono>
 #include <cstdint>
 
-#include "cache/v1/core/reactor/preempt.h"
+#include "cache/v2/core/reactor/preempt.h"
 
 namespace dingofs {
 namespace cache {
+namespace v2 {
 
 enum class EventMode : uint8_t {
   kReadRepeat,
@@ -52,7 +53,7 @@ class Event {
     kCancelling,    // a cancel is in flight; retires when it lands
   };
 
-  uint64_t buf_ = 0;
+  uint64_t buffer_ = 0;
   Event* next_ = nullptr;
   int fd_ = -1;
   EventMode mode_ = EventMode::kReadRepeat;
@@ -63,8 +64,6 @@ class Event {
 
 class EventList {
  public:
-  bool Empty() const { return head_ == nullptr; }
-
   void Push(Event* ev) {
     ev->next_ = head_;
     head_ = ev;
@@ -86,6 +85,8 @@ class EventList {
     return taken;
   }
 
+  bool empty() const { return head_ == nullptr; }
+
  private:
   Event* head_ = nullptr;
 };
@@ -98,20 +99,20 @@ class EventRing {
   EventRing(const EventRing&) = delete;
   EventRing& operator=(const EventRing&) = delete;
 
+  void Exit();
+
   io_uring_sqe* TryGetSqe() { return io_uring_get_sqe(&ring_); }
-  bool HasReady() const { return io_uring_cq_ready(&ring_) > 0; }
-  bool HasPending() const { return io_uring_sq_ready(&ring_) != 0; }
 
   unsigned PeekBatch(io_uring_cqe** cqes, unsigned n) {
     return io_uring_peek_batch_cqe(&ring_, cqes, n);
   }
 
   void Advance(unsigned n) { io_uring_cq_advance(&ring_, n); }
-
   void Submit();
   void SubmitAndWait();
-  void Exit();
 
+  bool HasReady() const { return io_uring_cq_ready(&ring_) > 0; }
+  bool HasUnsubmitted() const { return io_uring_sq_ready(&ring_) != 0; }
   PreemptMonitor Monitor() const;
 
  private:
@@ -130,9 +131,10 @@ class QuotaTicker final : public Event {
   QuotaTicker(const QuotaTicker&) = delete;
   QuotaTicker& operator=(const QuotaTicker&) = delete;
 
+  void Arm() const;
+  void Disarm() const;
+
   int fd() const { return timerfd_; }
-  void Start() const;
-  void Stop() const;
 
  private:
   void OnReady() noexcept override {}  // landing the CQE is the whole job
@@ -149,8 +151,9 @@ class Waker final : public Event {
   Waker(const Waker&) = delete;
   Waker& operator=(const Waker&) = delete;
 
-  int fd() const { return eventfd_; }
   void Ring() const;
+
+  int fd() const { return eventfd_; }
 
  private:
   void OnReady() noexcept override {}
@@ -165,21 +168,6 @@ struct DispatcherOption {
 
 class Dispatcher {
  public:
-  explicit Dispatcher(const DispatcherOption& option = {});
-  ~Dispatcher();
-
-  Dispatcher(const Dispatcher&) = delete;
-  Dispatcher& operator=(const Dispatcher&) = delete;
-
-  void AddEvent(int fd, Event* ev, EventMode mode);
-  bool DeleteEvent(Event* ev);
-  void DetachEvent(Event* ev);
-  unsigned ProcessEvents();
-
-  bool HasReadyEvent() const { return ring_.HasReady(); }
-  void WaitForEvent();
-  void Notify() const { waker_.Ring(); }
-
   class RunScope {
    public:
     explicit RunScope(Dispatcher& dispatcher);
@@ -191,6 +179,21 @@ class Dispatcher {
    private:
     Dispatcher& dispatcher_;
   };
+
+  explicit Dispatcher(const DispatcherOption& option = {});
+  ~Dispatcher();
+
+  Dispatcher(const Dispatcher&) = delete;
+  Dispatcher& operator=(const Dispatcher&) = delete;
+
+  void AddEvent(int fd, Event* ev, EventMode mode);
+  bool DeleteEvent(Event* ev);
+  void DeleteEventAndWait(Event* ev);
+  unsigned ProcessEvents();
+  void WaitForEvent();
+  void Notify() const { waker_.Ring(); }
+
+  bool HasReadyEvent() const { return ring_.HasReady(); }
 
  private:
   static constexpr unsigned kCqBatch = 256;
@@ -218,7 +221,8 @@ inline Dispatcher& ThisDispatcher() {
   return *tls_dispatcher;
 }
 
+}  // namespace v2
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_CACHE_CORE_REACTOR_DISPATCHER_H_
+#endif  // DINGOFS_CACHE_V2_CORE_REACTOR_DISPATCHER_H_

@@ -14,17 +14,25 @@
  * limitations under the License.
  */
 
-#include "cache/v1/core/runtime/runtime.h"
+#include "cache/v2/core/runtime/runtime.h"
 
+#include <gflags/gflags.h>
 #include <glog/logging.h>
 
-#include "cache/v1/core/runtime/mesh.h"
-#include "cache/v1/core/runtime/shard.h"
-#include "cache/v1/core/utils/cpu.h"
-#include "cache/v1/core/utils/memory/memory.h"
+#include "cache/v2/core/memory/shard_allocator.h"
+#include "cache/v2/core/runtime/mesh.h"
+#include "cache/v2/core/runtime/shard.h"
+#include "cache/v2/core/runtime/smp.h"
+#include "cache/v2/utils/cpu.h"
 
 namespace dingofs {
 namespace cache {
+namespace v2 {
+
+DEFINE_uint32(shards, 0, "reactor shards, 0 means one per core");
+DEFINE_string(cpuset, "", "cores the shards run on, e.g. 0-31");
+DEFINE_bool(pin_cpu, false, "pin each shard to its core");
+DEFINE_bool(poll_mode, false, "busy-poll the reactors");
 
 ShardLayout ShardLayout::Plan(const RuntimeOption& option) {
   std::vector<int> cpus = GetAllCpus();
@@ -54,35 +62,30 @@ ShardLayout ShardLayout::Plan(const RuntimeOption& option) {
   return ShardLayout(std::move(cpu_of_shard));
 }
 
-struct SpawnWork : InboxWork {
-  explicit SpawnWork(std::function<Future<>()> f) : fn(std::move(f)) {
-    run = &SpawnWork::Run;
+// Stop is delivered through the inbox, so a shard stops itself on its own
+// thread rather than being stopped from under one.
+struct Runtime::StopWork : InboxWork {
+  StopWork() {
+    run = [](InboxWork*) { ThisReactor().Shutdown(); };
   }
-
-  static void Run(InboxWork* base) {
-    auto* self = static_cast<SpawnWork*>(base);
-    (void)self->fn();
-    delete self;
-  }
-
-  std::function<Future<>()> fn;
 };
 
 Runtime::Runtime(RuntimeOption option)
     : option_(std::move(option)),
       layout_(ShardLayout::Plan(option_)),
       gate_(layout_.shard_count()),
-      inboxes_(std::make_unique<ShardInbox[]>(layout_.shard_count())),
       stops_(std::make_unique<StopWork[]>(layout_.shard_count())) {}
 
 Runtime::~Runtime() {
-  Stop();
+  Shutdown();
   Join();
 }
 
 void Runtime::Start() {
   CHECK(state_.load(std::memory_order_relaxed) == State::kIdle)
       << "Runtime already started";
+
+  LOG(INFO) << "Runtime is starting...";
 
   const unsigned shard_count = layout_.shard_count();
   memory::GlobalInit(shard_count);
@@ -93,24 +96,31 @@ void Runtime::Start() {
   for (unsigned s = 0; s < shard_count; ++s) {
     threads_.emplace_back([this, s] {
       BecomeShardThread(s, layout_.CpuOf(s));
-      Shard shard(s, option_, &inboxes_[s], Mesh::Instance().PollerFor(s));
+      Mesh& mesh = Mesh::Instance();
+      Shard shard(s, option_, &mesh.InboxFor(s), mesh.PollerFor(s));
       shard.Run(gate_);
     });
   }
   gate_.WaitAllStarted();
+
+  LOG(INFO) << "Successfully start Runtime: shards=" << shard_count;
 }
 
-void Runtime::Stop() {
+void Runtime::Shutdown() {
   State running = State::kRunning;
   if (!state_.compare_exchange_strong(running, State::kStopping,
                                       std::memory_order_acq_rel)) {
     return;
   }
 
+  LOG(INFO) << "Runtime is shutting down...";
+
   for (unsigned s = 0; s < layout_.shard_count(); ++s) {
-    (void)inboxes_[s].Post(&stops_[s]);  // false == that shard already stopping
+    (void)PostTo(s, &stops_[s]);  // false == that shard already stopping
   }
   gate_.IssueStop();
+
+  LOG(INFO) << "Successfully shutdown Runtime";
 }
 
 void Runtime::Join() {
@@ -118,7 +128,7 @@ void Runtime::Join() {
   if (state == State::kIdle || state == State::kJoined) {
     return;
   }
-  CHECK(state == State::kStopping) << "Join before Stop would never return";
+  CHECK(state == State::kStopping) << "Join before Shutdown would never return";
 
   for (auto& thread : threads_) {
     thread.join();
@@ -128,19 +138,6 @@ void Runtime::Join() {
   state_.store(State::kJoined, std::memory_order_release);
 }
 
-void Runtime::SpawnOn(unsigned shard, std::function<Future<>()> func) {
-  CHECK(shard < layout_.shard_count()) << "SpawnOn: shard out of range";
-  auto* work = new SpawnWork(std::move(func));
-  if (!inboxes_[shard].Post(work)) {
-    delete work;
-    LOG(FATAL) << "Fail to spawn on shard " << shard << ": it is not running";
-  }
-}
-
-bool Runtime::PostTo(unsigned shard, InboxWork* work) {
-  CHECK(shard < layout_.shard_count()) << "PostTo: shard out of range";
-  return inboxes_[shard].Post(work);
-}
-
+}  // namespace v2
 }  // namespace cache
 }  // namespace dingofs

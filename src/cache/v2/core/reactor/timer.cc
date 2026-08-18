@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "cache/v1/core/reactor/timer.h"
+#include "cache/v2/core/reactor/timer.h"
 
 #include <glog/logging.h>
 #include <sys/timerfd.h>
@@ -26,8 +26,9 @@
 
 namespace dingofs {
 namespace cache {
+namespace v2 {
 
-void Timer::Arm(uint64_t abs_ns) {
+void Timer::ArmAtNs(uint64_t abs_ns) {
   CHECK(!queued_) << "timer already armed; Cancel() first";
   armed_ = true;
   queued_ = true;
@@ -36,7 +37,7 @@ void Timer::Arm(uint64_t abs_ns) {
   ThisTimerService().Add(this);
 }
 
-void Timer::ArmAfterNs(uint64_t delay_ns) { Arm(NowNs() + delay_ns); }
+void Timer::ArmAfterNs(uint64_t delay_ns) { ArmAtNs(TimestampNs() + delay_ns); }
 
 void Timer::ArmPeriodic(std::chrono::steady_clock::duration period) {
   CHECK(!queued_) << "timer already armed; Cancel() first";
@@ -45,7 +46,7 @@ void Timer::ArmPeriodic(std::chrono::steady_clock::duration period) {
   armed_ = true;
   queued_ = true;
   period_ns_ = period_ns;
-  timeout_ns_ = NowNs() + period_ns;
+  timeout_ns_ = TimestampNs() + period_ns;
   ThisTimerService().Add(this);
 }
 
@@ -98,7 +99,7 @@ void TimerList::Remove(Timer* t) {
 }
 
 void TimerList::SpliceAllInto(TimerList* dst) {
-  if (Empty()) {
+  if (empty()) {
     return;
   }
 
@@ -111,29 +112,6 @@ void TimerList::SpliceAllInto(TimerList* dst) {
     dst->tail_ = tail_;
   }
   head_ = tail_ = nullptr;
-}
-
-int TimerSet::IndexOf(uint64_t ts) const {
-  if (ts <= last_) {
-    return kPastBucket;
-  }
-  return std::countl_zero(ts ^ last_);  // 0..63
-}
-
-void TimerSet::MarkNonEmpty(int i) {
-  if (i == kPastBucket) {
-    past_nonempty_ = true;
-  } else {
-    bits_ |= 1ull << i;
-  }
-}
-
-void TimerSet::MarkEmpty(int i) {
-  if (i == kPastBucket) {
-    past_nonempty_ = false;
-  } else {
-    bits_ &= ~(1ull << i);
-  }
 }
 
 bool TimerSet::Insert(Timer* t) {
@@ -152,7 +130,7 @@ void TimerSet::Remove(Timer* t) {
   int index = IndexOf(t->timeout_ns_);
   TimerList& list = buckets_[index];
   list.Remove(t);
-  if (list.Empty()) {
+  if (list.empty()) {
     MarkEmpty(index);
   }
 }
@@ -187,7 +165,7 @@ TimerList TimerSet::Expire(uint64_t now) {
 
   TimerList pending;
   list.SpliceAllInto(&pending);
-  while (!pending.Empty()) {
+  while (!pending.empty()) {
     Timer* t = pending.PopFront();
     if (t->timeout_ns_ <= now) {
       expired.PushBack(t);
@@ -196,7 +174,7 @@ TimerList TimerSet::Expire(uint64_t now) {
     }
   }
 
-  if (next_ == UINT64_MAX && !Empty()) {
+  if (next_ == UINT64_MAX && !empty()) {
     const TimerList& finest = past_nonempty_
                                   ? buckets_[kPastBucket]
                                   : buckets_[63 - std::countl_zero(bits_)];
@@ -205,6 +183,29 @@ TimerList TimerSet::Expire(uint64_t now) {
     }
   }
   return expired;
+}
+
+int TimerSet::IndexOf(uint64_t ts) const {
+  if (ts <= last_) {
+    return kPastBucket;
+  }
+  return std::countl_zero(ts ^ last_);  // 0..63
+}
+
+void TimerSet::MarkNonEmpty(int i) {
+  if (i == kPastBucket) {
+    past_nonempty_ = true;
+  } else {
+    bits_ |= 1ull << i;
+  }
+}
+
+void TimerSet::MarkEmpty(int i) {
+  if (i == kPastBucket) {
+    past_nonempty_ = false;
+  } else {
+    bits_ &= ~(1ull << i);
+  }
 }
 
 bool TimerQueue::Add(Timer* t) { return set_.Insert(t); }
@@ -218,14 +219,14 @@ void TimerQueue::Remove(Timer* t) {
   }
 }
 
-unsigned TimerQueue::Service(uint64_t now) {
+unsigned TimerQueue::RunExpired(uint64_t now) {
   expired_ = set_.Expire(now);
   for (Timer* t = expired_.Front(); t != nullptr; t = t->next_) {
     t->expired_ = true;
   }
 
   unsigned fired = 0;
-  while (!expired_.Empty()) {
+  while (!expired_.empty()) {
     fired += Fire(expired_.PopFront()) ? 1 : 0;
   }
   return fired;
@@ -248,7 +249,7 @@ bool TimerQueue::Fire(Timer* t) {
 }
 
 void TimerQueue::RearmPeriodic(Timer* t) {
-  t->timeout_ns_ = NowNs() + t->period_ns_;
+  t->timeout_ns_ = TimestampNs() + t->period_ns_;
   t->armed_ = true;
   t->queued_ = true;
   set_.Insert(t);
@@ -273,19 +274,13 @@ TimerService::TimerService(Dispatcher& dispatcher) : dispatcher_(&dispatcher) {
 }
 
 TimerService::~TimerService() {
-  dispatcher_->DetachEvent(this);  // no OnCancelled(): we are what goes away
+  dispatcher_->DeleteEventAndWait(
+      this);  // no OnCancelled(): we are what goes away
   tls_timer_service = nullptr;
   ::close(timerfd_);
 }
 
-void TimerService::OnReady() noexcept {
-  queue_.Service(NowNs());
-  if (!queue_.Empty()) {
-    ArmHardware(queue_.NextTimeout());
-  }
-}
-
-void TimerService::ArmHardware(uint64_t abs_ns) const {
+void TimerService::ArmTimerfd(uint64_t abs_ns) const {
   itimerspec its{};
   its.it_value.tv_sec = static_cast<time_t>(abs_ns / 1'000'000'000);
   its.it_value.tv_nsec = static_cast<long>(abs_ns % 1'000'000'000);
@@ -294,5 +289,13 @@ void TimerService::ArmHardware(uint64_t abs_ns) const {
   }
 }
 
+void TimerService::OnReady() noexcept {
+  queue_.RunExpired(TimestampNs());
+  if (!queue_.empty()) {
+    ArmTimerfd(queue_.NextTimeout());
+  }
+}
+
+}  // namespace v2
 }  // namespace cache
 }  // namespace dingofs

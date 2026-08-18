@@ -14,77 +14,116 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_CACHE_CORE_RUNTIME_SHARDED_H_
-#define DINGOFS_CACHE_CORE_RUNTIME_SHARDED_H_
+#ifndef DINGOFS_CACHE_V2_CORE_RUNTIME_SHARDED_H_
+#define DINGOFS_CACHE_V2_CORE_RUNTIME_SHARDED_H_
 
 #include <glog/logging.h>
 
 #include <concepts>
-#include <exception>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
-#include "cache/v1/core/reactor/coroutine.h"
-#include "cache/v1/core/runtime/smp.h"
+#include "cache/v2/core/reactor/coroutine.h"
+#include "cache/v2/core/runtime/smp.h"
+#include "common/status.h"
 
 namespace dingofs {
 namespace cache {
+namespace v2 {
 
+// Optional shard-local lifecycle. Both are Future because tearing a shard's
+// state down means draining io it already has in flight; neither is ever
+// called from outside -- Sharded drives them on the owning shard.
 template <typename S>
-concept Stoppable = requires(S s) {
-  { s.Stop() } -> std::same_as<Future<>>;
+concept Startable = requires(S s) {
+  { s.Start() } -> std::same_as<Future<>>;
 };
 
-// One Service instance per shard, constructed and destroyed ON its shard so
-// its memory and resources are shard-local.
+template <typename S>
+concept Shutdownable = requires(S s) {
+  { s.Shutdown() } -> std::same_as<Future<>>;
+};
+
+// One Service instance per shard, constructed and destroyed ON its shard.
+//
+// This is the only place a component admits the process has shards. The
+// Service is written as if it were the only one: plain members, no atomics,
+// no locks, and no way to ask which shard it is -- it just uses `this`.
+// Reaching a sibling is the container's job.
+//
+// Assembly runs on the thread that owns main(): it prepares whatever the
+// instances need, then StartOnAllShards builds them, each on the core that
+// will drive it, so the instance and everything its constructor allocates
+// come from that core's arena.
 template <typename Service>
 class Sharded {
  public:
   Sharded() = default;
-  ~Sharded() { CHECK(instances_.empty()) << "Sharded destroyed before Stop"; }
+  ~Sharded() {
+    CHECK(instances_.empty()) << "Sharded destroyed before Shutdown";
+  }
 
   Sharded(const Sharded&) = delete;
   Sharded& operator=(const Sharded&) = delete;
 
-  template <typename... Args>
-  Future<> Start(Args... args) {
-    instances_.assign(ShardCount(), nullptr);
-    std::vector<Future<>> starting;
-    starting.reserve(instances_.size());
-    for (unsigned s = 0; s < instances_.size(); ++s) {
-      starting.push_back(SubmitTo(
-          s, [this, s, args...] { instances_[s] = new Service(args...); }));
-    }
+  // -- external thread ------------------------------------------------------
 
-    std::exception_ptr failure;
-    try {
-      co_await WhenAll(std::move(starting));
-    } catch (...) {
-      failure = std::current_exception();
+  // `factory` runs ON its shard and may vary per instance -- hand each shard
+  // its own slice of whatever the launcher prepared. All shards build at once;
+  // if any fails, none survive.
+  template <typename Factory>
+    requires std::is_invocable_r_v<Service*, Factory, unsigned>
+  Status StartOnAllShards(Factory factory) {
+    CHECK(instances_.empty()) << "Sharded started twice";
+    instances_.assign(ShardCount(), nullptr);
+
+    const Status status =
+        RunOnAllAndWait([this, &factory](unsigned shard) -> Future<Status> {
+          return StartInstance(&instances_[shard], factory(shard));
+        });
+    if (!status.ok()) {
+      ShutdownOnAllShards();
     }
-    if (failure) {
-      co_await Stop();
-      std::rethrow_exception(failure);
-    }
+    return status;
   }
 
-  Future<> Stop() {
-    std::vector<Future<>> stopping;
-    stopping.reserve(instances_.size());
-    for (unsigned s = 0; s < instances_.size(); ++s) {
-      stopping.push_back(SubmitTo(s, [this, s]() -> Future<> {
-        return StopAndDelete(std::exchange(instances_[s], nullptr));
-      }));
+  // Two passes on purpose: every instance stops before any is destroyed, so a
+  // Shutdown() that still reaches a sibling shard finds it alive.
+  void ShutdownOnAllShards() {
+    if (instances_.empty()) {
+      return;
     }
-    co_await WhenAll(std::move(stopping));
+    RunOnAllAndWait([this](unsigned shard) -> Future<> {
+      return StopInstance(instances_[shard]);
+    });
+    RunOnAllAndWait([this](unsigned shard) -> Future<> {
+      delete std::exchange(instances_[shard], nullptr);
+      return MakeReadyFuture<>();
+    });
     instances_.clear();
   }
 
-  Service& Local() {
-    Service* service = instances_[ThisShardId()];
-    CHECK(service != nullptr) << "Sharded not started on this shard";
-    return *service;
+  // -- any thread -----------------------------------------------------------
+
+  // Fire-and-forget `func(service)` on every shard, waiting for none of them.
+  // For publishing a value the shards should pick up when they get to it -- a
+  // new topology, a reloaded config -- from a thread that must not block.
+  //
+  // Must not race ShutdownOnAllShards: stop the publisher first, as
+  // CacheGroupMemberSyncer does with its thread. Shards that stopped between
+  // the post and the run are skipped; they have no use for the value.
+  template <typename Func>
+  void PostToAll(Func func) {
+    for (unsigned shard = 0; shard < instances_.size(); ++shard) {
+      auto* work = new CallWork<Func>(this, func);
+      if (!PostTo(shard, work)) {
+        delete work;
+      }
+    }
   }
+
+  // -- shard ----------------------------------------------------------------
 
   template <typename Func>
   auto InvokeOn(unsigned shard, Func func) {
@@ -93,30 +132,73 @@ class Sharded {
     });
   }
 
-  template <typename Func>
-  Future<> InvokeOnAll(Func func) {
-    std::vector<Future<>> running;
-    running.reserve(ShardCount());
-    for (unsigned s = 0; s < ShardCount(); ++s) {
-      running.push_back(InvokeOn(s, func));
+  // Asks every shard for its part and folds the parts into `init`. All the
+  // asking happens first, so the shards answer in parallel; the fold runs on
+  // the calling shard, so `reduce` needs no synchronisation.
+  template <typename Value, typename Map, typename Reduce>
+  Future<Value> MapReduce(Value init, Map map, Reduce reduce) {
+    using Part =
+        typename FutureTraits<std::invoke_result_t<Map, Service&>>::Value;
+
+    std::vector<Future<Part>> parts;
+    parts.reserve(instances_.size());
+    for (unsigned shard = 0; shard < instances_.size(); ++shard) {
+      parts.push_back(InvokeOn(shard, map));
     }
-    co_await WhenAll(std::move(running));
+    for (Future<Part>& part : parts) {
+      reduce(init, co_await std::move(part));
+    }
+    co_return init;
+  }
+
+  Service& Local() {
+    Service* service = instances_[ThisShardId()];
+    CHECK(service != nullptr) << "Sharded not started on this shard";
+    return *service;
   }
 
  private:
-  static Future<> StopAndDelete(Service* service) {
-    if (service != nullptr) {
-      if constexpr (Stoppable<Service>) {
-        co_await service->Stop();
-      }
-      delete service;
+  template <typename Func>
+  struct CallWork : InboxWork {
+    CallWork(Sharded* owner, Func func) : owner(owner), func(std::move(func)) {
+      run = [](InboxWork* base) {
+        auto* self = static_cast<CallWork*>(base);
+        Service* service = self->owner->instances_[ThisShardId()];
+        if (service != nullptr) {
+          self->func(*service);
+        }
+        delete self;
+      };
     }
+
+    Sharded* owner;
+    Func func;
+  };
+
+  // Installed before Start() runs, so a failed Start still leaves the instance
+  // where ShutdownOnAllShards can find and destroy it.
+  static Future<Status> StartInstance(Service** slot, Service* service) {
+    *slot = service;
+    if constexpr (Startable<Service>) {
+      co_await service->Start();
+    }
+    co_return Status::OK();
+  }
+
+  static Future<> StopInstance(Service* service) {
+    if constexpr (Shutdownable<Service>) {
+      if (service != nullptr) {
+        return service->Shutdown();
+      }
+    }
+    return MakeReadyFuture<>();
   }
 
   std::vector<Service*> instances_;
 };
 
+}  // namespace v2
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_CACHE_CORE_RUNTIME_SHARDED_H_
+#endif  // DINGOFS_CACHE_V2_CORE_RUNTIME_SHARDED_H_

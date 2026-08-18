@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_CACHE_CORE_REACTOR_TIMER_H_
-#define DINGOFS_CACHE_CORE_REACTOR_TIMER_H_
+#ifndef DINGOFS_CACHE_V2_CORE_REACTOR_TIMER_H_
+#define DINGOFS_CACHE_V2_CORE_REACTOR_TIMER_H_
 
 #include <glog/logging.h>
 
@@ -24,15 +24,14 @@
 #include <functional>
 #include <utility>
 
-#include "cache/v1/core/reactor/dispatcher.h"
-#include "cache/v1/core/utils/time.h"
+#include "cache/v2/core/reactor/dispatcher.h"
+#include "cache/v2/utils/time.h"
 
 namespace dingofs {
 namespace cache {
+namespace v2 {
 
-// Lifecycle bits (shard-thread only):
-//   idle --Arm()--> in TimerSet --Expire--> in the expired list
-//   (000)          (armed+queued)     (armed+queued+expired)
+// Shard-thread only: idle --Arm()--> TimerSet --Expire--> expired list.
 class Timer {
  public:
   using Callback = std::function<void()>;
@@ -46,7 +45,7 @@ class Timer {
 
   void SetCallback(Callback cb) { cb_ = std::move(cb); }
 
-  void Arm(uint64_t abs_ns);
+  void ArmAtNs(uint64_t abs_ns);
   void ArmAfterNs(uint64_t delay_ns);
   void ArmPeriodic(std::chrono::steady_clock::duration period);
   bool Cancel();
@@ -57,7 +56,7 @@ class Timer {
   friend class TimerSet;
 
   Callback cb_;
-  uint64_t timeout_ns_ = 0;  // absolute deadline, NowNs() units
+  uint64_t timeout_ns_ = 0;  // absolute deadline, TimestampNs() units
   uint64_t period_ns_ = 0;   // != 0 -> periodic
   Timer* prev_ = nullptr;
   Timer* next_ = nullptr;
@@ -68,13 +67,13 @@ class Timer {
 
 class TimerList {
  public:
-  bool Empty() const { return head_ == nullptr; }
-  Timer* Front() const { return head_; }
-
   void PushBack(Timer* t);
   Timer* PopFront();
   void Remove(Timer* t);
   void SpliceAllInto(TimerList* dst);
+
+  bool empty() const { return head_ == nullptr; }
+  Timer* Front() const { return head_; }
 
  private:
   Timer* head_ = nullptr;
@@ -87,7 +86,7 @@ class TimerSet {
   void Remove(Timer* t);
   TimerList Expire(uint64_t now);
   uint64_t NextTimeout() const { return last_ > next_ ? last_ : next_; }
-  bool Empty() const { return bits_ == 0 && !past_nonempty_; }
+  bool empty() const { return bits_ == 0 && !past_nonempty_; }
 
  private:
   static constexpr int kPastBucket = 64;  // timeout <= last_
@@ -107,8 +106,8 @@ class TimerQueue {
  public:
   bool Add(Timer* t);
   void Remove(Timer* t);
-  unsigned Service(uint64_t now);
-  bool Empty() const { return set_.Empty(); }
+  unsigned RunExpired(uint64_t now);
+  bool empty() const { return set_.empty(); }
   uint64_t NextTimeout() const { return set_.NextTimeout(); }
 
  private:
@@ -117,7 +116,7 @@ class TimerQueue {
   static void RunCallback(Timer* t);
 
   TimerSet set_;
-  TimerList expired_;  // non-empty only inside Service()
+  TimerList expired_;  // non-empty only inside RunExpired()
 };
 
 class TimerService final : public Event {
@@ -130,14 +129,14 @@ class TimerService final : public Event {
 
   void Add(Timer* t) {
     if (queue_.Add(t)) {
-      ArmHardware(queue_.NextTimeout());
+      ArmTimerfd(queue_.NextTimeout());
     }
   }
   void Remove(Timer* t) { queue_.Remove(t); }
 
  private:
   void OnReady() noexcept override;
-  void ArmHardware(uint64_t abs_ns) const;
+  void ArmTimerfd(uint64_t abs_ns) const;
 
   TimerQueue queue_;
   Dispatcher* dispatcher_;
@@ -151,7 +150,8 @@ inline TimerService& ThisTimerService() {
   return *tls_timer_service;
 }
 
+}  // namespace v2
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_CACHE_CORE_REACTOR_TIMER_H_
+#endif  // DINGOFS_CACHE_V2_CORE_REACTOR_TIMER_H_

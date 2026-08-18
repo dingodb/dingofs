@@ -14,8 +14,14 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_CACHE_CORE_REACTOR_COROUTINE_H_
-#define DINGOFS_CACHE_CORE_REACTOR_COROUTINE_H_
+#ifndef DINGOFS_CACHE_V2_CORE_REACTOR_COROUTINE_H_
+#define DINGOFS_CACHE_V2_CORE_REACTOR_COROUTINE_H_
+
+// Fail in one line when a C++17 TU includes a v2 header without opting in.
+#if __cplusplus < 202002L
+#error \
+    "cache/v2 needs C++20: target_compile_features(<target> PRIVATE cxx_std_20)"
+#endif
 
 #include <glog/logging.h>
 
@@ -29,14 +35,15 @@
 #include <utility>
 #include <vector>
 
-#include "cache/v1/core/reactor/preempt.h"
-#include "cache/v1/core/reactor/reactor.h"
-#include "cache/v1/core/reactor/task.h"
-#include "cache/v1/core/reactor/timer.h"
+#include "cache/v2/core/reactor/preempt.h"
+#include "cache/v2/core/reactor/reactor.h"
+#include "cache/v2/core/reactor/task.h"
+#include "cache/v2/core/reactor/timer.h"
 #include "common/status.h"
 
 namespace dingofs {
 namespace cache {
+namespace v2 {
 
 template <typename T = void>
 class Future;
@@ -57,7 +64,8 @@ class BrokenPromise : public std::exception {
   const char* what() const noexcept override { return "broken promise"; }
 };
 
-[[gnu::noinline, gnu::cold]] inline std::exception_ptr MakeBrokenPromise() {
+[[gnu::noinline, gnu::cold]] inline std::exception_ptr
+MakeBrokenPromiseException() {
   return std::make_exception_ptr(BrokenPromise{});
 }
 
@@ -99,7 +107,6 @@ class FutureState {
   FutureState& operator=(const FutureState&) = delete;
 
   FutureState(FutureState&& other) noexcept { MoveFrom(std::move(other)); }
-
   FutureState& operator=(FutureState&& other) noexcept {
     if (this != &other) {
       DiscardAndReport();
@@ -195,8 +202,10 @@ class Promise {
   Promise() noexcept : state_(&local_state_) {}
   ~Promise() { Abandon(); }
 
-  Promise(Promise&& other) noexcept { MoveFrom(std::move(other)); }
+  Promise(const Promise&) = delete;
+  Promise& operator=(const Promise&) = delete;
 
+  Promise(Promise&& other) noexcept { MoveFrom(std::move(other)); }
   Promise& operator=(Promise&& other) noexcept {
     if (this != &other) {
       Abandon();
@@ -204,9 +213,6 @@ class Promise {
     }
     return *this;
   }
-
-  Promise(const Promise&) = delete;
-  Promise& operator=(const Promise&) = delete;
 
   Future<T> GetFuture();
 
@@ -259,7 +265,7 @@ class Promise {
 
     DCHECK(state_ != nullptr);
     if (!state_->Available()) {
-      state_->SetException(MakeBrokenPromise());
+      state_->SetException(MakeBrokenPromiseException());
       ScheduleWaiter();
     }
 
@@ -303,6 +309,9 @@ class [[nodiscard]] Future {
 
   ~Future() { Unlink(); }
 
+  Future(const Future&) = delete;
+  Future& operator=(const Future&) = delete;
+
   Future(Future&& other) noexcept
       : state_(std::move(other.state_)),
         promise_(std::exchange(other.promise_, nullptr)) {
@@ -311,7 +320,6 @@ class [[nodiscard]] Future {
       promise_->state_ = &state_;
     }
   }
-
   Future& operator=(Future&& other) noexcept {
     if (this != &other) {
       Unlink();
@@ -324,9 +332,6 @@ class [[nodiscard]] Future {
     }
     return *this;
   }
-
-  Future(const Future&) = delete;
-  Future& operator=(const Future&) = delete;
 
   bool Available() const noexcept { return state_.Available(); }
   bool Failed() const noexcept { return state_.Failed(); }
@@ -550,7 +555,8 @@ Future<> WhenAll(Futures... futures) {
   return WhenAll(std::move(pending));
 }
 
+}  // namespace v2
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_CACHE_CORE_REACTOR_COROUTINE_H_
+#endif  // DINGOFS_CACHE_V2_CORE_REACTOR_COROUTINE_H_

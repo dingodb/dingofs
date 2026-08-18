@@ -14,21 +14,25 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_CACHE_CORE_IO_IO_RING_H_
-#define DINGOFS_CACHE_CORE_IO_IO_RING_H_
+#ifndef DINGOFS_CACHE_V2_CORE_FS_IO_RING_H_
+#define DINGOFS_CACHE_V2_CORE_FS_IO_RING_H_
 
 #include <glog/logging.h>
 #include <liburing.h>
 
+#include <coroutine>
 #include <cstddef>
 #include <cstdint>
+#include <utility>
 #include <vector>
 
-#include "cache/v1/core/io/completion.h"
-#include "cache/v1/core/reactor/poller.h"
+#include "cache/v2/core/reactor/io_awaiter.h"
+#include "cache/v2/core/reactor/poller.h"
+#include "cache/v2/core/reactor/reactor.h"  // Schedule, Task, TaskPromise
 
 namespace dingofs {
 namespace cache {
+namespace v2 {
 
 inline constexpr uint16_t kNoBufIndex = 0xffff;
 
@@ -42,13 +46,13 @@ class FixedBuffers {
   int Register(void* base, size_t bytes, size_t chunk);
   void Unregister();
 
-  bool registered() const { return bytes_ != 0; }
-
   uint16_t IndexOf(const void* p) const {
     auto offset = static_cast<size_t>(static_cast<const char*>(p) - base_);
     return offset < bytes_ ? static_cast<uint16_t>(offset >> chunk_shift_)
                            : kNoBufIndex;
   }
+
+  bool registered() const { return bytes_ != 0; }
 
  private:
   io_uring* ring_;
@@ -89,13 +93,14 @@ class IoRing final : public Poller {
   IoRing& operator=(const IoRing&) = delete;
 
   io_uring_sqe* GetSqe(IoCompletion* c);
-  FixedBuffers& buffers() { return buffers_; }
-  FixedFiles& files() { return files_; }
 
   bool Poll() override;
   bool PurePoll() override { return inflight_ > 0; }
   bool TryEnterInterruptMode() override { return inflight_ == 0; }
   void Flush() override { SubmitAndCollect(); }
+
+  FixedBuffers& buffers() { return buffers_; }
+  FixedFiles& files() { return files_; }
 
  private:
   static constexpr unsigned kCqBatch = 256;
@@ -129,7 +134,27 @@ class UringAwaiter : public IoCompletion, public IoAwaiter<Derived> {
   ~UringAwaiter() = default;
 };
 
+// One-shot io_uring op; prep-closure pointees must outlive the suspension.
+template <typename PrepFn>
+class UringOpAwaiter final : public UringAwaiter<UringOpAwaiter<PrepFn>> {
+ public:
+  explicit UringOpAwaiter(PrepFn prep) : prep_(std::move(prep)) {}
+
+  void Arm() { prep_(ThisIoRing().GetSqe(this)); }
+
+  int32_t await_resume() const noexcept { return this->result_; }
+
+ private:
+  PrepFn prep_;
+};
+
+template <typename PrepFn>
+UringOpAwaiter<PrepFn> UringOp(PrepFn prep) {
+  return UringOpAwaiter<PrepFn>(std::move(prep));
+}
+
+}  // namespace v2
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_CACHE_CORE_IO_IO_RING_H_
+#endif  // DINGOFS_CACHE_V2_CORE_FS_IO_RING_H_

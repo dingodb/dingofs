@@ -14,24 +14,26 @@
  * limitations under the License.
  */
 
-#include "cache/v1/core/io/io_ring.h"
+#include "cache/v2/core/fs/io_ring.h"
 
 #include <glog/logging.h>
 #include <sys/uio.h>
 
 #include <cerrno>
+#include <cstdint>
 #include <mutex>
 #include <string>
 
 namespace dingofs {
 namespace cache {
+namespace v2 {
 
-struct OpcodeReq {
+struct UringOpcode {
   int op;
   const char* name;
 };
 
-constexpr OpcodeReq kRequiredOps[] = {
+constexpr UringOpcode kRequiredOps[] = {
     {.op = IORING_OP_NOP, .name = "NOP"},
     {.op = IORING_OP_READ, .name = "READ"},
     {.op = IORING_OP_WRITE, .name = "WRITE"},
@@ -52,6 +54,8 @@ constexpr unsigned kSetupLadder[] = {
     0,
 };
 
+// Both LOG(FATAL) on a kernel that cannot serve the ring: a missing opcode or
+// a missing feature is a deployment error, not something to degrade around.
 static void CheckOpCodes(io_uring* ring) {
   static std::once_flag once;
   std::call_once(once, [ring] {
@@ -61,18 +65,26 @@ static void CheckOpCodes(io_uring* ring) {
     }
 
     std::string missing;
-    for (const auto& req : kRequiredOps) {
-      if (!io_uring_opcode_supported(probe, req.op)) {
-        missing += req.name;
+    for (const UringOpcode& op : kRequiredOps) {
+      if (!io_uring_opcode_supported(probe, op.op)) {
+        missing += op.name;
         missing += ' ';
       }
     }
 
     io_uring_free_probe(probe);
     if (!missing.empty()) {
-      LOG(FATAL) << "Fail to use io_uring, missing opcodes: " << missing;
+      LOG(FATAL) << "Fail to use io_uring: missing opcodes: " << missing;
     }
   });
+}
+
+static void CheckFeatures(io_uring* ring, const io_uring_params& params) {
+  constexpr uint32_t kNeeded = IORING_FEAT_SUBMIT_STABLE | IORING_FEAT_NODROP;
+  if ((params.features & kNeeded) != kNeeded) {
+    io_uring_queue_exit(ring);
+    LOG(FATAL) << "Fail to use io_uring: kernel lacks SUBMIT_STABLE|NODROP";
+  }
 }
 
 int FixedBuffers::Register(void* base, size_t bytes, size_t chunk) {
@@ -171,33 +183,6 @@ IoRing::~IoRing() {
   tls_io_ring = nullptr;
 }
 
-void IoRing::Init(unsigned queue_len) {
-  io_uring_params params{};
-  int rc = -EINVAL;
-  for (unsigned flags : kSetupLadder) {
-    params = io_uring_params{};
-    params.flags = flags;
-    rc = io_uring_queue_init_params(queue_len, &ring_, &params);
-    if (rc != -EINVAL) {
-      break;
-    }
-  }
-
-  if (rc < 0) {
-    errno = -rc;
-    PLOG(FATAL) << "Fail to io_uring_queue_init_params(io)";
-  }
-
-  constexpr uint32_t kNeeded = IORING_FEAT_SUBMIT_STABLE | IORING_FEAT_NODROP;
-  if ((params.features & kNeeded) != kNeeded) {
-    io_uring_queue_exit(&ring_);
-    LOG(FATAL) << "Fail to use io_uring: kernel lacks SUBMIT_STABLE|NODROP";
-  }
-
-  (void)io_uring_register_ring_fd(&ring_);
-  io_uring_ring_dontfork(&ring_);
-}
-
 io_uring_sqe* IoRing::GetSqe(IoCompletion* c) {
   io_uring_sqe* sqe = io_uring_get_sqe(&ring_);
   while (__builtin_expect(sqe == nullptr, false)) {
@@ -216,6 +201,38 @@ io_uring_sqe* IoRing::GetSqe(IoCompletion* c) {
   return sqe;
 }
 
+bool IoRing::Poll() {
+  if (inflight_ == 0) {
+    return false;
+  }
+
+  SubmitAndCollect();
+  return Reap() > 0;
+}
+
+void IoRing::Init(unsigned queue_len) {
+  io_uring_params params{};
+  int rc = -EINVAL;
+  for (unsigned flags : kSetupLadder) {
+    params = io_uring_params{};
+    params.flags = flags;
+    rc = io_uring_queue_init_params(queue_len, &ring_, &params);
+    if (rc != -EINVAL) {
+      break;
+    }
+  }
+
+  if (rc < 0) {
+    errno = -rc;
+    PLOG(FATAL) << "Fail to io_uring_queue_init_params(io)";
+  }
+
+  CheckFeatures(&ring_, params);
+
+  (void)io_uring_register_ring_fd(&ring_);
+  io_uring_ring_dontfork(&ring_);
+}
+
 void IoRing::SubmitAndCollect() {
   if (io_uring_sq_ready(&ring_) == 0) {
     return;
@@ -230,15 +247,6 @@ void IoRing::SubmitAndCollect() {
     errno = -rc;
     PLOG(FATAL) << "Fail to io_uring_submit_and_get_events(io)";
   }
-}
-
-bool IoRing::Poll() {
-  if (inflight_ == 0) {
-    return false;
-  }
-
-  SubmitAndCollect();
-  return Reap() > 0;
 }
 
 unsigned IoRing::Reap() {
@@ -277,5 +285,6 @@ unsigned IoRing::Reap() {
   return total;
 }
 
+}  // namespace v2
 }  // namespace cache
 }  // namespace dingofs

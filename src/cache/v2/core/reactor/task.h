@@ -14,16 +14,17 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_CACHE_CORE_REACTOR_TASK_H_
-#define DINGOFS_CACHE_CORE_REACTOR_TASK_H_
+#ifndef DINGOFS_CACHE_V2_CORE_REACTOR_TASK_H_
+#define DINGOFS_CACHE_V2_CORE_REACTOR_TASK_H_
 
 #include <concepts>
 #include <cstddef>
 
-#include "cache/v1/core/utils/memory/memory.h"
+#include "cache/v2/core/memory/shard_allocator.h"
 
 namespace dingofs {
 namespace cache {
+namespace v2 {
 
 class Task {
  public:
@@ -31,8 +32,7 @@ class Task {
   static void operator delete(void* p, size_t) { memory::Free(p); }
   static void operator delete(void* p) { memory::Free(p); }
 
-  // On return the caller's pointer is dead: the task has taken over its own
-  // lifetime (self-destroy, re-queue, or hand off to another owner).
+  // On return the caller's pointer is dead: the task owns its own lifetime.
   virtual void RunAndDispose() noexcept = 0;
 
  protected:
@@ -42,7 +42,8 @@ class Task {
 template <typename P>
 concept TaskPromise = std::derived_from<P, Task>;
 
+}  // namespace v2
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_CACHE_CORE_REACTOR_TASK_H_
+#endif  // DINGOFS_CACHE_V2_CORE_REACTOR_TASK_H_

@@ -14,22 +14,21 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_CACHE_CORE_IO_FILE_H_
-#define DINGOFS_CACHE_CORE_IO_FILE_H_
+#ifndef DINGOFS_CACHE_V2_CORE_FS_FILESYSTEM_H_
+#define DINGOFS_CACHE_V2_CORE_FS_FILESYSTEM_H_
 
 #include <cstdint>
 #include <string>
 
-#include "cache/v1/core/io/io_ring.h"
-#include "cache/v1/core/reactor/coroutine.h"
-#include "cache/v1/core/utils/containers/admission_queue.h"
-#include "cache/v1/core/utils/status.h"
+#include "cache/v2/common/status.h"
+#include "cache/v2/core/fs/io_ring.h"
+#include "cache/v2/core/reactor/coroutine.h"
+#include "cache/v2/utils/containers/admission_queue.h"
 #include "common/status.h"
 
 namespace dingofs {
 namespace cache {
-
-Status IoStatus(const char* what, int err);
+namespace v2 {
 
 enum class OpenFlags : uint8_t {
   kRead = 1u << 0,
@@ -48,17 +47,34 @@ inline bool HasFlag(OpenFlags v, OpenFlags f) {
   return (static_cast<uint32_t>(v) & static_cast<uint32_t>(f)) != 0;
 }
 
+struct FileStat {
+  uint64_t size = 0;
+  uint32_t nlink = 0;
+  int64_t atime_sec = 0;
+  int64_t mtime_sec = 0;
+};
+
 struct OpenOption {
   uint32_t io_inflight = 128;  // per-file admission limit, on this shard
   uint32_t mode = 0644;
   bool register_fd = true;
+  // O_DIRECT, and with it the 4 KiB alignment every buffer must satisfy.
+  // Clearing it hands an unaligned transfer to the kernel instead: the copy
+  // still happens, but page-cache misses run it on an io-wq thread rather
+  // than on the shard, and we write no bounce code for it. Reads only --
+  // a buffered write would sit in the page cache and be lost on a crash.
+  bool direct = true;
 };
 
 class File;
 
 class RwAwaiter final : public UringAwaiter<RwAwaiter> {
  public:
-  RwAwaiter(File* file, bool write, uint64_t pos, void* buf,
+  RwAwaiter(File* file, bool write, uint64_t pos, void* buffer,
+            uint32_t len) noexcept;
+  // Vectored write. `iov` must outlive the await; `len` is its total, kept
+  // separately so the short-write check reads the same in both modes.
+  RwAwaiter(File* file, uint64_t pos, const struct iovec* iov, unsigned iovcnt,
             uint32_t len) noexcept;
 
   StatusOr<size_t> await_resume();
@@ -71,9 +87,11 @@ class RwAwaiter final : public UringAwaiter<RwAwaiter> {
 
  private:
   File* file_;
-  void* buf_;
+  void* buffer_;                       // scalar mode
+  const struct iovec* iov_ = nullptr;  // vectored mode, when non-null
   uint64_t pos_;
   uint32_t len_;
+  unsigned iovcnt_ = 0;
   bool write_;
 };
 
@@ -82,10 +100,14 @@ class File {
   File() = default;
   ~File();
 
+  File(const File&) = delete;
+  File& operator=(const File&) = delete;
+
   File(File&& o) noexcept
       : fd_(o.fd_),
         fixed_fd_(o.fixed_fd_),
         owns_slot_(o.owns_slot_),
+        direct_(o.direct_),
         queue_(o.queue_) {
     o.Disown();
   }
@@ -96,33 +118,37 @@ class File {
       fd_ = o.fd_;
       fixed_fd_ = o.fixed_fd_;
       owns_slot_ = o.owns_slot_;
+      direct_ = o.direct_;
       queue_ = o.queue_;
       o.Disown();
     }
     return *this;
   }
 
-  File(const File&) = delete;
-  File& operator=(const File&) = delete;
+  Future<Status> Close();
 
-  RwAwaiter Read(uint64_t pos, void* buf, uint32_t len);
-  RwAwaiter Write(uint64_t pos, const void* buf, uint32_t len);
+  RwAwaiter Read(uint64_t pos, void* buffer, uint32_t len);
+  RwAwaiter Write(uint64_t pos, const void* buffer, uint32_t len);
+  // One io for a body that arrived in pieces. No fixed-buffer variant
+  // exists for vectored io, so a single-range body should use Write.
+  RwAwaiter Writev(uint64_t pos, const struct iovec* iov, unsigned iovcnt,
+                   uint32_t len);
   Future<Status> Sync() const;
   Future<Status> Allocate(uint64_t pos, uint64_t len) const;
   Future<StatusOr<uint64_t>> Size() const;
-  Future<Status> Close();
 
   bool Valid() const { return fd_ >= 0; }
   int fd() const { return fd_; }
+  bool direct() const { return direct_; }
   int32_t fixed_fd() const { return fixed_fd_; }
   const AdmissionQueue<RwAwaiter>& admission() const { return queue_; }
 
  private:
   friend class RwAwaiter;
-  friend Future<StatusOr<File>> OpenFile(std::string path, OpenFlags flags,
-                                         OpenOption option);
+  friend class FileSystem;
 
-  File(int fd, uint32_t io_inflight) : fd_(fd), queue_(io_inflight) {}
+  File(int fd, uint32_t io_inflight, bool direct)
+      : fd_(fd), direct_(direct), queue_(io_inflight) {}
 
   void AdoptSlot(int32_t slot) {
     fixed_fd_ = slot;
@@ -140,13 +166,31 @@ class File {
   int fd_ = -1;
   int32_t fixed_fd_ = -1;
   bool owns_slot_ = false;
+  bool direct_ = true;
   AdmissionQueue<RwAwaiter> queue_{128};
 };
 
-Future<StatusOr<File>> OpenFile(std::string path, OpenFlags flags,
-                                OpenOption option = {});
+// Async fs ops on this shard's io_uring; missing opcodes fall back to syscall.
+class FileSystem {
+ public:
+  FileSystem() = delete;
 
+  static Future<StatusOr<File>> Open(std::string path, OpenFlags flags,
+                                     OpenOption option = {});
+
+  static Future<Status> Unlink(std::string path);
+  static Future<Status> Link(std::string from, std::string to);
+  static Future<Status> Rename(std::string from, std::string to);
+
+  // mkdir -p; an existing dir at any level is success (cross-shard race-free).
+  static Future<Status> MakeDirs(std::string path, uint32_t mode = 0755);
+
+  // Stat by path; NotExist when absent.
+  static Future<StatusOr<FileStat>> StatPath(std::string path);
+};
+
+}  // namespace v2
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_CACHE_CORE_IO_FILE_H_
+#endif  // DINGOFS_CACHE_V2_CORE_FS_FILESYSTEM_H_

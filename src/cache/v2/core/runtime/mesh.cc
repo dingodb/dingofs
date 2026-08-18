@@ -14,12 +14,13 @@
  * limitations under the License.
  */
 
-#include "cache/v1/core/runtime/mesh.h"
+#include "cache/v2/core/runtime/mesh.h"
 
 #include <glog/logging.h>
 
 namespace dingofs {
 namespace cache {
+namespace v2 {
 
 template <typename Func>
 [[gnu::always_inline]] static inline void ForEachPeer(uint64_t bits,
@@ -30,6 +31,15 @@ template <typename Func>
     bits &= bits - 1;
   }
 }
+
+bool MeshPoller::Poll() {
+  Mesh& mesh = Mesh::Instance();
+  bool work = mesh.Flush(shard_);
+  work |= mesh.Drain(shard_);
+  return work;
+}
+
+bool MeshPoller::PurePoll() { return Mesh::Instance().HasWork(shard_); }
 
 void Mesh::Init(unsigned shard_count) {
   CHECK(channels_ == nullptr) << "mesh built twice";
@@ -43,27 +53,11 @@ void Mesh::Init(unsigned shard_count) {
   dirty_words_ = new DirtyWord[shard_count * word_count_]();
   reactors_ = new Reactor*[shard_count]();
   pollers_ = new MeshPoller[shard_count]();
+  inboxes_ = new ShardInbox[shard_count]();
   for (unsigned s = 0; s < shard_count; ++s) {
     pollers_[s].Bind(s);
   }
   InitLinks();
-}
-
-void Mesh::InitLinks() {
-  const unsigned n = shard_count_;
-  const unsigned w = word_count_;
-  for (unsigned owner = 0; owner < n; ++owner) {
-    for (unsigned peer = 0; peer < n; ++peer) {
-      links_[(owner * n) + peer].Build(
-          &channels_[(peer * n) + owner],  // owner calls peer
-          &channels_[(owner * n) + peer],  // peer calls owner
-          NotifyBit(&notify_words_[(peer * w) + (owner / kBitsPerWord)].bits,
-                    owner % kBitsPerWord),
-          DirtyBit(&dirty_words_[(owner * w) + (peer / kBitsPerWord)].bits,
-                   peer % kBitsPerWord),
-          &reactors_[peer]);
-    }
-  }
 }
 
 void Mesh::Destroy() {
@@ -73,12 +67,14 @@ void Mesh::Destroy() {
   delete[] dirty_words_;
   delete[] reactors_;
   delete[] pollers_;
+  delete[] inboxes_;
   channels_ = nullptr;
   links_ = nullptr;
   notify_words_ = nullptr;
   dirty_words_ = nullptr;
   reactors_ = nullptr;
   pollers_ = nullptr;
+  inboxes_ = nullptr;
   shard_count_ = 0;
   word_count_ = 0;
 }
@@ -125,14 +121,23 @@ bool Mesh::Drain(unsigned shard) {
   return work;
 }
 
-bool MeshPoller::Poll() {
-  Mesh& mesh = Mesh::Instance();
-  bool work = mesh.Flush(shard_);
-  work |= mesh.Drain(shard_);
-  return work;
+void Mesh::InitLinks() {
+  const unsigned n = shard_count_;
+  const unsigned w = word_count_;
+  for (unsigned owner = 0; owner < n; ++owner) {
+    for (unsigned peer = 0; peer < n; ++peer) {
+      links_[(owner * n) + peer].Init(
+          &channels_[(peer * n) + owner],  // owner calls peer
+          &channels_[(owner * n) + peer],  // peer calls owner
+          NotifyBit(&notify_words_[(peer * w) + (owner / kBitsPerWord)].bits,
+                    owner % kBitsPerWord),
+          DirtyBit(&dirty_words_[(owner * w) + (peer / kBitsPerWord)].bits,
+                   peer % kBitsPerWord),
+          &reactors_[peer]);
+    }
+  }
 }
 
-bool MeshPoller::PurePoll() { return Mesh::Instance().HasWork(shard_); }
-
+}  // namespace v2
 }  // namespace cache
 }  // namespace dingofs

@@ -14,36 +14,32 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_CACHE_CORE_REACTOR_POLLER_H_
-#define DINGOFS_CACHE_CORE_REACTOR_POLLER_H_
+#ifndef DINGOFS_CACHE_V2_CORE_REACTOR_POLLER_H_
+#define DINGOFS_CACHE_V2_CORE_REACTOR_POLLER_H_
 
 #include <cstddef>
 #include <vector>
 
 namespace dingofs {
 namespace cache {
+namespace v2 {
 
-// Extension point for work sources polled by the reactor loop (SMP queues,
-// RDMA CQs, the IO ring, ...). Contract mirrors seastar's pollfn:
-//  - Poll: do pending work, return true if any work was done.
-//  - PurePoll: check only (used while idle-spinning), no side effects
-//    required beyond detection.
-//  - TryEnterInterruptMode: arm a wakeup source so the reactor may block in
-//    the kernel; return false to veto sleeping (work appeared / cannot arm).
-//  - ExitInterruptMode: disarm after waking.
-//  - Flush: hand anything prepared-but-not-submitted to the kernel. Called
-//    mid-batch, so a task's submissions need not wait for the batch to end.
+// Work source polled by the reactor loop (SMP queues, RDMA CQs, IO ring).
 class Poller {
  public:
   virtual ~Poller() = default;
-  virtual bool Poll() = 0;
-  virtual bool PurePoll() { return Poll(); }
-  virtual bool TryEnterInterruptMode() { return true; }
+
+  virtual bool Poll() = 0;  // do pending work; true if any was done
+  virtual bool PurePoll() { return Poll(); }  // detection only, while spinning
+
+  virtual bool TryEnterInterruptMode() { return true; }  // false vetoes sleep
   virtual void ExitInterruptMode() {}
-  virtual void Flush() {}
+
+  virtual void Flush() {}  // submit prepared work; called mid task batch
 };
 
+}  // namespace v2
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_CACHE_CORE_REACTOR_POLLER_H_
+#endif  // DINGOFS_CACHE_V2_CORE_REACTOR_POLLER_H_

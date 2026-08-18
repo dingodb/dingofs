@@ -14,21 +14,34 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_CACHE_CORE_RUNTIME_SMP_H_
-#define DINGOFS_CACHE_CORE_RUNTIME_SMP_H_
+#ifndef DINGOFS_CACHE_V2_CORE_RUNTIME_SMP_H_
+#define DINGOFS_CACHE_V2_CORE_RUNTIME_SMP_H_
 
+#include <glog/logging.h>
+
+#include <functional>
+#include <future>
+#include <latch>
+#include <memory>
 #include <type_traits>
 #include <utility>
 #include <vector>
 
-#include "cache/v1/core/reactor/coroutine.h"
-#include "cache/v1/core/runtime/mesh.h"
+#include "cache/v2/core/reactor/coroutine.h"
+#include "cache/v2/core/runtime/mesh.h"
+#include "common/status.h"
 
-// Running work on another shard and getting the answer back as a Future;
-// runtime/mesh.h carries the items.
+// Reaching a shard: from another shard (SubmitTo, below) or from a thread
+// outside the runtime (PostTo / SpawnOn / RunOnAndWait, at the bottom).
+//
+// None of them takes a Runtime handle. A process has exactly one runtime and
+// Mesh owns the per-shard table, so `Runtime` stays what it is -- the object
+// that starts and stops the shard threads -- instead of becoming a handle
+// every component has to be handed at construction.
 
 namespace dingofs {
 namespace cache {
+namespace v2 {
 
 inline unsigned ShardCount() { return Mesh::Instance().shard_count(); }
 
@@ -68,8 +81,6 @@ class SubmitWork final : public MeshWork {
 
   SubmitWork(Func func, MeshLink* home) : func_(std::move(func)), home_(home) {}
 
-  Future<Value> GetFuture() { return promise_.GetFuture(); }
-
   void Run() noexcept override {
     if constexpr (FutureTraits<Ret>::kIsFuture) {
       (void)AwaitAndRespond(this);
@@ -83,6 +94,8 @@ class SubmitWork final : public MeshWork {
     promise_.SetFrom(std::move(result_));
     delete this;
   }
+
+  Future<Value> GetFuture() { return promise_.GetFuture(); }
 
  private:
   static Future<> AwaitAndRespond(SubmitWork* self) {
@@ -132,17 +145,136 @@ auto SubmitTo(unsigned shard, Func&& func) -> Future<
   return future;
 }
 
-template <typename Func>
-Future<> InvokeOnAll(Func func) {
-  std::vector<Future<>> futures;
-  futures.reserve(ShardCount());
-  for (unsigned s = 0; s < ShardCount(); ++s) {
-    futures.push_back(SubmitTo(s, func));
+// -- outside -> shard --------------------------------------------------------
+
+// Hands `work` to the shard through its inbox; false when that shard is not
+// running, including when no runtime is up at all. On false the caller still
+// owns `work`. On true it runs on the shard and owns itself from there.
+inline bool PostTo(unsigned shard, InboxWork* work) {
+  Mesh& mesh = Mesh::Instance();
+  if (!mesh.built()) {
+    return false;
   }
-  co_await WhenAll(std::move(futures));
+  CHECK(shard < mesh.shard_count()) << "PostTo: shard out of range";
+  return mesh.InboxFor(shard).Post(work);
 }
 
+struct SpawnWork : InboxWork {
+  explicit SpawnWork(std::function<Future<>()> f) : fn(std::move(f)) {
+    run = &SpawnWork::Run;
+  }
+
+  static void Run(InboxWork* base) {
+    auto* self = static_cast<SpawnWork*>(base);
+    (void)self->fn();  // detached; the coroutine owns itself
+    delete self;
+  }
+
+  std::function<Future<>()> fn;
+};
+
+// A detached coroutine on `shard`. Fatal if the shard is not running: the
+// caller keeps no handle, so a silent drop would strand whatever it captured.
+inline void SpawnOn(unsigned shard, std::function<Future<>()> func) {
+  auto* work = new SpawnWork(std::move(func));
+  if (!PostTo(shard, work)) {
+    delete work;
+    LOG(FATAL) << "Fail to spawn on shard " << shard << ": it is not running";
+  }
+}
+
+template <typename Func, typename T>
+Future<> InvokeIntoStdPromise(Func func,
+                              std::shared_ptr<std::promise<T>> promise) {
+  try {
+    if constexpr (std::is_void_v<T>) {
+      co_await func();
+      promise->set_value();
+    } else {
+      promise->set_value(co_await func());
+    }
+  } catch (...) {
+    promise->set_exception(std::current_exception());
+  }
+}
+
+// Runs `func` on `shard` and BLOCKS until it resolves. External threads only:
+// on a shard it would park the very thread that has to run the work.
+template <typename Func>
+auto RunOnAndWait(unsigned shard, Func func) ->
+    typename FutureTraits<std::invoke_result_t<Func>>::Value {
+  CHECK(!HasReactor()) << "RunOnAndWait blocks a shard thread; use SubmitTo";
+  using Ret = std::invoke_result_t<Func>;
+  using T = typename FutureTraits<Ret>::Value;
+  auto promise = std::make_shared<std::promise<T>>();
+  std::future<T> fut = promise->get_future();
+  SpawnOn(shard, [func = std::move(func), promise]() -> Future<> {
+    return InvokeIntoStdPromise<Func, T>(func, promise);
+  });
+  return fut.get();
+}
+
+template <typename T, typename Func>
+Future<> InvokeIntoLatch(Func* func, unsigned shard, Status* failed,
+                         std::latch* done) {
+  try {
+    if constexpr (std::is_void_v<T>) {
+      co_await (*func)(shard);
+    } else {
+      *failed = co_await (*func)(shard);
+    }
+  } catch (const std::exception& e) {
+    *failed = Status::Internal(e.what());
+  } catch (...) {
+    *failed = Status::Internal("unknown exception");
+  }
+  done->count_down();
+}
+
+// Runs `func(shard)` on every shard AT ONCE and blocks until all of them
+// resolve. External threads only, for the same reason as RunOnAndWait.
+//
+// Every shard runs even when an earlier one fails -- teardown has to reach all
+// of them either way, and a half-built Sharded still has to be torn down. With
+// `func` returning Future<Status>, the first failure in shard order is the
+// result; with Future<>, failures are logged and the call still waits for all.
+template <typename Func>
+auto RunOnAllAndWait(Func func) ->
+    typename FutureTraits<std::invoke_result_t<Func, unsigned>>::Value {
+  CHECK(!HasReactor()) << "RunOnAllAndWait blocks a shard thread; use SubmitTo";
+  using Ret = std::invoke_result_t<Func, unsigned>;
+  using T = typename FutureTraits<Ret>::Value;
+  static_assert(FutureTraits<Ret>::kIsFuture &&
+                    (std::is_void_v<T> || std::is_same_v<T, Status>),
+                "RunOnAllAndWait: func returns Future<> or Future<Status>");
+
+  const unsigned shards = ShardCount();
+  std::vector<Status> failed(shards);
+  std::latch done(shards);
+  for (unsigned s = 0; s < shards; ++s) {
+    SpawnOn(s, [&func, failed = &failed[s], done = &done, s]() -> Future<> {
+      return InvokeIntoLatch<T>(&func, s, failed, done);
+    });
+  }
+  done.wait();
+
+  if constexpr (std::is_void_v<T>) {
+    for (unsigned s = 0; s < shards; ++s) {
+      LOG_IF(ERROR, !failed[s].ok())
+          << "Fail to run on shard " << s << ": " << failed[s].ToString();
+    }
+  } else {
+    for (const Status& status : failed) {
+      if (!status.ok()) {
+        return status;
+      }
+    }
+    return Status::OK();
+  }
+}
+
+}  // namespace v2
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_CACHE_CORE_RUNTIME_SMP_H_
+#endif  // DINGOFS_CACHE_V2_CORE_RUNTIME_SMP_H_

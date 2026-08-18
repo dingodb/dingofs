@@ -14,32 +14,33 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_CACHE_CORE_REACTOR_REACTOR_H_
-#define DINGOFS_CACHE_CORE_REACTOR_REACTOR_H_
+#ifndef DINGOFS_CACHE_V2_CORE_REACTOR_REACTOR_H_
+#define DINGOFS_CACHE_V2_CORE_REACTOR_REACTOR_H_
 
 #include <glog/logging.h>
 
 #include <cstdint>
 
-#include "cache/v1/core/reactor/dispatcher.h"
-#include "cache/v1/core/reactor/idle.h"
-#include "cache/v1/core/reactor/poller.h"
-#include "cache/v1/core/reactor/task.h"
-#include "cache/v1/core/reactor/timer.h"
-#include "cache/v1/core/utils/containers/circular_buffer.h"
+#include "cache/v2/core/reactor/dispatcher.h"
+#include "cache/v2/core/reactor/doorbell.h"
+#include "cache/v2/core/reactor/idle.h"
+#include "cache/v2/core/reactor/poller.h"
+#include "cache/v2/core/reactor/task.h"
+#include "cache/v2/core/reactor/timer.h"
+#include "cache/v2/utils/containers/circular_buffer.h"
 
 namespace dingofs {
 namespace cache {
+namespace v2 {
 
 class TaskQueue {
  public:
   void Push(Task* t) { queue_.PushBack(t); }
-  bool Empty() const { return queue_.Empty(); }
 
   template <typename Flush>
   void RunBatch(Flush flush, uint32_t flush_every) {
     uint32_t since_flush = 0;
-    while (!queue_.Empty()) {
+    while (!queue_.empty()) {
       queue_.PopFront()->RunAndDispose();
       if (NeedPreempt()) {
         return;
@@ -53,10 +54,12 @@ class TaskQueue {
   }
 
   void Drain() {
-    while (!queue_.Empty()) {
+    while (!queue_.empty()) {
       queue_.PopFront()->RunAndDispose();
     }
   }
+
+  bool empty() const { return queue_.empty(); }
 
  private:
   CircularBuffer<Task*> queue_;
@@ -130,8 +133,8 @@ class Reactor {
   Reactor(const Reactor&) = delete;
   Reactor& operator=(const Reactor&) = delete;
 
-  void Start();
-  void Stop();
+  void Run();  // blocks until Shutdown()
+  void Shutdown();
   void Wakeup();
 
   void Schedule(Task* t) { tasks_.Push(t); }
@@ -142,7 +145,7 @@ class Reactor {
   const ReactorStats& stats() const { return stats_; }
 
  private:
-  bool Polling();
+  bool PollOnce();
   bool AnyWork();
   void TrySleep();
 
@@ -154,7 +157,7 @@ class Reactor {
   TimerService timers_;
   IdleSpinner idle_;
   Doorbell bell_;
-  bool stopped_ = false;  // owner thread only; Stop() runs on it
+  bool stopped_ = false;  // owner thread only; Shutdown() runs on it
 };
 
 inline thread_local Reactor* tls_reactor = nullptr;
@@ -175,7 +178,8 @@ inline bool IsOnShard(unsigned shard) {
   tls_reactor->Schedule(t);
 }
 
+}  // namespace v2
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_CACHE_CORE_REACTOR_REACTOR_H_
+#endif  // DINGOFS_CACHE_V2_CORE_REACTOR_REACTOR_H_

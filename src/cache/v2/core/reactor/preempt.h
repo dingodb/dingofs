@@ -14,13 +14,14 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_CACHE_CORE_REACTOR_PREEMPT_H_
-#define DINGOFS_CACHE_CORE_REACTOR_PREEMPT_H_
+#ifndef DINGOFS_CACHE_V2_CORE_REACTOR_PREEMPT_H_
+#define DINGOFS_CACHE_V2_CORE_REACTOR_PREEMPT_H_
 
 #include <cstdint>
 
 namespace dingofs {
 namespace cache {
+namespace v2 {
 
 inline constexpr uint32_t kNeverPreempt = 0;
 
@@ -43,7 +44,8 @@ constinit inline thread_local PreemptMonitor
       false);
 }
 
+}  // namespace v2
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_CACHE_CORE_REACTOR_PREEMPT_H_
+#endif  // DINGOFS_CACHE_V2_CORE_REACTOR_PREEMPT_H_
