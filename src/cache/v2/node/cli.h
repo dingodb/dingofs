@@ -47,7 +47,8 @@ inline const std::vector<FlagSection> kSections = {
       "upload_stage_max_tries", "upload_stage_retry_delay_s",
       "max_range_size_kb"}},
     {"OFFLOAD OPTIONS",
-     {"offload_threads", "offload_queue_capacity", "offload_cpu_min_bytes"}},
+     {"offload_threads", "offload_queue_capacity", "offload_cpu_min_bytes",
+      "offload_cpu_spin_us"}},
     {"S3 SDK OPTIONS", {}, "options/blockaccess"},
     {"LOGGING OPTIONS", {"log_dir", "log_level", "log_v"}},
 };
