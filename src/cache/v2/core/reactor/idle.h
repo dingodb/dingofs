@@ -14,83 +14,70 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_CACHE_CORE_REACTOR_IDLE_H_
-#define DINGOFS_CACHE_CORE_REACTOR_IDLE_H_
+#ifndef DINGOFS_CACHE_V2_CORE_REACTOR_IDLE_H_
+#define DINGOFS_CACHE_V2_CORE_REACTOR_IDLE_H_
 
-#include <atomic>
 #include <cstdint>
 
-#include "cache/v1/core/utils/align.h"
-#include "cache/v1/core/utils/cpu.h"
-#include "cache/v1/core/utils/time.h"
+#include "cache/v2/utils/cpu.h"
+#include "cache/v2/utils/time.h"
 
 namespace dingofs {
 namespace cache {
+namespace v2 {
 
 class IdleSpinner {
  public:
-  explicit IdleSpinner(bool never_sleep) : never_sleep_(never_sleep) {}
+  explicit IdleSpinner(bool poll_mode) : poll_mode_(poll_mode) {}
 
   // return true if should sleep
   bool Spin() {
     if (!idle_) {
       idle_ = true;
-      since_ns_ = NowNs();
+      since_ns_ = TimestampNs();
+      tls_cached_timestamp = since_ns_;
       spins_ = 0;
     }
 
     CpuRelax();
 
-    if (never_sleep_) {
-      return false;
-    }
-
     if ((++spins_ & 63) != 0) {
       return false;
     }
 
-    return NowNs() - since_ns_ > kBudgetNs;
+    // Cached-clock heartbeat: poll mode must take this read too, not bail.
+    const uint64_t now = TimestampNs();
+    tls_cached_timestamp = now;
+    if (poll_mode_) {
+      return false;
+    }
+
+    return now - since_ns_ > kMaxPollTimeNs;
   }
 
   // return the time spent idle
-  uint64_t Reset() {
+  uint64_t EndIdle() {
     if (!idle_) {
       return 0;
     }
 
     idle_ = false;
-    return NowNs() - since_ns_;
+    const uint64_t now = TimestampNs();
+    tls_cached_timestamp = now;
+    return now - since_ns_;
   }
 
  private:
-  static constexpr uint64_t kBudgetNs = 200'000;
+  static constexpr uint64_t kMaxPollTimeNs = 200'000;
 
   uint64_t since_ns_ = 0;
   uint64_t spins_ = 0;
   bool idle_ = false;
-  const bool never_sleep_;
+  const bool poll_mode_;
 };
 
-class Doorbell {
- public:
-  void Arm() { armed_.store(true, std::memory_order_seq_cst); }
-  void Disarm() { armed_.store(false, std::memory_order_relaxed); }
-
-  bool ClaimRing() {
-    std::atomic_thread_fence(std::memory_order_seq_cst);
-    if (!armed_.load(std::memory_order_relaxed)) {
-      return false;
-    }
-
-    armed_.store(false, std::memory_order_relaxed);
-    return true;
-  }
-
- private:
-  alignas(kCacheLineSize) std::atomic<bool> armed_{false};
-};
-
+}  // namespace v2
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_CACHE_CORE_REACTOR_IDLE_H_
+#endif  // DINGOFS_CACHE_V2_CORE_REACTOR_IDLE_H_

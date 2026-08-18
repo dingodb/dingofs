@@ -14,29 +14,26 @@
  * limitations under the License.
  */
 
-#include "cache/v1/core/runtime/shard.h"
+#include "cache/v2/core/runtime/shard.h"
 
 #include <glog/logging.h>
 #include <pthread.h>
 
 #include <cstdio>
 
-#include "cache/v1/core/runtime/mesh.h"
-#include "cache/v1/core/utils/cpu.h"
-#include "cache/v1/core/utils/memory/memory.h"
+#include "cache/v2/core/memory/shard_allocator.h"
+#include "cache/v2/core/runtime/mesh.h"
+#include "cache/v2/utils/cpu.h"
+#include "cache/v2/utils/thread.h"
 
 namespace dingofs {
 namespace cache {
+namespace v2 {
 
-// 1. Set thread name to "shard-<id>"
-// 2. Pin thread to cpu if cpu >= 0
-// 3. Initialize shard memory arena
 void BecomeShardThread(unsigned shard, int cpu) {
-  char name[16];
-  (void)std::snprintf(name, sizeof(name), "shard-%u", shard);
-  (void)::pthread_setname_np(::pthread_self(), name);
+  SetThreadName("shard-" + std::to_string(shard));
   if (cpu >= 0) {
-    PinToCpu(::pthread_self(), cpu);
+    PinThreadToCpu(::pthread_self(), cpu);
   }
 
   memory::ShardInit(shard, cpu >= 0 ? NumaNode(cpu) : -1);
@@ -52,18 +49,15 @@ Shard::Shard(unsigned id, const RuntimeOption& option, ShardInbox* inbox,
   Mesh::Instance().AttachReactor(id, &reactor_);
 }
 
-// 1. Open the inbox and add pollers (inbox, mesh) to reactor
-// 2. Wait for all shards to start
-// 3. Start reactor (run loop)
-void Shard::Run(LifecycleGate& gate) {
+void Shard::Run(LifecycleBarrier& gate) {
   RegisterPollers();
 
   gate.WaitAllStarted();
-  reactor_.Start();  // run loop
+  reactor_.Run();
 
   UnregisterPollers();
 
-  if (!inbox_->Empty()) {
+  if (!inbox_->empty()) {
     LOG(ERROR) << "Fail to drain shard inbox: work was posted while shard "
                << id_ << " was stopping";
   }
@@ -90,5 +84,6 @@ void Shard::UnregisterPollers() {
   reactor_.UnregisterPoller(&io_ring_);
 }
 
+}  // namespace v2
 }  // namespace cache
 }  // namespace dingofs

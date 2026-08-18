@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "cache/v1/core/reactor/dispatcher.h"
+#include "cache/v2/core/reactor/dispatcher.h"
 
 #include <glog/logging.h>
 #include <poll.h>
@@ -23,18 +23,22 @@
 #include <unistd.h>
 
 #include <cerrno>
+#include <cstdint>
 #include <mutex>
 #include <string>
 
+#include "cache/v2/utils/time.h"
+
 namespace dingofs {
 namespace cache {
+namespace v2 {
 
-struct OpcodeReq {
+struct UringOpcode {
   int op;
   const char* name;
 };
 
-constexpr OpcodeReq kRequiredOps[] = {
+constexpr UringOpcode kRequiredOps[] = {
     {.op = IORING_OP_READ, .name = "READ"},
     {.op = IORING_OP_POLL_ADD, .name = "POLL_ADD"},
     {.op = IORING_OP_ASYNC_CANCEL, .name = "ASYNC_CANCEL"},
@@ -45,50 +49,19 @@ static inline void PrefetchEvent(const io_uring_cqe* cqe) {
       reinterpret_cast<const void*>(static_cast<uintptr_t>(cqe->user_data)));
 }
 
+// This and CheckOpcodes() both LOG(FATAL) on a kernel that cannot serve the
+// ring: that is a deployment error, not something to degrade around.
+static void CheckFeatures(io_uring* ring, const io_uring_params& params) {
+  constexpr uint32_t kNeeded = IORING_FEAT_SUBMIT_STABLE | IORING_FEAT_NODROP;
+  if ((params.features & kNeeded) != kNeeded) {
+    io_uring_queue_exit(ring);
+    LOG(FATAL) << "Fail to use io_uring: kernel lacks SUBMIT_STABLE|NODROP";
+  }
+}
+
 EventRing::EventRing(unsigned queue_len) {
   Init(queue_len);
   CheckOpcodes();
-}
-
-void EventRing::Init(unsigned queue_len) {
-  io_uring_params params{};
-  int rc = io_uring_queue_init_params(queue_len, &ring_, &params);
-  if (rc < 0) {
-    errno = -rc;
-    PLOG(FATAL) << "Fail to io_uring_queue_init_params";
-  }
-
-  constexpr uint32_t kNeeded = IORING_FEAT_SUBMIT_STABLE | IORING_FEAT_NODROP;
-  if ((params.features & kNeeded) != kNeeded) {
-    io_uring_queue_exit(&ring_);
-    LOG(FATAL) << "Fail to use io_uring: kernel lacks SUBMIT_STABLE|NODROP";
-  }
-
-  open_ = true;
-  io_uring_ring_dontfork(&ring_);
-}
-
-void EventRing::CheckOpcodes() {
-  static std::once_flag once;
-  std::call_once(once, [this] {
-    io_uring_probe* probe = io_uring_get_probe_ring(&ring_);
-    if (probe == nullptr) {
-      return;
-    }
-
-    std::string missing;
-    for (const auto& req : kRequiredOps) {
-      if (!io_uring_opcode_supported(probe, req.op)) {
-        missing += req.name;
-        missing += ' ';
-      }
-    }
-
-    io_uring_free_probe(probe);
-    if (!missing.empty()) {
-      LOG(FATAL) << "Fail to use io_uring: missing opcodes: " << missing;
-    }
-  });
 }
 
 void EventRing::Exit() {
@@ -129,6 +102,43 @@ PreemptMonitor EventRing::Monitor() const {
           .flag_mask = IORING_SQ_CQ_OVERFLOW};
 }
 
+void EventRing::Init(unsigned queue_len) {
+  io_uring_params params{};
+  int rc = io_uring_queue_init_params(queue_len, &ring_, &params);
+  if (rc < 0) {
+    errno = -rc;
+    PLOG(FATAL) << "Fail to io_uring_queue_init_params";
+  }
+
+  CheckFeatures(&ring_, params);
+
+  open_ = true;
+  io_uring_ring_dontfork(&ring_);
+}
+
+void EventRing::CheckOpcodes() {
+  static std::once_flag once;
+  std::call_once(once, [this] {
+    io_uring_probe* probe = io_uring_get_probe_ring(&ring_);
+    if (probe == nullptr) {
+      return;
+    }
+
+    std::string missing;
+    for (const UringOpcode& op : kRequiredOps) {
+      if (!io_uring_opcode_supported(probe, op.op)) {
+        missing += op.name;
+        missing += ' ';
+      }
+    }
+
+    io_uring_free_probe(probe);
+    if (!missing.empty()) {
+      LOG(FATAL) << "Fail to use io_uring: missing opcodes: " << missing;
+    }
+  });
+}
+
 QuotaTicker::QuotaTicker(std::chrono::microseconds quota) : quota_(quota) {
   timerfd_ = ::timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC | TFD_NONBLOCK);
   if (timerfd_ < 0) {
@@ -142,7 +152,7 @@ QuotaTicker::~QuotaTicker() {
   }
 }
 
-void QuotaTicker::Start() const {
+void QuotaTicker::Arm() const {
   auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(quota_);
   itimerspec its{};
   its.it_value.tv_sec = ns.count() / 1'000'000'000;
@@ -153,7 +163,7 @@ void QuotaTicker::Start() const {
   }
 }
 
-void QuotaTicker::Stop() const {
+void QuotaTicker::Disarm() const {
   itimerspec zero{};
   if (::timerfd_settime(timerfd_, 0, &zero, nullptr) < 0) {
     PLOG(FATAL) << "Fail to timerfd_settime(stop)";
@@ -177,6 +187,21 @@ void Waker::Ring() const {
   uint64_t one = 1;
   ssize_t rc = ::write(eventfd_, &one, sizeof(one));
   (void)rc;
+}
+
+Dispatcher::RunScope::RunScope(Dispatcher& dispatcher)
+    : dispatcher_(dispatcher) {
+  CHECK(tls_preempt_monitor.head == &kNeverPreempt)
+      << "one preempt monitor per thread";
+  tls_preempt_monitor = dispatcher.ring_.Monitor();
+  dispatcher_.ticker_.Arm();
+  dispatcher_.ring_.Submit();
+}
+
+Dispatcher::RunScope::~RunScope() {
+  dispatcher_.ticker_.Disarm();
+  dispatcher_.ProcessEvents();
+  tls_preempt_monitor = {};
 }
 
 Dispatcher::Dispatcher(const DispatcherOption& option)
@@ -213,7 +238,7 @@ bool Dispatcher::DeleteEvent(Event* ev) {
   return true;
 }
 
-void Dispatcher::DetachEvent(Event* ev) {
+void Dispatcher::DeleteEventAndWait(Event* ev) {
   DCHECK(!dispatching_) << "Detach from inside a handler; use DeleteEvent()";
   DCHECK(ev->state_ != Event::State::kPendingRearm)
       << "Detach of an event mid-batch; use DeleteEvent() instead";
@@ -232,10 +257,67 @@ void Dispatcher::DetachEvent(Event* ev) {
   }
 }
 
+unsigned Dispatcher::ProcessEvents() {
+  if (dispatching_) {
+    return 0;
+  }
+
+  dispatching_ = true;
+
+  unsigned work = 0;
+  io_uring_cqe* cqes[kCqBatch];
+  for (;;) {
+    unsigned n = ring_.PeekBatch(cqes, kCqBatch);
+    if (n == 0) {
+      break;
+    }
+
+    // One clock read serves every handler in this batch.
+    RefreshCachedTimestamp();
+
+    for (unsigned i = 0; i < n; ++i) {
+      if (i + 3 < n) {
+        PrefetchEvent(cqes[i + 3]);
+      }
+
+      auto* ev = static_cast<Event*>(io_uring_cqe_get_data(cqes[i]));
+      if (ev != nullptr) {  // null user_data: a cancel's own completion
+        work += Dispatch(ev) ? 1 : 0;
+      }
+    }
+
+    ring_.Advance(n);
+    if (n < kCqBatch) {
+      break;
+    }
+  }
+
+  dispatching_ = false;
+
+  if (!rearm_.empty()) {
+    DrainRearm();
+  }
+
+  if (!cancelled_.empty()) {
+    DrainCancelled();
+  }
+
+  if (ring_.HasUnsubmitted()) {
+    ring_.Submit();
+  }
+  return work;
+}
+
+void Dispatcher::WaitForEvent() {
+  ticker_.Disarm();  // or the quota tick would wake us for nothing
+  ring_.SubmitAndWait();
+  ticker_.Arm();
+}
+
 void Dispatcher::Arm(Event* ev) {
   io_uring_sqe* sqe = GetSqe();
   if (ev->mode_ == EventMode::kReadRepeat) {
-    io_uring_prep_read(sqe, ev->fd_, &ev->buf_, sizeof(ev->buf_), 0);
+    io_uring_prep_read(sqe, ev->fd_, &ev->buffer_, sizeof(ev->buffer_), 0);
   } else {
     io_uring_prep_poll_add(sqe, ev->fd_, POLLIN);
   }
@@ -306,60 +388,6 @@ void Dispatcher::DrainCancelled() {
   }
 }
 
-unsigned Dispatcher::ProcessEvents() {
-  if (dispatching_) {
-    return 0;
-  }
-
-  dispatching_ = true;
-
-  unsigned work = 0;
-  io_uring_cqe* cqes[kCqBatch];
-  for (;;) {
-    unsigned n = ring_.PeekBatch(cqes, kCqBatch);
-    if (n == 0) {
-      break;
-    }
-
-    for (unsigned i = 0; i < n; ++i) {
-      if (i + 3 < n) {
-        PrefetchEvent(cqes[i + 3]);
-      }
-
-      auto* ev = static_cast<Event*>(io_uring_cqe_get_data(cqes[i]));
-      if (ev != nullptr) {  // null user_data: a cancel's own completion
-        work += Dispatch(ev) ? 1 : 0;
-      }
-    }
-
-    ring_.Advance(n);
-    if (n < kCqBatch) {
-      break;
-    }
-  }
-
-  dispatching_ = false;
-
-  if (!rearm_.Empty()) {
-    DrainRearm();
-  }
-
-  if (!cancelled_.Empty()) {
-    DrainCancelled();
-  }
-
-  if (ring_.HasPending()) {
-    ring_.Submit();
-  }
-  return work;
-}
-
-void Dispatcher::WaitForEvent() {
-  ticker_.Stop();  // or the quota tick would wake us for nothing
-  ring_.SubmitAndWait();
-  ticker_.Start();
-}
-
 io_uring_sqe* Dispatcher::GetSqe() {
   io_uring_sqe* sqe = ring_.TryGetSqe();
   while (__builtin_expect(sqe == nullptr, false)) {
@@ -375,20 +403,6 @@ io_uring_sqe* Dispatcher::GetSqe() {
   return sqe;
 }
 
-Dispatcher::RunScope::RunScope(Dispatcher& dispatcher)
-    : dispatcher_(dispatcher) {
-  CHECK(tls_preempt_monitor.head == &kNeverPreempt)
-      << "one preempt monitor per thread";
-  tls_preempt_monitor = dispatcher.ring_.Monitor();
-  dispatcher_.ticker_.Start();
-  dispatcher_.ring_.Submit();
-}
-
-Dispatcher::RunScope::~RunScope() {
-  dispatcher_.ticker_.Stop();
-  dispatcher_.ProcessEvents();
-  tls_preempt_monitor = {};
-}
-
+}  // namespace v2
 }  // namespace cache
 }  // namespace dingofs

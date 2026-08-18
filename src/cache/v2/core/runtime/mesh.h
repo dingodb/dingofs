@@ -14,23 +14,27 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_CACHE_CORE_RUNTIME_MESH_H_
-#define DINGOFS_CACHE_CORE_RUNTIME_MESH_H_
+#ifndef DINGOFS_CACHE_V2_CORE_RUNTIME_MESH_H_
+#define DINGOFS_CACHE_V2_CORE_RUNTIME_MESH_H_
 
 #include <atomic>
 #include <cstdint>
 
-#include "cache/v1/core/reactor/poller.h"
-#include "cache/v1/core/reactor/reactor.h"
-#include "cache/v1/core/reactor/task.h"
-#include "cache/v1/core/utils/align.h"
-#include "cache/v1/core/utils/containers/spsc_ring.h"
+#include "cache/v2/core/reactor/poller.h"
+#include "cache/v2/core/reactor/reactor.h"
+#include "cache/v2/core/reactor/task.h"
+#include "cache/v2/core/runtime/shard_inbox.h"
+#include "cache/v2/utils/align.h"
+#include "cache/v2/utils/containers/spsc_ring.h"
 
-// Cross-shard messaging: every shard has one MeshLink per peer, and everything
-// it says to that peer goes through it.
+// The process-wide per-shard resource table, and the messaging on top of it:
+// one MeshLink per (shard, peer) pair for shard-to-shard, one ShardInbox per
+// shard for everyone outside. Reaching a shard never needs a Runtime handle
+// -- see smp.h for the verbs.
 
 namespace dingofs {
 namespace cache {
+namespace v2 {
 
 class MeshWork : public Task {
  public:
@@ -73,8 +77,7 @@ class NotifyBit {
   uint64_t mask_ = 0;
 };
 
-// A link's bit in its OWN dirty word: "I have unflushed work for this peer".
-// Single writer, so no atomics.
+// A link's bit in its OWN dirty word (unflushed work); single writer.
 class DirtyBit {
  public:
   DirtyBit() = default;
@@ -90,9 +93,6 @@ class DirtyBit {
 
 class MeshBatch {
  public:
-  bool Empty() const { return head_ == nullptr; }
-  uint32_t size() const { return size_; }
-
   void Push(MeshWork* item) {
     item->next = nullptr;
     if (tail_ != nullptr) {
@@ -125,6 +125,9 @@ class MeshBatch {
     return pushed;
   }
 
+  bool empty() const { return head_ == nullptr; }
+  uint32_t size() const { return size_; }
+
  private:
   MeshWork* head_ = nullptr;
   MeshWork* tail_ = nullptr;
@@ -133,8 +136,8 @@ class MeshBatch {
 
 class alignas(kCacheLineSize) MeshLink {
  public:
-  void Build(MeshChannel* my_calls, MeshChannel* peer_calls, NotifyBit notify,
-             DirtyBit dirty, Reactor** peer_reactor_slot) {
+  void Init(MeshChannel* my_calls, MeshChannel* peer_calls, NotifyBit notify,
+            DirtyBit dirty, Reactor** peer_reactor_slot) {
     my_calls_ = my_calls;
     peer_calls_ = peer_calls;
     notify_ = notify;
@@ -152,7 +155,7 @@ class alignas(kCacheLineSize) MeshLink {
       return false;
     }
 
-    if (submissions_.Empty() && responses_.Empty()) {
+    if (submissions_.empty() && responses_.empty()) {
       dirty_.Clear();
     }
 
@@ -208,14 +211,15 @@ class MeshPoller final : public Poller {
 
 class Mesh {
  public:
-  Mesh() = default;
-  Mesh(const Mesh&) = delete;
-  Mesh& operator=(const Mesh&) = delete;
-
   static Mesh& Instance() {
     static Mesh instance;
     return instance;
   }
+
+  Mesh() = default;
+
+  Mesh(const Mesh&) = delete;
+  Mesh& operator=(const Mesh&) = delete;
 
   void Init(unsigned shard_count);
   void Destroy();
@@ -224,6 +228,13 @@ class Mesh {
     DCHECK(reactors_[shard] == nullptr) << "shard attached twice";
     reactors_[shard] = reactor;
   }
+
+  bool HasWork(unsigned shard) const;
+  bool Flush(unsigned shard);
+  bool Drain(unsigned shard);
+
+  // False before Init and after Destroy, i.e. whenever no runtime is up.
+  bool built() const { return shard_count_ != 0; }
 
   unsigned shard_count() const {
     DCHECK(shard_count_ != 0) << "mesh not built";
@@ -238,9 +249,7 @@ class Mesh {
     return shard_count_ > 1 ? &pollers_[shard] : nullptr;
   }
 
-  bool HasWork(unsigned shard) const;
-  bool Flush(unsigned shard);
-  bool Drain(unsigned shard);
+  ShardInbox& InboxFor(unsigned shard) { return inboxes_[shard]; }
 
  private:
   static constexpr unsigned kBitsPerWord = 64;
@@ -253,11 +262,13 @@ class Mesh {
   DirtyWord* dirty_words_ = nullptr;    // [shard * words + w]  owner-only
   Reactor** reactors_ = nullptr;        // [shard] peer wakeup handles only
   MeshPoller* pollers_ = nullptr;       // [shard]
+  ShardInbox* inboxes_ = nullptr;       // [shard] outside -> shard
   unsigned shard_count_ = 0;
   unsigned word_count_ = 0;  // ceil(shard_count_ / kBitsPerWord)
 };
 
+}  // namespace v2
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_CACHE_CORE_RUNTIME_MESH_H_
+#endif  // DINGOFS_CACHE_V2_CORE_RUNTIME_MESH_H_

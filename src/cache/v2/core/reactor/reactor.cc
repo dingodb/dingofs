@@ -14,14 +14,15 @@
  * limitations under the License.
  */
 
-#include "cache/v1/core/reactor/reactor.h"
+#include "cache/v2/core/reactor/reactor.h"
 
 #include <glog/logging.h>
 
-#include "cache/v1/core/utils/memory/memory.h"
+#include "cache/v2/core/memory/shard_allocator.h"
 
 namespace dingofs {
 namespace cache {
+namespace v2 {
 
 Reactor::Reactor(unsigned shard_id, const ReactorOption& option)
     : shard_id_(shard_id),
@@ -35,7 +36,7 @@ Reactor::Reactor(unsigned shard_id, const ReactorOption& option)
 Reactor::~Reactor() { tls_reactor = nullptr; }
 
 // task -> submit event -> poll event -> idle spin -> sleep
-void Reactor::Start() {
+void Reactor::Run() {
   constexpr uint32_t kFlushEvery = 16;
   Dispatcher::RunScope running(dispatcher_);  // preempt signal + quota tick
   for (;;) {
@@ -44,8 +45,8 @@ void Reactor::Start() {
       break;
     }
 
-    if (Polling() || !tasks_.Empty()) {
-      stats_.idle_ns += idle_.Reset();  // work: the idle streak (if any) ends
+    if (PollOnce() || !tasks_.empty()) {
+      stats_.idle_ns += idle_.EndIdle();  // work: the idle streak (if any) ends
       continue;
     }
 
@@ -55,24 +56,23 @@ void Reactor::Start() {
   }
 
   tasks_.Drain();
-  stats_.idle_ns += idle_.Reset();
+  stats_.idle_ns += idle_.EndIdle();
   stopped_ = false;
 }
 
-// Runtime::Stop posts through the inbox, so the caller is always this reactor's
-// own thread; no wakeup needed, and stopped_ stays a plain bool.
-[[gnu::noinline, gnu::cold]] void Reactor::Stop() {
-  DCHECK(tls_reactor == this) << "Stop off the owning shard thread";
+// Always posted via the inbox, so it runs on this thread: stopped_ stays plain.
+[[gnu::noinline, gnu::cold]] void Reactor::Shutdown() {
+  DCHECK(tls_reactor == this) << "Shutdown off the owning shard thread";
   stopped_ = true;
 }
 
 void Reactor::Wakeup() {
-  if (bell_.ClaimRing()) {
+  if (bell_.ClaimWakeup()) {
     dispatcher_.Notify();
   }
 }
 
-bool Reactor::Polling() {
+bool Reactor::PollOnce() {
   bool work = dispatcher_.ProcessEvents() > 0;
   work |= memory::DrainCrossShardFree() > 0;
   work |= pollers_.Poll();
@@ -81,7 +81,7 @@ bool Reactor::Polling() {
 
 bool Reactor::AnyWork() {
   return stopped_ || dispatcher_.HasReadyEvent() || pollers_.PurePoll() ||
-         !tasks_.Empty();
+         !tasks_.empty();
 }
 
 void Reactor::TrySleep() {
@@ -97,5 +97,6 @@ void Reactor::TrySleep() {
   pollers_.ExitInterruptMode();
 }
 
+}  // namespace v2
 }  // namespace cache
 }  // namespace dingofs

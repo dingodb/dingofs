@@ -14,21 +14,29 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_CACHE_CORE_RUNTIME_SHARD_INBOX_H_
-#define DINGOFS_CACHE_CORE_RUNTIME_SHARD_INBOX_H_
+#ifndef DINGOFS_CACHE_V2_CORE_RUNTIME_SHARD_INBOX_H_
+#define DINGOFS_CACHE_V2_CORE_RUNTIME_SHARD_INBOX_H_
 
 #include <atomic>
 
-#include "cache/v1/core/reactor/poller.h"
-#include "cache/v1/core/reactor/reactor.h"
-#include "cache/v1/core/utils/containers/mpsc_queue.h"
+#include "cache/v2/core/reactor/poller.h"
+#include "cache/v2/core/reactor/reactor.h"
+#include "cache/v2/utils/containers/mpsc_queue.h"
 
 namespace dingofs {
 namespace cache {
+namespace v2 {
 
 struct InboxWork : MpscNode {
   void (*run)(InboxWork*) = nullptr;
 };
+
+// Runs one queued item. The node IS the work, and `next` has already been
+// read by the consumer, so the callback may free it.
+inline void RunInboxWork(MpscNode* node) {
+  auto* work = static_cast<InboxWork*>(node);
+  work->run(work);
+}
 
 // The one way into a shard from outside the runtime.
 class ShardInbox final : public Poller {
@@ -55,26 +63,12 @@ class ShardInbox final : public Poller {
     return true;
   }
 
-  bool Poll() override {
-    MpscNode* node = queue_.Drain();
-    if (node == nullptr) {
-      return false;
-    }
+  bool Poll() override { return queue_.ConsumeAll(RunInboxWork) != 0; }
 
-    while (node != nullptr) {
-      MpscNode* next = node->next;
-      auto* work = static_cast<InboxWork*>(node);
-      work->run(work);
-      node = next;
-    }
-    return true;
-  }
+  bool PurePoll() override { return !empty(); }
+  bool TryEnterInterruptMode() override { return empty(); }
 
-  bool PurePoll() override { return !Empty(); }
-
-  bool TryEnterInterruptMode() override { return Empty(); }
-
-  bool Empty() const { return queue_.Empty(); }
+  bool empty() const { return queue_.empty(); }
 
  private:
   std::atomic<Reactor*> reactor_{nullptr};
@@ -82,7 +76,8 @@ class ShardInbox final : public Poller {
   MpscQueue queue_;
 };
 
+}  // namespace v2
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_CACHE_CORE_RUNTIME_SHARD_INBOX_H_
+#endif  // DINGOFS_CACHE_V2_CORE_RUNTIME_SHARD_INBOX_H_

@@ -14,16 +14,20 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_CACHE_CORE_IO_COMPLETION_H_
-#define DINGOFS_CACHE_CORE_IO_COMPLETION_H_
+// Transport-neutral: how a coroutine waits for one completion. io_uring
+// (core/fs) and verbs (core/net/rdma) both derive from it.
+
+#ifndef DINGOFS_CACHE_V2_CORE_REACTOR_IO_AWAITER_H_
+#define DINGOFS_CACHE_V2_CORE_REACTOR_IO_AWAITER_H_
 
 #include <coroutine>
 #include <cstdint>
 
-#include "cache/v1/core/reactor/reactor.h"  // Schedule, Task, TaskPromise
+#include "cache/v2/core/reactor/reactor.h"  // Schedule, Task, TaskPromise
 
 namespace dingofs {
 namespace cache {
+namespace v2 {
 
 class IoCompletion {
  public:
@@ -59,7 +63,8 @@ class IoAwaiter {
   Task* continuation_ = nullptr;  // the coroutine waiting on it
 };
 
+}  // namespace v2
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_CACHE_CORE_IO_COMPLETION_H_
+#endif  // DINGOFS_CACHE_V2_CORE_REACTOR_IO_AWAITER_H_
