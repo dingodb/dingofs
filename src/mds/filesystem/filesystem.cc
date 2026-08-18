@@ -3194,11 +3194,6 @@ Status FileSystem::Fallocate(Context& ctx, Ino ino, int32_t mode, uint64_t offse
   // update chunk cache
   for (auto& chunk : effected_chunks) chunk_cache_.PutIf(ino, chunk);
 
-  entry_out.attr = std::move(attr);
-  entry_out.shrink_file = (delta_bytes < 0) ? true : false;
-  entry_out.expand_file = (delta_bytes > 0) ? true : false;
-  entry_out.chunks.swap(effected_chunks);
-
   // update quota
   if (delta_bytes != 0 && attr.nlink() > 0) {
     quota_manager_.UpdateFsUsage(delta_bytes, 0, reason);
@@ -3208,6 +3203,11 @@ Status FileSystem::Fallocate(Context& ctx, Ino ino, int32_t mode, uint64_t offse
       UpdateDirStat(parent, delta_bytes, 0, 0, reason);
     }
   }
+
+  entry_out.attr = std::move(attr);
+  entry_out.shrink_file = (delta_bytes < 0) ? true : false;
+  entry_out.expand_file = (delta_bytes > 0) ? true : false;
+  entry_out.chunks.swap(effected_chunks);
 
   trace.RecordElapsedTime("post_handle");
 
