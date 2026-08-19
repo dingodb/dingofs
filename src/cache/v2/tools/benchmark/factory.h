@@ -56,6 +56,8 @@ struct Slot {
   char* data = nullptr;
   BufferView view;
   BlockHandle key;
+  uint64_t offset = 0;
+  uint64_t length = 0;
   std::chrono::steady_clock::time_point t0;
 };
 
@@ -64,7 +66,7 @@ class TaskFactory {
   virtual ~TaskFactory() = default;
 
   virtual bool SubmitTask(Slot* slot, AsyncCallback cb) = 0;
-  virtual uint64_t BytesPerOp() const = 0;
+  virtual uint64_t BytesPerOp(const Slot* slot) const = 0;
 };
 
 using TaskFactoryUPtr = std::unique_ptr<TaskFactory>;
@@ -75,7 +77,7 @@ class PutTaskFactory final : public TaskFactory {
   explicit PutTaskFactory(BlockCacheImpl* block_cache);
 
   bool SubmitTask(Slot* slot, AsyncCallback cb) override;
-  uint64_t BytesPerOp() const override;
+  uint64_t BytesPerOp(const Slot* slot) const override;
 
  private:
   BlockCacheImpl* block_cache_;
@@ -86,7 +88,7 @@ class GetTaskFactory final : public TaskFactory {
   explicit GetTaskFactory(BlockCacheImpl* block_cache);
 
   bool SubmitTask(Slot* slot, AsyncCallback cb) override;
-  uint64_t BytesPerOp() const override;
+  uint64_t BytesPerOp(const Slot* slot) const override;
 
  private:
   BlockCacheImpl* block_cache_;
@@ -97,7 +99,7 @@ class DeleteTaskFactory final : public TaskFactory {
   explicit DeleteTaskFactory(BlockCacheImpl* block_cache);
 
   bool SubmitTask(Slot* slot, AsyncCallback cb) override;
-  uint64_t BytesPerOp() const override;
+  uint64_t BytesPerOp(const Slot* slot) const override;
 
  private:
   BlockCacheImpl* block_cache_;

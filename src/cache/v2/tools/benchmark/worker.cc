@@ -49,14 +49,20 @@ void Worker::Start() {
                         std::chrono::seconds(FLAGS_runtime);
 
   BlockKeyIterator iter(idx_, FLAGS_fsid, FLAGS_blksize, FLAGS_blocks);
+  const bool sweep = (FLAGS_op == "get");
+  const uint64_t begin = sweep ? FLAGS_offset : 0;
+  const uint64_t step = sweep ? FLAGS_length : FLAGS_blksize;
   bool stop = false;
   do {
-    for (iter.SeekToFirst(); iter.Valid(); iter.Next()) {
-      if (FLAGS_time_based && std::chrono::steady_clock::now() >= deadline) {
-        stop = true;
-        break;
+    for (iter.SeekToFirst(); iter.Valid() && !stop; iter.Next()) {
+      const auto key = iter.Key();
+      for (uint64_t offset = begin; offset < FLAGS_blksize; offset += step) {
+        if (FLAGS_time_based && std::chrono::steady_clock::now() >= deadline) {
+          stop = true;
+          break;
+        }
+        SubmitOne(key, offset, std::min(step, FLAGS_blksize - offset));
       }
-      SubmitOne(iter.Key());
     }
   } while (FLAGS_time_based && !stop);
 
@@ -66,10 +72,13 @@ void Worker::Start() {
 
 void Worker::Shutdown() { done_.wait(); }
 
-void Worker::SubmitOne(const BlockHandle& key) {
+void Worker::SubmitOne(const BlockHandle& key, uint64_t offset,
+                       uint64_t length) {
   window_.acquire();
   Slot* slot = PopSlot();
   slot->key = key;
+  slot->offset = offset;
+  slot->length = length;
 
   for (;;) {
     slot->t0 = std::chrono::steady_clock::now();
@@ -81,7 +90,8 @@ void Worker::SubmitOne(const BlockHandle& key) {
     std::this_thread::sleep_for(std::chrono::microseconds(100));
   }
 
-  VLOG(9) << "Submit task (key=" << key.Filename() << ").";
+  VLOG(9) << "Submit task (key=" << key.Filename() << " offset=" << offset
+          << " length=" << length << ").";
 }
 
 void Worker::OnComplete(Slot* slot, Status status) {
@@ -95,7 +105,7 @@ void Worker::OnComplete(Slot* slot, Status status) {
                << ") failed: " << status.ToString();
   }
 
-  const uint64_t bytes = factory_->BytesPerOp();
+  const uint64_t bytes = factory_->BytesPerOp(slot);
   collector_->Submit([bytes, latency_us](Stat* stat, Stat* total) {
     stat->Add(bytes, latency_us);
     total->Add(bytes, latency_us);
