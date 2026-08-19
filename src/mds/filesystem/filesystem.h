@@ -118,9 +118,9 @@ struct EntryOutForOpen {
 class FileSystem : public std::enable_shared_from_this<FileSystem> {
  public:
   FileSystem(uint64_t self_mds_id, FsInfoSPtr fs_info, IdGeneratorUPtr ino_id_generator,
-             IdGeneratorSPtr slice_id_generator, KVStorageSPtr kv_storage, OperationProcessorSPtr operation_processor,
-             MDSMetaMapSPtr mds_meta_map, WorkerSetSPtr quota_worker_set, WorkerSetSPtr dir_stat_worker_set,
-             notify::NotifyBuddySPtr notify_buddy);
+             IdGeneratorSPtr slice_id_generator, OperationProcessorSPtr operation_processor,
+             WarmupProcessorSPtr warmup_processor, MDSMetaMapSPtr mds_meta_map, WorkerSetSPtr quota_worker_set,
+             WorkerSetSPtr dir_stat_worker_set, notify::NotifyBuddySPtr notify_buddy);
   ~FileSystem();
 
   FileSystem(const FileSystem&) = delete;
@@ -129,18 +129,19 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   FileSystem& operator=(FileSystem&&) = delete;
 
   static FileSystemSPtr New(uint64_t self_mds_id, FsInfoSPtr fs_info, IdGeneratorUPtr ino_id_generator,
-                            IdGeneratorSPtr slice_id_generator, KVStorageSPtr kv_storage,
-                            OperationProcessorSPtr operation_processor, MDSMetaMapSPtr mds_meta_map,
+                            IdGeneratorSPtr slice_id_generator, OperationProcessorSPtr operation_processor,
+                            WarmupProcessorSPtr warmup_processor, MDSMetaMapSPtr mds_meta_map,
                             WorkerSetSPtr quota_worker_set, WorkerSetSPtr dir_stat_worker_set,
                             notify::NotifyBuddySPtr notify_buddy) {
     return std::make_shared<FileSystem>(self_mds_id, fs_info, std::move(ino_id_generator), slice_id_generator,
-                                        kv_storage, operation_processor, mds_meta_map, quota_worker_set,
+                                        operation_processor, warmup_processor, mds_meta_map, quota_worker_set,
                                         dir_stat_worker_set, notify_buddy);
   }
 
   FileSystemSPtr GetSelfPtr();
 
   bool Init();
+  void Stop();
 
   uint32_t FsId() const { return fs_id_; }
   std::string FsName() const { return fs_info_->GetName(); }
@@ -346,6 +347,8 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   PartitionCache& GetPartitionCache() { return partition_cache_; }
   InodeCache& GetInodeCache() { return inode_cache_; }
 
+  ChunkCache& GetChunkCache() { return chunk_cache_; }
+
   quota::QuotaManager& GetQuotaManager() { return quota_manager_; }
   ParentMemo& GetParentMemo() { return parent_memo_; }
 
@@ -460,9 +463,6 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   // for slice id
   IdGeneratorSPtr slice_id_generator_;
 
-  // persistence store dentry/inode
-  KVStorageSPtr kv_storage_;
-
   // for open/read/write/close file
   FileSessionManager file_session_manager_;
 
@@ -492,7 +492,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
 
   OperationProcessorSPtr operation_processor_;
 
-  WarmupProcessor warmup_processor_;
+  WarmupProcessorSPtr warmup_processor_;
 
   // notify buddy
   notify::NotifyBuddySPtr notify_buddy_;
@@ -504,10 +504,8 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
 // manage all filesystem
 class FileSystemSet {
  public:
-  FileSystemSet(CoordinatorClientSPtr coordinator_client, IdGeneratorUPtr fs_id_generator,
-                IdGeneratorSPtr slice_id_generator, KVStorageSPtr kv_storage, MDSMeta self_mds_meta,
-                MDSMetaMapSPtr mds_meta_map, OperationProcessorSPtr operation_processor, WorkerSetSPtr quota_worker_set,
-                WorkerSetSPtr dir_stat_worker_set, notify::NotifyBuddySPtr notify_buddy);
+  FileSystemSet(KVStorageSPtr kv_storage, MDSMeta self_mds_meta, MDSMetaMapSPtr mds_meta_map,
+                OperationProcessorSPtr operation_processor, notify::NotifyBuddySPtr notify_buddy);
   ~FileSystemSet();
 
   FileSystemSet(const FileSystemSet&) = delete;
@@ -515,17 +513,13 @@ class FileSystemSet {
   FileSystemSet(FileSystemSet&&) = delete;
   FileSystemSet& operator=(FileSystemSet&&) = delete;
 
-  static FileSystemSetSPtr New(CoordinatorClientSPtr coordinator_client, IdGeneratorUPtr fs_id_generator,
-                               IdGeneratorSPtr slice_id_generator, KVStorageSPtr kv_storage, MDSMeta self_mds_meta,
-                               MDSMetaMapSPtr mds_meta_map, OperationProcessorSPtr operation_processor,
-                               WorkerSetSPtr quota_worker_set, WorkerSetSPtr dir_stat_worker_set,
-                               notify::NotifyBuddySPtr notify_buddy) {
-    return std::make_shared<FileSystemSet>(coordinator_client, std::move(fs_id_generator),
-                                           std::move(slice_id_generator), kv_storage, self_mds_meta, mds_meta_map,
-                                           operation_processor, quota_worker_set, dir_stat_worker_set, notify_buddy);
+  static FileSystemSetSPtr New(KVStorageSPtr kv_storage, MDSMeta self_mds_meta, MDSMetaMapSPtr mds_meta_map,
+                               OperationProcessorSPtr operation_processor, notify::NotifyBuddySPtr notify_buddy) {
+    return std::make_shared<FileSystemSet>(kv_storage, self_mds_meta, mds_meta_map, operation_processor, notify_buddy);
   }
 
   bool Init();
+  void Stop(bool is_force);
 
   struct CreateFsParam {
     int64_t mds_id;
@@ -620,8 +614,6 @@ class FileSystemSet {
 
   Status RunOperation(Operation* operation);
 
-  CoordinatorClientSPtr coordinator_client_;
-
   // for fs id
   IdGeneratorUPtr fs_id_generator_;
   // for slice id
@@ -630,6 +622,8 @@ class FileSystemSet {
   KVStorageSPtr kv_storage_;
 
   OperationProcessorSPtr operation_processor_;
+
+  WarmupProcessorSPtr warmup_processor_;
 
   WorkerSetSPtr quota_worker_set_;
 

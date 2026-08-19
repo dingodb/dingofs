@@ -22,11 +22,11 @@
 #include "brpc/server.h"
 #include "json/value.h"
 #include "mds/background/cache_member_sync.h"
+#include "mds/background/dir_stats_sync.h"
 #include "mds/background/fsinfo_sync.h"
 #include "mds/background/gc.h"
 #include "mds/background/heartbeat.h"
 #include "mds/background/monitor.h"
-#include "mds/background/dir_stats_sync.h"
 #include "mds/background/quota_sync.h"
 #include "mds/cachegroup/member_manager.h"
 #include "mds/common/crontab.h"
@@ -141,12 +141,6 @@ class Server {
 
   // mutation merger
   OperationProcessorSPtr operation_processor_;
-
-  // worker set for quota
-  WorkerSetSPtr quota_worker_set_;
-
-  // worker set for dir stats
-  WorkerSetSPtr dir_stat_worker_set_;
 
   // filesystem
   FileSystemSetSPtr file_system_set_;

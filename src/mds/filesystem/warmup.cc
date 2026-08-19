@@ -14,6 +14,8 @@
 
 #include "mds/filesystem/warmup.h"
 
+#include "mds/filesystem/filesystem.h"
+
 namespace dingofs {
 namespace mds {
 
@@ -23,34 +25,42 @@ DEFINE_uint32(mds_warmup_worker_num, 4096, "number of warmup workers");
 DEFINE_uint32(mds_warmup_worker_max_pending_num, 259072, "warmup worker max pending num");
 DEFINE_bool(mds_warmup_worker_use_pthread, true, "warmup worker use pthread");
 
-bool WarmupChunkTask::IsCached() { return chunk_cache_.IsExist(ino_); }
-
 void WarmupChunkTask::Run() {
+  const uint32_t fs_id = param_.fs->FsId();
+  const Ino ino = param_.ino;
+
   auto status = WarmupChunk();
   if (!status.ok()) {
-    LOG(ERROR) << fmt::format("[warmup.{}.{}] warmup chunk fail, status({}).", fs_id_, ino_, status.error_str());
+    LOG(ERROR) << fmt::format("[warmup.{}.{}] warmup chunk fail, status({}).", fs_id, ino, status.error_str());
   }
 }
 
 Status WarmupChunkTask::WarmupChunk() {
-  if (IsCached()) return Status::OK();
+  const uint32_t fs_id = param_.fs->FsId();
+  const Ino ino = param_.ino;
+  const auto& chunk_indexes = param_.chunk_indexes;
+
+  auto& chunk_cache = param_.fs->GetChunkCache();
+  auto operation_processor = warmup_pocessor_.GetOperationProcessor();
+
+  if (warmup_pocessor_.IsStopped()) return Status::OK();
+  if (chunk_cache.IsExist(ino)) return Status::OK();
 
   class Trace trace;
-  GetChunkOperation operation(trace, fs_id_, ino_, chunk_indexes_);
-  auto status = operation_processor_->RunAlone(&operation);
+  GetChunkOperation operation(trace, fs_id, ino, chunk_indexes);
+  auto status = operation_processor->RunAlone(&operation);
   if (!status.ok()) return status;
+
+  LOG_DEBUG << fmt::format("[warmup.{}.{}] warmup chunk success.", fs_id, ino);
 
   auto& result = operation.GetResult();
 
   for (const auto& chunk : result.chunks) {
-    chunk_cache_.PutIf(ino_, chunk);
+    chunk_cache.PutIf(ino, chunk);
   }
 
   return Status::OK();
 }
-
-WarmupProcessor::WarmupProcessor(ChunkCache& chunk_cache, OperationProcessorSPtr operation_processor)
-    : chunk_cache_(chunk_cache), operation_processor_(operation_processor) {}
 
 bool WarmupProcessor::Init() {
   worker_set_ = ExecqWorkerSet::NewUnique(kWarmupWorkerSetName, FLAGS_mds_warmup_worker_num,
@@ -61,13 +71,31 @@ bool WarmupProcessor::Init() {
     return false;
   }
 
+  if (!worker_set_->Init()) {
+    LOG(ERROR) << "init warmup worker set fail.";
+    return false;
+  }
+
   return true;
 }
 
-void WarmupProcessor::Execute(uint32_t fs_id, Ino ino, const std::vector<uint32_t>& chunk_indexes) {
-  auto task = std::make_shared<WarmupChunkTask>(fs_id, ino, chunk_indexes, chunk_cache_, operation_processor_);
+void WarmupProcessor::Stop() {
+  is_stopped_.store(true);
 
-  worker_set_->ExecuteHash(ino, task);
+  if (worker_set_ != nullptr) {
+    worker_set_->Destroy();
+  }
+}
+
+void WarmupProcessor::Execute(const WarmupChunkTask::Param& param) {
+  const uint32_t fs_id = param.fs->FsId();
+  const Ino ino = param.ino;
+
+  auto task = WarmupChunkTask::New(param, *this);
+
+  if (!worker_set_->ExecuteHash(ino, task)) {
+    LOG(ERROR) << fmt::format("[warmup.{}.{}] execute warmup chunk task fail.", fs_id, ino);
+  }
 }
 
 }  // namespace mds

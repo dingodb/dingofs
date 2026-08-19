@@ -82,7 +82,7 @@ class FsUtilsTest : public testing::Test {
     fs_info.mutable_partition_policy()->mutable_mono()->set_mds_id(1);
 
     fs = FileSystem::New(/*self_mds_id=*/1, FsInfo::New(fs_info), std::move(ino_id_generator), slice_id_generator,
-                         kv_storage, operation_processor, nullptr, quota_worker_set, quota_worker_set, nullptr);
+                         operation_processor, nullptr, nullptr, quota_worker_set, quota_worker_set, nullptr);
     ASSERT_TRUE(fs->CreateRoot().ok());
   }
 
