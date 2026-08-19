@@ -30,7 +30,6 @@ endif()
 
 option(DINGOFS_BUILD_SDK "Build and install the DingoFS client SDK (fat static library)" OFF)
 option(BUILD_UNIT_TESTS "Build unit test" OFF)
-option(BUILD_CACHE_V2 "Build cache v2" OFF)
 option(BUILD_INTEGRATION_TESTS "Build integration test" OFF)
 option(USE_TCMALLOC "Use tcmalloc" ON)
 option(BRPC_ENABLE_CPU_PROFILER "Enable brpc cpu profiler" OFF)

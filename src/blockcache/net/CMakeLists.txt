@@ -1,4 +1,4 @@
-# Copyright (c) 2024 dingodb.com, Inc. All Rights Reserved
+# Copyright (c) 2026 dingodb.com, Inc. All Rights Reserved
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,11 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# The transport-neutral layer: vocabulary headers only, nothing that knows a
+# wire. Each transport is a target of its own underneath -- net/rdma links
+# ibverbs, net/brpc links brpc -- so a user of this layer alone links
+# neither.
+add_library(blockcache_net INTERFACE)
 
-add_subdirectory(utils)
-add_subdirectory(common)
-add_subdirectory(blockcache)
-add_subdirectory(cache)
-add_subdirectory(client)
-add_subdirectory(mds)
-add_subdirectory(tools)
+target_link_libraries(blockcache_net INTERFACE
+    blockcache_core
+)
+
+add_subdirectory(infiniband)
+add_subdirectory(protocol)
+add_subdirectory(rdma)
+add_subdirectory(brpc)
+add_subdirectory(server)
