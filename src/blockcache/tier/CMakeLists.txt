@@ -1,4 +1,4 @@
-# Copyright (c) 2024 dingodb.com, Inc. All Rights Reserved
+# Copyright (c) 2026 dingodb.com, Inc. All Rights Reserved
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,11 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+file(GLOB BLOCKCACHE_TIER_SRCS "${CMAKE_CURRENT_SOURCE_DIR}/*.cc")
 
-add_subdirectory(utils)
-add_subdirectory(common)
-add_subdirectory(blockcache)
-add_subdirectory(cache)
-add_subdirectory(client)
-add_subdirectory(mds)
-add_subdirectory(tools)
+add_library(blockcache_tier ${BLOCKCACHE_TIER_SRCS})
+target_compile_features(blockcache_tier PRIVATE cxx_std_20)
+target_link_libraries(blockcache_tier
+    blockcache_block
+    blockcache_remote
+    blockcache_object
+    blockcache_common
+    blockcache_core
+    gflags::gflags
+    glog::glog
+)
+blockcache_tune(blockcache_tier)
