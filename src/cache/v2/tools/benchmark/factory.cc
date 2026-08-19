@@ -69,18 +69,22 @@ bool PutTaskFactory::SubmitTask(Slot* slot, AsyncCallback cb) {
                                 std::move(cb), {.stage = FLAGS_stage});
 }
 
-uint64_t PutTaskFactory::BytesPerOp() const { return FLAGS_blksize; }
+uint64_t PutTaskFactory::BytesPerOp(const Slot* /*slot*/) const {
+  return FLAGS_blksize;
+}
 
 GetTaskFactory::GetTaskFactory(BlockCacheImpl* block_cache)
     : block_cache_(block_cache) {}
 
 bool GetTaskFactory::SubmitTask(Slot* slot, AsyncCallback cb) {
   return block_cache_->AsyncGet(
-      slot->key, FLAGS_offset, static_cast<uint32_t>(FLAGS_length), slot->data,
+      slot->key, slot->offset, static_cast<uint32_t>(slot->length), slot->data,
       std::move(cb), {.retrieve_storage = FLAGS_retrieve_storage});
 }
 
-uint64_t GetTaskFactory::BytesPerOp() const { return FLAGS_length; }
+uint64_t GetTaskFactory::BytesPerOp(const Slot* slot) const {
+  return slot->length;
+}
 
 DeleteTaskFactory::DeleteTaskFactory(BlockCacheImpl* block_cache)
     : block_cache_(block_cache) {}
@@ -89,7 +93,7 @@ bool DeleteTaskFactory::SubmitTask(Slot* slot, AsyncCallback cb) {
   return block_cache_->AsyncDelete(slot->key, std::move(cb));
 }
 
-uint64_t DeleteTaskFactory::BytesPerOp() const { return 0; }
+uint64_t DeleteTaskFactory::BytesPerOp(const Slot* /*slot*/) const { return 0; }
 
 TaskFactoryUPtr NewFactory(BlockCacheImpl* block_cache, const std::string& op) {
   if (op == "put") {

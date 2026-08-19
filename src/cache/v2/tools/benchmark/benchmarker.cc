@@ -33,9 +33,11 @@ Benchmarker::Benchmarker()
       reporter_(std::make_shared<Reporter>(collector_)),
       thread_pool_(
           std::make_unique<utils::TaskThreadPool<>>("benchmark_worker")) {
+  CHECK_LT(FLAGS_offset, FLAGS_blksize);
   if (FLAGS_offset + FLAGS_length > FLAGS_blksize) {
     FLAGS_length = FLAGS_blksize - FLAGS_offset;
   }
+  CHECK_GT(FLAGS_length, 0);
 }
 
 Status Benchmarker::Start() { return InitAll(); }

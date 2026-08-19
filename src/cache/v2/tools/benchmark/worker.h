@@ -41,7 +41,7 @@ class Worker {
   void Shutdown();
 
  private:
-  void SubmitOne(const BlockHandle& key);
+  void SubmitOne(const BlockHandle& key, uint64_t offset, uint64_t length);
   void OnComplete(Slot* slot, Status status);
   Slot* PopSlot();
   void PushSlot(Slot* slot);
