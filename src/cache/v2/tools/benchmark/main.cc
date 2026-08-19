@@ -14,19 +14,28 @@
  * limitations under the License.
  */
 
-#include <gflags/gflags.h>
 #include <glog/logging.h>
 
 #include <iostream>
 
 #include "cache/v2/tools/benchmark/benchmarker.h"
+#include "cache/v2/tools/benchmark/cli.h"
+#include "common/logging.h"
+
+using dingofs::Logger;
+using dingofs::cache::v2::Benchmarker;
+using dingofs::cache::v2::FlagParser;
+using dingofs::cache::v2::kUsage;
 
 int main(int argc, char** argv) {
-  google::ParseCommandLineFlags(&argc, &argv, true);
-  google::InitGoogleLogging(argv[0]);
-  FLAGS_logtostderr = true;
+  if (!FlagParser::Parse(&argc, &argv, kUsage)) {
+    return 0;
+  }
 
-  dingofs::cache::v2::Benchmarker benchmarker;
+  Logger::Init("cb");
+  LOG(INFO) << FlagParser::GenCurrentFlags(FlagParser::Collect(kUsage));
+
+  Benchmarker benchmarker;
   auto status = benchmarker.Start();
   if (!status.ok()) {
     std::cerr << "Failed to start benchmarker: " << status.ToString() << '\n';

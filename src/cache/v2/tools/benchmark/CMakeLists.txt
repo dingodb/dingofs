@@ -28,6 +28,7 @@ target_link_libraries(cb-v2
     cache_v2_api
     cache_v2_object
     cache_v2_common
+    cache_v2_flags
     dingofs_executor
     fmt::fmt
     brpc::brpc
