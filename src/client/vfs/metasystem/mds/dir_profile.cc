@@ -20,6 +20,7 @@
 
 #include "common/logging.h"
 #include "common/options/client.h"
+#include "common/options/common.h"
 #include "utils/concurrent/concurrent.h"
 #include "utils/time.h"
 
@@ -38,7 +39,7 @@ void DirProfile::Accumulate(Ino child_ino, FileType type, uint64_t length) {
   ++total_children_;
 
   if (type != FileType::kFile) return;
-  if (length > FLAGS_vfs_tiny_file_max_size) return;
+  if (length > FLAGS_small_file_max_size) return;
 
   small_file_inos_.push_back(child_ino);
 }

@@ -35,6 +35,7 @@
 #include "butil/file_util.h"
 #include "butil/strings/string_split.h"
 #include "butil/strings/string_util.h"
+#include "common/options/common.h"
 #include "common/types.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
@@ -53,7 +54,8 @@ class Helper {
   static int64_t GetPid();
   static int64_t GetThreadID();
 
-  static bool IsEqualIgnoreCase(const std::string& str1, const std::string& str2);
+  static bool IsEqualIgnoreCase(const std::string& str1,
+                                const std::string& str2);
   static std::string ToUpperCase(const std::string& str);
 
   // string type cast
@@ -71,20 +73,27 @@ class Helper {
   static bool ParseAddr(const std::string& addr, std::string& host, int& port);
 
   // local file system operation
-  static std::string ConcatPath(const std::string& path1, const std::string& path2);
-  static std::vector<std::string> TraverseDirectory(const std::string& path, bool ignore_dir = false,
+  static std::string ConcatPath(const std::string& path1,
+                                const std::string& path2);
+  static std::vector<std::string> TraverseDirectory(const std::string& path,
+                                                    bool ignore_dir = false,
                                                     bool ignore_file = false);
-  static std::vector<std::string> TraverseDirectory(const std::string& path, const std::string& prefix,
-                                                    bool ignore_dir = false, bool ignore_file = false);
-  static std::string FindFileInDirectory(const std::string& dirpath, const std::string& prefix);
+  static std::vector<std::string> TraverseDirectory(const std::string& path,
+                                                    const std::string& prefix,
+                                                    bool ignore_dir = false,
+                                                    bool ignore_file = false);
+  static std::string FindFileInDirectory(const std::string& dirpath,
+                                         const std::string& prefix);
   static bool CreateDirectories(const std::string& path);
   static bool RemoveFileOrDirectory(const std::string& path);
   static bool RemoveAllFileOrDirectory(const std::string& path);
-  static bool Rename(const std::string& src_path, const std::string& dst_path, bool is_force = true);
+  static bool Rename(const std::string& src_path, const std::string& dst_path,
+                     bool is_force = true);
   static int64_t GetFileSize(const std::string& path);
 
   static std::string GenerateRandomString(int length);
-  static int64_t GenerateRealRandomInteger(int64_t min_value, int64_t max_value);
+  static int64_t GenerateRealRandomInteger(int64_t min_value,
+                                           int64_t max_value);
   static int64_t GenerateRandomInteger(int64_t min_value, int64_t max_value);
   static float GenerateRandomFloat(float min_value, float max_value);
 
@@ -92,16 +101,19 @@ class Helper {
   static std::string EndPointToString(const butil::EndPoint& endpoint);
   static bool SaveFile(const std::string& filepath, const std::string& data);
   static std::string FsModeToString(mode_t mode);
-  static bool ProtoToJson(const google::protobuf::Message& message, std::string& json);
+  static bool ProtoToJson(const google::protobuf::Message& message,
+                          std::string& json);
 
   template <typename T>
-  static std::vector<T> PbRepeatedToVector(const google::protobuf::RepeatedPtrField<T>& data) {
+  static std::vector<T> PbRepeatedToVector(
+      const google::protobuf::RepeatedPtrField<T>& data) {
     // const source: elements are copied.
     return {data.begin(), data.end()};
   }
 
   template <typename T>
-  static std::vector<T> PbRepeatedToVector(google::protobuf::RepeatedPtrField<T>* data) {
+  static std::vector<T> PbRepeatedToVector(
+      google::protobuf::RepeatedPtrField<T>* data) {
     // mutable source: elements are moved out, leaving them unspecified.
     std::vector<T> vec;
     vec.reserve(data->size());
@@ -113,7 +125,8 @@ class Helper {
   }
 
   template <typename T>
-  static std::vector<T> PbRepeatedToVector(const google::protobuf::RepeatedField<T>& data) {
+  static std::vector<T> PbRepeatedToVector(
+      const google::protobuf::RepeatedField<T>& data) {
     std::vector<T> vec;
     vec.reserve(data.size());
     for (auto& item : data) {
@@ -124,7 +137,8 @@ class Helper {
   }
 
   template <typename T>
-  static std::vector<T> PbRepeatedToVector(google::protobuf::RepeatedField<T>* data) {
+  static std::vector<T> PbRepeatedToVector(
+      google::protobuf::RepeatedField<T>* data) {
     std::vector<T> vec;
     vec.reserve(data->size());
     for (auto& item : *data) {
@@ -135,14 +149,16 @@ class Helper {
   }
 
   template <typename T>
-  static void VectorToPbRepeated(const std::vector<T>& vec, google::protobuf::RepeatedPtrField<T>* out) {
+  static void VectorToPbRepeated(const std::vector<T>& vec,
+                                 google::protobuf::RepeatedPtrField<T>* out) {
     for (auto& item : vec) {
       *(out->Add()) = item;
     }
   }
 
   template <typename T>
-  static void VectorToPbRepeated(const std::vector<T>& vec, google::protobuf::RepeatedField<T>* out) {
+  static void VectorToPbRepeated(const std::vector<T>& vec,
+                                 google::protobuf::RepeatedField<T>* out) {
     for (auto& item : vec) {
       out->Add(item);
     }
@@ -449,6 +465,10 @@ class Helper {
     }
 
     return "UNKNOWN";
+  }
+
+  static bool IsSmallFile(uint64_t length) {
+    return length <= FLAGS_small_file_max_size;
   }
 
 };  // class Helper

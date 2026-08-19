@@ -20,6 +20,7 @@
 #include "client/vfs/metasystem/mds/dir_profile.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/options/client.h"
+#include "common/options/common.h"
 #include "utils/time.h"
 
 namespace dingofs {
@@ -35,17 +36,17 @@ constexpr uint32_t kWarmupOpenThreshold = 16;
 class DirProfileTest : public ::testing::Test {
  protected:
   void SetUp() override {
-    saved_tiny_max_ = FLAGS_vfs_tiny_file_max_size;
+    saved_tiny_max_ = FLAGS_small_file_max_size;
     saved_batch_size_ = FLAGS_vfs_meta_warmup_small_file_batch_size;
     saved_ttl_s_ = FLAGS_vfs_meta_warmup_small_file_ttl_s;
 
-    FLAGS_vfs_tiny_file_max_size = kSmallThreshold;
+    FLAGS_small_file_max_size = kSmallThreshold;
     FLAGS_vfs_meta_warmup_small_file_batch_size = 256;
     FLAGS_vfs_meta_warmup_small_file_ttl_s = 600;
   }
 
   void TearDown() override {
-    FLAGS_vfs_tiny_file_max_size = saved_tiny_max_;
+    FLAGS_small_file_max_size = saved_tiny_max_;
     FLAGS_vfs_meta_warmup_small_file_batch_size = saved_batch_size_;
     FLAGS_vfs_meta_warmup_small_file_ttl_s = saved_ttl_s_;
   }

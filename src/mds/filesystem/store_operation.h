@@ -1000,7 +1000,6 @@ class GetChunkOperation : public Operation {
   ~GetChunkOperation() override = default;
 
   struct Result {
-    AttrEntry attr;
     std::vector<ChunkEntry> chunks;
   };
 
@@ -1028,7 +1027,6 @@ class ScanChunkOperation : public Operation {
   ~ScanChunkOperation() override = default;
 
   struct Result {
-    AttrEntry attr;
     std::vector<ChunkEntry> chunks;
   };
 

@@ -75,7 +75,6 @@ DECLARE_uint64(vfs_meta_memo_expired_s);
 DECLARE_uint64(vfs_meta_chunk_cache_expired_s);
 DECLARE_uint64(vfs_meta_inode_cache_expired_s);
 DECLARE_uint32(vfs_meta_inode_attr_ttl_s);
-DECLARE_uint64(vfs_tiny_file_max_size);
 
 // vfs read
 DECLARE_int32(vfs_read_executor_thread);
