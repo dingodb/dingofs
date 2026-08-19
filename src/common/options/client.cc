@@ -77,10 +77,6 @@ DEFINE_uint32(vfs_meta_inode_attr_ttl_s, 1,
               "inode attr freshness ttl, refetch from mds after expired");
 DEFINE_validator(vfs_meta_inode_attr_ttl_s, brpc::PassValidate);
 
-DEFINE_uint64(vfs_tiny_file_max_size, 1024 * 1024 * 32,
-              "max size of tiny file");
-DEFINE_validator(vfs_tiny_file_max_size, brpc::PassValidate);
-
 DEFINE_int32(vfs_flush_thread, 4, "number of background flush threads");
 DEFINE_validator(vfs_flush_thread, brpc::PassValidate);
 

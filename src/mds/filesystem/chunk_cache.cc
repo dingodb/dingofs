@@ -147,6 +147,11 @@ std::vector<ChunkCache::ChunkSPtr> ChunkCache::Get(uint64_t ino) {
   return chunks;
 }
 
+bool ChunkCache::IsExist(uint64_t ino) {
+  auto chunks = Get(ino);
+  return !chunks.empty();
+}
+
 size_t ChunkCache::Size() {
   size_t size = 0;
   shard_map_.iterate([&size](Map& map) { size += map.size(); });

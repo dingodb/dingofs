@@ -186,7 +186,7 @@ sequenceDiagram
   - `vfs_meta_warmup_dir_cooldown_s` (uint32, 60) —— C：单目录预热冷却时间
   - `vfs_meta_warmup_dir_profile_ttl_s` (uint32, 300) —— Tprofile：DirProfile TTL
   - `vfs_meta_warmup_dir_profile_capacity` (uint32, 8192) —— DirProfileCache 容量上限
-- 小文件阈值 S 不新增 gflag，运行时从 `FLAGS_vfs_tiny_file_max_size` 读取
+- 小文件阈值 S 不新增 gflag，运行时从 `FLAGS_small_file_max_size` 读取
 
 **Patterns to follow:**
 - `vfs_intime_warmup_enable`、`vfs_meta_inode_cache_expired_s`、`vfs_warmup_threads`

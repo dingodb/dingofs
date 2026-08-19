@@ -50,6 +50,8 @@ class ChunkCache {
   ChunkSPtr Get(uint64_t ino, uint64_t chunk_index);
   std::vector<ChunkSPtr> Get(uint64_t ino);
 
+  bool IsExist(uint64_t ino);
+
   size_t Size();
   size_t Bytes();
 

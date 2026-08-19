@@ -161,6 +161,7 @@ FileSystem::FileSystem(uint64_t self_mds_id, FsInfoSPtr fs_info, IdGeneratorUPtr
       chunk_cache_(fs_id_),
       quota_manager_(fs_info, parent_memo_, operation_processor, quota_worker_set, notify_buddy),
       dir_stat_manager_(fs_info, operation_processor, dir_stat_worker_set),
+      warmup_processor_(chunk_cache_, operation_processor),
       notify_buddy_(notify_buddy),
       file_session_manager_(fs_id_, operation_processor) {
   // Inject the live-tree recompute: DirStatManager's seed/repair paths need it
@@ -192,6 +193,11 @@ bool FileSystem::Init() {
 
   if (!renamer_.Init()) {
     LOG(ERROR) << fmt::format("[fs.{}] init renamer fail.", fs_id_);
+    return false;
+  }
+
+  if (!warmup_processor_.Init()) {
+    LOG(ERROR) << fmt::format("[fs.{}] init warmup processor fail.", fs_id_);
     return false;
   }
 
@@ -1834,6 +1840,13 @@ Status FileSystem::ReadDir(Context& ctx, Ino ino, const std::string& last_name, 
       }
 
       entry_out.attr = inode->ToAttr();
+
+      // warmup small file chunks in cache
+      if (IsFile(dentry.INo()) && dingofs::Helper::IsSmallFile(entry_out.attr.length()) &&
+          !chunk_cache_.IsExist(dentry.INo())) {
+        // just first chunk because small file
+        warmup_processor_.Execute(fs_id_, dentry.INo(), {0});
+      }
     }
 
     entry_outs.push_back(std::move(entry_out));

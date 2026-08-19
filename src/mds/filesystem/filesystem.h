@@ -41,6 +41,7 @@
 #include "mds/filesystem/partition.h"
 #include "mds/filesystem/renamer.h"
 #include "mds/filesystem/store_operation.h"
+#include "mds/filesystem/warmup.h"
 #include "mds/mds/mds_meta.h"
 #include "mds/quota/quota.h"
 #include "mds/statistics/dir_stat_manager.h"
@@ -490,6 +491,8 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   Renamer renamer_;
 
   OperationProcessorSPtr operation_processor_;
+
+  WarmupProcessor warmup_processor_;
 
   // notify buddy
   notify::NotifyBuddySPtr notify_buddy_;
