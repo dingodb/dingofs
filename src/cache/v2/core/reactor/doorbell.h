@@ -38,13 +38,7 @@ class Doorbell {
   void Disarm() { armed_.store(false, std::memory_order_relaxed); }
 
   bool ClaimWakeup() {
-    std::atomic_thread_fence(std::memory_order_seq_cst);
-    if (!armed_.load(std::memory_order_relaxed)) {
-      return false;
-    }
-
-    armed_.store(false, std::memory_order_relaxed);
-    return true;
+    return armed_.exchange(false, std::memory_order_seq_cst);
   }
 
  private:
