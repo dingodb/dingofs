@@ -15,62 +15,79 @@
 #ifndef DINGOFS_MDS_FILESYSTEM_WARMUP_H_
 #define DINGOFS_MDS_FILESYSTEM_WARMUP_H_
 
+#include <atomic>
 #include <cstdint>
 #include <vector>
 
 #include "mds/common/runnable.h"
 #include "mds/common/status.h"
-#include "mds/filesystem/chunk_cache.h"
 #include "mds/filesystem/store_operation.h"
 
 namespace dingofs {
 namespace mds {
 
+class FileSystem;
+using FileSystemSPtr = std::shared_ptr<FileSystem>;
+
+class WarmupProcessor;
+using WarmupProcessorSPtr = std::shared_ptr<WarmupProcessor>;
+
 class WarmupChunkTask : public TaskRunnable {
  public:
-  WarmupChunkTask(uint32_t fs_id, Ino ino, const std::vector<uint32_t>& chunk_indexes, ChunkCache& chunk_cache,
-                  OperationProcessorSPtr operation_processor)
-      : fs_id_(fs_id),
-        ino_(ino),
-        chunk_indexes_(chunk_indexes),
-        chunk_cache_(chunk_cache),
-        operation_processor_(operation_processor) {}
+  struct Param {
+    FileSystemSPtr fs;
+    Ino ino;
+    std::vector<uint32_t> chunk_indexes;
+  };
+
+  WarmupChunkTask(const Param& param, WarmupProcessor& warmup_pocessor)
+      : param_(param), warmup_pocessor_(warmup_pocessor) {}
   ~WarmupChunkTask() override = default;
+
+  static TaskRunnablePtr New(const Param& param, WarmupProcessor& warmup_pocessor) {
+    return std::make_shared<WarmupChunkTask>(param, warmup_pocessor);
+  }
 
   std::string Type() override { return "WARMUP_CHUNK"; }
 
   void Run() override;
 
  private:
-  bool IsCached();
-
   Status WarmupChunk();
 
-  uint32_t fs_id_;
-  Ino ino_;
+  Param param_;
 
-  std::vector<uint32_t> chunk_indexes_;
-
-  ChunkCache& chunk_cache_;
-  OperationProcessorSPtr operation_processor_;
+  WarmupProcessor& warmup_pocessor_;
 };
 
 class WarmupProcessor {
  public:
-  WarmupProcessor(ChunkCache& chunk_cache, OperationProcessorSPtr operation_processor);
+  WarmupProcessor(OperationProcessorSPtr operation_processor) : operation_processor_(operation_processor) {}
   virtual ~WarmupProcessor() = default;
 
   WarmupProcessor(const WarmupProcessor&) = delete;
   WarmupProcessor& operator=(const WarmupProcessor&) = delete;
 
-  bool Init();
+  static WarmupProcessorSPtr New(OperationProcessorSPtr operation_processor) {
+    return std::make_shared<WarmupProcessor>(operation_processor);
+  }
 
-  void Execute(uint32_t fs_id, Ino ino, const std::vector<uint32_t>& chunk_indexes);
+  bool Init();
+  void Stop();
+
+  void Execute(const WarmupChunkTask::Param& param);
 
  private:
+  friend class WarmupChunkTask;
+
+  OperationProcessorSPtr GetOperationProcessor() { return operation_processor_; }
+
+  bool IsStopped() { return is_stopped_.load(std::memory_order_relaxed); }
+
+  std::atomic<bool> is_stopped_{false};
+
   WorkerSetUPtr worker_set_;
 
-  ChunkCache& chunk_cache_;
   OperationProcessorSPtr operation_processor_;
 };
 

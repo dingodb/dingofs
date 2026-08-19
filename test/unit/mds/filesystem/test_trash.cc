@@ -124,8 +124,8 @@ class TrashFileSystemTest : public testing::Test {
 
     fs = FileSystem::New(kTrashMdsId, FsInfo::New(fs_info),
                          std::move(ino_id_generator), slice_id_generator,
-                         kv_storage, operation_processor, nullptr,
-                         quota_worker_set, quota_worker_set, nullptr);
+                         operation_processor, nullptr, nullptr, quota_worker_set,
+                         quota_worker_set, nullptr);
     auto status = fs->CreateRoot();
     ASSERT_TRUE(status.ok())
         << "create root fail, error: " << status.error_str();
@@ -1747,8 +1747,8 @@ class TrashDirStatTest : public testing::Test {
 
     fs = FileSystem::New(kTrashMdsId, FsInfo::New(fs_info),
                          std::move(ino_id_generator), slice_id_generator,
-                         kv_storage, operation_processor, nullptr,
-                         quota_worker_set, quota_worker_set, nullptr);
+                         operation_processor, nullptr, nullptr, quota_worker_set,
+                         quota_worker_set, nullptr);
     ASSERT_TRUE(fs->CreateRoot().ok());
   }
 

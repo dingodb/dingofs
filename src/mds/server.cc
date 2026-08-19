@@ -13,13 +13,13 @@
 // limitations under the License.
 
 #include "mds/server.h"
-#include "../common/helper.h"
 
 #include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "../common/helper.h"
 #include "common/logging.h"
 #include "common/options/mds.h"
 #include "common/version.h"
@@ -57,14 +57,6 @@ DEFINE_string(mds_gc_lock_name, "/lock/mds/gc", "gc lock name");
 DEFINE_string(mds_pid_file_name, "pid", "pid file name");
 
 DECLARE_string(mds_service_worker_set_type);
-
-const std::string kQuotaWorkerSetName = "QUOTA_WORKER_SET";
-DEFINE_uint32(mds_quota_worker_num, 24, "quota worker number");
-DEFINE_uint32(mds_quota_worker_max_pending_num, 1000000, "quota worker max pending number");
-
-const std::string kDirStatWorkerSetName = "DIR_STAT_WORKER_SET";
-DEFINE_uint32(mds_dir_stat_worker_num, 24, "dir stat worker number");
-DEFINE_uint32(mds_dir_stat_worker_max_pending_num, 1000000, "dir stat worker max pending number");
 
 // crontab config
 DEFINE_uint32(mds_crontab_heartbeat_interval_s, 5, "heartbeat interval seconds");
@@ -254,30 +246,8 @@ bool Server::InitFileSystem() {
   CHECK(operation_processor_ != nullptr) << "operation_processor is nullptr.";
   CHECK(notify_buddy_ != nullptr) << "notify_buddy is nullptr.";
 
-  IdGeneratorUPtr fs_id_generator = NewFsIdGenerator(kv_storage_);
-  IdGeneratorSPtr slice_id_generator = FLAGS_mds_slice_id_generator_share_enable
-                                           ? NewSliceIdGenerator(kv_storage_)
-                                           : NewSliceIdGenerator(self_mds_meta_.ID(), kv_storage_);
-
-  CHECK(fs_id_generator != nullptr) << "new fs AutoIncrementIdGenerator fail.";
-  CHECK(fs_id_generator->Init()) << "init fs AutoIncrementIdGenerator fail.";
-
-  CHECK(slice_id_generator != nullptr) << "new slice AutoIncrementIdGenerator fail.";
-  CHECK(slice_id_generator->Init()) << "init slice AutoIncrementIdGenerator fail.";
-
-  quota_worker_set_ = ExecqWorkerSet::NewUnique(kQuotaWorkerSetName, FLAGS_mds_quota_worker_num,
-                                                FLAGS_mds_quota_worker_max_pending_num, true);
-  CHECK(quota_worker_set_ != nullptr) << "new quota worker set fail.";
-  CHECK(quota_worker_set_->Init()) << "init quota worker set fail.";
-
-  dir_stat_worker_set_ = ExecqWorkerSet::NewUnique(kDirStatWorkerSetName, FLAGS_mds_dir_stat_worker_num,
-                                                   FLAGS_mds_dir_stat_worker_max_pending_num, true);
-  CHECK(dir_stat_worker_set_ != nullptr) << "new dir stat worker set fail.";
-  CHECK(dir_stat_worker_set_->Init()) << "init dir stat worker set fail.";
-
-  file_system_set_ = FileSystemSet::New(coordinator_client_, std::move(fs_id_generator), slice_id_generator,
-                                        kv_storage_, self_mds_meta_, mds_meta_map_, operation_processor_,
-                                        quota_worker_set_, dir_stat_worker_set_, notify_buddy_);
+  file_system_set_ =
+      FileSystemSet::New(kv_storage_, self_mds_meta_, mds_meta_map_, operation_processor_, notify_buddy_);
   CHECK(file_system_set_ != nullptr) << "new FileSystem fail.";
 
   return file_system_set_->Init();
@@ -587,6 +557,8 @@ void Server::Run() {
 
   CHECK(brpc_server_.AddService(fs_stat_service_.get(), brpc::SERVER_DOESNT_OWN_SERVICE) == 0)
       << "add fsstat service error.";
+
+  brpc_server_.set_version(dingofs::DingoShortVersionString());
 
   brpc::ServerOptions option;
   CHECK(brpc_server_.Start(GetListenAddr().c_str(), &option) == 0) << "start brpc server error.";
