@@ -43,6 +43,8 @@ DEFINE_uint32(offload_cpu_spin_us, 0,
 
 // -- CpuWorker ---------------------------------------------------------------
 
+constexpr uint64_t kParkTimeoutNs = 100'000'000;
+
 CpuWorker::~CpuWorker() { Shutdown(); }
 
 void CpuWorker::Start(unsigned shard) {
@@ -59,20 +61,14 @@ void CpuWorker::Shutdown() {
     return;
   }
   stopping_.store(true, std::memory_order_release);
-  {
-    std::lock_guard<std::mutex> lock(mutex_);
-  }
-  cv_.notify_one();
+  parker_.Wake();
   thread_.join();
   Drain();  // whatever landed in the window before the thread saw stopping_
 }
 
 void CpuWorker::Post(InboxWork* work) {
   queue_.Push(work);
-  if (bell_.ClaimWakeup()) {
-    std::lock_guard<std::mutex> lock(mutex_);  // pairs with the park below
-    cv_.notify_one();
-  }
+  parker_.Wake();
 }
 
 void CpuWorker::Loop() {
@@ -88,16 +84,11 @@ void CpuWorker::Loop() {
       continue;
     }
 
-    // Arm before re-checking: a post between the drain above and the arm
-    // would otherwise ring a bell nobody was listening for.
-    bell_.Arm();
-    {
-      std::unique_lock<std::mutex> lock(mutex_);
-      if (queue_.empty() && !stopping_.load(std::memory_order_acquire)) {
-        cv_.wait(lock);
-      }
-    }
-    bell_.Disarm();
+    parker_.WaitFor(
+        [this] {
+          return !queue_.empty() || stopping_.load(std::memory_order_acquire);
+        },
+        kParkTimeoutNs);
   }
 }
 

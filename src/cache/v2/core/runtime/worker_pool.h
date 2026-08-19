@@ -77,9 +77,7 @@ class CpuWorker {
   bool SpinForWork(uint64_t spin_ns);
 
   MpscQueue queue_;
-  Doorbell bell_;  // only ring the worker when it actually parked
-  std::mutex mutex_;
-  std::condition_variable cv_;
+  Parker parker_;
   std::atomic<bool> stopping_{false};
   std::thread thread_;
 };
