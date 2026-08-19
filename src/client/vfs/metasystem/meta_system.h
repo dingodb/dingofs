@@ -32,6 +32,7 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 
+class BlockStore;
 class WarmupManager;
 
 struct DumpOption {
@@ -242,6 +243,10 @@ class MetaSystem {
 
   virtual bool GetDescription(Json::Value& value) = 0;
   virtual bool GetSummary(Json::Value& value) = 0;
+
+  // Inject the BlockStore owned by VFSHub after both objects exist.
+  // Default is a no-op so non-MDS backends do not need to care.
+  virtual void SetBlockStore(BlockStore* /*block_store*/) {}
 
   // Inject the WarmupManager owned by VFSHub after both objects exist.
   // Default is a no-op so non-MDS backends do not need to care.

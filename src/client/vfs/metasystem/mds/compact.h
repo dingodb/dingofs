@@ -45,21 +45,18 @@ class CompactProcessor;
 class CompactChunkTask : public TaskRunnable {
  public:
   CompactChunkTask(Ino ino, InodeSPtr& inode, ChunkSPtr& chunk,
-                   MDSClient& mds_client, Compactor& compactor,
                    CompactProcessor& compact_processor)
       : ino_(ino),
         inode_(inode),
         chunk_(chunk),
-        mds_client_(mds_client),
-        compactor_(compactor),
         compact_processor_(compact_processor) {}
   ~CompactChunkTask() override = default;
 
   static CompactChunkTaskPtr New(Ino ino, InodeSPtr& inode, ChunkSPtr& chunk,
-                                 MDSClient& mds_client, Compactor& compactor,
+
                                  CompactProcessor& compact_processor) {
-    return std::make_shared<CompactChunkTask>(ino, inode, chunk, mds_client,
-                                              compactor, compact_processor);
+    return std::make_shared<CompactChunkTask>(ino, inode, chunk,
+                                              compact_processor);
   }
 
   std::string Type() override { return "COMPACT_CHUNK"; }
@@ -83,9 +80,6 @@ class CompactChunkTask : public TaskRunnable {
   InodeSPtr inode_;
   ChunkSPtr chunk_;
 
-  MDSClient& mds_client_;
-  Compactor& compactor_;
-
   CompactProcessor& compact_processor_;
 
   Status status_;
@@ -94,7 +88,9 @@ class CompactChunkTask : public TaskRunnable {
 
 class CompactProcessor {
  public:
-  CompactProcessor();
+  CompactProcessor(MDSClient& mds_client, Compactor& compactor,
+                   Executor& executor)
+      : mds_client_(mds_client), compactor_(compactor), executor_(executor) {}
   ~CompactProcessor() = default;
 
   // no copy and move
@@ -103,12 +99,10 @@ class CompactProcessor {
   CompactProcessor(CompactProcessor&&) = delete;
   CompactProcessor& operator=(CompactProcessor&&) = delete;
 
-  bool Init();
   void Stop();
 
-  Status LaunchCompact(Ino ino, InodeSPtr inode, ChunkSPtr& chunk,
-                       MDSClient& mds_client, Compactor& compactor,
-                       bool is_async = true);
+  Status Execute(Ino ino, InodeSPtr inode, ChunkSPtr& chunk,
+                 bool is_async = true);
 
   bool IsStopped() { return is_stopped_.load(); }
 
@@ -118,9 +112,16 @@ class CompactProcessor {
   void CleanExpired(uint64_t expire_time_s);
 
  private:
+  friend class CompactChunkTask;
+
+  MDSClient& GetMDSClient() { return mds_client_; }
+  Compactor& GetCompactor() { return compactor_; }
+
   std::atomic<bool> is_stopped_{false};
 
-  Executor executor_;
+  MDSClient& mds_client_;
+  Compactor& compactor_;
+  Executor& executor_;
 
   struct Value {
     uint64_t version;
