@@ -241,6 +241,10 @@ class MetaWrapper {
 
   bool GetSummary(Json::Value& value) { return target_->GetSummary(value); }
 
+  void SetBlockStore(BlockStore* block_store) {
+    target_->SetBlockStore(block_store);
+  }
+
   void SetWarmupManager(WarmupManager* warmup_manager) {
     target_->SetWarmupManager(warmup_manager);
   }
