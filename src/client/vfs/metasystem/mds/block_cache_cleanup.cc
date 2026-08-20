@@ -15,6 +15,8 @@
 
 #include "client/vfs/metasystem/mds/block_cache_cleanup.h"
 
+#include <glog/logging.h>
+
 #include "common/block/block_utils.h"
 
 namespace dingofs {
@@ -45,18 +47,20 @@ Status BlockCacheCleanupTask::Clean() {
   if (block_cache == nullptr) return Status::OK();
 
   const uint32_t chunk_count =
-      (length_ / chunk_size) + (length_ % chunk_size != 0);
+      (length_ / chunk_size) + (length_ % chunk_size != 0 ? 1 : 0);
 
   auto ctx = std::make_shared<Context>("");
   ctx->inner_req = true;
 
   std::vector<ChunkDescriptor> chunk_descriptors;
-  for (uint32_t index = 0; index < chunk_count; ++index) {
+  for (uint32_t i = 0; i < chunk_count; ++i) {
     ChunkDescriptor chunk_descriptor;
-    chunk_descriptor.set_index(index);
+    chunk_descriptor.set_index(i);
     chunk_descriptor.set_version(0);
     chunk_descriptors.push_back(chunk_descriptor);
   }
+
+  if (chunk_descriptors.empty()) return Status::OK();
 
   std::vector<mds::ChunkEntry> chunks;
   Status status = mds_client.ReadSlice(ctx, ino_, chunk_descriptors, chunks);
@@ -64,6 +68,8 @@ Status BlockCacheCleanupTask::Clean() {
 
   for (const auto& chunk : chunks) {
     for (const auto& slice : chunk.slices()) {
+      if (slice.id() == 0) continue;  // skip empty slice
+
       LOG_DEBUG << fmt::format(
           "[meta.cleanup.{}] clean block cache, slice({}/{}).", ino_,
           chunk.index(), slice.id());

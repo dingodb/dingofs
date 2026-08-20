@@ -91,15 +91,15 @@ static void ErrorCallback(void* vdata, const char* msg, int errnum) {
 
 // The signal handler
 static void SignalHandler(int signo) {
+  if (signo == SIGTERM) {
+    // Only set a flag here (async-signal-safe); the main thread exits the
+    // Run() loop and performs the actual Stop().
+    dingofs::mds::Server::GetInstance().AskStop();
+    return;
+  }
+
   // flush log
   dingofs::Logger::FlushLogs();
-
-  if (signo == SIGTERM) {
-    dingofs::mds::Server& server = dingofs::mds::Server::GetInstance();
-    server.Stop();
-
-    _exit(0);
-  }
 
   std::cerr << "received signal: " << signo << '\n';
   std::cerr << "stack trace:\n";

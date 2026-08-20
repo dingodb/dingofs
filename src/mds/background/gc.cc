@@ -366,6 +366,10 @@ void GcProcessor::Stop() {
   if (worker_set_ != nullptr) {
     worker_set_->Stop();
   }
+
+  for (auto& [fs_id, block_accesser] : block_accessers_) {
+    if (block_accesser != nullptr) block_accesser->Stop();
+  }
 }
 
 void GcProcessor::Run() {

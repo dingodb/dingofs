@@ -169,26 +169,45 @@ void Server::Stop() {
   bool expected = false;
   if (!is_stopped_.compare_exchange_strong(expected, true)) return;
 
-  mds_service_->Stop();
-  debug_service_->Stop();
-  fs_stat_service_->Stop();
+  LOG(INFO) << "mds server is stopping...";
+
+  if (mds_service_ != nullptr) mds_service_->Stop();
+  LOG(INFO) << "mds service is stopped.";
+  if (debug_service_ != nullptr) debug_service_->Stop();
+  LOG(INFO) << "debug service is stopped.";
+  if (fs_stat_service_ != nullptr) fs_stat_service_->Stop();
+  LOG(INFO) << "fs stat service is stopped.";
 
   brpc_server_.Stop(0);
   brpc_server_.Join();
+  LOG(INFO) << "brpc server is stopped.";
 
-  file_system_set_->Stop(true);
-
-  heartbeat_->Stop();
+  // Stop crontab (task producer) before stopping the components it drives.
   crontab_manager_.Stop();
-  monitor_->Stop();
-  notify_buddy_->Stop();
-  gc_processor_->Stop();
+  LOG(INFO) << "crontab manager is stopped.";
 
-  operation_processor_->Stop();
+  if (heartbeat_ != nullptr) heartbeat_->Stop();
+  LOG(INFO) << "heartbeat is stopped.";
+  if (file_system_set_ != nullptr) file_system_set_->Stop(true);
+  LOG(INFO) << "file system set is stopped.";
+  if (monitor_ != nullptr) monitor_->Stop();
+  LOG(INFO) << "monitor is stopped.";
+  if (notify_buddy_ != nullptr) notify_buddy_->Stop();
+  LOG(INFO) << "notify buddy is stopped.";
+  if (gc_processor_ != nullptr) gc_processor_->Stop();
+  LOG(INFO) << "gc processor is stopped.";
 
-  kv_storage_->Stop();
+  if (operation_processor_ != nullptr) operation_processor_->Stop();
+  LOG(INFO) << "operation processor is stopped.";
 
-  logclean_manager_->Stop();
+  if (kv_storage_ != nullptr) kv_storage_->Stop();
+  LOG(INFO) << "kv storage is stopped.";
+  if (coordinator_client_ != nullptr) coordinator_client_->Stop();
+  LOG(INFO) << "coordinator client is stopped.";
+
+  if (logclean_manager_ != nullptr) logclean_manager_->Stop();
+
+  LOG(INFO) << "mds server is stopped.";
 }
 
 bool Server::InitConfig(const std::string& path) {
@@ -513,8 +532,6 @@ bool Server::InitCrontab() {
       [](void*) { Server::GetInstance().GetCacheMemberSynchronizer()->Run(); },
   });
 
-  crontab_manager_.AddCrontab(crontab_configs_);
-
   return true;
 }
 
@@ -663,9 +680,13 @@ void Server::Run() {
   brpc::ServerOptions option;
   CHECK(brpc_server_.Start(GetListenAddr().c_str(), &option) == 0) << "start brpc server error.";
 
+  // Start crontab only after brpc is listening, so heartbeat doesn't report
+  // this MDS alive before it can serve RPCs.
+  crontab_manager_.AddCrontab(crontab_configs_);
+
   PrintReadyInfo(GetListenAddr());
 
-  while (!brpc::IsAskedToQuit() && !is_stopped_.load()) {
+  while (!brpc::IsAskedToQuit() && !is_stopped_.load() && !is_asked_stop_.load()) {
     bthread_usleep(1000000L);
   }
 }
@@ -713,9 +734,6 @@ void Server::DescribeByJson(Json::Value& value) {
   value["e-crontab"] = crontab_value;
 
   // mds service
-  // Json::Value mds_service_value;
-  // mds_service_->DescribeByJson(mds_service_value);
-  // value["f-mds_service"] = mds_service_value;
 
   // gc
 

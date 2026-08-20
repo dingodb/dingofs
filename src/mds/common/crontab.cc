@@ -84,17 +84,31 @@ void CrontabManager::AddCrontab(std::vector<CrontabConfig>& crontab_configs) {
     crontab->name = crontab_config.name;
     crontab->interval = crontab_config.interval;
     if (crontab_config.async) {
-      crontab->func = [&](void*) {
+      crontab->func = [this, &crontab_config](void*) {
+        // Track in-flight async tasks so Stop() can wait for them; otherwise
+        // a detached bthread could use already-stopped components.
+        struct Ctx {
+          CrontabManager* manager;
+          CrontabConfig* config;
+        };
+        auto* ctx = new Ctx{this, &crontab_config};
+        inflight_async_count_.fetch_add(1);
+
         bthread_t tid;
         const bthread_attr_t attr = BTHREAD_ATTR_NORMAL;
-        bthread_start_background(
-            &tid, &attr,
-            [](void* arg) -> void* {
-              CrontabConfig* crontab_config = static_cast<CrontabConfig*>(arg);
-              crontab_config->funcer(nullptr);
-              return nullptr;
-            },
-            &crontab_config);
+        if (bthread_start_background(
+                &tid, &attr,
+                [](void* arg) -> void* {
+                  auto* ctx = static_cast<Ctx*>(arg);
+                  ctx->config->funcer(nullptr);
+                  ctx->manager->inflight_async_count_.fetch_sub(1);
+                  delete ctx;
+                  return nullptr;
+                },
+                ctx) != 0) {
+          inflight_async_count_.fetch_sub(1);
+          delete ctx;
+        }
       };
     } else {
       crontab->func = crontab_config.funcer;
@@ -190,6 +204,12 @@ void CrontabManager::Stop() {
     }
 
     it = crontabs_.erase(it);
+  }
+
+  // Wait for in-flight async crontab tasks to finish, so components they use
+  // (operation processor, kv storage, ...) can be stopped safely afterwards.
+  while (inflight_async_count_.load() > 0) {
+    bthread_usleep(10000L);  // 10ms
   }
 }
 
