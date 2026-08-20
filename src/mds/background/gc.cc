@@ -358,13 +358,13 @@ bool GcProcessor::Init() {
   return worker_set_->Init();
 }
 
-void GcProcessor::Destroy() {
+void GcProcessor::Stop() {
   if (dist_lock_ != nullptr) {
-    dist_lock_->Destroy();
+    dist_lock_->Stop();
   }
 
   if (worker_set_ != nullptr) {
-    worker_set_->Destroy();
+    worker_set_->Stop();
   }
 }
 

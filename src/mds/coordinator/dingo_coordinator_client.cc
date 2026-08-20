@@ -91,7 +91,7 @@ bool DingoCoordinatorClient::Init(const std::string& addr) {
   return true;
 }
 
-bool DingoCoordinatorClient::Destroy() {
+bool DingoCoordinatorClient::Stop() {
   LOG(INFO) << fmt::format("destroy dingo coordinator client.");
 
   delete coordinator_;

@@ -41,9 +41,9 @@ bool Renamer::Init() {
   return worker_->Init();
 }
 
-bool Renamer::Destroy() {
+bool Renamer::Stop() {
   if (worker_) {
-    worker_->Destroy();
+    worker_->Stop();
   }
 
   return true;

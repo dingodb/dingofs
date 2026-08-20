@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include "mds/filesystem/id_generator.h"
-#include "common/helper.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -23,6 +22,7 @@
 #include "bthread/bthread.h"
 #include "bthread/mutex.h"
 #include "butil/compiler_specific.h"
+#include "common/helper.h"
 #include "common/logging.h"
 #include "dingofs/error.pb.h"
 #include "fmt/format.h"
@@ -113,7 +113,7 @@ bool CoorAutoIncrementIdGenerator::Init() {
   return true;
 }
 
-bool CoorAutoIncrementIdGenerator::Destroy() {
+bool CoorAutoIncrementIdGenerator::Stop() {
   BAIDU_SCOPED_LOCK(mutex_);
 
   auto status = DeleteAutoIncrement();
@@ -229,7 +229,7 @@ bool StoreAutoIncrementIdGenerator::Init() {
   return true;
 }
 
-bool StoreAutoIncrementIdGenerator::Destroy() {
+bool StoreAutoIncrementIdGenerator::Stop() {
   BAIDU_SCOPED_LOCK(mutex_);
 
   is_destroyed_.store(true, std::memory_order_release);
@@ -453,7 +453,7 @@ bool ShardStoreAutoIncrementIdGenerator::Init() {
   return true;
 }
 
-bool ShardStoreAutoIncrementIdGenerator::Destroy() {
+bool ShardStoreAutoIncrementIdGenerator::Stop() {
   auto status = DestroyId();
   if (!status.ok()) {
     LOG(ERROR) << fmt::format("[idalloc.{}] destroy autoincrement table fail, status({}).", name_, status.error_str());
@@ -692,7 +692,7 @@ void DestroyInodeIdGenerator(uint32_t fs_id, CoordinatorClientSPtr coordinator_c
 
   auto id_generator = CoorAutoIncrementIdGenerator::New(coordinator_client, name, fs_id, kInoStartId,
                                                         FLAGS_mds_ino_generator_batch_size);
-  id_generator->Destroy();
+  id_generator->Stop();
 }
 
 void DestroyInodeIdGenerator(uint32_t fs_id, KVStorageSPtr kv_storage) {
@@ -701,7 +701,7 @@ void DestroyInodeIdGenerator(uint32_t fs_id, KVStorageSPtr kv_storage) {
 
   auto id_generator =
       StoreAutoIncrementIdGenerator::New(kv_storage, name, kInoStartId, FLAGS_mds_ino_generator_batch_size);
-  id_generator->Destroy();
+  id_generator->Stop();
 }
 
 }  // namespace mds

@@ -38,6 +38,8 @@ class DebugServiceImpl : public pb::debug::DebugService {
     return std::make_unique<DebugServiceImpl>(std::move(file_system_set));
   }
 
+  void Stop() { is_stopped_.store(true, std::memory_order_relaxed); }
+
   void GetLogLevel(google::protobuf::RpcController* controller, const pb::debug::GetLogLevelRequest* request,
                    pb::debug::GetLogLevelResponse* response, google::protobuf::Closure* done) override;
   void ChangeLogLevel(google::protobuf::RpcController* controller, const pb::debug::ChangeLogLevelRequest* request,
@@ -69,7 +71,11 @@ class DebugServiceImpl : public pb::debug::DebugService {
                          pb::debug::ReleaseFreeMemoryResponse* response, google::protobuf::Closure* done) override;
 
  private:
+  bool IsStopped() { return is_stopped_.load(std::memory_order_relaxed); }
+
   FileSystemSPtr GetFileSystem(uint32_t fs_id);
+
+  std::atomic<bool> is_stopped_{false};
 
   FileSystemSetSPtr file_system_set_;
 };

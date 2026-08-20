@@ -77,14 +77,15 @@ class GroupCommitTest : public ::testing::Test {
 
     // the batch transaction reads the parent inode, so it must exist
     ASSERT_TRUE(kv_storage_
-                    ->Put(KVStorage::WriteOption(), MetaCodec::EncodeInodeKey(kFsId, kParentIno),
+                    ->Put(KVStorage::WriteOption(),
+                          MetaCodec::EncodeInodeKey(kFsId, kParentIno),
                           MetaCodec::EncodeInodeValue(MakeDirAttr(kParentIno)))
                     .ok());
   }
 
   void TearDown() override {
     if (processor_ != nullptr) {
-      processor_->Destroy();
+      processor_->Stop();
       processor_ = nullptr;
     }
     kv_storage_ = nullptr;
@@ -114,7 +115,8 @@ TEST_F(GroupCommitTest, ConcurrentMkNodUnderParkingPressure) {
     for (int i = 0; i < kOpNum; i++) {
       threads.emplace_back([&, i]() {
         const Ino ino = ino_base + i;
-        Dentry dentry(kFsId, "f" + std::to_string(ino), kParentIno, ino, pb::mds::FileType::FILE, 0);
+        Dentry dentry(kFsId, "f" + std::to_string(ino), kParentIno, ino,
+                      pb::mds::FileType::FILE, 0);
         auto attr = MakeFileAttr(ino);
 
         MkNodOperation operation(traces[i], parent_inode, dentry, attr);
@@ -129,16 +131,22 @@ TEST_F(GroupCommitTest, ConcurrentMkNodUnderParkingPressure) {
     std::set<uint64_t> txn_ids;
     for (int i = 0; i < kOpNum; i++) {
       const Ino ino = ino_base + i;
-      EXPECT_TRUE(statuses[i].ok()) << "op " << i << " fail: " << statuses[i].error_str();
+      EXPECT_TRUE(statuses[i].ok())
+          << "op " << i << " fail: " << statuses[i].error_str();
 
       // every dentry the operation claimed to create is readable
       std::string value;
-      EXPECT_TRUE(kv_storage_->Get(MetaCodec::EncodeDentryKey(kFsId, kParentIno, "f" + std::to_string(ino)), value).ok())
+      EXPECT_TRUE(kv_storage_
+                      ->Get(MetaCodec::EncodeDentryKey(
+                                kFsId, kParentIno, "f" + std::to_string(ino)),
+                            value)
+                      .ok())
           << "dentry of ino " << ino << " missing";
 
       // an operation must be committed by exactly one transaction
-      EXPECT_EQ(traces[i].GetTxns().size(), 1u) << "op " << i << " executed " << traces[i].GetTxns().size()
-                                                << " times";
+      EXPECT_EQ(traces[i].GetTxns().size(), 1u)
+          << "op " << i << " executed " << traces[i].GetTxns().size()
+          << " times";
 
       for (const auto& txn : traces[i].GetTxns()) txn_ids.insert(txn.txn_id);
     }
@@ -149,7 +157,8 @@ TEST_F(GroupCommitTest, ConcurrentMkNodUnderParkingPressure) {
   for (uint32_t max_inflight : {1U, 2U, 1000000U}) {
     const size_t txn_num = run_workload(max_inflight, ino_base);
     EXPECT_GT(txn_num, 0u);
-    EXPECT_LE(txn_num, static_cast<size_t>(kOpNum)) << "max_inflight=" << max_inflight;
+    EXPECT_LE(txn_num, static_cast<size_t>(kOpNum))
+        << "max_inflight=" << max_inflight;
     ino_base += 1000;
   }
 }

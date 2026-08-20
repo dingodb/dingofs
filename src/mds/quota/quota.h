@@ -233,7 +233,7 @@ class QuotaManager {
   QuotaManager& operator=(QuotaManager&&) = delete;
 
   bool Init();
-  void Destroy();
+  void Stop();
 
   Status SetFsQuota(Trace& trace, const QuotaEntry& quota);
   Status GetFsQuota(Trace& trace, bool is_bypass_cache, QuotaEntry& quota);

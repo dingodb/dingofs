@@ -136,7 +136,7 @@ class NotifyBuddy {
   }
 
   bool Init();
-  bool Destroy();
+  bool Stop();
 
   bool AsyncNotify(MessageSPtr message);
 

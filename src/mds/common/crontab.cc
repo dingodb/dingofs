@@ -43,7 +43,7 @@ CrontabManager::~CrontabManager() {
   // timer thread could still invoke Run() on a freed Crontab later,
   // causing a use-after-free. Destroy() cancels every pending timer and
   // waits for in-flight callbacks to finish before we let crontabs_ go.
-  Destroy();
+  Stop();
   bthread_mutex_destroy(&mutex_);
 }
 
@@ -172,7 +172,7 @@ void CrontabManager::DeleteCrontab(uint32_t crontab_id) {
   crontabs_.erase(crontab_id);
 }
 
-void CrontabManager::Destroy() {
+void CrontabManager::Stop() {
   BAIDU_SCOPED_LOCK(mutex_);
 
   // Pause every crontab first so any Run() invocation still in flight sees

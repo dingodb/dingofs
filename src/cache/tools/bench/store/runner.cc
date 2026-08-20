@@ -124,7 +124,7 @@ class BlockCacheTarget final : public BenchTarget {
   void Shutdown() override {
     if (block_cache_ != nullptr) block_cache_->Shutdown();
     if (storage_client_ != nullptr) storage_client_->Shutdown();
-    if (block_accesser_ != nullptr) block_accesser_->Destroy();
+    if (block_accesser_ != nullptr) block_accesser_->Stop();
   }
   Status Write(const BlockHandle& h, IOBuffer p) override {
     return block_cache_->Cache(h, std::move(p));
@@ -164,9 +164,11 @@ ConsoleReporter::HeaderRows BuildHeader(const Options& o) {
   h.emplace_back(
       "store size",
       FormatBytes(static_cast<uint64_t>(o.store_size_mb) * 1024 * 1024));
-  if (o.runtime_s > 0) h.emplace_back("runtime", std::to_string(o.runtime_s) + "s");
+  if (o.runtime_s > 0)
+    h.emplace_back("runtime", std::to_string(o.runtime_s) + "s");
   if (o.io_size > 0) h.emplace_back("io_size", FormatBytes(o.io_size));
-  if (o.warmup_s > 0) h.emplace_back("warmup", std::to_string(o.warmup_s) + "s");
+  if (o.warmup_s > 0)
+    h.emplace_back("warmup", std::to_string(o.warmup_s) + "s");
   return h;
 }
 
@@ -180,12 +182,14 @@ BenchTargetUPtr NewTarget(const Options& options) {
       opt.cache_store = "disk";
       opt.cache_dir = options.dir;
       opt.cache_size_mb = options.store_size_mb;
-      return std::make_unique<CacheStoreTarget>(std::make_shared<DiskCache>(opt));
+      return std::make_unique<CacheStoreTarget>(
+          std::make_shared<DiskCache>(opt));
     }
     case Layer::kMem: {
       MemCacheOption opt;
       opt.cache_size_mb = options.store_size_mb;
-      return std::make_unique<CacheStoreTarget>(std::make_shared<MemCache>(opt));
+      return std::make_unique<CacheStoreTarget>(
+          std::make_shared<MemCache>(opt));
     }
     case Layer::kBlockCache:
       return std::make_unique<BlockCacheTarget>(options);
@@ -212,7 +216,8 @@ Status Runner::Init() {
   if (options_.NeedsDisk()) {
     auto status = InitializeGlobalSlabPool();
     if (!status.ok()) {
-      LOG(ERROR) << "Init slab pool failed (need huge pages: 2 x iodepth x 4MiB)";
+      LOG(ERROR)
+          << "Init slab pool failed (need huge pages: 2 x iodepth x 4MiB)";
       return status;
     }
     std::error_code ec;
@@ -325,9 +330,10 @@ Status Runner::Run() {
 
   const uint64_t start_us = butil::gettimeofday_us();
   if (options_.runtime_s > 0) {
-    deadline_us_ = start_us + (static_cast<uint64_t>(options_.warmup_s +
-                                                     options_.runtime_s) *
-                              1000000ULL);
+    deadline_us_ =
+        start_us +
+        (static_cast<uint64_t>(options_.warmup_s + options_.runtime_s) *
+         1000000ULL);
   }
 
   std::vector<std::thread> workers;

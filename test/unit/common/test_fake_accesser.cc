@@ -31,12 +31,12 @@ class FakeAccesserTest : public ::testing::Test {
 TEST_F(FakeAccesserTest, InitFailsWhenAlreadyStarted) {
   EXPECT_TRUE(accesser_.Init());
   EXPECT_FALSE(accesser_.Init());
-  EXPECT_TRUE(accesser_.Destroy());
+  EXPECT_TRUE(accesser_.Stop());
 }
 
 TEST_F(FakeAccesserTest, DestroyIsIdempotentWhenNotStarted) {
-  EXPECT_TRUE(accesser_.Destroy());
-  EXPECT_TRUE(accesser_.Destroy());
+  EXPECT_TRUE(accesser_.Stop());
+  EXPECT_TRUE(accesser_.Stop());
 }
 
 TEST_F(FakeAccesserTest, ContainerAlwaysExists) {

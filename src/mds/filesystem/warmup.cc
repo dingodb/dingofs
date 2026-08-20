@@ -83,7 +83,7 @@ void WarmupProcessor::Stop() {
   is_stopped_.store(true);
 
   if (worker_set_ != nullptr) {
-    worker_set_->Destroy();
+    worker_set_->Stop();
   }
 }
 

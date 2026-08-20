@@ -65,13 +65,13 @@ struct RadosAsyncIOUnit {
 
 class RadosAccesser : public Accesser {
  public:
-  RadosAccesser(const RadosOptions& options) : options_(options){};
+  RadosAccesser(const RadosOptions& options) : options_(options) {};
 
-  ~RadosAccesser() override { Destroy(); }
+  ~RadosAccesser() override { Stop(); }
 
   bool Init() override;
 
-  bool Destroy() override;
+  bool Stop() override;
 
   bool ContainerExist() override;
 

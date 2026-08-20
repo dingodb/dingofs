@@ -39,7 +39,9 @@ class StoreDistributionLockTest : public testing::Test {
     FLAGS_mds_distribution_lock_lease_ttl_ms = 100;
   }
 
-  static void TearDownTestSuite() { FLAGS_mds_distribution_lock_lease_ttl_ms = saved_ttl_ms; }
+  static void TearDownTestSuite() {
+    FLAGS_mds_distribution_lock_lease_ttl_ms = saved_ttl_ms;
+  }
 
   static KVStorageSPtr NewStorage() {
     auto storage = DummyStorage::New();
@@ -50,7 +52,8 @@ class StoreDistributionLockTest : public testing::Test {
   // Polls `pred` until it becomes true or `timeout` elapses. Avoids
   // hard-coded sleeps racing with the lock's background renew bthread.
   template <typename Pred>
-  static bool WaitUntil(Pred pred, std::chrono::milliseconds timeout = std::chrono::milliseconds(2000)) {
+  static bool WaitUntil(Pred pred, std::chrono::milliseconds timeout =
+                                       std::chrono::milliseconds(2000)) {
     auto deadline = std::chrono::steady_clock::now() + timeout;
     while (std::chrono::steady_clock::now() < deadline) {
       if (pred()) return true;
@@ -65,19 +68,22 @@ uint64_t StoreDistributionLockTest::saved_ttl_ms = 0;
 
 TEST_F(StoreDistributionLockTest, SingleOwnerEventuallyLocksAndKeyIsPersisted) {
   auto storage = NewStorage();
-  auto lock = StoreDistributionLock::New(storage, "test_lock_single", /*mds_id=*/1);
+  auto lock =
+      StoreDistributionLock::New(storage, "test_lock_single", /*mds_id=*/1);
 
   ASSERT_TRUE(lock->Init());
   ASSERT_TRUE(WaitUntil([&] { return lock->IsLocked(); }));
   EXPECT_EQ(lock->LockKey(), "test_lock_single");
 
-  lock->Destroy();
+  lock->Stop();
 }
 
 TEST_F(StoreDistributionLockTest, SecondOwnerCannotAcquireWhileFirstHoldsLock) {
   auto storage = NewStorage();
-  auto lock1 = StoreDistributionLock::New(storage, "test_lock_mutex", /*mds_id=*/1);
-  auto lock2 = StoreDistributionLock::New(storage, "test_lock_mutex", /*mds_id=*/2);
+  auto lock1 =
+      StoreDistributionLock::New(storage, "test_lock_mutex", /*mds_id=*/1);
+  auto lock2 =
+      StoreDistributionLock::New(storage, "test_lock_mutex", /*mds_id=*/2);
 
   ASSERT_TRUE(lock1->Init());
   ASSERT_TRUE(WaitUntil([&] { return lock1->IsLocked(); }));
@@ -90,26 +96,29 @@ TEST_F(StoreDistributionLockTest, SecondOwnerCannotAcquireWhileFirstHoldsLock) {
   EXPECT_FALSE(lock2->IsLocked());
   EXPECT_TRUE(lock1->IsLocked());
 
-  lock1->Destroy();
-  lock2->Destroy();
+  lock1->Stop();
+  lock2->Stop();
 }
 
 TEST_F(StoreDistributionLockTest, SecondOwnerTakesOverAfterFirstStopsRenewing) {
   auto storage = NewStorage();
-  auto lock1 = StoreDistributionLock::New(storage, "test_lock_handoff", /*mds_id=*/1);
-  auto lock2 = StoreDistributionLock::New(storage, "test_lock_handoff", /*mds_id=*/2);
+  auto lock1 =
+      StoreDistributionLock::New(storage, "test_lock_handoff", /*mds_id=*/1);
+  auto lock2 =
+      StoreDistributionLock::New(storage, "test_lock_handoff", /*mds_id=*/2);
 
   ASSERT_TRUE(lock1->Init());
   ASSERT_TRUE(WaitUntil([&] { return lock1->IsLocked(); }));
 
   // Stop lock1's renewal without deleting its key, simulating a crashed/
   // partitioned holder: the key stays in storage but its lease will expire.
-  lock1->Destroy();
+  lock1->Stop();
 
   ASSERT_TRUE(lock2->Init());
-  ASSERT_TRUE(WaitUntil([&] { return lock2->IsLocked(); }, std::chrono::milliseconds(3000)));
+  ASSERT_TRUE(WaitUntil([&] { return lock2->IsLocked(); },
+                        std::chrono::milliseconds(3000)));
 
-  lock2->Destroy();
+  lock2->Stop();
 }
 
 TEST_F(StoreDistributionLockTest, GetAllLockInfoReportsCurrentOwner) {
@@ -117,20 +126,23 @@ TEST_F(StoreDistributionLockTest, GetAllLockInfoReportsCurrentOwner) {
   auto operation_processor = OperationProcessor::New(storage);
   ASSERT_TRUE(operation_processor->Init());
 
-  auto lock = StoreDistributionLock::New(storage, "test_lock_describe", /*mds_id=*/42);
+  auto lock =
+      StoreDistributionLock::New(storage, "test_lock_describe", /*mds_id=*/42);
   ASSERT_TRUE(lock->Init());
   ASSERT_TRUE(WaitUntil([&] { return lock->IsLocked(); }));
 
   std::vector<StoreDistributionLock::LockEntry> entries;
-  ASSERT_TRUE(StoreDistributionLock::GetAllLockInfo(operation_processor, entries).ok());
+  ASSERT_TRUE(
+      StoreDistributionLock::GetAllLockInfo(operation_processor, entries).ok());
 
-  auto it = std::find_if(entries.begin(), entries.end(),
-                          [](const auto& entry) { return entry.name == "test_lock_describe"; });
+  auto it = std::find_if(entries.begin(), entries.end(), [](const auto& entry) {
+    return entry.name == "test_lock_describe";
+  });
   ASSERT_NE(it, entries.end());
   EXPECT_EQ(it->owner, 42);
 
-  lock->Destroy();
-  operation_processor->Destroy();
+  lock->Stop();
+  operation_processor->Stop();
 }
 
 }  // namespace unit_test

@@ -44,7 +44,7 @@ bool FakeAccesser::Init() {
   return true;
 }
 
-bool FakeAccesser::Destroy() {
+bool FakeAccesser::Stop() {
   if (!started_.load(std::memory_order_relaxed)) {
     return true;
   }

@@ -37,7 +37,7 @@ class DirStatOperationTest : public ::testing::Test {
 
   static void TearDownTestSuite() {
     if (processor != nullptr) {
-      processor->Destroy();
+      processor->Stop();
       processor = nullptr;
     }
   }
@@ -230,7 +230,8 @@ TEST_F(DirStatOperationTest, RepairCheckAndWrite) {
   // check-only (repair=false): reports mismatch, writes nothing.
   {
     Trace trace;
-    dingofs::mds::RepairDirStatOperation op(trace, fs_id, ino, calc, /*repair=*/false);
+    dingofs::mds::RepairDirStatOperation op(trace, fs_id, ino, calc,
+                                            /*repair=*/false);
     ASSERT_TRUE(processor->RunAlone(&op).ok());
     EXPECT_TRUE(op.GetResult().found);
     EXPECT_TRUE(op.GetResult().mismatch);
@@ -246,7 +247,8 @@ TEST_F(DirStatOperationTest, RepairCheckAndWrite) {
   // repair: overwrites with calc.
   {
     Trace trace;
-    dingofs::mds::RepairDirStatOperation op(trace, fs_id, ino, calc, /*repair=*/true);
+    dingofs::mds::RepairDirStatOperation op(trace, fs_id, ino, calc,
+                                            /*repair=*/true);
     ASSERT_TRUE(processor->RunAlone(&op).ok());
     EXPECT_TRUE(op.GetResult().mismatch);
     EXPECT_TRUE(op.GetResult().wrote);
@@ -262,7 +264,8 @@ TEST_F(DirStatOperationTest, RepairCheckAndWrite) {
   // repair when already matching: no write.
   {
     Trace trace;
-    dingofs::mds::RepairDirStatOperation op(trace, fs_id, ino, calc, /*repair=*/true);
+    dingofs::mds::RepairDirStatOperation op(trace, fs_id, ino, calc,
+                                            /*repair=*/true);
     ASSERT_TRUE(processor->RunAlone(&op).ok());
     EXPECT_FALSE(op.GetResult().mismatch);
     EXPECT_FALSE(op.GetResult().wrote);
@@ -278,7 +281,8 @@ TEST_F(DirStatOperationTest, RepairAbsentCreates) {
   calc.set_inodes(2);
   {
     Trace trace;
-    dingofs::mds::RepairDirStatOperation op(trace, fs_id, ino, calc, /*repair=*/true);
+    dingofs::mds::RepairDirStatOperation op(trace, fs_id, ino, calc,
+                                            /*repair=*/true);
     ASSERT_TRUE(processor->RunAlone(&op).ok());
     EXPECT_FALSE(op.GetResult().found);
     EXPECT_TRUE(op.GetResult().mismatch);

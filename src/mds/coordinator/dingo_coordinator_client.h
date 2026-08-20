@@ -32,7 +32,7 @@ class DingoCoordinatorClient : public CoordinatorClient {
   static CoordinatorClientSPtr New() { return std::make_shared<DingoCoordinatorClient>(); }
 
   bool Init(const std::string& addr) override;
-  bool Destroy() override;
+  bool Stop() override;
 
   std::string GetAddr() override { return coordinator_addr_; }
 

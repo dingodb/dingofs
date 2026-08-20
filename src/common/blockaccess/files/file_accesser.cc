@@ -142,7 +142,7 @@ bool FileAccesser::Init() {
   return true;
 }
 
-bool FileAccesser::Destroy() {
+bool FileAccesser::Stop() {
   if (!started_.load(std::memory_order_relaxed)) {
     return true;
   }

@@ -42,12 +42,12 @@ struct AsyncContext {
 class TikvGoStorage : public KVStorage {
  public:
   TikvGoStorage() = default;
-  ~TikvGoStorage() override = default;
+  ~TikvGoStorage() override;
 
   static KVStorageSPtr New() { return std::make_shared<TikvGoStorage>(); }
 
   bool Init(const std::string& addr) override;
-  bool Destroy() override;
+  bool Stop() override { return true; }
 
   Status CreateTable(const std::string&, const TableOption&, int64_t&) override { return Status::OK(); }
   Status DropTable(int64_t) override { return Status::OK(); }

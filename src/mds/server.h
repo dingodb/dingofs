@@ -50,6 +50,8 @@ class Server {
   bool InitLog();
   bool Init(const std::string& conf_path, const std::string& store_url);
 
+  void Stop();
+
   std::string GetPidFilePath();
   std::string GetListenAddr();
   std::string GetStoreAddr();
@@ -74,8 +76,6 @@ class Server {
   FsStatServiceImplUPtr& GetFsStatService();
 
   void Run();
-
-  void Stop();
 
   void DescribeByJson(Json::Value& value);
 
@@ -102,7 +102,7 @@ class Server {
   bool InitCrontab();
   bool InitService();
 
-  std::atomic<bool> stop_{false};
+  std::atomic<bool> is_stopped_{false};
 
   std::string store_addr_;
 

@@ -4139,7 +4139,7 @@ bool OperationProcessor::Init() {
   return true;
 }
 
-bool OperationProcessor::Destroy() {
+bool OperationProcessor::Stop() {
   is_stop_.store(true);
 
   for (auto& dispatcher : dispatchers_) {
@@ -4149,7 +4149,7 @@ bool OperationProcessor::Destroy() {
     }
   }
 
-  async_worker_->Destroy();
+  async_worker_->Stop();
 
   return true;
 }

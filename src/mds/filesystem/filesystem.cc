@@ -180,9 +180,9 @@ FileSystem::FileSystem(uint64_t self_mds_id, FsInfoSPtr fs_info, IdGeneratorUPtr
 
 FileSystem::~FileSystem() {
   // destroy
-  quota_manager_.Destroy();
+  quota_manager_.Stop();
 
-  renamer_.Destroy();
+  renamer_.Stop();
 }
 
 FileSystemSPtr FileSystem::GetSelfPtr() { return std::dynamic_pointer_cast<FileSystem>(shared_from_this()); }
@@ -1849,7 +1849,8 @@ Status FileSystem::ReadDir(Context& ctx, Ino ino, const std::string& last_name, 
       if (IsFile(dentry.INo()) && dingofs::Helper::IsSmallFile(entry_out.attr.length()) &&
           !chunk_cache_.IsExist(dentry.INo())) {
         // just first chunk because small file
-         warmup_processor_->Execute(WarmupChunkTask::Param{.fs = GetSelfPtr(), .ino = dentry.INo(), .chunk_indexes = {0}});
+        warmup_processor_->Execute(
+            WarmupChunkTask::Param{.fs = GetSelfPtr(), .ino = dentry.INo(), .chunk_indexes = {0}});
       }
     }
 
@@ -4260,19 +4261,19 @@ void FileSystemSet::Stop(bool is_force) {
   }
 
   if (dir_stat_worker_set_ != nullptr) {
-    dir_stat_worker_set_->Destroy();
+    dir_stat_worker_set_->Stop();
   }
 
   if (quota_worker_set_ != nullptr) {
-    quota_worker_set_->Destroy();
+    quota_worker_set_->Stop();
   }
 
   if (slice_id_generator_ != nullptr) {
-    slice_id_generator_->Destroy();
+    slice_id_generator_->Stop();
   }
 
   if (fs_id_generator_ != nullptr) {
-    fs_id_generator_->Destroy();
+    fs_id_generator_->Stop();
   }
 }
 
