@@ -238,7 +238,10 @@ void NotifyBuddy::FinishSendTask() { sending_tasks_.fetch_sub(1, std::memory_ord
 
 void NotifyBuddy::SendMessage(uint64_t mds_id, BatchMessage& batch_message) {
   pb::mds::NotifyBuddyRequest notify_message;
-  notify_message.set_id(id_generator_.fetch_add(1, std::memory_order_relaxed));
+  const uint64_t id = id_generator_.fetch_add(1, std::memory_order_relaxed);
+  notify_message.set_id(id);
+
+  const uint32_t batch_size = batch_message.size();
 
   for (auto& message : batch_message) {
     auto* mut_message = notify_message.add_messages();
@@ -252,7 +255,7 @@ void NotifyBuddy::SendMessage(uint64_t mds_id, BatchMessage& batch_message) {
         auto refresh_fs_info_message = std::dynamic_pointer_cast<RefreshFsInfoMessage>(message);
         mut_message->mutable_refresh_fs_info()->set_fs_name(refresh_fs_info_message->fs_name);
 
-        LOG(INFO) << fmt::format("[notify.{}] refresh fs({}/{}) info.", mds_id, message->fs_id,
+        LOG_DEBUG << fmt::format("[notify.{}.{}.{}] refresh fs({}/{}) info.", mds_id, id, batch_size, message->fs_id,
                                  refresh_fs_info_message->fs_name);
 
       } break;
@@ -265,7 +268,7 @@ void NotifyBuddy::SendMessage(uint64_t mds_id, BatchMessage& batch_message) {
         mut_refresh_inode->mutable_inode()->Swap(&refresh_inode_message->attr);
         mut_refresh_inode->mutable_attr_mutation()->Swap(&refresh_inode_message->mutation);
 
-        LOG_DEBUG << fmt::format("[notify.{}] refresh inode, inode({}).", mds_id,
+        LOG_DEBUG << fmt::format("[notify.{}.{}.{}] refresh inode, inode({}).", mds_id, id, batch_size,
                                  mut_refresh_inode->inode().ShortDebugString());
 
       } break;
@@ -276,8 +279,8 @@ void NotifyBuddy::SendMessage(uint64_t mds_id, BatchMessage& batch_message) {
         auto clean_partition_cache_message = std::dynamic_pointer_cast<CleanPartitionCacheMessage>(message);
         mut_message->mutable_clean_partition_cache()->set_ino(clean_partition_cache_message->ino);
 
-        LOG(INFO) << fmt::format("[notify.{}] clean partition cache({}/{}) info.", mds_id, message->fs_id,
-                                 clean_partition_cache_message->ino);
+        LOG_DEBUG << fmt::format("[notify.{}.{}.{}] clean partition cache({}/{}) info.", mds_id, id, batch_size,
+                                 message->fs_id, clean_partition_cache_message->ino);
 
       } break;
 
@@ -288,8 +291,9 @@ void NotifyBuddy::SendMessage(uint64_t mds_id, BatchMessage& batch_message) {
         mut_message->mutable_set_dir_quota()->set_ino(set_dir_quota_message->ino);
         mut_message->mutable_set_dir_quota()->mutable_quota()->Swap(&set_dir_quota_message->quota);
 
-        LOG(INFO) << fmt::format("[notify.{}] set dir quota, dir({}/{}) quota({}).", mds_id, message->fs_id,
-                                 set_dir_quota_message->ino, set_dir_quota_message->quota.ShortDebugString());
+        LOG_DEBUG << fmt::format("[notify.{}.{}.{}] set dir quota, dir({}/{}) quota({}).", mds_id, id, batch_size,
+                                 message->fs_id, set_dir_quota_message->ino,
+                                 set_dir_quota_message->quota.ShortDebugString());
 
       } break;
 
@@ -300,8 +304,8 @@ void NotifyBuddy::SendMessage(uint64_t mds_id, BatchMessage& batch_message) {
         mut_message->mutable_delete_dir_quota()->set_ino(delete_dir_quota_message->ino);
         mut_message->mutable_delete_dir_quota()->set_uuid(delete_dir_quota_message->uuid);
 
-        LOG(INFO) << fmt::format("[notify.{}] delete dir quota, dir({}/{}/{}).", mds_id, message->fs_id,
-                                 delete_dir_quota_message->ino, delete_dir_quota_message->uuid);
+        LOG_DEBUG << fmt::format("[notify.{}.{}.{}] delete dir quota, dir({}/{}/{}).", mds_id, id, batch_size,
+                                 message->fs_id, delete_dir_quota_message->ino, delete_dir_quota_message->uuid);
 
       } break;
 

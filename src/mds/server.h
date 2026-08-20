@@ -51,6 +51,8 @@ class Server {
   bool Init(const std::string& conf_path, const std::string& store_url);
 
   void Stop();
+  // Async-signal-safe: just ask the Run() loop to exit; main thread does Stop().
+  void AskStop() { is_asked_stop_.store(true); }
 
   std::string GetPidFilePath();
   std::string GetListenAddr();
@@ -103,6 +105,7 @@ class Server {
   bool InitService();
 
   std::atomic<bool> is_stopped_{false};
+  std::atomic<bool> is_asked_stop_{false};
 
   std::string store_addr_;
 

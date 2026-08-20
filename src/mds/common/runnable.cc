@@ -253,9 +253,7 @@ bool ExecqWorkerSet::Init() {
 }
 
 void ExecqWorkerSet::Stop() {
-  for (const auto& worker : workers_) {
-    worker->Stop();
-  }
+  for (const auto& worker : workers_) worker->Stop();
 }
 
 bool ExecqWorkerSet::ExecuteRR(TaskRunnablePtr task) {
@@ -539,8 +537,6 @@ PriorWorkerSet::PriorWorkerSet(std::string name, uint32_t worker_num, int64_t ma
 }
 
 PriorWorkerSet::~PriorWorkerSet() {
-  Stop();
-
   bthread_cond_destroy(&cond_);
   bthread_mutex_destroy(&mutex_);
 }
