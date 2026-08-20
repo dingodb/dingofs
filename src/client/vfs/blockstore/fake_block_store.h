@@ -19,7 +19,6 @@
 
 #include <atomic>
 
-#include "cache/api/block_cache.h"
 #include "client/vfs/blockstore/block_store.h"
 
 namespace dingofs {

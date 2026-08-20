@@ -42,7 +42,11 @@
 #include "common/logging.h"
 #include "common/metrics/client/client.h"
 #include "common/metrics/metric_guard.h"
+#ifdef WITH_CLIENT_BLOCKCACHE
+#include "blockcache/common/flag_decls.h"
+#else
 #include "common/options/cache.h"
+#endif
 #include "common/options/client.h"
 #include "common/status.h"
 #include "common/trace/trace_manager.h"
@@ -381,7 +385,11 @@ Status ClientSession::Start(const DingofsConfig& config, int upgrade_from_pid) {
 
   // Propagate mds_addrs to the cache layer's own MDS client so that
   // remote cache peer discovery works when remote cache is enabled.
+#ifdef WITH_CLIENT_BLOCKCACHE
+  blockcache::FLAGS_mds_addrs = config.mds_addrs;
+#else
   cache::FLAGS_mds_addrs = config.mds_addrs;
+#endif
 
   vfs::VFSConfig vfs_conf;
   vfs_conf.mds_addrs = config.mds_addrs;

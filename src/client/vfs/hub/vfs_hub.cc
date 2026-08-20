@@ -22,8 +22,11 @@
 #include <atomic>
 #include <memory>
 
-#include "cache/infiniband/memory.h"
+#ifdef WITH_CLIENT_BLOCKCACHE
+#include "client/vfs/blockstore/block_store_v2.h"
+#else
 #include "client/vfs/blockstore/block_store_impl.h"
+#endif
 #include "client/vfs/blockstore/fake_block_store.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/compaction/compactor_impl.h"
@@ -43,7 +46,6 @@
 #include "common/blockaccess/prefix_block_accesser.h"
 #include "common/blockaccess/rados/rados_common.h"
 #include "common/directory.h"
-#include "common/options/cache.h"
 #include "common/options/client.h"
 #include "common/status.h"
 #include "common/version.h"
@@ -310,8 +312,13 @@ Status VFSHubImpl::Start(bool skip_mount) {
     if (FLAGS_vfs_use_fake_block_store) {
       block_store_ = std::make_unique<FakeBlockStore>(this, fs_info_.uuid);
     } else {
+#ifdef WITH_CLIENT_BLOCKCACHE
+      block_store_ = NewBlockStoreV2(
+          this, fs_info_.uuid, static_cast<uint64_t>(fs_info_.block_size));
+#else
       block_store_ = std::make_unique<BlockStoreImpl>(this, fs_info_.uuid,
                                                       block_accesser_.get());
+#endif
     }
     CHECK(block_store_ != nullptr) << "block store is nullptr.";
     DINGOFS_RETURN_NOT_OK(block_store_->Start());
@@ -390,23 +397,16 @@ Status VFSHubImpl::Start(bool skip_mount) {
 
   // register memory for rdma
   {
-    if (cache::FLAGS_use_rdma) {
-      CHECK_NOTNULL(read_mem_pool_->BaseAddr());
-      CHECK_NOTNULL(write_buffer_manager_->BaseAddr());
+    auto status = block_store_->RegisterMemory(read_mem_pool_->BaseAddr(),
+                                               read_mem_pool_->TotalSize());
+    if (!status.ok()) {
+      return status;
+    }
 
-      auto status = cache::infiniband::RegisterMemoryForRDMA(
-          cache::FLAGS_cache_rdma_device, read_mem_pool_->BaseAddr(),
-          read_mem_pool_->TotalSize());
-      if (!status.ok()) {
-        return status;
-      }
-
-      status = cache::infiniband::RegisterMemoryForRDMA(
-          cache::FLAGS_cache_rdma_device, write_buffer_manager_->BaseAddr(),
-          write_buffer_manager_->TotalSize());
-      if (!status.ok()) {
-        return status;
-      }
+    status = block_store_->RegisterMemory(write_buffer_manager_->BaseAddr(),
+                                          write_buffer_manager_->TotalSize());
+    if (!status.ok()) {
+      return status;
     }
   }
 

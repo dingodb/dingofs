@@ -29,6 +29,7 @@
 #include "brpc/controller.h"
 #include "brpc/server.h"
 #include "butil/iobuf.h"
+#include "cache/api/block_cache.h"
 #include "client/common/client_state.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/metasystem/meta_system.h"

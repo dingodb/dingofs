@@ -34,8 +34,16 @@ option(BUILD_INTEGRATION_TESTS "Build integration test" OFF)
 option(USE_TCMALLOC "Use tcmalloc" ON)
 option(BRPC_ENABLE_CPU_PROFILER "Enable brpc cpu profiler" OFF)
 option(USE_CICD_BUILD "Enable CI/CD build" OFF)
+option(WITH_CLIENT_BLOCKCACHE "Client uses blockcache instead of cache" OFF)
 
 option(ENABLE_COVERAGE "Enable GCC coverage instrumentation" OFF)
+
+if(WITH_CLIENT_BLOCKCACHE)
+  if(DINGOFS_BUILD_SDK)
+    message(FATAL_ERROR "WITH_CLIENT_BLOCKCACHE does not support DINGOFS_BUILD_SDK yet")
+  endif()
+  add_compile_definitions(WITH_CLIENT_BLOCKCACHE=1)
+endif()
 
 if(ENABLE_COVERAGE)
   if(NOT CMAKE_C_COMPILER_ID STREQUAL "GNU" OR
@@ -278,6 +286,14 @@ message("Using uring ${uring_VERSION}")
 # libnuma: used by src/utils/numa_binder for NUMA pinning
 find_library(NUMA_LIBRARY numa REQUIRED)
 message("Using libnuma: ${NUMA_LIBRARY}")
+
+# blockcache links into shared libraries (sdk/c, python), so it needs a PIC
+# libnuma; the dingo-eureka static archive is non-PIC.
+find_library(NUMA_SHARED_LIBRARY NAMES libnuma.so)
+if(NOT NUMA_SHARED_LIBRARY)
+  set(NUMA_SHARED_LIBRARY ${NUMA_LIBRARY})
+endif()
+message("Using shared libnuma: ${NUMA_SHARED_LIBRARY}")
 
 find_package(ibverbs REQUIRED)
 message("Using ibverbs, lib:${ibverbs_LIBRARIES}, include_dir:${ibverbs_INCLUDE_DIR}")

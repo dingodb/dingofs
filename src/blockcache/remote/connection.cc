@@ -148,8 +148,19 @@ NodeProber::RemoteShardRange NodeProber::GetRemoteShardRange(
 
 NodeConnection::NodeConnection(Option option) : option_(std::move(option)) {}
 
+bool NodeConnection::IsConnected() const {
+  if (stub_ == nullptr) {
+    return false;
+  }
+  if (!option_.use_rdma) {
+    return true;
+  }
+  const RdmaConnection* conn = channel_.connection();
+  return conn != nullptr && conn->alive();
+}
+
 Future<Status> NodeConnection::Open() {
-  if (stub_ != nullptr) {
+  if (IsConnected()) {
     co_return Status::OK();
   }
   co_return co_await opening_.Do([this] { return Establish(); });
@@ -164,10 +175,16 @@ Future<> NodeConnection::Close() {
 }
 
 Future<Status> NodeConnection::Establish() {
-  if (!option_.use_rdma) {
-    return EstablishForBrpc();
+  if (IsConnected()) {
+    co_return Status::OK();
   }
-  return EstablishForRdma();
+  if (stub_ != nullptr) {
+    co_await Close();
+  }
+  if (!option_.use_rdma) {
+    co_return co_await EstablishForBrpc();
+  }
+  co_return co_await EstablishForRdma();
 }
 
 Future<Status> NodeConnection::EstablishForBrpc() {

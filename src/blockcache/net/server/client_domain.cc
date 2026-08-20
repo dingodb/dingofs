@@ -18,7 +18,10 @@
 
 #include <glog/logging.h>
 
+#include <optional>
+#include <thread>
 #include <utility>
+#include <vector>
 
 #include "blockcache/core/memory/buffer.h"
 #include "blockcache/core/runtime/smp.h"
@@ -109,23 +112,63 @@ void ClientDomain::ShutdownOnAllShards() {
       [](unsigned /*shard*/) -> Future<> { return ShutdownOnThisShard(); });
 }
 
-static Future<Status> RegisterOnThisShard(void* base, size_t bytes) {
+static Future<> AdoptOnThisShard(verbs::MemoryRegion* region) {
   RdmaDomain* domain = ClientDomain::DomainOfThisShard();
-  if (domain == nullptr) {
-    co_return Status::OK();  // no rdma on this shard: nothing to pin
+  if (domain != nullptr) {
+    domain->memory().Adopt(std::move(*region));
   }
-  StatusOr<const verbs::MemoryRegion*> mr =
-      domain->memory().Register(base, bytes);
-  co_return mr.status();
+  co_return;
 }
 
 Status ClientDomain::RegisterOnAllShards(void* base, size_t bytes) {
   if (base == nullptr || bytes == 0) {
     return Status::OK();
   }
-  return RunOnAllAndWait([base, bytes](unsigned) -> Future<Status> {
-    return RegisterOnThisShard(base, bytes);
-  });
+
+  const unsigned shards = ShardCount();
+  std::vector<ibv_pd*> pds(shards, nullptr);
+  for (unsigned shard = 0; shard < shards; ++shard) {
+    pds[shard] = RunOnAndWait(shard, []() -> Future<ibv_pd*> {
+      RdmaDomain* domain = DomainOfThisShard();
+      co_return domain == nullptr ? nullptr : domain->device().pd();
+    });
+  }
+
+  std::vector<std::optional<verbs::MemoryRegion>> regions(shards);
+  std::vector<Status> results(shards);
+  std::vector<std::thread> pinners;
+  for (unsigned shard = 0; shard < shards; ++shard) {
+    if (pds[shard] == nullptr) {
+      continue;
+    }
+    pinners.emplace_back([&, shard] {
+      StatusOr<verbs::MemoryRegion> mr =
+          verbs::MemoryRegion::Register(pds[shard], base, bytes);
+      if (mr.ok()) {
+        regions[shard].emplace(std::move(mr).value());
+      } else {
+        results[shard] = mr.status();
+      }
+    });
+  }
+  for (std::thread& pinner : pinners) {
+    pinner.join();
+  }
+  for (const Status& status : results) {
+    if (!status.ok()) {
+      return status;
+    }
+  }
+
+  for (unsigned shard = 0; shard < shards; ++shard) {
+    if (!regions[shard].has_value()) {
+      continue;
+    }
+    verbs::MemoryRegion* region = &*regions[shard];
+    RunOnAndWait(shard,
+                 [region]() -> Future<> { return AdoptOnThisShard(region); });
+  }
+  return Status::OK();
 }
 
 ClientDomain::~ClientDomain() {

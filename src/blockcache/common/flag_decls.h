@@ -29,6 +29,7 @@ DECLARE_uint32(listen_port);
 DECLARE_string(bind_ip);
 DECLARE_bool(rdma);
 DECLARE_string(rdma_device);
+DECLARE_uint32(rdma_idle_timeout_s);
 DECLARE_bool(daemonize);
 
 // core/runtime/runtime.cc

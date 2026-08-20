@@ -154,6 +154,16 @@ void BlockStoreImpl::PrefetchAsync(ContextSPtr ctx, PrefetchReq req,
   block_cache_->AsyncPrefetch(req.handle, prefetch_size, std::move(wrapper));
 }
 
+Status BlockStoreImpl::RegisterMemory(void* base, size_t bytes) {
+  if (!cache::FLAGS_use_rdma) {
+    return Status::OK();
+  }
+
+  CHECK_NOTNULL(base);
+  return cache::infiniband::RegisterMemoryForRDMA(
+      cache::FLAGS_cache_rdma_device, base, bytes);
+}
+
 // utility
 bool BlockStoreImpl::EnableCache() const { return block_cache_->EnableCache(); }
 

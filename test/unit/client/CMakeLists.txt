@@ -32,6 +32,7 @@ target_link_libraries(test_client
   $<TARGET_OBJECTS:test_vfs_impl>
   $<TARGET_OBJECTS:test_vfs_service>
   $<TARGET_OBJECTS:test_vfs_metasystem>
+  $<$<BOOL:${WITH_CLIENT_BLOCKCACHE}>:$<TARGET_OBJECTS:test_vfs_blockstore>>
 
   vfs_lib
   vfs_data

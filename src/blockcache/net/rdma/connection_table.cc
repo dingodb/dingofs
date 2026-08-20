@@ -39,11 +39,11 @@ Future<size_t> ConnectionTable::ReapDead() {
   }
   reaping_ = true;
 
-  // By index: Shutdown() suspends and Register() can still append.
-  // NOLINTNEXTLINE(modernize-loop-convert) -- a range-for would walk a vector
-  // that reallocated underneath it.
+  // By index: Shutdown() suspends and Register() can still append; a
+  // range-for would walk a vector that reallocated underneath it.
+  // NOLINTNEXTLINE(modernize-loop-convert)
   for (size_t i = 0; i < conns_.size(); ++i) {
-    if (!conns_[i]->alive()) {
+    if (!conns_[i]->initiator() && !conns_[i]->alive()) {
       co_await conns_[i]->Shutdown();
     }
   }
@@ -68,8 +68,9 @@ void ConnectionTable::MarkIdleDead(uint64_t deadline_ns) {
 
 Future<> ConnectionTable::ShutdownAll(Gate* gate) {
   closing_ = true;
-  // NOLINTNEXTLINE(modernize-loop-convert) -- see the header's rule (2): a
-  // range-for here is the use-after-free this class exists to prevent.
+  // See the header's rule (2): a range-for here is the use-after-free this
+  // class exists to prevent.
+  // NOLINTNEXTLINE(modernize-loop-convert)
   for (size_t i = 0; i < conns_.size(); ++i) {
     co_await conns_[i]->Shutdown();
   }

@@ -29,7 +29,11 @@
 #include "common/flag.h"
 #include "common/helper.h"
 #include "common/logging.h"
+#ifdef WITH_CLIENT_BLOCKCACHE
+#include "blockcache/common/flag_decls.h"
+#else
 #include "common/options/cache.h"
+#endif
 #include "common/options/client.h"
 #include "common/options/common.h"
 #include "common/types.h"
@@ -201,7 +205,11 @@ int main(int argc, char* argv[]) {
   }
 
   // used for remote cache
+#ifdef WITH_CLIENT_BLOCKCACHE
+  dingofs::blockcache::FLAGS_mds_addrs = mds_addrs;
+#else
   dingofs::cache::FLAGS_mds_addrs = mds_addrs;
+#endif
 
   // init global log
   dingofs::Logger::Init("dingo-client");

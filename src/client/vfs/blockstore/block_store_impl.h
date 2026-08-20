@@ -48,6 +48,9 @@ class BlockStoreImpl final : public BlockStore {
 
   void PrefetchAsync(ContextSPtr ctx, PrefetchReq req,
                      StatusCallback callback) override;
+
+  Status RegisterMemory(void* base, size_t bytes) override;
+
   // utility
   bool EnableCache() const override;
   cache::BlockCache* GetBlockCache() const override;

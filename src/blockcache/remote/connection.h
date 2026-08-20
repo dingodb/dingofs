@@ -93,7 +93,7 @@ class NodeConnection {
   Future<Status> Open();
   Future<> Close();
 
-  bool IsConnected() const { return stub_ != nullptr; }
+  bool IsConnected() const;
   CacheStub* stub() const { return stub_.get(); }
 
  private:

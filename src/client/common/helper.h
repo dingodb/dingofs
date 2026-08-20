@@ -29,7 +29,11 @@
 #include "common/directory.h"
 #include "common/helper.h"
 #include "common/logging.h"
+#ifdef WITH_CLIENT_BLOCKCACHE
+#include "blockcache/common/flag_decls.h"
+#else
 #include "common/options/cache.h"
+#endif
 #include "common/options/client.h"
 #include "common/options/common.h"
 #include "fmt/format.h"
@@ -74,6 +78,31 @@ static std::vector<std::pair<std::string, std::string>> GenConfigs(
         "storage", fmt::format("[local://{}]", options.file_options.path));
   }
   // cache
+#ifdef WITH_CLIENT_BLOCKCACHE
+  if (!blockcache::FLAGS_cache_group.empty()) {
+    configs.emplace_back("cache",
+                         fmt::format("[{} {}]", blockcache::FLAGS_mds_addrs,
+                                     blockcache::FLAGS_cache_group));
+  } else if (blockcache::FLAGS_cache_store == "disk") {
+    std::vector<std::pair<std::string, uint64_t>> cache_dirs;
+    Helper::SplitUniteCacheDir(blockcache::FLAGS_cache_dir,
+                               blockcache::FLAGS_cache_size_mb, &cache_dirs);
+    std::string cache_dir_info;
+    for (size_t i = 0; i < cache_dirs.size(); ++i) {
+      if (i != 0) {
+        cache_dir_info.append(", ");
+      }
+      fmt::format_to(std::back_inserter(cache_dir_info), "{}({}MB)",
+                     cache_dirs[i].first, cache_dirs[i].second);
+    }
+    configs.emplace_back(
+        "cache",
+        fmt::format("[{} {} {}%(ratio)]", blockcache::FLAGS_cache_store,
+                    cache_dir_info, blockcache::FLAGS_free_space_ratio * 100));
+  } else {
+    configs.emplace_back("cache", "[]");
+  }
+#else
   if (!cache::FLAGS_cache_group.empty()) {
     configs.emplace_back("cache", fmt::format("[{} {}]", cache::FLAGS_mds_addrs,
                                               cache::FLAGS_cache_group));
@@ -85,6 +114,7 @@ static std::vector<std::pair<std::string, std::string>> GenConfigs(
   } else {
     configs.emplace_back("cache", "[]");
   }
+#endif
 
   // monitor
   auto hostname = Helper::GetHostName();

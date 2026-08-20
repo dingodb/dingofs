@@ -42,6 +42,9 @@ DEFINE_uint32(listen_port, 9300, "port to listen on");
 DEFINE_string(bind_ip, "0.0.0.0", "ip to bind");
 DEFINE_bool(rdma, false, "enable rdma transport");
 DEFINE_string(rdma_device, "", "rdma device");
+DEFINE_uint32(rdma_idle_timeout_s, 10,
+              "seconds without hearing a peer before its connection is "
+              "reaped; at least 3x the 2s ping interval");
 DEFINE_bool(daemonize, false, "run in background");
 
 CacheNode::CacheNode() : CacheNode(std::make_unique<MDSClientImpl>()) {}
@@ -116,6 +119,8 @@ Status CacheNode::StartServer() {
     option.buffer_pool_bytes = FLAGS_buffer_pool_mb << 20;
     option.rdma.enabled = FLAGS_rdma;
     option.rdma.device = FLAGS_rdma_device;
+    option.rdma.idle_timeout_ns =
+        uint64_t{FLAGS_rdma_idle_timeout_s} * 1'000'000'000;
     server_ = std::make_unique<Server>(option);
     server_->AddService<CacheService>(block_cache_.get());
   }

@@ -17,9 +17,9 @@
 #ifndef DINGOFS_CLIENT_BLOCK_STORE_H_
 #define DINGOFS_CLIENT_BLOCK_STORE_H_
 
+#include <cstddef>
 #include <cstdint>
 
-#include "cache/api/block_cache.h"
 #include "client/vfs/common/read_buf_view.h"
 #include "common/block/block_handle.h"
 #include "common/callback.h"
@@ -28,6 +28,11 @@
 #include "common/trace/context.h"
 
 namespace dingofs {
+
+namespace cache {
+class BlockCache;
+}  // namespace cache
+
 namespace client {
 namespace vfs {
 
@@ -69,6 +74,11 @@ class BlockStore {
 
   virtual void PrefetchAsync(ContextSPtr ctx, PrefetchReq req,
                              StatusCallback callback) = 0;
+
+  virtual Status RegisterMemory(void* /*base*/, size_t /*bytes*/) {
+    return Status::OK();
+  }
+
   // utility
   virtual bool EnableCache() const = 0;
   virtual cache::BlockCache* GetBlockCache() const = 0;

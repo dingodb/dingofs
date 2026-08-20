@@ -45,6 +45,8 @@ class MemoryRegistry {
       void* addr, size_t length,
       unsigned access = verbs::MemoryRegion::kDefaultAccess);
 
+  void Adopt(verbs::MemoryRegion mr) { external_.push_back(std::move(mr)); }
+
   // O(1) inside the pool, linear over the (few) external regions.
   StatusOr<const verbs::MemoryRegion*> Find(const void* p, size_t len) const;
   StatusOr<uint32_t> LkeyOf(const void* p, size_t len) const;

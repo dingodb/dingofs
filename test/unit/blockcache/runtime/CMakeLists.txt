@@ -1,4 +1,4 @@
-# Copyright (c) 2025 dingodb.com, Inc. All Rights Reserved
+# Copyright (c) 2026 dingodb.com, Inc. All Rights Reserved
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,27 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_library(fuse_client_lib
-    fuse_op.cc
-    fuse_server.cc
-    upgrade/handover_client.cc
-    upgrade/handover_controller.cc
-    upgrade/handover_server.cc
-    upgrade/handover_session_impl.cc
+add_executable(test_blockcache_runtime
+    worker_pool_test.cc
+)
+target_compile_features(test_blockcache_runtime PRIVATE cxx_std_20)
+
+target_link_libraries(test_blockcache_runtime
+    blockcache_core
+    ${TEST_DEPS}
 )
 
-target_link_libraries(fuse_client_lib
-    PROTO_OBJS
-    vfs_lib
-    vfs_block_store
-    block_accesser
-    dingofs_metrics
-    dingofs_common
-    client_options
-    jsoncpp
-    ${FUSE3_LIBRARY}
+set_target_properties(test_blockcache_runtime PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${TEST_EXECUTABLE_OUTPUT_PATH}
 )
-
-if(NOT WITH_CLIENT_BLOCKCACHE)
-    target_link_libraries(fuse_client_lib cache_tier)
-endif()
