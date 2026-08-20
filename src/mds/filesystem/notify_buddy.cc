@@ -14,10 +14,11 @@
 
 #include "mds/filesystem/notify_buddy.h"
 
-#include <bthread/types.h>
-
 #include <cstdint>
+#include <iterator>
 #include <memory>
+#include <system_error>
+#include <utility>
 
 #include "bthread/bthread.h"
 #include "common/logging.h"
@@ -27,45 +28,22 @@ namespace dingofs {
 namespace mds {
 namespace notify {
 
-DEFINE_uint32(mds_notify_message_batch_size, 64, "notify message batch size.");
+DEFINE_uint32(mds_notify_message_batch_size, 124, "notify message batch size.");
 DEFINE_validator(mds_notify_message_batch_size, brpc::PassValidate);
 
-DEFINE_uint32(mds_wait_message_delay_us, 100, "wait message delay us.");
-DEFINE_validator(mds_wait_message_delay_us, brpc::PassValidate);
+DEFINE_uint32(mds_notify_message_max_inflight_per_mds, 1, "max in-flight notify message batches per mds.");
+DEFINE_validator(mds_notify_message_max_inflight_per_mds, brpc::PositiveInteger);
 
 NotifyBuddy::NotifyBuddy(MDSMetaMapSPtr mds_meta_map, uint64_t self_mds_id)
-    : mds_meta_map_(mds_meta_map), self_mds_id_(self_mds_id) {
-  bthread_mutex_init(&mutex_, nullptr);
-  bthread_cond_init(&cond_, nullptr);
-}
+    : self_mds_id_(self_mds_id), mds_meta_map_(mds_meta_map) {}
 
-NotifyBuddy::~NotifyBuddy() {
-  bthread_cond_destroy(&cond_);
-  bthread_mutex_destroy(&mutex_);
-}
+NotifyBuddy::~NotifyBuddy() { Destroy(); }
 
 bool NotifyBuddy::Init() {
-  struct Param {
-    NotifyBuddy* self{nullptr};
-  };
-
-  Param* param = new Param({this});
-
-  const bthread_attr_t attr = BTHREAD_ATTR_NORMAL;
-  if (bthread_start_background(
-          &tid_, &attr,
-          [](void* arg) -> void* {
-            Param* param = reinterpret_cast<Param*>(arg);
-
-            param->self->DispatchMessage();
-
-            delete param;
-            return nullptr;
-          },
-          param) != 0) {
-    tid_ = 0;
-    delete param;
-    LOG(FATAL) << "[notify] start background thread fail.";
+  try {
+    dispatcher_.thread = std::thread([this] { DispatchMessage(); });
+  } catch (const std::system_error& e) {
+    LOG(ERROR) << fmt::format("[notify] start background thread fail, {}.", e.what());
     return false;
   }
 
@@ -73,25 +51,25 @@ bool NotifyBuddy::Init() {
 }
 
 bool NotifyBuddy::Destroy() {
-  is_stop_.store(true);
+  bool expected = false;
+  if (!is_stop_.compare_exchange_strong(expected, true)) return true;
 
-  if (tid_ > 0) {
-    bthread_cond_signal(&cond_);
+  {
+    std::lock_guard<std::mutex> lock(dispatcher_.thread_mutex);
+    dispatcher_.thread_cond.notify_all();
+  }
 
-    if (bthread_stop(tid_) != 0) {
-      LOG(ERROR) << fmt::format("[notify] bthread_stop fail.");
-    }
+  if (dispatcher_.thread.joinable()) dispatcher_.thread.join();
 
-    if (bthread_join(tid_, nullptr) != 0) {
-      LOG(ERROR) << fmt::format("[notify] bthread_join fail.");
-    }
+  while (sending_tasks_.load(std::memory_order_acquire) > 0) {
+    bthread_usleep(1000);
   }
 
   return true;
 }
 
 bool NotifyBuddy::AsyncNotify(MessageSPtr message) {
-  if (is_stop_.load(std::memory_order_relaxed)) {
+  if (message == nullptr || is_stop_.load(std::memory_order_acquire)) {
     return false;
   }
 
@@ -100,9 +78,16 @@ bool NotifyBuddy::AsyncNotify(MessageSPtr message) {
     return false;
   }
 
-  queue_.Enqueue(message);
+  {
+    // enqueue and notify under thread_mutex so the dispatcher cannot miss a
+    // wakeup, and re-check is_stop_ so no message slips in after the shutdown
+    // drain in DispatchMessage.
+    std::lock_guard<std::mutex> lock(dispatcher_.thread_mutex);
+    if (is_stop_.load(std::memory_order_acquire)) return false;
 
-  bthread_cond_signal(&cond_);
+    dispatcher_.messages.Enqueue(std::move(message));
+    dispatcher_.thread_cond.notify_one();
+  }
 
   return true;
 }
@@ -131,43 +116,69 @@ void NotifyBuddy::DispatchMessage() {
   std::vector<MessageSPtr> messages;
   messages.reserve(FLAGS_mds_notify_message_batch_size);
 
-  while (true) {
+  MessageSPtr message = nullptr;
+  while (!is_stop_.load(std::memory_order_acquire)) {
     messages.clear();
 
-    MessageSPtr message = nullptr;
-    while (!queue_.Dequeue(message) && !is_stop_.load(std::memory_order_relaxed)) {
-      bthread_mutex_lock(&mutex_);
-      bthread_cond_wait(&cond_, &mutex_);
-      bthread_mutex_unlock(&mutex_);
+    message = nullptr;
+    {
+      std::unique_lock<std::mutex> lock(dispatcher_.thread_mutex);
+      while (!dispatcher_.messages.Dequeue(message) && !is_stop_.load(std::memory_order_acquire)) {
+        dispatcher_.thread_cond.wait(lock);
+      }
     }
 
-    if (is_stop_.load(std::memory_order_relaxed) && messages.empty()) {
-      break;
-    }
+    if (is_stop_.load(std::memory_order_acquire)) break;
 
-    if (FLAGS_mds_wait_message_delay_us > 0) {
-      bthread_usleep(FLAGS_mds_wait_message_delay_us);
-    }
+    messages.push_back(std::move(message));
 
-    do {
-      messages.push_back(message);
-    } while (queue_.Dequeue(message));
+    while (messages.size() < FLAGS_mds_notify_message_batch_size && dispatcher_.messages.Dequeue(message)) {
+      messages.push_back(std::move(message));
+    }
 
     auto batch_message_map = GroupingByMdsID(messages);
     for (auto& [mds_id, batch_message] : batch_message_map) {
-      LaunchSendMessage(mds_id, batch_message);
+      LaunchOrParkMessage(mds_id, std::move(batch_message));
+    }
+  }
+
+  // Notifications are best effort. Drop messages that were not dispatched before shutdown.
+  // Drain under thread_mutex: producers check is_stop_ under the same mutex, so no
+  // message can be enqueued after this drain.
+  {
+    std::lock_guard<std::mutex> lock(dispatcher_.thread_mutex);
+    while (dispatcher_.messages.Dequeue(message)) {
     }
   }
 }
 
-void NotifyBuddy::LaunchSendMessage(uint64_t mds_id, const BatchMessage& batch_message) {
+void NotifyBuddy::LaunchOrParkMessage(uint64_t mds_id, BatchMessage&& batch_message) {
+  bool launch = false;
+  {
+    std::lock_guard<std::mutex> lock(dispatcher_.parked_mutex);
+    auto& entry = dispatcher_.parked_messages[mds_id];
+    if (entry.inflight >= FLAGS_mds_notify_message_max_inflight_per_mds) {
+      entry.messages.insert(entry.messages.end(), std::make_move_iterator(batch_message.begin()),
+                            std::make_move_iterator(batch_message.end()));
+    } else {
+      ++entry.inflight;
+      launch = true;
+    }
+  }
+
+  if (launch) LaunchSendMessage(mds_id, std::move(batch_message));
+}
+
+void NotifyBuddy::LaunchSendMessage(uint64_t mds_id, BatchMessage&& batch_message) {
   struct Params {
     NotifyBuddy* self{nullptr};
     uint64_t mds_id;
     BatchMessage batch_message;
   };
 
-  Params* params = new Params({.self = this, .mds_id = mds_id, .batch_message = batch_message});
+  sending_tasks_.fetch_add(1, std::memory_order_acq_rel);
+
+  Params* params = new Params({.self = this, .mds_id = mds_id, .batch_message = std::move(batch_message)});
 
   bthread_t tid;
   bthread_attr_t attr = BTHREAD_ATTR_NORMAL;
@@ -176,17 +187,54 @@ void NotifyBuddy::LaunchSendMessage(uint64_t mds_id, const BatchMessage& batch_m
           [](void* arg) -> void* {
             Params* params = reinterpret_cast<Params*>(arg);
 
-            params->self->SendMessage(params->mds_id, params->batch_message);
+            for (;;) {
+              params->self->SendMessage(params->mds_id, params->batch_message);
 
+              BatchMessage next_batch_message;
+              if (!params->self->TakeParkedMessages(params->mds_id, next_batch_message)) break;
+              params->batch_message = std::move(next_batch_message);
+            }
+
+            params->self->FinishSendTask();
             delete params;
 
             return nullptr;
           },
           params) != 0) {
     delete params;
+
+    sending_tasks_.fetch_sub(1, std::memory_order_acq_rel);
+
     LOG(FATAL) << "[notify] start background thread fail.";
   }
 }
+
+bool NotifyBuddy::TakeParkedMessages(uint64_t mds_id, BatchMessage& batch_message) {
+  std::lock_guard<std::mutex> lock(dispatcher_.parked_mutex);
+  auto it = dispatcher_.parked_messages.find(mds_id);
+  CHECK(it != dispatcher_.parked_messages.end()) << fmt::format("[notify.{}] parked message entry not found.", mds_id);
+
+  auto& entry = it->second;
+  if (is_stop_.load(std::memory_order_acquire) || entry.messages.empty()) {
+    CHECK(entry.inflight > 0) << fmt::format("[notify.{}] in-flight count underflow.", mds_id);
+    --entry.inflight;
+    if (entry.inflight == 0) dispatcher_.parked_messages.erase(it);
+    return false;
+  }
+
+  const size_t batch_size = FLAGS_mds_notify_message_batch_size;
+  if (entry.messages.size() <= batch_size) {
+    batch_message.swap(entry.messages);
+  } else {
+    batch_message.assign(std::make_move_iterator(entry.messages.begin()),
+                         std::make_move_iterator(entry.messages.begin() + batch_size));
+    entry.messages.erase(entry.messages.begin(), entry.messages.begin() + batch_size);
+  }
+
+  return true;
+}
+
+void NotifyBuddy::FinishSendTask() { sending_tasks_.fetch_sub(1, std::memory_order_acq_rel); }
 
 void NotifyBuddy::SendMessage(uint64_t mds_id, BatchMessage& batch_message) {
   pb::mds::NotifyBuddyRequest notify_message;
