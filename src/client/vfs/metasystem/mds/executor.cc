@@ -31,7 +31,7 @@ bool Executor::Init() {
   return true;
 }
 
-void Executor::Stop() { worker_set_->Destroy(); }
+void Executor::Stop() { worker_set_->Stop(); }
 
 bool Executor::ExecuteByHash(uint64_t hash_id, TaskRunnablePtr task,
                              bool retry) {

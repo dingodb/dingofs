@@ -15,6 +15,7 @@
 #ifndef DINGOFS_MDS_SERVICE_MDS_H_
 #define DINGOFS_MDS_SERVICE_MDS_H_
 
+#include <atomic>
 #include <cstdint>
 
 #include "common/trace/trace_manager.h"
@@ -46,7 +47,7 @@ class MDSServiceImpl : public pb::mds::MDSService {
   }
 
   bool Init();
-  void Destroy();
+  void Stop();
 
   void Echo(google::protobuf::RpcController* controller, const pb::mds::EchoRequest* request,
             pb::mds::EchoResponse* response, google::protobuf::Closure* done) override;
@@ -249,8 +250,7 @@ class MDSServiceImpl : public pb::mds::MDSService {
   void DeleteMember(google::protobuf::RpcController* controller, const pb::mds::DeleteMemberRequest* request,
                     pb::mds::DeleteMemberResponse* response, google::protobuf::Closure* done) override;
 
-  void RestoreFromTrash(google::protobuf::RpcController* controller,
-                        const pb::mds::RestoreFromTrashRequest* request,
+  void RestoreFromTrash(google::protobuf::RpcController* controller, const pb::mds::RestoreFromTrashRequest* request,
                         pb::mds::RestoreFromTrashResponse* response, google::protobuf::Closure* done) override;
 
   void DescribeByJson(Json::Value& value);
@@ -263,6 +263,8 @@ class MDSServiceImpl : public pb::mds::MDSService {
 
   WorkerSetUPtr& GetReadWorkerSet() { return read_worker_set_; }
   WorkerSetUPtr& GetWriteWorkerSet() { return write_worker_set_; }
+
+  bool IsStopped() { return is_stopped_.load(std::memory_order_relaxed); }
 
   // mds
   void DoHeartbeat(google::protobuf::RpcController* controller, const pb::mds::HeartbeatRequest* request,
@@ -434,9 +436,11 @@ class MDSServiceImpl : public pb::mds::MDSService {
   void DoDeleteMember(google::protobuf::RpcController* controller, const pb::mds::DeleteMemberRequest* request,
                       pb::mds::DeleteMemberResponse* response, TraceClosure* done);
 
-  inline SpanScopeSPtr StartSpan(const std::string& name, const pb::mds::RequestInfo& info) {
+  SpanScopeSPtr StartSpan(const std::string& name, const pb::mds::RequestInfo& info) {
     return trace_manager_.StartSpan(name, info.request_id(), info.span_id());
   }
+
+  std::atomic<bool> is_stopped_{false};
 
   // file system set
   FileSystemSetSPtr file_system_set_;

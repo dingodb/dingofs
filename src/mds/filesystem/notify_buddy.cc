@@ -37,7 +37,7 @@ DEFINE_validator(mds_notify_message_max_inflight_per_mds, brpc::PositiveInteger)
 NotifyBuddy::NotifyBuddy(MDSMetaMapSPtr mds_meta_map, uint64_t self_mds_id)
     : self_mds_id_(self_mds_id), mds_meta_map_(mds_meta_map) {}
 
-NotifyBuddy::~NotifyBuddy() { Destroy(); }
+NotifyBuddy::~NotifyBuddy() { Stop(); }
 
 bool NotifyBuddy::Init() {
   try {
@@ -50,7 +50,7 @@ bool NotifyBuddy::Init() {
   return true;
 }
 
-bool NotifyBuddy::Destroy() {
+bool NotifyBuddy::Stop() {
   bool expected = false;
   if (!is_stop_.compare_exchange_strong(expected, true)) return true;
 

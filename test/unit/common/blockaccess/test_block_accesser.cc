@@ -57,7 +57,7 @@ class BlockAccesserImplTest : public ::testing::Test {
 
   void TearDown() override {
     if (accesser_) {
-      accesser_->Destroy();
+      accesser_->Stop();
       accesser_.reset();
     }
     if (std::filesystem::exists(root_)) {
@@ -285,7 +285,7 @@ class RadosPutSemanticsTest : public ::testing::Test {
   void TearDown() override {
     if (accesser_) {
       (void)accesser_->Delete(key_);
-      accesser_->Destroy();
+      accesser_->Stop();
     }
   }
 

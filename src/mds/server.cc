@@ -164,6 +164,33 @@ bool Server::Init(const std::string& conf_path, const std::string& store_url) {
   return true;
 }
 
+void Server::Stop() {
+  // Only stop once
+  bool expected = false;
+  if (!is_stopped_.compare_exchange_strong(expected, true)) return;
+
+  mds_service_->Stop();
+  debug_service_->Stop();
+  fs_stat_service_->Stop();
+
+  brpc_server_.Stop(0);
+  brpc_server_.Join();
+
+  file_system_set_->Stop(true);
+
+  heartbeat_->Stop();
+  crontab_manager_.Stop();
+  monitor_->Stop();
+  notify_buddy_->Stop();
+  gc_processor_->Stop();
+
+  operation_processor_->Stop();
+
+  kv_storage_->Stop();
+
+  logclean_manager_->Stop();
+}
+
 bool Server::InitConfig(const std::string& path) {
   LOG(INFO) << fmt::format("config path: {}", path);
 
@@ -638,28 +665,9 @@ void Server::Run() {
 
   PrintReadyInfo(GetListenAddr());
 
-  while (!brpc::IsAskedToQuit() && !stop_.load()) {
+  while (!brpc::IsAskedToQuit() && !is_stopped_.load()) {
     bthread_usleep(1000000L);
   }
-}
-
-void Server::Stop() {
-  // Only stop once
-  bool expected = false;
-  if (!stop_.compare_exchange_strong(expected, true)) {
-    return;
-  }
-
-  logclean_manager_->Stop();
-
-  mds_service_->Destroy();
-
-  brpc_server_.Stop(0);
-  brpc_server_.Join();
-  operation_processor_->Destroy();
-  heartbeat_->Destroy();
-  crontab_manager_.Destroy();
-  monitor_->Destroy();
 }
 
 static void DescribeTcmallocByJson(Json::Value& value) {

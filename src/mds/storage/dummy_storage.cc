@@ -29,8 +29,6 @@ namespace mds {
 
 bool DummyStorage::Init(const std::string&) { return true; }
 
-bool DummyStorage::Destroy() { return true; }
-
 Status DummyStorage::CreateTable(const std::string& name, const TableOption& option, int64_t& table_id) {
   utils::WriteLockGuard lock(lock_);
 
@@ -252,8 +250,7 @@ Status DummyTxn::PutIfAbsent(const std::string& key, const std::string& value) {
   // A prior staged Put in this txn means the key is already present from the
   // txn's view -- reject immediately.
   auto sit = stage_writes_.find(key);
-  if (sit != stage_writes_.end() &&
-      sit->second.opt_type == KeyValue::OpType::kPut) {
+  if (sit != stage_writes_.end() && sit->second.opt_type == KeyValue::OpType::kPut) {
     return Status(pb::error::EEXISTED, "key already exist");
   }
 

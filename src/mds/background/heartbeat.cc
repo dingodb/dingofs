@@ -49,7 +49,7 @@ bool Heartbeat::Init() {
   return true;
 }
 
-bool Heartbeat::Destroy() { return true; }
+bool Heartbeat::Stop() { return true; }
 
 void Heartbeat::Run() {
   bool running = false;

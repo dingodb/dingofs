@@ -26,12 +26,15 @@ namespace mds {
 class TikvStorage : public KVStorage {
  public:
   TikvStorage() = default;
-  ~TikvStorage() override = default;
+  ~TikvStorage() override {
+    delete client_;
+    client_ = nullptr;
+  }
 
   static KVStorageSPtr New() { return std::make_shared<TikvStorage>(); }
 
   bool Init(const std::string& addr) override;
-  bool Destroy() override;
+  bool Stop() override { return true; }
 
   Status CreateTable(const std::string& name, const TableOption& option, int64_t& table_id) override;
   Status DropTable(int64_t table_id) override;

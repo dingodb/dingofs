@@ -103,7 +103,7 @@ bool S3Accesser::Init() {
   return true;
 }
 
-bool S3Accesser::Destroy() { return true; }
+bool S3Accesser::Stop() { return true; }
 
 Aws::String S3Accesser::S3Key(const std::string& key) {
   return Aws::String(key.c_str(), key.size());

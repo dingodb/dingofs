@@ -33,7 +33,7 @@ class DummyCoordinatorClient : public CoordinatorClient {
   static CoordinatorClientSPtr New() { return std::make_shared<DummyCoordinatorClient>(); }
 
   bool Init(const std::string& addr) override;
-  bool Destroy() override;
+  bool Stop() override;
 
   std::string GetAddr() override { return ""; }
 

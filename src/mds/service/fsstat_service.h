@@ -36,6 +36,8 @@ class FsStatServiceImpl : public pb::web::FsStatService, public brpc::Tabbed {
   FsStatServiceImpl(const FsStatServiceImpl&) = delete;
   FsStatServiceImpl& operator=(const FsStatServiceImpl&) = delete;
 
+  void Stop() { is_stopped_.store(true, std::memory_order_relaxed); }
+
   static FsStatServiceImplUPtr New() { return std::make_unique<FsStatServiceImpl>(); }
 
   void default_method(::google::protobuf::RpcController* controller, const pb::web::FsStatRequest* request,
@@ -43,10 +45,15 @@ class FsStatServiceImpl : public pb::web::FsStatService, public brpc::Tabbed {
   void GetTabInfo(brpc::TabInfoList*) const override;
 
  private:
+  bool IsStopped() { return is_stopped_.load(std::memory_order_relaxed); }
+
   void RenderAutoIncrementIdGenerator(FileSystemSetSPtr file_system_set, butil::IOBufBuilder& os);
   void RenderMainPage(const brpc::Server* server, FileSystemSetSPtr file_system_set, const std::string& parse_key,
                       butil::IOBufBuilder& os);
   void RenderServerPage(butil::IOBufBuilder& os);
+
+  std::atomic<bool> is_stopped_{false};
+  ;
 };
 
 }  // namespace mds

@@ -27,12 +27,15 @@ namespace mds {
 class DingodbStorage : public KVStorage {
  public:
   DingodbStorage() = default;
-  ~DingodbStorage() override = default;
+  ~DingodbStorage() override {
+    delete client_;
+    client_ = nullptr;
+  }
 
   static KVStorageSPtr New() { return std::make_shared<DingodbStorage>(); }
 
   bool Init(const std::string& addr) override;
-  bool Destroy() override;
+  bool Stop() override { return true; }
 
   static std::vector<std::pair<std::string, std::string>> GetSdkVersion();
 

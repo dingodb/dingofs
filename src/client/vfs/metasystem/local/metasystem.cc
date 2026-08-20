@@ -227,7 +227,7 @@ Status LocalMetaSystem::Init(bool /*skip_mount*/) {
 }
 
 void LocalMetaSystem::Stop(bool /*skip_unmount*/) {
-  crontab_manager_.Destroy();
+  crontab_manager_.Stop();
 
   CloseLevelDB();
 }

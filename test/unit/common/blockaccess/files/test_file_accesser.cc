@@ -57,7 +57,7 @@ class FileAccesserTest : public ::testing::Test {
 
   void TearDown() override {
     if (accesser_) {
-      accesser_->Destroy();
+      accesser_->Stop();
       accesser_.reset();
     }
 

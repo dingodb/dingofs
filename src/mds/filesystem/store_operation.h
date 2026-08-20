@@ -2866,7 +2866,7 @@ class OperationProcessor : public std::enable_shared_from_this<OperationProcesso
   KVStorageSPtr GetKVStorage() const { return kv_storage_; }
 
   bool Init();
-  bool Destroy();
+  bool Stop();
 
   bool RunBatched(Operation* operation);
   Status RunAlone(Operation* operation);

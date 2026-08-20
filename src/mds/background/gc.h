@@ -296,7 +296,7 @@ class GcProcessor {
   }
 
   bool Init();
-  void Destroy();
+  void Stop();
 
   void Run();
   void RunTrash();

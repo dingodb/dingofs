@@ -37,7 +37,7 @@ class DistributionLock : public std::enable_shared_from_this<DistributionLock> {
   virtual ~DistributionLock() = default;
 
   virtual bool Init() = 0;
-  virtual void Destroy() = 0;
+  virtual void Stop() = 0;
 
   virtual std::string LockKey() = 0;
   virtual bool IsLocked() = 0;
@@ -64,7 +64,7 @@ class CoorDistributionLock : public DistributionLock {
   CoorDistributionLockSPtr GetSelfPtr();
 
   bool Init() override;
-  void Destroy() override;
+  void Stop() override;
 
   std::string LockKey() override;
   bool IsLocked() override;
@@ -117,7 +117,8 @@ class StoreDistributionLock : public DistributionLock {
   StoreDistributionLockPtr GetSelfPtr();
 
   bool Init() override;
-  void Destroy() override;
+  void Stop() override;
+
   std::string LockKey() override;
   bool IsLocked() override;
 

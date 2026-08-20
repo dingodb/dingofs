@@ -57,7 +57,7 @@ class CacheGroupMemberManagerTest : public testing::Test {
   void TearDown() override {
     manager_.reset();
     if (operation_processor_ != nullptr) {
-      operation_processor_->Destroy();
+      operation_processor_->Stop();
     }
     operation_processor_.reset();
     storage_.reset();

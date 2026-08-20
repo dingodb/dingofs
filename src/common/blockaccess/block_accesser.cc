@@ -99,9 +99,9 @@ Status BlockAccesserImpl::Init() {
   return Status::OK();
 }
 
-Status BlockAccesserImpl::Destroy() {
+Status BlockAccesserImpl::Stop() {
   if (data_accesser_ != nullptr) {
-    data_accesser_->Destroy();
+    data_accesser_->Stop();
     data_accesser_.reset(nullptr);
   }
 

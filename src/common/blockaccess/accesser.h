@@ -39,7 +39,7 @@ class Accesser {
 
   virtual bool Init() = 0;
 
-  virtual bool Destroy() = 0;
+  virtual bool Stop() = 0;
 
   virtual bool ContainerExist() = 0;
 

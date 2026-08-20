@@ -90,11 +90,11 @@ class FsUtilsTest : public testing::Test {
     fs = nullptr;
 
     if (quota_worker_set != nullptr) {
-      quota_worker_set->Destroy();
+      quota_worker_set->Stop();
       quota_worker_set = nullptr;
     }
     if (operation_processor != nullptr) {
-      operation_processor->Destroy();
+      operation_processor->Stop();
       operation_processor = nullptr;
     }
     kv_storage = nullptr;

@@ -165,6 +165,13 @@ static Status ParseAsyncUInt64Result(void* vr, uint64_t* out_value = nullptr) {
 // TikvGoStorage
 // ---------------------------------------------------------------------------
 
+TikvGoStorage::~TikvGoStorage() {
+  if (client_handle_ != 0) {
+    tikv_go_client_destroy(static_cast<GoUint64>(client_handle_));
+    client_handle_ = 0;
+  }
+}
+
 bool TikvGoStorage::Init(const std::string& addr) {
   LOG(INFO) << fmt::format("[storage] init tikv-go storage, addr({}).", addr);
 
@@ -193,15 +200,6 @@ bool TikvGoStorage::Init(const std::string& addr) {
 
   client_handle_ = handle;
   LOG(INFO) << fmt::format("[storage] init tikv-go storage end, addr({}).", addr);
-
-  return true;
-}
-
-bool TikvGoStorage::Destroy() {
-  if (client_handle_ != 0) {
-    tikv_go_client_destroy(static_cast<GoUint64>(client_handle_));
-    client_handle_ = 0;
-  }
 
   return true;
 }

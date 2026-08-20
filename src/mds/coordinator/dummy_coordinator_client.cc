@@ -37,7 +37,7 @@ bool DummyCoordinatorClient::Init(const std::string& addr) {
 
   return true;
 }
-bool DummyCoordinatorClient::Destroy() { return true; }
+bool DummyCoordinatorClient::Stop() { return true; }
 
 Status DummyCoordinatorClient::MDSHeartbeat(const MDSMeta& mds, std::vector<MDSMeta>& out_mdses) {
   BAIDU_SCOPED_LOCK(mutex_);

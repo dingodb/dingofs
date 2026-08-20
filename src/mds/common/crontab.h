@@ -83,7 +83,7 @@ class CrontabManager {
   void PauseCrontab(uint32_t crontab_id);
   void DeleteCrontab(uint32_t crontab_id);
 
-  void Destroy();
+  void Stop();
 
   void DescribeByJson(Json::Value& value);
 

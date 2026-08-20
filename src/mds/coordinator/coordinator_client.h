@@ -37,7 +37,7 @@ class CoordinatorClient {
   virtual ~CoordinatorClient() = default;
 
   virtual bool Init(const std::string& addr) = 0;
-  virtual bool Destroy() = 0;
+  virtual bool Stop() = 0;
 
   virtual std::string GetAddr() = 0;
 

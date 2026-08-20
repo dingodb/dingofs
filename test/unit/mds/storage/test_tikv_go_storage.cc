@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <algorithm>
-#include "common/helper.h"
 #include <atomic>
 #include <cstdint>
 #include <string>
@@ -22,6 +21,7 @@
 
 #include "bthread/bthread.h"
 #include "bthread/types.h"
+#include "common/helper.h"
 #include "glog/logging.h"
 #include "gtest/gtest.h"
 #include "mds/common/helper.h"
@@ -41,7 +41,7 @@ class TikvGoStorageTest : public testing::Test {
         << "init tikv-go storage fail.";
   }
 
-  static void TearDownTestSuite() { storage_->Destroy(); }
+  static void TearDownTestSuite() { storage_->Stop(); }
 
  public:
   static KVStorageSPtr storage_;
@@ -55,9 +55,9 @@ TEST_F(TikvGoStorageTest, Put) {
   auto txn = storage_->NewTxn();
 
   for (int i = 0; i < 10; ++i) {
-    auto status =
-        txn->Put("unit_tikv_go_put_" + ::dingofs::Helper::GenerateRandomString(32),
-                 "unit_value_" + ::dingofs::Helper::GenerateRandomString(64));
+    auto status = txn->Put(
+        "unit_tikv_go_put_" + ::dingofs::Helper::GenerateRandomString(32),
+        "unit_value_" + ::dingofs::Helper::GenerateRandomString(64));
     ASSERT_TRUE(status.ok()) << "put fail, error: " << status.error_str();
   }
 
@@ -72,9 +72,10 @@ TEST_F(TikvGoStorageTest, PutGet) {
 
   std::vector<std::string> keys;
   for (int i = 0; i < 10; ++i) {
-    std::string key = "unit_tikv_go_putget_" + ::dingofs::Helper::GenerateRandomString(32);
-    auto status =
-        txn->Put(key, "unit_value_" + ::dingofs::Helper::GenerateRandomString(64));
+    std::string key =
+        "unit_tikv_go_putget_" + ::dingofs::Helper::GenerateRandomString(32);
+    auto status = txn->Put(
+        key, "unit_value_" + ::dingofs::Helper::GenerateRandomString(64));
     ASSERT_TRUE(status.ok()) << "put fail, error: " << status.error_str();
     keys.push_back(key);
   }
@@ -95,7 +96,8 @@ TEST_F(TikvGoStorageTest, PutDelete) {
 
   std::string key =
       "unit_tikv_go_putdelete_" + ::dingofs::Helper::GenerateRandomString(32);
-  std::string value = "unit_value_" + ::dingofs::Helper::GenerateRandomString(64);
+  std::string value =
+      "unit_value_" + ::dingofs::Helper::GenerateRandomString(64);
 
   {
     auto txn = storage_->NewTxn();
@@ -130,10 +132,10 @@ TEST_F(TikvGoStorageTest, PutBatchGet) {
     auto txn = storage_->NewTxn();
 
     for (int i = 0; i < 10; ++i) {
-      std::string key =
-          "unit_tikv_go_batchget_" + ::dingofs::Helper::GenerateRandomString(32);
-      auto status =
-          txn->Put(key, "unit_value_" + ::dingofs::Helper::GenerateRandomString(64));
+      std::string key = "unit_tikv_go_batchget_" +
+                        ::dingofs::Helper::GenerateRandomString(32);
+      auto status = txn->Put(
+          key, "unit_value_" + ::dingofs::Helper::GenerateRandomString(64));
       ASSERT_TRUE(status.ok()) << "put fail, error: " << status.error_str();
       keys.push_back(key);
     }
@@ -174,8 +176,8 @@ TEST_F(TikvGoStorageTest, Scan) {
     auto txn = storage_->NewTxn();
     for (int i = 0; i < 10; ++i) {
       std::string key = prefix + std::to_string(i);
-      auto status =
-          txn->Put(key, "unit_value_" + ::dingofs::Helper::GenerateRandomString(64));
+      auto status = txn->Put(
+          key, "unit_value_" + ::dingofs::Helper::GenerateRandomString(64));
       ASSERT_TRUE(status.ok()) << "put fail, error: " << status.error_str();
       keys.push_back(key);
     }
@@ -200,14 +202,15 @@ TEST_F(TikvGoStorageTest, Scan) {
 TEST_F(TikvGoStorageTest, ScanWithLimit) {
   GTEST_SKIP() << "Skip ScanWithLimit test case.";
 
-  std::string prefix =
-      "unit_tikv_go_scanlimit_" + ::dingofs::Helper::GenerateRandomString(16) + "_";
+  std::string prefix = "unit_tikv_go_scanlimit_" +
+                       ::dingofs::Helper::GenerateRandomString(16) + "_";
 
   {
     auto txn = storage_->NewTxn();
     for (int i = 0; i < 10; ++i) {
-      auto status = txn->Put(prefix + std::to_string(i),
-                             "unit_value_" + ::dingofs::Helper::GenerateRandomString(64));
+      auto status =
+          txn->Put(prefix + std::to_string(i),
+                   "unit_value_" + ::dingofs::Helper::GenerateRandomString(64));
       ASSERT_TRUE(status.ok()) << "put fail, error: " << status.error_str();
     }
     auto status = txn->Commit();
@@ -231,14 +234,15 @@ TEST_F(TikvGoStorageTest, ScanWithLimit) {
 TEST_F(TikvGoStorageTest, ScanWithHandler) {
   GTEST_SKIP() << "Skip ScanWithHandler test case.";
 
-  std::string prefix =
-      "unit_tikv_go_scanhandler_" + ::dingofs::Helper::GenerateRandomString(16) + "_";
+  std::string prefix = "unit_tikv_go_scanhandler_" +
+                       ::dingofs::Helper::GenerateRandomString(16) + "_";
 
   {
     auto txn = storage_->NewTxn();
     for (int i = 0; i < 10; ++i) {
-      auto status = txn->Put(prefix + std::to_string(i),
-                             "unit_value_" + ::dingofs::Helper::GenerateRandomString(64));
+      auto status =
+          txn->Put(prefix + std::to_string(i),
+                   "unit_value_" + ::dingofs::Helper::GenerateRandomString(64));
       ASSERT_TRUE(status.ok()) << "put fail, error: " << status.error_str();
     }
     auto status = txn->Commit();
@@ -267,9 +271,10 @@ TEST_F(TikvGoStorageTest, ScanWithHandler) {
 TEST_F(TikvGoStorageTest, StoragePutGet) {
   GTEST_SKIP() << "Skip StoragePutGet test case.";
 
-  std::string key =
-      "unit_tikv_go_storage_putget_" + ::dingofs::Helper::GenerateRandomString(32);
-  std::string value = "unit_value_" + ::dingofs::Helper::GenerateRandomString(64);
+  std::string key = "unit_tikv_go_storage_putget_" +
+                    ::dingofs::Helper::GenerateRandomString(32);
+  std::string value =
+      "unit_value_" + ::dingofs::Helper::GenerateRandomString(64);
 
   KVStorage::WriteOption opt;
   auto status = storage_->Put(opt, key, value);
@@ -284,9 +289,10 @@ TEST_F(TikvGoStorageTest, StoragePutGet) {
 TEST_F(TikvGoStorageTest, StorageDelete) {
   GTEST_SKIP() << "Skip StorageDelete test case.";
 
-  std::string key =
-      "unit_tikv_go_storage_delete_" + ::dingofs::Helper::GenerateRandomString(32);
-  std::string value = "unit_value_" + ::dingofs::Helper::GenerateRandomString(64);
+  std::string key = "unit_tikv_go_storage_delete_" +
+                    ::dingofs::Helper::GenerateRandomString(32);
+  std::string value =
+      "unit_value_" + ::dingofs::Helper::GenerateRandomString(64);
 
   KVStorage::WriteOption opt;
   auto status = storage_->Put(opt, key, value);
@@ -307,8 +313,8 @@ TEST_F(TikvGoStorageTest, StorageBatchPut) {
   std::vector<KeyValue> kvs;
   for (int i = 0; i < 10; ++i) {
     KeyValue kv;
-    kv.key =
-        "unit_tikv_go_storage_batchput_" + ::dingofs::Helper::GenerateRandomString(32);
+    kv.key = "unit_tikv_go_storage_batchput_" +
+             ::dingofs::Helper::GenerateRandomString(32);
     kv.value = "unit_value_" + ::dingofs::Helper::GenerateRandomString(64);
     kvs.push_back(std::move(kv));
   }
@@ -336,9 +342,9 @@ TEST_F(TikvGoStorageTest, GetNotFound) {
 
   auto txn = storage_->NewTxn();
   std::string value;
-  auto status = txn->Get(
-      "unit_tikv_go_nonexistent_key_" + ::dingofs::Helper::GenerateRandomString(32),
-      value);
+  auto status = txn->Get("unit_tikv_go_nonexistent_key_" +
+                             ::dingofs::Helper::GenerateRandomString(32),
+                         value);
   ASSERT_FALSE(status.ok());
   ASSERT_EQ(status.error_code(), pb::error::ENOT_FOUND);
   txn->Commit();
@@ -371,9 +377,9 @@ TEST_F(TikvGoStorageTest, BatchGetPartialMiss) {
 
   {
     auto txn = storage_->NewTxn();
-    std::vector<std::string> keys = {existing_key,
-                                     "unit_tikv_go_partialmiss_nonexist_" +
-                                         ::dingofs::Helper::GenerateRandomString(32)};
+    std::vector<std::string> keys = {
+        existing_key, "unit_tikv_go_partialmiss_nonexist_" +
+                          ::dingofs::Helper::GenerateRandomString(32)};
     std::vector<KeyValue> kvs;
     auto status = txn->BatchGet(keys, kvs);
     ASSERT_TRUE(status.ok()) << "batch get fail: " << status.error_str();
@@ -386,14 +392,15 @@ TEST_F(TikvGoStorageTest, BatchGetPartialMiss) {
 TEST_F(TikvGoStorageTest, ScanWithKVHandler) {
   GTEST_SKIP() << "Skip ScanWithKVHandler test case.";
 
-  std::string prefix =
-      "unit_tikv_go_scankvhandler_" + ::dingofs::Helper::GenerateRandomString(16) + "_";
+  std::string prefix = "unit_tikv_go_scankvhandler_" +
+                       ::dingofs::Helper::GenerateRandomString(16) + "_";
 
   {
     auto txn = storage_->NewTxn();
     for (int i = 0; i < 5; ++i) {
-      auto status = txn->Put(prefix + std::to_string(i),
-                             "unit_value_" + ::dingofs::Helper::GenerateRandomString(64));
+      auto status =
+          txn->Put(prefix + std::to_string(i),
+                   "unit_value_" + ::dingofs::Helper::GenerateRandomString(64));
       ASSERT_TRUE(status.ok()) << "put fail: " << status.error_str();
     }
     auto status = txn->Commit();
@@ -420,14 +427,15 @@ TEST_F(TikvGoStorageTest, ScanWithKVHandler) {
 TEST_F(TikvGoStorageTest, ScanHandlerEarlyStop) {
   GTEST_SKIP() << "Skip ScanHandlerEarlyStop test case.";
 
-  std::string prefix =
-      "unit_tikv_go_earlystop_" + ::dingofs::Helper::GenerateRandomString(16) + "_";
+  std::string prefix = "unit_tikv_go_earlystop_" +
+                       ::dingofs::Helper::GenerateRandomString(16) + "_";
 
   {
     auto txn = storage_->NewTxn();
     for (int i = 0; i < 10; ++i) {
-      auto status = txn->Put(prefix + std::to_string(i),
-                             "unit_value_" + ::dingofs::Helper::GenerateRandomString(64));
+      auto status =
+          txn->Put(prefix + std::to_string(i),
+                   "unit_value_" + ::dingofs::Helper::GenerateRandomString(64));
       ASSERT_TRUE(status.ok()) << "put fail: " << status.error_str();
     }
     auto status = txn->Commit();
@@ -458,7 +466,8 @@ TEST_F(TikvGoStorageTest, ScanEmptyRange) {
 
   auto txn = storage_->NewTxn();
   Range range;
-  range.start = "unit_tikv_go_emptyrange_" + ::dingofs::Helper::GenerateRandomString(32);
+  range.start =
+      "unit_tikv_go_emptyrange_" + ::dingofs::Helper::GenerateRandomString(32);
   range.end = range.start + "\xFF";
 
   std::vector<KeyValue> kvs;
@@ -491,7 +500,8 @@ TEST_F(TikvGoStorageTest, GetTrace) {
 
   auto txn = storage_->NewTxn();
 
-  std::string key = "unit_tikv_go_trace_" + ::dingofs::Helper::GenerateRandomString(32);
+  std::string key =
+      "unit_tikv_go_trace_" + ::dingofs::Helper::GenerateRandomString(32);
   auto status = txn->Put(key, "trace_value");
   ASSERT_TRUE(status.ok()) << "put fail: " << status.error_str();
 
@@ -511,7 +521,8 @@ TEST_F(TikvGoStorageTest, StoragePutKV) {
   GTEST_SKIP() << "Skip StoragePutKV test case.";
 
   KeyValue kv;
-  kv.key = "unit_tikv_go_storage_putkv_" + ::dingofs::Helper::GenerateRandomString(32);
+  kv.key = "unit_tikv_go_storage_putkv_" +
+           ::dingofs::Helper::GenerateRandomString(32);
   kv.value = "unit_value_" + ::dingofs::Helper::GenerateRandomString(64);
 
   KVStorage::WriteOption opt;
@@ -530,8 +541,8 @@ TEST_F(TikvGoStorageTest, StorageBatchDelete) {
   std::vector<std::string> keys;
   KVStorage::WriteOption opt;
   for (int i = 0; i < 5; ++i) {
-    std::string key =
-        "unit_tikv_go_storage_batchdel_" + ::dingofs::Helper::GenerateRandomString(32);
+    std::string key = "unit_tikv_go_storage_batchdel_" +
+                      ::dingofs::Helper::GenerateRandomString(32);
     auto status = storage_->Put(opt, key, "value_" + std::to_string(i));
     ASSERT_TRUE(status.ok()) << "put fail: " << status.error_str();
     keys.push_back(key);
@@ -550,8 +561,8 @@ TEST_F(TikvGoStorageTest, StorageBatchDelete) {
 TEST_F(TikvGoStorageTest, StorageScan) {
   GTEST_SKIP() << "Skip StorageScan test case.";
 
-  std::string prefix =
-      "unit_tikv_go_storage_scan_" + ::dingofs::Helper::GenerateRandomString(16) + "_";
+  std::string prefix = "unit_tikv_go_storage_scan_" +
+                       ::dingofs::Helper::GenerateRandomString(16) + "_";
 
   KVStorage::WriteOption opt;
   for (int i = 0; i < 5; ++i) {
@@ -577,7 +588,8 @@ TEST_F(TikvGoStorageTest, NewTxnReadCommitted) {
   ASSERT_NE(txn, nullptr);
   ASSERT_NE(txn->ID(), 0);
 
-  std::string key = "unit_tikv_go_rc_" + ::dingofs::Helper::GenerateRandomString(32);
+  std::string key =
+      "unit_tikv_go_rc_" + ::dingofs::Helper::GenerateRandomString(32);
   auto status = txn->Put(key, "rc_value");
   ASSERT_TRUE(status.ok()) << "put fail: " << status.error_str();
 
@@ -682,38 +694,40 @@ TEST_F(TikvGoStorageTest, PutBatchGetInBthread) {
 
   bthread_t tid;
   bthread_attr_t attr = BTHREAD_ATTR_NORMAL;
-  ASSERT_EQ(0, bthread_start_background(
-                   &tid, &attr,
-                   [](void* arg) -> void* {
-                     Param* p = reinterpret_cast<Param*>(arg);
-                     auto storage = p->storage;
+  ASSERT_EQ(
+      0,
+      bthread_start_background(
+          &tid, &attr,
+          [](void* arg) -> void* {
+            Param* p = reinterpret_cast<Param*>(arg);
+            auto storage = p->storage;
 
-                     std::vector<std::string> keys;
-                     {
-                       auto txn = storage->NewTxn();
-                       for (int i = 0; i < 10; ++i) {
-                         std::string key = "unit_tikv_go_bthread_" +
-                                           ::dingofs::Helper::GenerateRandomString(32);
-                         txn->Put(key, "unit_value_" +
-                                           ::dingofs::Helper::GenerateRandomString(64));
-                         keys.push_back(key);
-                       }
-                       txn->Commit();
-                     }
+            std::vector<std::string> keys;
+            {
+              auto txn = storage->NewTxn();
+              for (int i = 0; i < 10; ++i) {
+                std::string key = "unit_tikv_go_bthread_" +
+                                  ::dingofs::Helper::GenerateRandomString(32);
+                txn->Put(key, "unit_value_" +
+                                  ::dingofs::Helper::GenerateRandomString(64));
+                keys.push_back(key);
+              }
+              txn->Commit();
+            }
 
-                     {
-                       auto txn = storage->NewTxn();
-                       std::vector<KeyValue> kvs;
-                       txn->BatchGet(keys, kvs);
-                       CHECK_EQ(kvs.size(), keys.size())
-                           << "kvs size not equal in bthread.";
-                       txn->Commit();
-                     }
+            {
+              auto txn = storage->NewTxn();
+              std::vector<KeyValue> kvs;
+              txn->BatchGet(keys, kvs);
+              CHECK_EQ(kvs.size(), keys.size())
+                  << "kvs size not equal in bthread.";
+              txn->Commit();
+            }
 
-                     delete p;
-                     return nullptr;
-                   },
-                   param));
+            delete p;
+            return nullptr;
+          },
+          param));
 
   bthread_join(tid, nullptr);
 }

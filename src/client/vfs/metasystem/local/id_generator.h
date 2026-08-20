@@ -33,7 +33,7 @@ class IdGenerator {
   virtual ~IdGenerator() = default;
 
   virtual bool Init() = 0;
-  virtual bool Destroy() = 0;
+  virtual bool Stop() = 0;
 
   virtual bool GenID(uint32_t num, uint64_t& id) = 0;
   virtual bool GenID(uint32_t num, uint64_t min_slice_id, uint64_t& id) = 0;
@@ -55,7 +55,7 @@ class LevelIdGenerator : public IdGenerator {
   }
 
   bool Init() override;
-  bool Destroy() override;
+  bool Stop() override;
 
   bool GenID(uint32_t num, uint64_t& id) override;
   bool GenID(uint32_t num, uint64_t min_slice_id, uint64_t& id) override;

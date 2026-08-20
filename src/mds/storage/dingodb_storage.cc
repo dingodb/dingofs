@@ -13,12 +13,12 @@
 // limitations under the License.
 
 #include "mds/storage/dingodb_storage.h"
-#include "common/helper.h"
 
 #include <cstdint>
 #include <memory>
 #include <string>
 
+#include "common/helper.h"
 #include "common/logging.h"
 #include "dingofs/error.pb.h"
 #include "fmt/format.h"
@@ -58,14 +58,6 @@ bool DingodbStorage::Init(const std::string& addr) {
 
   auto status = dingodb::sdk::Client::BuildFromAddrs(addr, &client_);
   CHECK(status.ok()) << fmt::format("build dingo sdk client fail, error: {}", status.ToString());
-
-  return true;
-}
-
-bool DingodbStorage::Destroy() {
-  LOG(INFO) << "[storage] destroy dingo storage.";
-
-  delete client_;
 
   return true;
 }

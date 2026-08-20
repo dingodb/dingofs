@@ -20,10 +20,10 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <rados/librados.h>
-#include <algorithm>
-#include <chrono>
 
+#include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cstddef>
 #include <cstring>
 #include <functional>
@@ -224,7 +224,7 @@ bool RadosAccesser::Init() {
   return true;
 }
 
-bool RadosAccesser::Destroy() {
+bool RadosAccesser::Stop() {
   if (map_refresher_ != nullptr) {
     map_refresher_->Stop();
     map_refresher_.reset();

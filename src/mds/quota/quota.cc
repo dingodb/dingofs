@@ -397,7 +397,7 @@ bool QuotaManager::Init() {
   return true;
 }
 
-void QuotaManager::Destroy() {
+void QuotaManager::Stop() {
   const uint32_t fs_id = fs_info_->GetFsId();
   auto status = FlushUsage();
   if (!status.ok()) {

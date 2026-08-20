@@ -99,7 +99,7 @@ class Renamer {
   static RenamerSPtr New() { return std::make_shared<Renamer>(); }
 
   bool Init();
-  bool Destroy();
+  bool Stop();
 
   template <typename T>
   Status Execute(FileSystemSPtr fs, Context& ctx, const T& param, RenameResult& out);

@@ -40,7 +40,7 @@ class Heartbeat {
   }
 
   bool Init();
-  bool Destroy();
+  bool Stop();
 
   void Run();
 

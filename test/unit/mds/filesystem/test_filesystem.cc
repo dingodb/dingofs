@@ -145,7 +145,7 @@ class FileSystemSetTest : public testing::Test {
     fs_set = nullptr;
 
     if (operation_processor != nullptr) {
-      operation_processor->Destroy();
+      operation_processor->Stop();
       operation_processor = nullptr;
     }
   }
@@ -205,7 +205,7 @@ class FileSystemTest : public testing::Test {
     fs = nullptr;
 
     if (operation_processor != nullptr) {
-      operation_processor->Destroy();
+      operation_processor->Stop();
       operation_processor = nullptr;
     }
   }

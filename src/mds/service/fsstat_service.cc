@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include "mds/service/fsstat_service.h"
-#include "common/helper.h"
 
 #include <json/value.h>
 #include <sys/types.h>
@@ -30,6 +29,7 @@
 #include "brpc/controller.h"
 #include "brpc/server.h"
 #include "butil/iobuf.h"
+#include "common/helper.h"
 #include "common/logging.h"
 #include "common/version.h"
 #include "dingofs/mds.pb.h"
@@ -1879,6 +1879,13 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
   const std::string& path = cntl->http_request().unresolved_path();
 
   LOG(INFO) << fmt::format("FsStatService path: {}", path);
+
+  if (IsStopped()) {
+    os << "FsStatService is stopped.";
+    cntl->http_response().set_status_code(brpc::HTTP_STATUS_SERVICE_UNAVAILABLE);
+    cntl->response_attachment().append(os.buf());
+    return;
+  }
 
   std::vector<std::string> params;
   ::dingofs::Helper::SplitString(path, '/', params);

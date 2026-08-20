@@ -124,8 +124,8 @@ class TrashFileSystemTest : public testing::Test {
 
     fs = FileSystem::New(kTrashMdsId, FsInfo::New(fs_info),
                          std::move(ino_id_generator), slice_id_generator,
-                         operation_processor, nullptr, nullptr, quota_worker_set,
-                         quota_worker_set, nullptr);
+                         operation_processor, nullptr, nullptr,
+                         quota_worker_set, quota_worker_set, nullptr);
     auto status = fs->CreateRoot();
     ASSERT_TRUE(status.ok())
         << "create root fail, error: " << status.error_str();
@@ -135,12 +135,12 @@ class TrashFileSystemTest : public testing::Test {
     fs = nullptr;
 
     if (quota_worker_set != nullptr) {
-      quota_worker_set->Destroy();
+      quota_worker_set->Stop();
       quota_worker_set = nullptr;
     }
 
     if (operation_processor != nullptr) {
-      operation_processor->Destroy();
+      operation_processor->Stop();
       operation_processor = nullptr;
     }
 
@@ -983,8 +983,7 @@ TEST_F(TrashFileSystemTest, BucketNlinkStaysFixedAcrossOps) {
     ASSERT_TRUE(fs->MkDir(root_ctx, mk, create_out).ok());
 
     EntryWithPaOut rmdir_out;
-    ASSERT_TRUE(
-        fs->RmDir(root_ctx, kRootIno, mk.name, rmdir_out).ok());
+    ASSERT_TRUE(fs->RmDir(root_ctx, kRootIno, mk.name, rmdir_out).ok());
   }
 
   // Pick any current sub-trash bucket dentry under .trash.
@@ -1143,8 +1142,7 @@ TEST_F(TrashFileSystemTest, RenameDirOutOfTrashSucceeds) {
   const Ino dir_ino = create_out.attr.ino();
 
   EntryWithPaOut rmdir_out;
-  ASSERT_TRUE(
-      fs->RmDir(ctx, kRootIno, "rename_dir_out", rmdir_out).ok());
+  ASSERT_TRUE(fs->RmDir(ctx, kRootIno, "rename_dir_out", rmdir_out).ok());
 
   Trace trace;
   Ino bucket_ino = 0;
@@ -1738,8 +1736,8 @@ class TrashDirStatTest : public testing::Test {
     ASSERT_TRUE(operation_processor->Init())
         << "init operation processor fail.";
 
-    quota_worker_set = SimpleWorkerSet::New(
-        "trash_ds_quota", 1, 1024, false, /*is_inplace_run=*/true);
+    quota_worker_set = SimpleWorkerSet::New("trash_ds_quota", 1, 1024, false,
+                                            /*is_inplace_run=*/true);
     ASSERT_TRUE(quota_worker_set->Init()) << "init quota worker set fail.";
 
     pb::mds::FsInfo fs_info = CreateFsInfoWithTrash(
@@ -1747,8 +1745,8 @@ class TrashDirStatTest : public testing::Test {
 
     fs = FileSystem::New(kTrashMdsId, FsInfo::New(fs_info),
                          std::move(ino_id_generator), slice_id_generator,
-                         operation_processor, nullptr, nullptr, quota_worker_set,
-                         quota_worker_set, nullptr);
+                         operation_processor, nullptr, nullptr,
+                         quota_worker_set, quota_worker_set, nullptr);
     ASSERT_TRUE(fs->CreateRoot().ok());
   }
 
@@ -1761,12 +1759,12 @@ class TrashDirStatTest : public testing::Test {
     fs = nullptr;
 
     if (quota_worker_set != nullptr) {
-      quota_worker_set->Destroy();
+      quota_worker_set->Stop();
       quota_worker_set = nullptr;
     }
 
     if (operation_processor != nullptr) {
-      operation_processor->Destroy();
+      operation_processor->Stop();
       operation_processor = nullptr;
     }
 
@@ -1973,8 +1971,7 @@ TEST_F(TrashDirStatTest, TreeRebuildGraftCreditsInteriorQuota) {
   Trace trace;
   GetInodeAttrOperation attr_op(trace, /*fs_id=*/3000, sub_ino);
   ASSERT_TRUE(operation_processor->RunAlone(&attr_op).ok());
-  Ino sub_bucket_ino =
-      attr_op.GetResult().attr_with_mutation.attr.parents(0);
+  Ino sub_bucket_ino = attr_op.GetResult().attr_with_mutation.attr.parents(0);
   std::string sub_trash_name = BuildTrashEntryName(kRootIno, sub_ino, "qsub");
   status = fs->RestoreFromTrash(ctx, sub_bucket_ino, sub_trash_name);
   ASSERT_TRUE(status.ok()) << "put_back fail: " << status.error_str();
@@ -2085,8 +2082,7 @@ TEST_F(TrashDirStatTest, PutBackConsumesCarried) {
   GetInodeAttrOperation attr_op(trace, /*fs_id=*/3000, sub_ino);
   ASSERT_TRUE(operation_processor->RunAlone(&attr_op).ok());
   Ino sub_bucket_ino = attr_op.GetResult().attr_with_mutation.attr.parents(0);
-  std::string sub_trash_name =
-      BuildTrashEntryName(top_ino, sub_ino, "qc_sub");
+  std::string sub_trash_name = BuildTrashEntryName(top_ino, sub_ino, "qc_sub");
   ASSERT_TRUE(fs->RestoreFromTrash(ctx, sub_bucket_ino, sub_trash_name,
                                    /*allow_trash_parent=*/false,
                                    /*carried_bytes=*/5000,

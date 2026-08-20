@@ -180,7 +180,7 @@ void MDSMetaSystem::Stop(bool skip_unmount) {
 
   FlushAllFile();
 
-  crontab_manager_.Destroy();
+  crontab_manager_.Stop();
 
   batch_processor_.Stop();
 
