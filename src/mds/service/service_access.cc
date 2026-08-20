@@ -13,20 +13,19 @@
 // limitations under the License.
 
 #include "mds/service/service_access.h"
-#include "common/helper.h"
 
 #include "butil/endpoint.h"
+#include "common/helper.h"
 #include "common/logging.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mds.pb.h"
 #include "fmt/core.h"
-#include "mds/common/helper.h"
 
 namespace dingofs {
 namespace mds {
 
 static const uint32_t kConnectTimeoutMs = 200;
-static const uint32_t kRpcTimeoutMs = 6000;
+static const uint32_t kRpcTimeoutMs = 2000;
 
 ChannelPool::ChannelPool() { bthread_mutex_init(&mutex_, nullptr); }
 ChannelPool::~ChannelPool() { bthread_mutex_destroy(&mutex_); }

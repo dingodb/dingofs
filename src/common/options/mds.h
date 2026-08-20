@@ -109,7 +109,7 @@ DECLARE_uint32(mds_compact_chunk_interval_ms);
 
 // notify buddy config
 DECLARE_uint32(mds_notify_message_batch_size);
-DECLARE_uint32(mds_wait_message_delay_us);
+DECLARE_uint32(mds_notify_message_max_inflight_per_mds);
 
 DECLARE_uint32(mds_inode_cache_max_count);
 DECLARE_uint32(mds_partition_cache_max_count);
