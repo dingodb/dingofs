@@ -91,6 +91,79 @@ Server& Server::GetInstance() {
   return instance;
 }
 
+bool Server::Init(const std::string& conf_path, const std::string& store_url) {
+  if (!InitLogCleanManager()) {
+    LOG(ERROR) << "init log clean manager error.";
+    return false;
+  }
+  if (!InitConfig(conf_path)) {
+    LOG(ERROR) << fmt::format("init config({}) error.", conf_path);
+    return false;
+  }
+  if (!InitStorage(store_url)) {
+    LOG(ERROR) << fmt::format("init storage({}) error.", store_url);
+    return false;
+  }
+  if (!InitOperationProcessor()) {
+    LOG(ERROR) << "init operation processor error.";
+    return false;
+  }
+  if (!InitCacheGroupMemberManager()) {
+    LOG(ERROR) << "init cache group member manager error.";
+    return false;
+  }
+  if (!InitHeartbeat()) {
+    LOG(ERROR) << "init heartbeat error.";
+    return false;
+  }
+  if (!InitMDSMeta()) {
+    LOG(ERROR) << "init mds meta error.";
+    return false;
+  }
+  if (!InitNotifyBuddy()) {
+    LOG(ERROR) << "init notify buddy error.";
+    return false;
+  }
+  if (!InitFileSystem()) {
+    LOG(ERROR) << "init file system set error.";
+    return false;
+  }
+  if (!InitFsInfoSync()) {
+    LOG(ERROR) << "init fs info sync error.";
+    return false;
+  }
+  if (!InitCacheMemberSynchronizer()) {
+    LOG(ERROR) << "init cache member synchronizer error.";
+    return false;
+  }
+  if (!InitMonitor()) {
+    LOG(ERROR) << "init mds monitor error.";
+    return false;
+  }
+  if (!InitGcProcessor()) {
+    LOG(ERROR) << "init gc error.";
+    return false;
+  }
+  if (!InitQuotaSynchronizer()) {
+    LOG(ERROR) << "init quota synchronizer error.";
+    return false;
+  }
+  if (!InitDirStatsSynchronizer()) {
+    LOG(ERROR) << "init dir-stats synchronizer error.";
+    return false;
+  }
+  if (!InitCrontab()) {
+    LOG(ERROR) << "init crontab error.";
+    return false;
+  }
+  if (!InitService()) {
+    LOG(ERROR) << "init service error.";
+    return false;
+  }
+
+  return true;
+}
+
 bool Server::InitConfig(const std::string& path) {
   LOG(INFO) << fmt::format("config path: {}", path);
 

@@ -47,43 +47,8 @@ class Server {
  public:
   static Server& GetInstance();
 
-  bool InitConfig(const std::string& path);
-
   bool InitLog();
-
-  bool InitLogCleanManager();
-
-  bool InitMDSMeta();
-
-  bool InitCoordinatorClient(const std::string& coor_url);
-
-  bool InitStorage(const std::string& store_url);
-
-  bool InitOperationProcessor();
-
-  bool InitCacheGroupMemberManager();
-
-  bool InitNotifyBuddy();
-
-  bool InitFileSystem();
-
-  bool InitHeartbeat();
-
-  bool InitFsInfoSync();
-
-  bool InitCacheMemberSynchronizer();
-
-  bool InitMonitor();
-
-  bool InitQuotaSynchronizer();
-
-  bool InitDirStatsSynchronizer();
-
-  bool InitGcProcessor();
-
-  bool InitCrontab();
-
-  bool InitService();
+  bool Init(const std::string& conf_path, const std::string& store_url);
 
   std::string GetPidFilePath();
   std::string GetListenAddr();
@@ -117,6 +82,25 @@ class Server {
  private:
   explicit Server();
   ~Server();
+
+  bool InitConfig(const std::string& path);
+  bool InitLogCleanManager();
+  bool InitMDSMeta();
+  bool InitCoordinatorClient(const std::string& coor_url);
+  bool InitStorage(const std::string& store_url);
+  bool InitOperationProcessor();
+  bool InitCacheGroupMemberManager();
+  bool InitNotifyBuddy();
+  bool InitFileSystem();
+  bool InitHeartbeat();
+  bool InitFsInfoSync();
+  bool InitCacheMemberSynchronizer();
+  bool InitMonitor();
+  bool InitQuotaSynchronizer();
+  bool InitDirStatsSynchronizer();
+  bool InitGcProcessor();
+  bool InitCrontab();
+  bool InitService();
 
   std::atomic<bool> stop_{false};
 
