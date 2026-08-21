@@ -49,8 +49,6 @@
 #include "mds/common/helper.h"
 #include "mds/common/partition_helper.h"
 #include "mds/common/status.h"
-#include "mds/common/suffix_set.h"
-#include "mds/common/synchronization.h"
 #include "mds/common/tracing.h"
 #include "mds/common/trash.h"
 #include "mds/common/type.h"
@@ -115,6 +113,9 @@ DEFINE_string(mds_storage_engine, "dummy", "mds storage engine, e.g dingo-store|
 DEFINE_validator(mds_storage_engine, [](const char*, const std::string& value) -> bool {
   return value == "dingo-store" || value == "tikv" || value == "tikv-go" || value == "dummy";
 });
+
+DEFINE_bool(mds_partition_inflight_controller_enable, true, "Partition inflight controller enable.");
+DEFINE_validator(mds_partition_inflight_controller_enable, brpc::PassValidate);
 
 DECLARE_uint32(mds_txn_max_retry_times);
 
@@ -246,7 +247,7 @@ bool FileSystem::CanServe(uint64_t self_mds_id) {
 
 void FileSystem::AddDentryToPartition(Ino parent, const Dentry& dentry, uint64_t version) {
   // Trash parents (.trash root + hour buckets) never enter partition_cache_;
-  // see GetPartitionFromStore for the design rationale.
+  // see FetchPartition for the design rationale.
   if (IsTrashInode(parent)) return;
   auto partition = GetPartitionFromCache(parent);
   if (partition != nullptr) {
@@ -307,12 +308,11 @@ Status FileSystem::GetPartition(Context& ctx, uint64_t version, Ino parent, Part
   // patches KV out-of-band — any cache would go stale undetectably. Trash
   // listing is admin-rare, so a per-request ShardPartition is acceptable.
   if (IsTrashInode(parent)) {
-    return GetPartitionFromStore(ctx, parent, fmt::format("Trash.{}.{}", method_name, request_id), out_partition);
+    return FetchPartition(ctx, parent, fmt::format("Trash.{}.{}", method_name, request_id), out_partition);
   }
 
   if (bypass_cache) {
-    auto status =
-        GetPartitionFromStore(ctx, parent, fmt::format("Bypass.{}.{}", method_name, request_id), out_partition);
+    auto status = FetchPartition(ctx, parent, fmt::format("bypass.{}.{}", method_name, request_id), out_partition);
     if (!status.ok()) {
       return Status(status.error_code(), fmt::format("not found partition({}), {}.", parent, status.error_str()));
     }
@@ -322,8 +322,7 @@ Status FileSystem::GetPartition(Context& ctx, uint64_t version, Ino parent, Part
 
   auto partition = GetPartitionFromCache(parent);
   if (partition == nullptr) {
-    auto status =
-        GetPartitionFromStore(ctx, parent, fmt::format("CacheMiss.{}.{}", method_name, request_id), out_partition);
+    auto status = FetchPartition(ctx, parent, fmt::format("cache-miss.{}.{}", method_name, request_id), out_partition);
     if (!status.ok()) {
       return Status(status.error_code(), fmt::format("not found partition({}), {}.", parent, status.error_str()));
     }
@@ -333,18 +332,28 @@ Status FileSystem::GetPartition(Context& ctx, uint64_t version, Ino parent, Part
 
   uint64_t cache_version = use_base_version ? partition->BaseVersion() : partition->DeltaVersion();
   if (version > cache_version) {
-    std::string reason = fmt::format("OutOfDate.{}.{}.[{},cache{},req{}]", method_name, request_id, use_base_version,
+    std::string reason = fmt::format("out-of-date.{}.{}.[{},cache{},req{}]", method_name, request_id, use_base_version,
                                      cache_version, version);
-    auto status = GetPartitionFromStore(ctx, parent, reason, out_partition);
+    auto status = FetchPartition(ctx, parent, reason, out_partition);
     if (!status.ok()) {
       return Status(status.error_code(), fmt::format("not found partition({}), {}.", parent, status.error_str()));
+    }
+
+    // singleflight may have piggybacked on a fetch started before this
+    // request; re-validate and refetch (as a new leader) if still stale.
+    uint64_t got_version = use_base_version ? out_partition->BaseVersion() : out_partition->DeltaVersion();
+    if (version > got_version) {
+      status = FetchPartition(ctx, parent, reason + ".retry", out_partition);
+      if (!status.ok()) {
+        return Status(status.error_code(), fmt::format("not found partition({}), {}.", parent, status.error_str()));
+      }
     }
 
     return status;
   }
 
   if (partition->NeedCompact()) {
-    auto status = GetPartitionFromStore(ctx, parent, "Compact", out_partition);
+    auto status = FetchPartition(ctx, parent, "compact", out_partition);
     if (!status.ok()) {
       return Status(status.error_code(), fmt::format("not found partition({}), {}.", parent, status.error_str()));
     }
@@ -362,8 +371,39 @@ PartitionPtr FileSystem::GetPartitionFromCache(Ino parent) { return partition_ca
 
 std::vector<PartitionPtr> FileSystem::GetAllPartitionsFromCache() { return partition_cache_.GetAll(); }
 
-Status FileSystem::GetPartitionFromStore(Context& ctx, Ino parent, const std::string& reason,
-                                         PartitionPtr& out_partition) {
+Status FileSystem::FetchPartition(Context& ctx, Ino parent, const std::string& reason, PartitionPtr& out_partition) {
+  // Trash parents never enter partition_cache_ and are admin-rare — skip singleflight.
+  if (IsTrashInode(parent)) {
+    return DoFetchPartition(ctx, parent, reason, out_partition);
+  }
+
+  if (!FLAGS_mds_partition_inflight_controller_enable) {
+    return DoFetchPartition(ctx, parent, reason, out_partition);
+  }
+
+  // singleflight: coalesce concurrent store fetches of the same parent. The
+  // leader fetches, followers wait and share status/partition. OutOfDate
+  // callers re-validate the version in GetPartition and refetch if stale.
+  // std::shared_ptr<InflightPartitionFetch> inflight;
+  bool is_leader = false;
+  auto inflight = partition_inflight_controller_.Get(parent, is_leader);
+
+  if (!is_leader) {
+    inflight->done.wait();
+    out_partition = inflight->partition;
+    return inflight->status;
+  }
+
+  inflight->status = DoFetchPartition(ctx, parent, reason, out_partition);
+  inflight->partition = out_partition;
+  partition_inflight_controller_.Delete(parent);
+
+  inflight->done.signal();
+
+  return inflight->status;
+}
+
+Status FileSystem::DoFetchPartition(Context& ctx, Ino parent, const std::string& reason, PartitionPtr& out_partition) {
   auto& trace = ctx.GetTrace();
   const std::string& request_id = ctx.RequestId();
   const std::string& method_name = ctx.MethodName();
@@ -2854,7 +2894,7 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, RenameResult& 
   // bucket_ino> may now point at an inode that no longer lives under .trash.
   // Drop the cache so subsequent trash-move requests re-resolve cleanly.
   // (kTrashInodeId itself is not in partition_cache_ — trash partitions
-  // bypass the cache entirely; see GetPartitionFromStore.)
+  // bypass the cache entirely; see FetchPartition.)
   if (old_parent == kTrashInodeId) {
     last_trash_bucket_ino_.store(0, std::memory_order_release);
   }
@@ -4073,7 +4113,7 @@ Status FileSystem::RestoreFromTrash(Context& ctx, Ino trash_parent, const std::s
   }
 
   // Trash partitions don't participate in partition_cache_ (see
-  // GetPartitionFromStore), so there's nothing to evict here — the next
+  // FetchPartition), so there's nothing to evict here — the next
   // ls .trash/<bucket> reads dentries directly from KV.
 
   // Refresh parent_memo_ for restored DIRECTORY: the dir's parents() just
