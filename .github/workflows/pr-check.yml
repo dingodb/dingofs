@@ -1,3 +1,11 @@
+# Repository ruleset configuration for this ordinary CI workflow:
+# - require status checks: unit-test, build, e2e, jenkins-regression
+# - expected source for each status check: GitHub Actions
+# - do not also add this file as an organization required workflow
+#   (otherwise the merge_group workflow can be dispatched twice)
+# - Environment jenkins-regression: no required reviewers
+# - store JENKINS_USER and JENKINS_API_TOKEN only as Environment secrets
+
 name: PR Check
 
 on:
@@ -5,6 +13,9 @@ on:
     branches: [main]
   merge_group:
     branches: [main]
+
+permissions:
+  contents: read
 
 concurrency:
   group: pr-check-${{ github.event.pull_request.number || github.event.merge_group.head_sha }}
@@ -15,6 +26,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      # Candidate-controlled test: honest regression coverage only, not a security boundary.
+      - name: Check Jenkins workflow contract
+        run: bash scripts/test/test_pr_check_jenkins.sh
 
       - name: Copy dingofs repository
         run: |
@@ -192,3 +207,31 @@ jobs:
       - name: Tear down
         if: always()
         run: bash ${{ github.workspace }}/.github/scripts/down.sh || true
+
+  jenkins-regression:
+    needs: e2e
+    if: github.event_name == 'merge_group' && needs.e2e.result == 'success'
+    runs-on: ubuntu-latest
+    environment: jenkins-regression
+    timeout-minutes: 270
+    steps:
+      - name: Checkout trusted Jenkins trigger
+        uses: actions/checkout@v4
+        with:
+          repository: dingodb/dingofs
+          ref: refs/heads/main
+          path: trusted-main
+          persist-credentials: false
+
+      - name: Trigger Jenkins regression and wait
+        env:
+          JENKINS_URL: ${{ vars.JENKINS_URL }}
+          JENKINS_JOB_PATH: ${{ vars.JENKINS_JOB_PATH }}
+          JENKINS_USER: ${{ secrets.JENKINS_USER }}
+          JENKINS_API_TOKEN: ${{ secrets.JENKINS_API_TOKEN }}
+          GIT_REF: ${{ github.ref }}
+          GIT_SHA: ${{ github.sha }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SERVER_URL: ${{ github.server_url }}
+        run: bash "${GITHUB_WORKSPACE}/trusted-main/.github/scripts/trigger-jenkins.sh"

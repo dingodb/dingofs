@@ -1,0 +1,37 @@
+# Required organization ruleset configuration (outside this workflow):
+# - source repository: dingodb/dingofs
+# - workflow path: .github/workflows/pr-source.yml
+# - ref: refs/heads/main
+# - require the workflow by source/path/ref, never by check name alone
+# - merge queue grouping strategy: ALLGREEN
+# - no bypass actors
+
+name: PR Source
+
+on:
+  pull_request_target:
+    branches: [main]
+  merge_group:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  trusted-source:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require a branch from this repository
+        if: github.event_name == 'pull_request_target'
+        env:
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPOSITORY: ${{ github.event.pull_request.base.repo.full_name }}
+        run: |
+          if [[ "$HEAD_REPOSITORY" != "$BASE_REPOSITORY" ]]; then
+            echo "Only branches from $BASE_REPOSITORY may enter the merge queue" >&2
+            exit 1
+          fi
+
+      - name: Confirm merge queue admission
+        if: github.event_name == 'merge_group'
+        run: echo "The merge group was admitted only after the PR source gate passed"
