@@ -166,6 +166,7 @@ DEFINE_validator(vfs_meta_warmup_small_file_ttl_s, brpc::PassValidate);
 // vfs meta
 
 DEFINE_uint32(vfs_meta_read_dir_batch_size, 1024, "read dir batch size.");
+DEFINE_bool(vfs_meta_use_rdma, false, "use RDMA for MDS RPC");
 DEFINE_uint32(vfs_meta_rpc_timeout_ms, 10000, "rpc timeout ms");
 DEFINE_validator(vfs_meta_rpc_timeout_ms, brpc::PassValidate);
 

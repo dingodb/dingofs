@@ -21,8 +21,14 @@ namespace client {
 DEFINE_int32(timeout_ms, 8000, "Timeout for each request");
 DEFINE_bool(log_each_request, false, "print log each request");
 
+DEFINE_bool(use_rdma, false, "use rdma");
+
 bool Interaction::Init(const std::string& addr) {
-  if (channel_.Init(addr.c_str(), nullptr) != 0) {
+  brpc::ChannelOptions options;
+  options.socket_mode =
+      FLAGS_use_rdma ? brpc::SOCKET_MODE_RDMA : brpc::SOCKET_MODE_TCP;
+
+  if (channel_.Init(addr.c_str(), &options) != 0) {
     LOG(ERROR) << fmt::format("Init channel fail, addr({})", addr);
     return false;
   }

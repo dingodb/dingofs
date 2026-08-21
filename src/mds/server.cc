@@ -75,6 +75,7 @@ DEFINE_uint32(mds_server_id, 1001, "server id, must be unique in the cluster");
 DEFINE_string(mds_server_host, "127.0.0.1", "server host");
 DEFINE_string(mds_server_listen_host, "0.0.0.0", "server listen host");
 DEFINE_uint32(mds_server_port, 7801, "server port");
+DEFINE_bool(mds_use_rdma, false, "use RDMA for MDS RPC");
 DEFINE_bool(mds_cache_member_enable_cache, true, "cache member enable cache, default:true");
 
 DECLARE_string(mds_storage_engine);
@@ -678,6 +679,8 @@ void Server::Run() {
   brpc_server_.set_version(dingofs::DingoShortVersionString());
 
   brpc::ServerOptions option;
+  option.socket_mode =
+      FLAGS_mds_use_rdma ? brpc::SOCKET_MODE_RDMA : brpc::SOCKET_MODE_TCP;
   CHECK(brpc_server_.Start(GetListenAddr().c_str(), &option) == 0) << "start brpc server error.";
 
   // Start crontab only after brpc is listening, so heartbeat doesn't report
