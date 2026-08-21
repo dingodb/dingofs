@@ -118,6 +118,7 @@ DECLARE_int32(vfs_periodic_trim_mem_ms);
 
 // vfs meta
 DECLARE_uint32(vfs_meta_read_dir_batch_size);
+DECLARE_bool(vfs_meta_use_rdma);
 DECLARE_uint32(vfs_meta_rpc_timeout_ms);
 DECLARE_int32(vfs_meta_rpc_retry_times);
 

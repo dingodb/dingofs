@@ -107,6 +107,8 @@ void RPC::Stop() {
 
 bool RPC::CheckMdsAlive(const EndPoint& endpoint) {
   brpc::ChannelOptions options;
+  options.socket_mode = FLAGS_vfs_meta_use_rdma ? brpc::SOCKET_MODE_RDMA
+                                                : brpc::SOCKET_MODE_TCP;
   options.connect_timeout_ms = kConnectTimeoutMs;
   options.timeout_ms = FLAGS_vfs_meta_rpc_timeout_ms;
   options.max_retry = FLAGS_vfs_meta_rpc_retry_times;
@@ -220,6 +222,8 @@ RPC::ChannelSPtr RPC::NewChannel(const EndPoint& endpoint) {  // NOLINT
 
   ChannelSPtr channel = std::make_shared<brpc::Channel>();
   brpc::ChannelOptions options;
+  options.socket_mode = FLAGS_vfs_meta_use_rdma ? brpc::SOCKET_MODE_RDMA
+                                                : brpc::SOCKET_MODE_TCP;
   options.connect_timeout_ms = kConnectTimeoutMs;
   options.timeout_ms = FLAGS_vfs_meta_rpc_timeout_ms;
   options.max_retry = FLAGS_vfs_meta_rpc_retry_times;

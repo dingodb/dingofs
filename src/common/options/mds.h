@@ -48,6 +48,7 @@ DECLARE_uint32(mds_server_id);
 DECLARE_string(mds_server_host);
 DECLARE_string(mds_server_listen_host);
 DECLARE_uint32(mds_server_port);
+DECLARE_bool(mds_use_rdma);
 
 // all mds share the same inode generator
 DECLARE_bool(mds_ino_generator_share_enable);
