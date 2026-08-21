@@ -27,8 +27,8 @@
 #include "dingofs/mds.pb.h"
 #include "json/value.h"
 #include "mds/common/context.h"
+#include "mds/common/inflight_controller.h"
 #include "mds/common/status.h"
-#include "mds/common/trash.h"
 #include "mds/common/type.h"
 #include "mds/filesystem/chunk_cache.h"
 #include "mds/filesystem/dentry.h"
@@ -390,7 +390,8 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   Status GetPartition(Context& ctx, uint64_t version, Ino parent, PartitionPtr& out_partition);
   PartitionPtr GetPartitionFromCache(Ino parent);
   std::vector<PartitionPtr> GetAllPartitionsFromCache();
-  Status GetPartitionFromStore(Context& ctx, Ino parent, const std::string& reason, PartitionPtr& out_partition);
+  Status FetchPartition(Context& ctx, Ino parent, const std::string& reason, PartitionPtr& out_partition);
+  Status DoFetchPartition(Context& ctx, Ino parent, const std::string& reason, PartitionPtr& out_partition);
 
   // get dentry
   Status GetDentryFromStore(Ino parent, const std::string& name, Dentry& dentry);
@@ -468,6 +469,18 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
 
   // organize dentry directory tree
   PartitionCache partition_cache_;
+
+  // singleflight for FetchPartition: coalesce concurrent store fetches
+  // of the same parent to reduce backend load. Entry lifetime = one RPC.
+  // struct InflightPartitionFetch {
+  //   bthread::CountdownEvent done{1};
+  //   Status status;
+  //   PartitionPtr partition;
+  // };
+  // bthread::Mutex inflight_fetch_mutex_;
+  // absl::flat_hash_map<Ino, std::shared_ptr<InflightPartitionFetch>> inflight_fetches_;
+
+  InflightController<Ino, PartitionPtr> partition_inflight_controller_;
 
   // organize inode
   InodeCache inode_cache_;
