@@ -26,6 +26,7 @@
 #include "absl/container/btree_map.h"
 #include "glog/logging.h"
 #include "json/value.h"
+#include "mds/common/inflight_controller.h"
 #include "mds/common/status.h"
 #include "mds/common/type.h"
 #include "mds/filesystem/dentry.h"
@@ -194,6 +195,7 @@ class ShardPartition {
   void DeleteShardNoLock(const std::string& start);
 
   Status FetchDirShard(const Range& range, DirShardSPtr& out_shard);
+  Status DoFetchDirShard(const Range& range, DirShardSPtr& out_shard);
 
   // refresh partition with latest inode
   bool Refresh(uint64_t new_version);
@@ -225,6 +227,8 @@ class ShardPartition {
   std::atomic<uint64_t> shard_id_generator_{1};
 
   OperationProcessorSPtr operation_processor_;
+
+  InflightController<std::string, DirShardSPtr> shard_inflight_controller_;
 };
 
 class PartitionCache {
