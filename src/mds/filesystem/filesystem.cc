@@ -386,16 +386,16 @@ Status FileSystem::FetchPartition(Context& ctx, Ino parent, const std::string& r
   // callers re-validate the version in GetPartition and refetch if stale.
   // std::shared_ptr<InflightPartitionFetch> inflight;
   bool is_leader = false;
-  auto inflight = partition_inflight_controller_.Get(parent, is_leader);
+  auto inflight = partition_inflight_controller_.GetOrCreate(parent, is_leader);
 
   if (!is_leader) {
     inflight->done.wait();
-    out_partition = inflight->partition;
+    out_partition = inflight->value;
     return inflight->status;
   }
 
   inflight->status = DoFetchPartition(ctx, parent, reason, out_partition);
-  inflight->partition = out_partition;
+  inflight->value = out_partition;
   partition_inflight_controller_.Delete(parent);
 
   inflight->done.signal();

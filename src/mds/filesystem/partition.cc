@@ -13,9 +13,6 @@
 // limitations under the License.
 
 #include "mds/filesystem/partition.h"
-#include "common/helper.h"
-
-#include <json/value.h>
 
 #include <algorithm>
 #include <atomic>
@@ -24,10 +21,12 @@
 #include <string>
 #include <vector>
 
+#include "brpc/reloadable_flags.h"
+#include "common/helper.h"
 #include "common/logging.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
-#include "mds/common/helper.h"
+#include "json/value.h"
 #include "utils/time.h"
 
 namespace dingofs {
@@ -40,6 +39,9 @@ DEFINE_uint32(mds_partition_cache_shard_max_count, 4 * 1024 * 1024, "partition c
 DEFINE_uint32(mds_partition_dentry_op_max_count, 100000, "partition dentry op max count");
 
 DEFINE_uint32(mds_partition_shard_split_threshold, 8192, "split shard when dentry count exceeds this");
+
+DEFINE_bool(mds_dirshard_inflight_controller_enable, true, "DirShard inflight controller enable.");
+DEFINE_validator(mds_dirshard_inflight_controller_enable, brpc::PassValidate);
 
 // --- DirShard implementation ---
 
@@ -453,6 +455,29 @@ void ShardPartition::DeleteShard(const std::string& start) {
 void ShardPartition::DeleteShardNoLock(const std::string& start) { shard_map_.erase(start); }
 
 Status ShardPartition::FetchDirShard(const Range& range, DirShardSPtr& out_shard) {
+  if (!FLAGS_mds_dirshard_inflight_controller_enable) {
+    return DoFetchDirShard(range, out_shard);
+  }
+
+  bool is_leader = false;
+  auto inflight = shard_inflight_controller_.GetOrCreate(range.ToString(), is_leader);
+
+  if (!is_leader) {
+    inflight->done.wait();
+    out_shard = inflight->value;
+    return inflight->status;
+  }
+
+  inflight->status = DoFetchDirShard(range, out_shard);
+  inflight->value = out_shard;
+  shard_inflight_controller_.Delete(range.ToString());
+
+  inflight->done.signal();
+
+  return inflight->status;
+}
+
+Status ShardPartition::DoFetchDirShard(const Range& range, DirShardSPtr& out_shard) {
   utils::Duration duration;
   absl::btree_map<std::string, Dentry> dentries;
   Trace trace;

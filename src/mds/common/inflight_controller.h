@@ -29,11 +29,11 @@ class InflightController {
   struct InflightEntry {
     bthread::CountdownEvent done{1};
     Status status;
-    U partition;
+    U value;
   };
   using InflightEntryPtr = std::shared_ptr<InflightEntry>;
 
-  InflightEntryPtr Get(const T& key, bool& is_leader) {
+  InflightEntryPtr GetOrCreate(const T& key, bool& is_leader) {
     std::lock_guard<bthread::Mutex> guard(mutex_);
 
     auto it = inflight_entries_.find(key);
