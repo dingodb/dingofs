@@ -5,14 +5,14 @@ ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 DOC="${ROOT}/.github/JENKINS_JOB_SETUP.md"
 
 require() {
-  if ! rg -q -- "$1" "${DOC}"; then
+  if ! grep -Eq -- "$1" "${DOC}"; then
     echo "missing Jenkins setup guidance: $1" >&2
     exit 1
   fi
 }
 
 forbid() {
-  if rg -q -- "$1" "${DOC}"; then
+  if grep -Eq -- "$1" "${DOC}"; then
     echo "stale Jenkins setup guidance: $1" >&2
     exit 1
   fi
