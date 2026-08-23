@@ -338,3 +338,15 @@ print("PASS: PR Check Jenkins contract")
 PY
 
 bash "${ROOT}/scripts/test/test_jenkins_setup_docs.sh"
+
+# GitHub-hosted runners do not guarantee that ripgrep is installed. Exercise
+# the documentation contract with a minimal PATH that provides grep but not rg.
+fallback_path=$(mktemp -d)
+cleanup_fallback_path() {
+  rm -rf -- "${fallback_path}"
+}
+trap cleanup_fallback_path EXIT
+ln -s "$(command -v dirname)" "${fallback_path}/dirname"
+ln -s "$(command -v grep)" "${fallback_path}/grep"
+PATH="${fallback_path}" /usr/bin/bash \
+  "${ROOT}/scripts/test/test_jenkins_setup_docs.sh"
