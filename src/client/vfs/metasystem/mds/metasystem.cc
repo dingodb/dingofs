@@ -26,12 +26,9 @@
 #include "client/vfs/common/client_id.h"
 #include "client/vfs/components/context.h"
 #include "client/vfs/components/warmup_manager.h"
-#include "client/vfs/data_buffer.h"
 #include "client/vfs/metasystem/mds/helper.h"
 #include "client/vfs/metasystem/mds/mds_client.h"
 #include "client/vfs/vfs_meta.h"
-#include "common/const.h"
-#include "common/io_buffer.h"
 #include "common/logging.h"
 #include "common/options/client.h"
 #include "common/status.h"
@@ -64,11 +61,19 @@ const uint32_t kCleanExpiredModifyTimeMemoIntervalS = 300;  // seconds
 
 const std::string kSliceIdCacheName = "slice";
 
-const std::string kExecutorWorkerSetName = "meta_worker_set";
+const std::string kExecutorWorkerSetName = "meta_executor";
 
-DEFINE_uint32(vfs_meta_worker_num, 128, "number of meta workers");
-DEFINE_uint32(vfs_meta_worker_max_pending_num, 1048576,
+DEFINE_uint32(vfs_meta_executor_worker_num, 128, "number of meta workers");
+DEFINE_uint32(vfs_meta_executor_max_pending_num, 1048576,
               "meta worker max pending num");
+
+const std::string kBgExecutorWorkerSetName = "meta_bg_executor";
+
+DEFINE_uint32(vfs_meta_bg_executor_worker_num, 8, "number of compact workers");
+DEFINE_uint32(vfs_meta_bg_executor_max_pending_num, 1024,
+              "compact worker max pending num");
+DEFINE_bool(vfs_meta_bg_executor_use_pthread, true,
+            "compact worker use pthread");
 
 DEFINE_uint32(vfs_meta_copy_file_range_max_chunks_per_rpc, 256,
               "Max dst chunks affected by one CopyFileRange RPC window.");
@@ -111,15 +116,22 @@ MDSMetaSystem::MDSMetaSystem(mds::FsInfoEntry fs_info_entry,
     : name_(fs_info_entry.fs_name()),
       client_id_(client_id),
       fs_info_(fs_info_entry),
-      executor_(kExecutorWorkerSetName, FLAGS_vfs_meta_worker_num,
-                FLAGS_vfs_meta_worker_max_pending_num),
+      executor_(kExecutorWorkerSetName, FLAGS_vfs_meta_executor_worker_num,
+                FLAGS_vfs_meta_executor_max_pending_num),
+      bg_executor_(kBgExecutorWorkerSetName,
+                   FLAGS_vfs_meta_bg_executor_worker_num,
+                   FLAGS_vfs_meta_bg_executor_max_pending_num,
+                   FLAGS_vfs_meta_bg_executor_use_pthread),
       mds_client_(client_id, fs_info_, std::move(rpc), trace_manager),
       inode_cache_(fs_info_.GetFsId()),
       id_cache_(kSliceIdCacheName, mds_client_),
       file_session_map_(inode_cache_, fs_info_.GetChunkSize()),
       dir_profile_cache_(DirProfileCache::New()),
       batch_processor_(mds_client_),
-      compactor_(compactor) {}
+      compactor_(compactor),
+      compact_processor_(mds_client_, compactor_, bg_executor_),
+      block_cache_cleaner_(fs_info_.GetFsId(), fs_info_.GetChunkSize(),
+                           bg_executor_, mds_client_) {}
 
 MDSMetaSystem::~MDSMetaSystem() {}  // NOLINT
 
@@ -136,8 +148,8 @@ Status MDSMetaSystem::Init(bool skip_mount) {
     return Status::Internal("init executor fail");
   }
 
-  if (!compact_processor_.Init()) {
-    return Status::Internal("init compact processor fail");
+  if (!bg_executor_.Init()) {
+    return Status::Internal("init bg_executor fail");
   }
 
   // mount fs — skipped when this is a new process inheriting an existing
@@ -168,13 +180,17 @@ void MDSMetaSystem::Stop(bool skip_unmount) {
 
   FlushAllFile();
 
-  crontab_manager_.Destroy();
+  crontab_manager_.Stop();
 
   batch_processor_.Stop();
 
+  compact_processor_.Stop();
+
+  block_cache_cleaner_.Stop();
+
   executor_.Stop();
 
-  compact_processor_.Stop();
+  bg_executor_.Stop();
 
   // Skipped when this is the old process handing off its session to the new
   // process.
@@ -1311,6 +1327,11 @@ Status MDSMetaSystem::Unlink(ContextSPtr ctx, Ino parent,
 
   dir_iterator_manager_.DeleteEntry(parent, name);
 
+  if (attr_entry.type() == pb::mds::FileType::FILE &&
+      mds::IsDeleted(attr_entry)) {
+    block_cache_cleaner_.Execute(attr_entry.ino(), attr_entry.length());
+  }
+
   return Status::OK();
 }
 
@@ -1484,23 +1505,30 @@ Status MDSMetaSystem::Fallocate(ContextSPtr ctx, Ino ino, int mode,
 
   MDSClient::AttrWithChunkOut out;
   status = mds_client_.Fallocate(ctx, ino, mode, offset, length, out);
-  if (!status.ok()) return status;
-
-  // Invalidate caches on success OR ambiguous net error (server may have
-  // committed the txn but the response was lost — cache TTL is 3600s, so
-  // stale could persist that long). Business errors (EQUOTA / EALLOC_ID /
-  // EINTERNAL / EPERM) roll the txn back atomically on the server side —
-  // cache stays consistent, skip.
-  if (status.ok() || status.IsNetError()) {
-    chunk_memo_.Forget(ino);
+  auto file_session = file_session_map_.GetSession(ino);
+  const bool collapse = mode == FALLOC_FL_COLLAPSE_RANGE;
+  if (!status.ok()) {
+    if (status.IsNetError()) {
+      chunk_memo_.Forget(ino);
+      if (collapse && file_session != nullptr)
+        file_session->GetChunkSet()->Reset();
+    }
+    return status;
   }
 
+  chunk_memo_.Forget(ino);
   modify_time_memo_.Remember(ino);
   PutInodeToCache(out.attr_entry);
 
-  auto file_session = file_session_map_.GetSession(ino);
-  if (file_session != nullptr && !out.effected_chunks.empty()) {
-    file_session->GetChunkSet()->Put(out.effected_chunks, "fallocate");
+  if (file_session != nullptr) {
+    if (collapse) {
+      // Every cached index at and after offset may now refer to a different
+      // chunk. Reset rather than trying to delete and renumber individual
+      // entries.
+      file_session->GetChunkSet()->Reset();
+    } else if (!out.effected_chunks.empty()) {
+      file_session->GetChunkSet()->Put(out.effected_chunks, "fallocate");
+    }
   }
 
   return status;
@@ -1839,8 +1867,7 @@ Status MDSMetaSystem::AsyncFlushSlice(ContextSPtr& ctx, ChunkSetSPtr chunk_set,
     for (auto& chunk : chunks) {
       auto status = chunk->IsNeedCompaction();
       if (status.ok()) {
-        compact_processor_.LaunchCompact(ino, GetInodeFromCache(ino), chunk,
-                                         mds_client_, compactor_, true);
+        compact_processor_.Execute(ino, GetInodeFromCache(ino), chunk, true);
       }
     }
   }
@@ -1985,9 +2012,8 @@ Status MDSMetaSystem::Compact(ContextSPtr ctx, Ino ino, uint32_t chunk_index,
 
   for (auto& chunk : chunks) {
     auto chunk_ptr = Chunk::New(ino, chunk, "manual_compact");
-    auto status =
-        compact_processor_.LaunchCompact(ino, GetInodeFromCache(ino), chunk_ptr,
-                                         mds_client_, compactor_, is_async);
+    auto status = compact_processor_.Execute(ino, GetInodeFromCache(ino),
+                                             chunk_ptr, is_async);
     if (!status.ok()) return status;
   }
 

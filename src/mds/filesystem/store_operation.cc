@@ -1639,7 +1639,10 @@ void FallocateOperation::SetZero(BatchSharedParam& shared_param, AttrEntry& attr
 }
 
 Status FallocateOperation::PreProcess(TxnUPtr& txn, BatchSharedParam& shared_param) {
-  if (!(param_.mode & FALLOC_FL_PUNCH_HOLE || param_.mode & FALLOC_FL_ZERO_RANGE)) return Status::OK();
+  if (!(param_.mode & FALLOC_FL_PUNCH_HOLE || param_.mode & FALLOC_FL_ZERO_RANGE ||
+        param_.mode == FALLOC_FL_COLLAPSE_RANGE)) {
+    return Status::OK();
+  }
   if (shared_param.is_prefetched_chunk) return Status::OK();
 
   const uint32_t fs_id = param_.fs_id;
@@ -1665,7 +1668,78 @@ void FallocateOperation::PostProcess(BatchSharedParam& shared_param) {
   }
 }
 
-Status FallocateOperation::RunInBatch(TxnUPtr&, BatchSharedParam& shared_param) {
+Status FallocateOperation::CollapseRange(TxnUPtr& txn, BatchSharedParam& shared_param, AttrEntry& attr) {
+  const uint64_t chunk_size = param_.chunk_size;
+  if (chunk_size == 0 || param_.len == 0 || param_.offset % chunk_size != 0 || param_.len % chunk_size != 0 ||
+      param_.offset >= attr.length() || param_.len >= attr.length() - param_.offset) {
+    return Status(pb::error::EILLEGAL_PARAMTETER, "invalid collapse range");
+  }
+
+  // ponytail: one transaction keeps collapse atomic; split transactions need a
+  // recovery marker and would expose partially shifted files.
+  const uint64_t first_chunk = param_.offset / chunk_size;
+  const uint64_t removed_chunks = param_.len / chunk_size;
+  const uint64_t end_chunk = first_chunk + removed_chunks;
+
+  struct ShiftedChunk {
+    ChunkEntry chunk;
+    uint64_t target_version;
+  };
+  std::vector<ShiftedChunk> shifted_chunks;
+  auto first = shared_param.chunk_map.lower_bound(first_chunk);
+  for (auto it = first; it != shared_param.chunk_map.end(); ++it) {
+    const uint64_t old_index = it->first;
+    shared_param.changed_chunk_indexes.erase(old_index);
+
+    auto status = txn->Delete(MetaCodec::EncodeChunkKey(param_.fs_id, param_.ino, old_index));
+    if (!status.ok()) return status;
+
+    if (old_index < end_chunk) {
+      TrashSliceList trash_slice_list;
+      for (const auto& slice : it->second.slices()) {
+        if (slice.id() == 0) continue;
+        auto* trash_slice = trash_slice_list.add_slices();
+        trash_slice->set_fs_id(param_.fs_id);
+        trash_slice->set_ino(param_.ino);
+        trash_slice->set_chunk_index(old_index);
+        trash_slice->set_block_size(it->second.block_size());
+        trash_slice->set_chunk_size(it->second.chunk_size());
+        trash_slice->mutable_slice()->CopyFrom(slice);
+      }
+      if (!trash_slice_list.slices().empty()) {
+        trash_slice_list.set_time_ms(utils::TimestampMs());
+        status = txn->Put(MetaCodec::EncodeDelSliceKey(param_.fs_id, param_.ino, old_index, GetTime()),
+                          MetaCodec::EncodeDelSliceValue(trash_slice_list));
+        if (!status.ok()) return status;
+      }
+    } else {
+      const uint64_t target_index = old_index - removed_chunks;
+      const auto target = shared_param.chunk_map.find(target_index);
+      shifted_chunks.push_back({it->second, target == shared_param.chunk_map.end() ? 0 : target->second.version()});
+    }
+  }
+
+  shared_param.chunk_map.erase(first, shared_param.chunk_map.end());
+  for (auto& shifted : shifted_chunks) {
+    const uint64_t target_index = shifted.chunk.index() - removed_chunks;
+    shifted.chunk.set_index(target_index);
+    shifted.chunk.set_version(std::max(shifted.chunk.version(), shifted.target_version) + 1);
+
+    auto status = txn->Put(MetaCodec::EncodeChunkKey(param_.fs_id, param_.ino, target_index),
+                           MetaCodec::EncodeChunkValue(shifted.chunk));
+    if (!status.ok()) return status;
+
+    shared_param.chunk_map[target_index] = shifted.chunk;
+    shared_param.changed_chunk_indexes.insert(target_index);
+  }
+
+  attr.set_length(attr.length() - param_.len);
+  attr.set_ctime(std::max(attr.ctime(), GetTime()));
+  attr.set_mtime(std::max(attr.mtime(), GetTime()));
+  return Status::OK();
+}
+
+Status FallocateOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) {
   auto& attr = shared_param.attr;
   const int32_t mode_ = param_.mode;
   const uint64_t offset = param_.offset;
@@ -1674,12 +1748,20 @@ Status FallocateOperation::RunInBatch(TxnUPtr&, BatchSharedParam& shared_param) 
   result_.delta_bytes = 0;
   result_.effected_chunks.clear();
 
+  if ((mode_ & FALLOC_FL_COLLAPSE_RANGE) && mode_ != FALLOC_FL_COLLAPSE_RANGE) {
+    return Status(pb::error::EILLEGAL_PARAMTETER, "invalid fallocate mode");
+  }
+
   // Pre-image length, before PreAlloc/SetZero mutate attr. The growth is charged
   // to quota and dir-stat by the caller via result_.delta_bytes.
   const uint64_t file_length = attr.length();
 
   if (mode_ == 0) {
     PreAlloc(attr, offset, len, false);
+
+  } else if (mode_ == FALLOC_FL_COLLAPSE_RANGE) {
+    auto status = CollapseRange(txn, shared_param, attr);
+    if (!status.ok()) return status;
 
   } else if (mode_ & FALLOC_FL_PUNCH_HOLE) {
     SetZero(shared_param, attr, offset, len, true);
@@ -1690,9 +1772,6 @@ Status FallocateOperation::RunInBatch(TxnUPtr&, BatchSharedParam& shared_param) 
 
   } else if (mode_ & FALLOC_FL_KEEP_SIZE) {
     PreAlloc(attr, offset, len, true);
-
-  } else if (mode_ & FALLOC_FL_COLLAPSE_RANGE) {
-    return Status(pb::error::ENOT_SUPPORT, "not support FALLOC_FL_COLLAPSE_RANGE");
   }
 
   result_.delta_bytes = static_cast<int64_t>(attr.length()) - static_cast<int64_t>(file_length);
@@ -4060,7 +4139,7 @@ bool OperationProcessor::Init() {
   return true;
 }
 
-bool OperationProcessor::Destroy() {
+bool OperationProcessor::Stop() {
   is_stop_.store(true);
 
   for (auto& dispatcher : dispatchers_) {
@@ -4070,7 +4149,7 @@ bool OperationProcessor::Destroy() {
     }
   }
 
-  async_worker_->Destroy();
+  async_worker_->Stop();
 
   return true;
 }

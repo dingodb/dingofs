@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include "tools/mds-cli/br.h"
-#include "common/helper.h"
 
 #include <unistd.h>
 
@@ -31,6 +30,7 @@
 
 #include "common/blockaccess/block_accesser.h"
 #include "common/const.h"
+#include "common/helper.h"
 #include "common/logging.h"
 #include "dingofs/error.pb.h"
 #include "fmt/format.h"
@@ -599,7 +599,7 @@ bool Backup::Init(const std::string& coor_addr) {
 
 void Backup::Destroy() {
   if (operation_processor_) {
-    operation_processor_->Destroy();
+    operation_processor_->Stop();
     operation_processor_.reset();
   }
 }
@@ -690,7 +690,8 @@ Status Backup::BackupMetaTable(OutputUPtr output) {
         } else {
           output_status =
               Status(pb::error::EINTERNAL,
-                     fmt::format("unknown key({})", ::dingofs::Helper::StringToHex(key)));
+                     fmt::format("unknown key({})",
+                                 ::dingofs::Helper::StringToHex(key)));
           return false;
         }
 
@@ -753,7 +754,8 @@ Status Backup::BackupFsMetaTable(uint32_t fs_id, OutputUPtr output) {
         } else {
           output_status =
               Status(pb::error::EINTERNAL,
-                     fmt::format("unknown key({})", ::dingofs::Helper::StringToHex(key)));
+                     fmt::format("unknown key({})",
+                                 ::dingofs::Helper::StringToHex(key)));
           return false;
         }
 
@@ -805,7 +807,7 @@ bool Restore::Init(const std::string& coor_addr) {
 
 void Restore::Destroy() {
   if (operation_processor_) {
-    operation_processor_->Destroy();
+    operation_processor_->Stop();
     operation_processor_.reset();
   }
 }
@@ -964,8 +966,9 @@ bool IsValidProtoValue(const std::string& value) {
 }
 
 Status InvalidValueStatus(const std::string& key) {
-  return Status(pb::error::EINTERNAL, fmt::format("invalid value for key({})",
-                                                  ::dingofs::Helper::StringToHex(key)));
+  return Status(pb::error::EINTERNAL,
+                fmt::format("invalid value for key({})",
+                            ::dingofs::Helper::StringToHex(key)));
 }
 
 Status ValidateMetaTableInput(Input* input, MetaTableStats& stats) {
@@ -1014,8 +1017,9 @@ Status ValidateMetaTableInput(Input* input, MetaTableStats& stats) {
       ++stats.slice_ref_count;
       is_valid_value = IsValidProtoValue<SliceRefEntry>(value);
     } else {
-      return Status(pb::error::EINTERNAL,
-                    fmt::format("unknown key({})", ::dingofs::Helper::StringToHex(key)));
+      return Status(
+          pb::error::EINTERNAL,
+          fmt::format("unknown key({})", ::dingofs::Helper::StringToHex(key)));
     }
     if (!is_valid_value) return InvalidValueStatus(key);
 
@@ -1077,8 +1081,9 @@ Status ValidateFsMetaTableInput(uint32_t fs_id, Input* input,
       ++stats.del_file_count;
       is_valid_value = IsValidProtoValue<AttrEntry>(value);
     } else {
-      return Status(pb::error::EINTERNAL,
-                    fmt::format("unknown key({})", ::dingofs::Helper::StringToHex(key)));
+      return Status(
+          pb::error::EINTERNAL,
+          fmt::format("unknown key({})", ::dingofs::Helper::StringToHex(key)));
     }
     if (!is_valid_value) return InvalidValueStatus(key);
 
@@ -1286,7 +1291,8 @@ bool RestoreCommandRunner::Run(const Options& options,
   if (options.input_type == "file") {
     restore_options.type = Type::kFile;
     restore_options.file_path = options.file_path;
-    if (options.file_path.empty() || !::dingofs::Helper::IsExistPath(options.file_path)) {
+    if (options.file_path.empty() ||
+        !::dingofs::Helper::IsExistPath(options.file_path)) {
       std::cerr << fmt::format("file path is empty or not exist.") << '\n';
       return true;
     }

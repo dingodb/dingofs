@@ -74,6 +74,14 @@ static const std::string kFsTableName = "dingofs";
 static const std::string kStatsName = ".stats";
 static const std::string kRecyleName = ".recycle";
 
+const std::string kQuotaWorkerSetName = "QUOTA_WORKER_SET";
+DEFINE_uint32(mds_quota_worker_num, 24, "quota worker number");
+DEFINE_uint32(mds_quota_worker_max_pending_num, 1000000, "quota worker max pending number");
+
+const std::string kDirStatWorkerSetName = "DIR_STAT_WORKER_SET";
+DEFINE_uint32(mds_dir_stat_worker_num, 24, "dir stat worker number");
+DEFINE_uint32(mds_dir_stat_worker_max_pending_num, 1000000, "dir stat worker max pending number");
+
 DEFINE_uint32(mds_filesystem_name_max_size, 1024, "Max size of filesystem name.");
 DEFINE_validator(mds_filesystem_name_max_size, brpc::PassValidate);
 DEFINE_uint32(mds_filesystem_hash_bucket_num, 1024, "Filesystem hash bucket num.");
@@ -143,8 +151,8 @@ static bool IsInodeInTrash(const InodeSPtr& inode) {
 }
 
 FileSystem::FileSystem(uint64_t self_mds_id, FsInfoSPtr fs_info, IdGeneratorUPtr ino_id_generator,
-                       IdGeneratorSPtr slice_id_generator, KVStorageSPtr kv_storage,
-                       OperationProcessorSPtr operation_processor, MDSMetaMapSPtr mds_meta_map,
+                       IdGeneratorSPtr slice_id_generator, OperationProcessorSPtr operation_processor,
+                       WarmupProcessorSPtr warmup_processor, MDSMetaMapSPtr mds_meta_map,
                        WorkerSetSPtr quota_worker_set, WorkerSetSPtr dir_stat_worker_set,
                        notify::NotifyBuddySPtr notify_buddy)
     : self_mds_id_(self_mds_id),
@@ -154,13 +162,13 @@ FileSystem::FileSystem(uint64_t self_mds_id, FsInfoSPtr fs_info, IdGeneratorUPtr
       partition_cache_(fs_id_),
       ino_id_generator_(std::move(ino_id_generator)),
       slice_id_generator_(slice_id_generator),
-      kv_storage_(kv_storage),
       operation_processor_(operation_processor),
       mds_meta_map_(mds_meta_map),
       parent_memo_(fs_id_),
       chunk_cache_(fs_id_),
       quota_manager_(fs_info, parent_memo_, operation_processor, quota_worker_set, notify_buddy),
       dir_stat_manager_(fs_info, operation_processor, dir_stat_worker_set),
+      warmup_processor_(warmup_processor),
       notify_buddy_(notify_buddy),
       file_session_manager_(fs_id_, operation_processor) {
   // Inject the live-tree recompute: DirStatManager's seed/repair paths need it
@@ -172,9 +180,9 @@ FileSystem::FileSystem(uint64_t self_mds_id, FsInfoSPtr fs_info, IdGeneratorUPtr
 
 FileSystem::~FileSystem() {
   // destroy
-  quota_manager_.Destroy();
+  quota_manager_.Stop();
 
-  renamer_.Destroy();
+  renamer_.Stop();
 }
 
 FileSystemSPtr FileSystem::GetSelfPtr() { return std::dynamic_pointer_cast<FileSystem>(shared_from_this()); }
@@ -197,6 +205,8 @@ bool FileSystem::Init() {
 
   return true;
 }
+
+void FileSystem::Stop() {}
 
 // odd number is dir inode
 Status FileSystem::GenDirIno(Ino& ino) {
@@ -1834,6 +1844,14 @@ Status FileSystem::ReadDir(Context& ctx, Ino ino, const std::string& last_name, 
       }
 
       entry_out.attr = inode->ToAttr();
+
+      // warmup small file chunks in cache
+      if (IsFile(dentry.INo()) && dingofs::Helper::IsSmallFile(entry_out.attr.length()) &&
+          !chunk_cache_.IsExist(dentry.INo())) {
+        // just first chunk because small file
+        warmup_processor_->Execute(
+            WarmupChunkTask::Param{.fs = GetSelfPtr(), .ino = dentry.INo(), .chunk_indexes = {0}});
+      }
     }
 
     entry_outs.push_back(std::move(entry_out));
@@ -3122,6 +3140,16 @@ Status FileSystem::Fallocate(Context& ctx, Ino ino, int32_t mode, uint64_t offse
     return Status(pb::error::ENOT_SUPPORT, "cannot fallocate on trashed inode");
   }
 
+  if (mode & FALLOC_FL_COLLAPSE_RANGE) {
+    const uint64_t chunk_size = fs_info_->GetChunkSize();
+    const bool valid_range = mode == FALLOC_FL_COLLAPSE_RANGE && chunk_size != 0 && len != 0 &&
+                             offset % chunk_size == 0 && len % chunk_size == 0 && offset < inode->Length() &&
+                             len < inode->Length() - offset;
+    if (!valid_range) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "invalid collapse range");
+    }
+  }
+
   auto parse_mode_fn = [](int32_t mode) -> const char* {
     if (mode == 0) {
       return "PreAlloc";
@@ -3129,7 +3157,8 @@ Status FileSystem::Fallocate(Context& ctx, Ino ino, int32_t mode, uint64_t offse
       return "PunchHole";
     } else if (mode & FALLOC_FL_ZERO_RANGE) {
       return (mode & FALLOC_FL_KEEP_SIZE) ? "ZeroRangeKeepSize" : "ZeroRange";
-
+    } else if (mode == FALLOC_FL_COLLAPSE_RANGE) {
+      return "CollapseRange";
     } else {
       return "Unknown";
     }
@@ -3191,7 +3220,9 @@ Status FileSystem::Fallocate(Context& ctx, Ino ino, int32_t mode, uint64_t offse
   std::string reason = fmt::format("fallocate.{}.{}", request_id, ino);
   UpsertInodeCache(attr, reason);
 
-  // update chunk cache
+  // A collapse changes the meaning of every cached chunk index at and after
+  // offset. Drop the whole inode cache before installing the shifted entries.
+  if (mode == FALLOC_FL_COLLAPSE_RANGE) chunk_cache_.Delete(ino);
   for (auto& chunk : effected_chunks) chunk_cache_.PutIf(ino, chunk);
 
   // update quota
@@ -4148,21 +4179,30 @@ void FileSystem::RecordTrashMoveOutcome(Ino bucket_ino) {
   }
 }
 
-FileSystemSet::FileSystemSet(CoordinatorClientSPtr coordinator_client, IdGeneratorUPtr fs_id_generator,
-                             IdGeneratorSPtr slice_id_generator, KVStorageSPtr kv_storage, MDSMeta self_mds_meta,
-                             MDSMetaMapSPtr mds_meta_map, OperationProcessorSPtr operation_processor,
-                             WorkerSetSPtr quota_worker_set, WorkerSetSPtr dir_stat_worker_set,
-                             notify::NotifyBuddySPtr notify_buddy)
-    : coordinator_client_(coordinator_client),
-      fs_id_generator_(std::move(fs_id_generator)),
-      slice_id_generator_(slice_id_generator),
-      kv_storage_(kv_storage),
+FileSystemSet::FileSystemSet(KVStorageSPtr kv_storage, MDSMeta self_mds_meta, MDSMetaMapSPtr mds_meta_map,
+                             OperationProcessorSPtr operation_processor, notify::NotifyBuddySPtr notify_buddy)
+    : kv_storage_(kv_storage),
       self_mds_meta_(self_mds_meta),
       mds_meta_map_(mds_meta_map),
       operation_processor_(operation_processor),
-      quota_worker_set_(quota_worker_set),
-      dir_stat_worker_set_(dir_stat_worker_set),
-      notify_buddy_(notify_buddy) {}
+      warmup_processor_(WarmupProcessor::New(operation_processor)),
+      notify_buddy_(notify_buddy) {
+  fs_id_generator_ = NewFsIdGenerator(kv_storage_);
+  CHECK(fs_id_generator_ != nullptr) << "fs_id_generator is null.";
+
+  slice_id_generator_ = FLAGS_mds_slice_id_generator_share_enable
+                            ? NewSliceIdGenerator(kv_storage_)
+                            : NewSliceIdGenerator(self_mds_meta_.ID(), kv_storage_);
+  CHECK(slice_id_generator_ != nullptr) << "slice_id_generator is null.";
+
+  quota_worker_set_ = ExecqWorkerSet::NewUnique(kQuotaWorkerSetName, FLAGS_mds_quota_worker_num,
+                                                FLAGS_mds_quota_worker_max_pending_num, true);
+  CHECK(quota_worker_set_ != nullptr) << "quota_worker_set is null.";
+
+  dir_stat_worker_set_ = ExecqWorkerSet::NewUnique(kDirStatWorkerSetName, FLAGS_mds_dir_stat_worker_num,
+                                                   FLAGS_mds_dir_stat_worker_max_pending_num, true);
+  CHECK(dir_stat_worker_set_ != nullptr) << "dir_stat_worker_set is null.";
+}
 
 FileSystemSet::~FileSystemSet() {}  // NOLINT
 
@@ -4170,6 +4210,31 @@ bool FileSystemSet::Init() {
   CHECK(kv_storage_ != nullptr) << "kv_storage is null.";
   CHECK(mds_meta_map_ != nullptr) << "mds_meta_map is null.";
   CHECK(operation_processor_ != nullptr) << "operation_processor is null.";
+
+  if (!fs_id_generator_->Init()) {
+    LOG(ERROR) << "[fsset] init fs id generator fail.";
+    return false;
+  }
+
+  if (!slice_id_generator_->Init()) {
+    LOG(ERROR) << "[fsset] init slice id generator fail.";
+    return false;
+  }
+
+  if (!quota_worker_set_->Init()) {
+    LOG(ERROR) << "[fsset] init quota worker set fail.";
+    return false;
+  }
+
+  if (!dir_stat_worker_set_->Init()) {
+    LOG(ERROR) << "[fsset] init dir stat worker set fail.";
+    return false;
+  }
+
+  if (!warmup_processor_->Init()) {
+    LOG(ERROR) << "[fsset] init warmup processor fail.";
+    return false;
+  }
 
   if (!IsExistMetaTable()) {
     LOG(ERROR) << "[fsset] not exist fs table.";
@@ -4188,6 +4253,28 @@ bool FileSystemSet::Init() {
   }
 
   return true;
+}
+
+void FileSystemSet::Stop(bool is_force) {
+  if (warmup_processor_ != nullptr) {
+    warmup_processor_->Stop();
+  }
+
+  if (dir_stat_worker_set_ != nullptr) {
+    dir_stat_worker_set_->Stop();
+  }
+
+  if (quota_worker_set_ != nullptr) {
+    quota_worker_set_->Stop();
+  }
+
+  if (slice_id_generator_ != nullptr) {
+    slice_id_generator_->Stop();
+  }
+
+  if (fs_id_generator_ != nullptr) {
+    fs_id_generator_->Stop();
+  }
 }
 
 IdGeneratorUPtr FileSystemSet::NewInoGenerator(uint32_t fs_id) {
@@ -4410,8 +4497,8 @@ Status FileSystemSet::CreateFs(const CreateFsParam& param, FsInfoEntry& fs_info)
   CHECK(ino_id_generator != nullptr) << "new id generator fail.";
 
   auto fs = FileSystem::New(self_mds_meta_.ID(), FsInfo::New(fs_info), std::move(ino_id_generator), slice_id_generator_,
-                            kv_storage_, operation_processor_, mds_meta_map_, quota_worker_set_, dir_stat_worker_set_,
-                            notify_buddy_);
+                            operation_processor_, warmup_processor_, mds_meta_map_, quota_worker_set_,
+                            dir_stat_worker_set_, notify_buddy_);
   if (!fs->Init()) {
     cleanup(fs_id, table_id, fs_key, "");
     return Status(pb::error::EINTERNAL, "init FileSystem fail");
@@ -4813,8 +4900,8 @@ bool FileSystemSet::LoadFileSystems() {
     CHECK(ino_id_generator != nullptr) << "new id generator fail.";
 
     fs = FileSystem::New(self_mds_meta_.ID(), FsInfo::New(fs_info), std::move(ino_id_generator), slice_id_generator_,
-                         kv_storage_, operation_processor_, mds_meta_map_, quota_worker_set_, dir_stat_worker_set_,
-                         notify_buddy_);
+                         operation_processor_, warmup_processor_, mds_meta_map_, quota_worker_set_,
+                         dir_stat_worker_set_, notify_buddy_);
     if (!fs->Init()) {
       LOG(ERROR) << fmt::format("[fsset.{}.{}] init filesystem fail.", fs_info.fs_name(), fs_info.fs_id());
       continue;

@@ -315,6 +315,7 @@ Status VFSHubImpl::Start(bool skip_mount) {
     }
     CHECK(block_store_ != nullptr) << "block store is nullptr.";
     DINGOFS_RETURN_NOT_OK(block_store_->Start());
+    meta_wrapper_->SetBlockStore(block_store_.get());
   }
 
   {
@@ -548,6 +549,12 @@ Status VFSHubImpl::Stop(bool skip_unmount) {
     prefetch_manager_->Stop();
   }
 
+  // Drain MetaSystem tasks before shutting down BlockStore. Unlink cleanup
+  // tasks run on the metadata executor and submit asynchronous cache deletes.
+  if (meta_wrapper_ != nullptr) {
+    meta_wrapper_->Stop(skip_unmount);
+  }
+
   // Block cache read/prefetch completions run in cache-owned bthreads and may
   // schedule read cleanup work. Keep read_cleanup_executor_ alive until
   // block_store_->Shutdown() has joined those bthreads.
@@ -556,7 +563,7 @@ Status VFSHubImpl::Stop(bool skip_unmount) {
   }
 
   // BlockStore::Shutdown has invoked every accepted upload callback. Drain
-  // CBExecutor while MetaSystem is still available to completion callbacks.
+  // CBExecutor while the callback executor is still alive.
   if (cb_executor_ != nullptr) {
     cb_executor_->Stop();
   }
@@ -566,14 +573,6 @@ Status VFSHubImpl::Stop(bool skip_unmount) {
   // read bthread, otherwise a straggler completion submits to a dead executor.
   if (read_cleanup_executor_ != nullptr) {
     read_cleanup_executor_->Stop();
-  }
-
-  // meta_wrapper_ can stop after block_store_: the metasystem flushes to MDS
-  // via RPC and never pushes data through block_store_, and its only background
-  // producer (write_background_executor_'s slice_id pre-allocation) was already
-  // drained above. Block-store completions are drained by CBExecutor above.
-  if (meta_wrapper_ != nullptr) {
-    meta_wrapper_->Stop(skip_unmount);
   }
 
   if (logclean_manager_ != nullptr) {

@@ -57,7 +57,7 @@ bool LevelIdGenerator::Init() {
   return true;
 }
 
-bool LevelIdGenerator::Destroy() {
+bool LevelIdGenerator::Stop() {
   BAIDU_SCOPED_LOCK(mutex_);
 
   auto status = DestroyId();

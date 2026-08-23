@@ -40,7 +40,7 @@ class BlockAccesser {
 
   virtual Status Init() = 0;
 
-  virtual Status Destroy() = 0;
+  virtual Status Stop() = 0;
 
   virtual bool ContainerExist() = 0;
 
@@ -98,11 +98,11 @@ class BlockAccesserImpl : public BlockAccesser {
  public:
   BlockAccesserImpl(const BlockAccessOptions& options) : options_(options) {}
 
-  ~BlockAccesserImpl() override { Destroy(); }
+  ~BlockAccesserImpl() override { Stop(); }
 
   Status Init() override;
 
-  Status Destroy() override;
+  Status Stop() override;
 
   bool ContainerExist() override;
 

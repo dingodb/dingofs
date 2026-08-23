@@ -53,7 +53,7 @@ class PrefixBlockAccesser : public BlockAccesser {
 
   Status Init() override { return inner_->Init(); }
 
-  Status Destroy() override { return inner_->Destroy(); }
+  Status Stop() override { return inner_->Stop(); }
 
   bool ContainerExist() override { return inner_->ContainerExist(); }
 

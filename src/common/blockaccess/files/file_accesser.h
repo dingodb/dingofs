@@ -31,7 +31,7 @@ class FileAccesser : public Accesser {
   ~FileAccesser() override = default;
 
   bool Init() override;
-  bool Destroy() override;
+  bool Stop() override;
 
   bool ContainerExist() override;
 

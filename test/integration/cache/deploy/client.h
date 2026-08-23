@@ -217,7 +217,7 @@ class CacheClient {
   void Close() {
     ShutdownCacheOnly();
     if (accesser_) {
-      accesser_->Destroy();
+      accesser_->Stop();
       accesser_.reset();
     }
   }

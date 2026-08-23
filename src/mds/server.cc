@@ -13,13 +13,13 @@
 // limitations under the License.
 
 #include "mds/server.h"
-#include "../common/helper.h"
 
 #include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "../common/helper.h"
 #include "common/logging.h"
 #include "common/options/mds.h"
 #include "common/version.h"
@@ -58,14 +58,6 @@ DEFINE_string(mds_pid_file_name, "pid", "pid file name");
 
 DECLARE_string(mds_service_worker_set_type);
 
-const std::string kQuotaWorkerSetName = "QUOTA_WORKER_SET";
-DEFINE_uint32(mds_quota_worker_num, 24, "quota worker number");
-DEFINE_uint32(mds_quota_worker_max_pending_num, 1000000, "quota worker max pending number");
-
-const std::string kDirStatWorkerSetName = "DIR_STAT_WORKER_SET";
-DEFINE_uint32(mds_dir_stat_worker_num, 24, "dir stat worker number");
-DEFINE_uint32(mds_dir_stat_worker_max_pending_num, 1000000, "dir stat worker max pending number");
-
 // crontab config
 DEFINE_uint32(mds_crontab_heartbeat_interval_s, 5, "heartbeat interval seconds");
 DEFINE_uint32(mds_crontab_fsinfosync_interval_s, 10, "fs info sync interval seconds");
@@ -97,6 +89,125 @@ Server::~Server() {}  // NOLINT
 Server& Server::GetInstance() {
   static Server instance;
   return instance;
+}
+
+bool Server::Init(const std::string& conf_path, const std::string& store_url) {
+  if (!InitLogCleanManager()) {
+    LOG(ERROR) << "init log clean manager error.";
+    return false;
+  }
+  if (!InitConfig(conf_path)) {
+    LOG(ERROR) << fmt::format("init config({}) error.", conf_path);
+    return false;
+  }
+  if (!InitStorage(store_url)) {
+    LOG(ERROR) << fmt::format("init storage({}) error.", store_url);
+    return false;
+  }
+  if (!InitOperationProcessor()) {
+    LOG(ERROR) << "init operation processor error.";
+    return false;
+  }
+  if (!InitCacheGroupMemberManager()) {
+    LOG(ERROR) << "init cache group member manager error.";
+    return false;
+  }
+  if (!InitHeartbeat()) {
+    LOG(ERROR) << "init heartbeat error.";
+    return false;
+  }
+  if (!InitMDSMeta()) {
+    LOG(ERROR) << "init mds meta error.";
+    return false;
+  }
+  if (!InitNotifyBuddy()) {
+    LOG(ERROR) << "init notify buddy error.";
+    return false;
+  }
+  if (!InitFileSystem()) {
+    LOG(ERROR) << "init file system set error.";
+    return false;
+  }
+  if (!InitFsInfoSync()) {
+    LOG(ERROR) << "init fs info sync error.";
+    return false;
+  }
+  if (!InitCacheMemberSynchronizer()) {
+    LOG(ERROR) << "init cache member synchronizer error.";
+    return false;
+  }
+  if (!InitMonitor()) {
+    LOG(ERROR) << "init mds monitor error.";
+    return false;
+  }
+  if (!InitGcProcessor()) {
+    LOG(ERROR) << "init gc error.";
+    return false;
+  }
+  if (!InitQuotaSynchronizer()) {
+    LOG(ERROR) << "init quota synchronizer error.";
+    return false;
+  }
+  if (!InitDirStatsSynchronizer()) {
+    LOG(ERROR) << "init dir-stats synchronizer error.";
+    return false;
+  }
+  if (!InitCrontab()) {
+    LOG(ERROR) << "init crontab error.";
+    return false;
+  }
+  if (!InitService()) {
+    LOG(ERROR) << "init service error.";
+    return false;
+  }
+
+  return true;
+}
+
+void Server::Stop() {
+  // Only stop once
+  bool expected = false;
+  if (!is_stopped_.compare_exchange_strong(expected, true)) return;
+
+  LOG(INFO) << "mds server is stopping...";
+
+  if (mds_service_ != nullptr) mds_service_->Stop();
+  LOG(INFO) << "mds service is stopped.";
+  if (debug_service_ != nullptr) debug_service_->Stop();
+  LOG(INFO) << "debug service is stopped.";
+  if (fs_stat_service_ != nullptr) fs_stat_service_->Stop();
+  LOG(INFO) << "fs stat service is stopped.";
+
+  brpc_server_.Stop(0);
+  brpc_server_.Join();
+  LOG(INFO) << "brpc server is stopped.";
+
+  // Stop crontab (task producer) before stopping the components it drives.
+  crontab_manager_.Stop();
+  LOG(INFO) << "crontab manager is stopped.";
+
+  if (heartbeat_ != nullptr) heartbeat_->Stop();
+  LOG(INFO) << "heartbeat is stopped.";
+  if (file_system_set_ != nullptr) file_system_set_->Stop(true);
+  LOG(INFO) << "file system set is stopped.";
+  if (monitor_ != nullptr) monitor_->Stop();
+  LOG(INFO) << "monitor is stopped.";
+  if (notify_buddy_ != nullptr) notify_buddy_->Stop();
+  LOG(INFO) << "notify buddy is stopped.";
+  if (gc_processor_ != nullptr) gc_processor_->Stop();
+  LOG(INFO) << "gc processor is stopped.";
+
+  if (operation_processor_ != nullptr) operation_processor_->Stop();
+  LOG(INFO) << "operation processor is stopped.";
+
+  if (kv_storage_ != nullptr) kv_storage_->Stop();
+  LOG(INFO) << "kv storage is stopped.";
+  if (coordinator_client_ != nullptr) coordinator_client_->Stop();
+  LOG(INFO) << "coordinator client is stopped.";
+
+  if (logclean_manager_ != nullptr) logclean_manager_->Stop();
+
+  LOG(INFO) << "mds server is stopped.";
 }
 
 bool Server::InitConfig(const std::string& path) {
@@ -254,30 +365,8 @@ bool Server::InitFileSystem() {
   CHECK(operation_processor_ != nullptr) << "operation_processor is nullptr.";
   CHECK(notify_buddy_ != nullptr) << "notify_buddy is nullptr.";
 
-  IdGeneratorUPtr fs_id_generator = NewFsIdGenerator(kv_storage_);
-  IdGeneratorSPtr slice_id_generator = FLAGS_mds_slice_id_generator_share_enable
-                                           ? NewSliceIdGenerator(kv_storage_)
-                                           : NewSliceIdGenerator(self_mds_meta_.ID(), kv_storage_);
-
-  CHECK(fs_id_generator != nullptr) << "new fs AutoIncrementIdGenerator fail.";
-  CHECK(fs_id_generator->Init()) << "init fs AutoIncrementIdGenerator fail.";
-
-  CHECK(slice_id_generator != nullptr) << "new slice AutoIncrementIdGenerator fail.";
-  CHECK(slice_id_generator->Init()) << "init slice AutoIncrementIdGenerator fail.";
-
-  quota_worker_set_ = ExecqWorkerSet::NewUnique(kQuotaWorkerSetName, FLAGS_mds_quota_worker_num,
-                                                FLAGS_mds_quota_worker_max_pending_num, true);
-  CHECK(quota_worker_set_ != nullptr) << "new quota worker set fail.";
-  CHECK(quota_worker_set_->Init()) << "init quota worker set fail.";
-
-  dir_stat_worker_set_ = ExecqWorkerSet::NewUnique(kDirStatWorkerSetName, FLAGS_mds_dir_stat_worker_num,
-                                                   FLAGS_mds_dir_stat_worker_max_pending_num, true);
-  CHECK(dir_stat_worker_set_ != nullptr) << "new dir stat worker set fail.";
-  CHECK(dir_stat_worker_set_->Init()) << "init dir stat worker set fail.";
-
-  file_system_set_ = FileSystemSet::New(coordinator_client_, std::move(fs_id_generator), slice_id_generator,
-                                        kv_storage_, self_mds_meta_, mds_meta_map_, operation_processor_,
-                                        quota_worker_set_, dir_stat_worker_set_, notify_buddy_);
+  file_system_set_ =
+      FileSystemSet::New(kv_storage_, self_mds_meta_, mds_meta_map_, operation_processor_, notify_buddy_);
   CHECK(file_system_set_ != nullptr) << "new FileSystem fail.";
 
   return file_system_set_->Init();
@@ -443,8 +532,6 @@ bool Server::InitCrontab() {
       [](void*) { Server::GetInstance().GetCacheMemberSynchronizer()->Run(); },
   });
 
-  crontab_manager_.AddCrontab(crontab_configs_);
-
   return true;
 }
 
@@ -588,33 +675,20 @@ void Server::Run() {
   CHECK(brpc_server_.AddService(fs_stat_service_.get(), brpc::SERVER_DOESNT_OWN_SERVICE) == 0)
       << "add fsstat service error.";
 
+  brpc_server_.set_version(dingofs::DingoShortVersionString());
+
   brpc::ServerOptions option;
   CHECK(brpc_server_.Start(GetListenAddr().c_str(), &option) == 0) << "start brpc server error.";
 
+  // Start crontab only after brpc is listening, so heartbeat doesn't report
+  // this MDS alive before it can serve RPCs.
+  crontab_manager_.AddCrontab(crontab_configs_);
+
   PrintReadyInfo(GetListenAddr());
 
-  while (!brpc::IsAskedToQuit() && !stop_.load()) {
+  while (!brpc::IsAskedToQuit() && !is_stopped_.load() && !is_asked_stop_.load()) {
     bthread_usleep(1000000L);
   }
-}
-
-void Server::Stop() {
-  // Only stop once
-  bool expected = false;
-  if (!stop_.compare_exchange_strong(expected, true)) {
-    return;
-  }
-
-  logclean_manager_->Stop();
-
-  mds_service_->Destroy();
-
-  brpc_server_.Stop(0);
-  brpc_server_.Join();
-  operation_processor_->Destroy();
-  heartbeat_->Destroy();
-  crontab_manager_.Destroy();
-  monitor_->Destroy();
 }
 
 static void DescribeTcmallocByJson(Json::Value& value) {
@@ -660,9 +734,6 @@ void Server::DescribeByJson(Json::Value& value) {
   value["e-crontab"] = crontab_value;
 
   // mds service
-  // Json::Value mds_service_value;
-  // mds_service_->DescribeByJson(mds_service_value);
-  // value["f-mds_service"] = mds_service_value;
 
   // gc
 

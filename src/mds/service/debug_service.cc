@@ -14,9 +14,9 @@
 
 #include "mds/service/debug_service.h"
 
+#include "common/helper.h"
 #include "dingofs/debug.pb.h"
 #include "dingofs/error.pb.h"
-#include "common/helper.h"
 #include "mds/common/context.h"
 #include "mds/filesystem/dentry.h"
 #include "mds/filesystem/inode.h"
@@ -100,6 +100,10 @@ void DebugServiceImpl::GetFs(google::protobuf::RpcController*, const pb::debug::
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
   brpc::ClosureGuard done_guard(svr_done);
 
+  if (IsStopped()) {
+    return ServiceHelper::SetError(response->mutable_error(), pb::error::ESERVICE_STOPPED, "service is stopped");
+  }
+
   if (request->fs_id() == 0) {
     auto fs_list = file_system_set_->GetAllFileSystem();
     for (auto& fs : fs_list) {
@@ -138,6 +142,10 @@ void DebugServiceImpl::GetPartition(google::protobuf::RpcController*, const pb::
                                     pb::debug::GetPartitionResponse* response, google::protobuf::Closure* done) {
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
   brpc::ClosureGuard done_guard(svr_done);
+
+  if (IsStopped()) {
+    return ServiceHelper::SetError(response->mutable_error(), pb::error::ESERVICE_STOPPED, "service is stopped");
+  }
 
   auto fs = GetFileSystem(request->fs_id());
   if (!fs) {
@@ -190,6 +198,10 @@ void DebugServiceImpl::GetInode(google::protobuf::RpcController*, const pb::debu
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
   brpc::ClosureGuard done_guard(svr_done);
 
+  if (IsStopped()) {
+    return ServiceHelper::SetError(response->mutable_error(), pb::error::ESERVICE_STOPPED, "service is stopped");
+  }
+
   auto fs = GetFileSystem(request->fs_id());
   if (!fs) {
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
@@ -218,6 +230,10 @@ void DebugServiceImpl::GetOpenFile(google::protobuf::RpcController*, const pb::d
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
   brpc::ClosureGuard done_guard(svr_done);
 
+  if (IsStopped()) {
+    return ServiceHelper::SetError(response->mutable_error(), pb::error::ESERVICE_STOPPED, "service is stopped");
+  }
+
   auto fs = GetFileSystem(request->fs_id());
   if (!fs) {
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
@@ -236,6 +252,10 @@ void DebugServiceImpl::TraceWorkerSet(google::protobuf::RpcController*, const pb
                                       pb::debug::TraceWorkerSetResponse* response, google::protobuf::Closure* done) {
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
   brpc::ClosureGuard done_guard(svr_done);
+
+  if (IsStopped()) {
+    return ServiceHelper::SetError(response->mutable_error(), pb::error::ESERVICE_STOPPED, "service is stopped");
+  }
 
   auto& mds_service = Server::GetInstance().GetMDSService();
 
@@ -259,6 +279,10 @@ void DebugServiceImpl::CleanCache(google::protobuf::RpcController* controller,
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
   brpc::ClosureGuard done_guard(svr_done);
 
+  if (IsStopped()) {
+    return ServiceHelper::SetError(response->mutable_error(), pb::error::ESERVICE_STOPPED, "service is stopped");
+  }
+
   auto fs = GetFileSystem(request->fs_id());
   if (fs == nullptr) {
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
@@ -277,6 +301,10 @@ void DebugServiceImpl::GetMemoryStats(google::protobuf::RpcController*, const pb
                                       pb::debug::GetMemoryStatsResponse* response, google::protobuf::Closure* done) {
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
   brpc::ClosureGuard done_guard(svr_done);
+
+  if (IsStopped()) {
+    return ServiceHelper::SetError(response->mutable_error(), pb::error::ESERVICE_STOPPED, "service is stopped");
+  }
 
 #ifdef USE_TCMALLOC
   auto* tcmalloc = MallocExtension::instance();
@@ -302,6 +330,10 @@ void DebugServiceImpl::ReleaseFreeMemory(google::protobuf::RpcController*,
                                          google::protobuf::Closure* done) {
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
   brpc::ClosureGuard done_guard(svr_done);
+
+  if (IsStopped()) {
+    return ServiceHelper::SetError(response->mutable_error(), pb::error::ESERVICE_STOPPED, "service is stopped");
+  }
 
 #ifdef USE_TCMALLOC
   auto* tcmalloc = MallocExtension::instance();

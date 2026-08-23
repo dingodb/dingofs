@@ -24,6 +24,7 @@
 #include "client/vfs/common/client_id.h"
 #include "client/vfs/compaction/compactor.h"
 #include "client/vfs/metasystem/mds/batch_processor.h"
+#include "client/vfs/metasystem/mds/block_cache_cleanup.h"
 #include "client/vfs/metasystem/mds/chunk.h"
 #include "client/vfs/metasystem/mds/chunk_memo.h"
 #include "client/vfs/metasystem/mds/compact.h"
@@ -175,6 +176,10 @@ class MDSMetaSystem : public vfs::MetaSystem {
 
   bool GetDescription(Json::Value& value) override;
 
+  void SetBlockStore(BlockStore* block_store) override {
+    block_cache_cleaner_.SetBlockStore(block_store);
+  }
+
   void SetWarmupManager(WarmupManager* warmup_manager) override {
     warmup_manager_ = warmup_manager;
   }
@@ -257,6 +262,9 @@ class MDSMetaSystem : public vfs::MetaSystem {
   mds::FsInfo fs_info_;
 
   Executor executor_;
+  // Background executor for async tasks, such as compaction, block cache
+  // cleanup, etc.
+  Executor bg_executor_;
 
   MDSClient mds_client_;
 
@@ -280,11 +288,13 @@ class MDSMetaSystem : public vfs::MetaSystem {
   // This is manage crontab, like heartbeat.
   mds::CrontabManager crontab_manager_;
 
+  Compactor& compactor_;
+
   BatchProcessor batch_processor_;
 
   CompactProcessor compact_processor_;
 
-  Compactor& compactor_;
+  BlockCacheCleaner block_cache_cleaner_;
 
   std::atomic<bool> stopped_{false};
 };

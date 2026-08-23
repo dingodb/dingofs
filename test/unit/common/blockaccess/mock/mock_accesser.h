@@ -47,7 +47,7 @@ class MockBlockAccesser : public BlockAccesser {
 
   MOCK_METHOD(Status, Init, (), (override));
 
-  MOCK_METHOD(Status, Destroy, (), (override));
+  MOCK_METHOD(Status, Stop, (), (override));
 
   MOCK_METHOD(bool, ContainerExist, (), (override));
 

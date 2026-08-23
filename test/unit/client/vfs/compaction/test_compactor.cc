@@ -176,9 +176,10 @@ TEST(CompactChunkTaskTest, EmptyCompactionResultDoesNotCallMDS) {
       .WillOnce([](ContextSPtr, Ino, int64_t, const std::vector<Slice>&,
                    std::vector<Slice>&) { return Status::OK(); });
 
-  meta::CompactProcessor compact_processor;
-  auto task = meta::CompactChunkTask::New(kIno, inode, chunk, mds_client,
-                                          compactor, compact_processor);
+  meta::Executor executor("test_compact_worker_set", 1, 1);
+  meta::CompactProcessor compact_processor(mds_client, compactor, executor);
+  auto task =
+      meta::CompactChunkTask::New(kIno, inode, chunk, compact_processor);
   task->Run();
 
   EXPECT_TRUE(task->GetStatus().IsNotFit()) << task->GetStatus().ToString();

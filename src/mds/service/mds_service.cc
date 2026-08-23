@@ -62,12 +62,22 @@ DEFINE_uint32(mds_service_write_worker_num, 4096, "number of write workers");
 DEFINE_uint32(mds_service_write_worker_max_pending_num, 259072, "write service worker max pending num");
 DEFINE_bool(mds_service_write_worker_use_pthread, false, "write worker use pthread");
 
-#define RunInPlace(name, controller, request, response, svr_done) \
-  if (!FLAGS_mds_service_worker_enable) {                         \
-    return Do##name(controller, request, response, svr_done);     \
+#define RunInPlace(name, controller, request, response, svr_done)                                              \
+  if (!FLAGS_mds_service_worker_enable) {                                                                      \
+    if (BAIDU_UNLIKELY(IsStopped())) {                                                                         \
+      brpc::ClosureGuard done_guard(svr_done);                                                                 \
+      ServiceHelper::SetError((response)->mutable_error(), pb::error::ESERVICE_STOPPED, "service is stopped"); \
+      return;                                                                                                  \
+    }                                                                                                          \
+    return Do##name(controller, request, response, svr_done);                                                  \
   }
 
 #define RunInQueue(name, controller, request, response, svr_done, worker_set)                                    \
+  if (BAIDU_UNLIKELY(IsStopped())) {                                                                             \
+    brpc::ClosureGuard done_guard(svr_done);                                                                     \
+    ServiceHelper::SetError((response)->mutable_error(), pb::error::ESERVICE_STOPPED, "service is stopped");     \
+    return;                                                                                                      \
+  }                                                                                                              \
   auto task = std::make_shared<ServiceTask>(                                                                     \
       [this, controller, request, response, svr_done]() { Do##name(controller, request, response, svr_done); }); \
                                                                                                                  \
@@ -174,9 +184,13 @@ bool MDSServiceImpl::Init() {
   return true;
 }
 
-void MDSServiceImpl::Destroy() {
-  read_worker_set_->Destroy();
-  write_worker_set_->Destroy();
+void MDSServiceImpl::Stop() {
+  bool expected = false;
+  if (!is_stopped_.compare_exchange_strong(expected, true)) return;
+
+  read_worker_set_->Stop();
+  write_worker_set_->Stop();
+
   if (FLAGS_enable_trace) trace_manager_.Stop();
 }
 

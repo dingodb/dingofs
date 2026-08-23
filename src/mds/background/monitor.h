@@ -40,7 +40,7 @@ class Monitor {
   }
 
   bool Init();
-  void Destroy();
+  void Stop();
 
   void Run();
 

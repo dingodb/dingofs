@@ -18,12 +18,16 @@
 #include <sys/types.h>
 
 #include <atomic>
+#include <condition_variable>
 #include <cstdint>
+#include <map>
 #include <memory>
+#include <mutex>
 #include <string>
+#include <thread>
 #include <vector>
 
-#include "bthread/types.h"
+#include "absl/container/flat_hash_map.h"
 #include "butil/containers/mpsc_queue.h"
 #include "butil/endpoint.h"
 #include "mds/common/type.h"
@@ -132,30 +136,50 @@ class NotifyBuddy {
   }
 
   bool Init();
-  bool Destroy();
+  bool Stop();
 
   bool AsyncNotify(MessageSPtr message);
 
  private:
   using BatchMessage = std::vector<MessageSPtr>;
 
+  struct Dispatcher {
+    struct ParkEntry {
+      uint32_t inflight{0};
+      BatchMessage messages;
+    };
+
+    using ParkedMessageMap = absl::flat_hash_map<uint64_t, ParkEntry>;
+
+    std::thread thread;
+    std::mutex thread_mutex;
+    std::condition_variable thread_cond;
+    butil::MPSCQueue<MessageSPtr> messages;
+
+    std::mutex parked_mutex;
+    ParkedMessageMap parked_messages;
+  };
+
   // mds_id -> messages
   static std::map<uint64_t, BatchMessage> GroupingByMdsID(const std::vector<MessageSPtr>& messages);
   void DispatchMessage();
-  void LaunchSendMessage(uint64_t mds_id, const BatchMessage& batch_message);
+  void LaunchOrParkMessage(uint64_t mds_id, BatchMessage&& batch_message);
+  void LaunchSendMessage(uint64_t mds_id, BatchMessage&& batch_message);
+  bool TakeParkedMessages(uint64_t mds_id, BatchMessage& batch_message);
   void SendMessage(uint64_t mds_id, BatchMessage& batch_message);
+  void FinishSendTask();
 
   bool GenEndpoint(uint64_t mds_id, butil::EndPoint& endpoint);
 
-  bthread_t tid_{0};
-  bthread_mutex_t mutex_;
-  bthread_cond_t cond_;
-
   std::atomic<bool> is_stop_{false};
 
+  // for waiting all sending tasks to finish
+  std::atomic<uint64_t> sending_tasks_{0};
+
+  // for generating unique message id
   std::atomic<uint64_t> id_generator_{0};
 
-  butil::MPSCQueue<MessageSPtr> queue_;
+  Dispatcher dispatcher_;
 
   uint64_t self_mds_id_;
   MDSMetaMapSPtr mds_meta_map_;

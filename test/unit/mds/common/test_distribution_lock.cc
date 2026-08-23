@@ -61,7 +61,7 @@ TEST_F(CoorDistributionLockTest, Lock) {
   }
 
   for (auto& dist_lock : dist_locks) {
-    dist_lock->Destroy();
+    dist_lock->Stop();
   }
 }
 

@@ -73,7 +73,7 @@ class KVStorage {
   virtual ~KVStorage() = default;
 
   virtual bool Init(const std::string& addr) = 0;
-  virtual bool Destroy() = 0;
+  virtual bool Stop() = 0;
 
   virtual Status CreateTable(const std::string& name, const TableOption& option, int64_t& table_id) = 0;
   virtual Status DropTable(int64_t table_id) = 0;

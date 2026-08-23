@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include "mds/storage/tikv_storage.h"
-#include "common/helper.h"
 
 #include <bthread/countdown_event.h>
 #include <glog/logging.h>
@@ -25,6 +24,7 @@
 #include <string>
 #include <vector>
 
+#include "common/helper.h"
 #include "mds/common/helper.h"
 #include "mds/common/synchronization.h"
 #include "tikv/lib.rs.h"
@@ -42,13 +42,6 @@ bool TikvStorage::Init(const std::string& addr) {
   client_ = new tikv_client::TransactionClient(addrs);
 
   LOG(INFO) << fmt::format("[storage] init tikv storage end, addr({}).", addr);
-
-  return true;
-}
-
-bool TikvStorage::Destroy() {
-  delete client_;
-  client_ = nullptr;
 
   return true;
 }

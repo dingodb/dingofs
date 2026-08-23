@@ -16,8 +16,10 @@
 
 #include "common/blockaccess/s3/s3_accesser.h"
 
+#include <atomic>
 #include <cstdlib>
 #include <memory>
+#include <mutex>
 
 #include "aws/core/Aws.h"
 #include "aws/crt/io/Bootstrap.h"
@@ -33,6 +35,11 @@ namespace blockaccess {
 
 static Aws::SDKOptions aws_sdk_options;
 
+// Pair InitAPI/ShutdownAPI across all accessers: init on first Init(),
+// shutdown on last Stop(). No atexit: ShutdownAPI there deadlocks waiting
+// for CRT event-loop threads while clients may still be alive.
+static std::atomic<int> aws_api_refcount{0};
+
 bool S3Accesser::Init() {
   const auto& s3_info = options_.s3_info;
 
@@ -46,7 +53,7 @@ bool S3Accesser::Init() {
     return false;
   }
 
-  // only init once
+  // pair with ShutdownAwsApi in Stop()
   auto init_aws_api_fn = [&]() {
     auto& logging_options = aws_sdk_options.loggingOptions;
 
@@ -82,14 +89,9 @@ bool S3Accesser::Init() {
     }
 
     Aws::InitAPI(aws_sdk_options);
-
-    if (std::atexit([]() { Aws::ShutdownAPI(aws_sdk_options); }) != 0) {
-      LOG(FATAL) << "[s3_accesser] register shutdown function fail.";
-    }
   };
 
-  static std::once_flag aws_init_flag;
-  std::call_once(aws_init_flag, init_aws_api_fn);
+  if (aws_api_refcount.fetch_add(1) == 0) init_aws_api_fn();
 
   bucket_ = options_.s3_info.bucket_name;
 
@@ -103,7 +105,18 @@ bool S3Accesser::Init() {
   return true;
 }
 
-bool S3Accesser::Destroy() { return true; }
+bool S3Accesser::Stop() {
+  // release the s3 client (and its refs on the CRT bootstrap) before
+  // shutting down the API, otherwise ShutdownAPI blocks forever.
+  client_.reset();
+
+  if (aws_api_refcount.fetch_sub(1) == 1) {
+    LOG(INFO) << "[s3_accesser] shutdown aws api.";
+    Aws::ShutdownAPI(aws_sdk_options);
+  }
+
+  return true;
+}
 
 Aws::String S3Accesser::S3Key(const std::string& key) {
   return Aws::String(key.c_str(), key.size());

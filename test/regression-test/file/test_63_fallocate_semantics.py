@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
 """Case 63: fallocate(2) semantics and boundary coverage.
 
-Covers plain allocation, KEEP_SIZE, PUNCH_HOLE, ZERO_RANGE, file-position and
-reopen visibility, chunk boundaries, invalid arguments, and fd errors.
+Covers plain allocation, KEEP_SIZE, PUNCH_HOLE, ZERO_RANGE,
+COLLAPSE_RANGE, file-position and reopen visibility, chunk boundaries, invalid
+arguments, and fd errors.
 Unsupported fallocate modes are skipped so the case also runs on backends that
 only implement the basic operation.
 """
 import errno
 import os
 
-from common import (FALLOC_FL_KEEP_SIZE, FALLOC_FL_PUNCH_HOLE,
-                    FALLOC_FL_ZERO_RANGE, fallocate, rand_data, run_case)
+from common import (FALLOC_FL_COLLAPSE_RANGE, FALLOC_FL_KEEP_SIZE,
+                    FALLOC_FL_PUNCH_HOLE, FALLOC_FL_ZERO_RANGE, fallocate,
+                    rand_data, run_case)
 
 BLOCK = 4096
 CHUNK = 64 << 20
@@ -168,6 +170,59 @@ def chunk_boundary(c, d):
                "chunk-boundary extension reads as zeros")
 
 
+def collapse_range(c, d):
+    """Exercise chunk-aligned collapse and its Linux boundary checks."""
+    p = os.path.join(d, "collapse")
+    size = 4 * CHUNK
+    markers = [b"chunk-0", b"chunk-1", b"chunk-2", b"chunk-3"]
+    with open(p, "wb") as f:
+        f.truncate(size)
+
+    fd = os.open(p, os.O_RDWR)
+    try:
+        for i, marker in enumerate(markers):
+            os.pwrite(fd, marker, i * CHUNK)
+        os.lseek(fd, 123, os.SEEK_SET)
+
+        if not do_fallocate(c, fd, FALLOC_FL_COLLAPSE_RANGE, CHUNK, CHUNK,
+                            "COLLAPSE_RANGE removes one aligned chunk"):
+            return
+
+        c.check_eq(os.lseek(fd, 0, os.SEEK_CUR), 123,
+                   "COLLAPSE_RANGE does not change file position")
+        c.check_eq(os.fstat(fd).st_size, 3 * CHUNK,
+                   "COLLAPSE_RANGE shrinks file by the removed length")
+        c.check_eq(os.pread(fd, len(markers[0]), 0), markers[0],
+                   "COLLAPSE_RANGE preserves the prefix chunk")
+        c.check_eq(os.pread(fd, len(markers[2]), CHUNK), markers[2],
+                   "COLLAPSE_RANGE shifts the following chunk left")
+        c.check_eq(os.pread(fd, len(markers[3]), 2 * CHUNK), markers[3],
+                   "COLLAPSE_RANGE shifts the final chunk left")
+        c.check_eq(os.pread(fd, BLOCK, CHUNK + len(markers[2])), b"\x00" * BLOCK,
+                   "COLLAPSE_RANGE preserves sparse holes")
+
+        # Once the mode is supported, these failures are the requested EINVAL
+        # cases rather than the unsupported-mode result hidden by fallocate().
+        c.check(not fallocate(fd, FALLOC_FL_COLLAPSE_RANGE, BLOCK, CHUNK),
+                "COLLAPSE_RANGE rejects unaligned offset")
+        c.check(not fallocate(fd, FALLOC_FL_COLLAPSE_RANGE, CHUNK, 0),
+                "COLLAPSE_RANGE rejects zero length")
+        c.check(not fallocate(fd, FALLOC_FL_COLLAPSE_RANGE | FALLOC_FL_KEEP_SIZE,
+                              0, CHUNK),
+                "COLLAPSE_RANGE rejects KEEP_SIZE combination")
+        c.check(not fallocate(fd, FALLOC_FL_COLLAPSE_RANGE, 2 * CHUNK,
+                              CHUNK),
+                "COLLAPSE_RANGE rejects a range ending at EOF")
+    finally:
+        os.close(fd)
+
+    c.check_eq(read_range(p, 0, len(markers[0])), markers[0],
+               "reopened fd sees the preserved prefix")
+    c.check_eq(read_range(p, CHUNK, len(markers[2])), markers[2],
+               "reopened fd sees shifted collapse data")
+    return True
+
+
 def no_op_and_errors(c, d):
     p = os.path.join(d, "errors")
     original = rand_data(BLOCK, seed=6303)
@@ -249,6 +304,7 @@ def case(c, d):
         return
     keep_size_and_zeroing(c, d)
     chunk_boundary(c, d)
+    collapse_range(c, d)
     no_op_and_errors(c, d)
     reopen_visibility(c, d)
 

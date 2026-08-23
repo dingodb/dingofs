@@ -102,7 +102,7 @@ class Worker {
   }
 
   bool Init();
-  void Destroy();
+  void Stop();
 
   bool Execute(TaskRunnablePtr task);
 
@@ -150,7 +150,7 @@ class WorkerSet {
   virtual ~WorkerSet() = default;
 
   virtual bool Init() = 0;
-  virtual void Destroy() = 0;
+  virtual void Stop() = 0;
 
   virtual bool Execute(TaskRunnablePtr task) = 0;
   virtual bool ExecuteRR(TaskRunnablePtr task) = 0;
@@ -240,7 +240,7 @@ class ExecqWorkerSet : public WorkerSet {
   }
 
   bool Init() override;
-  void Destroy() override;
+  void Stop() override;
 
   bool Execute(TaskRunnablePtr task) override { return ExecuteLeastQueue(task); };
   bool ExecuteRR(TaskRunnablePtr task) override;
@@ -276,7 +276,7 @@ class SimpleWorkerSet : public WorkerSet {
   }
 
   bool Init() override;
-  void Destroy() override;
+  void Stop() override;
 
   bool Execute(TaskRunnablePtr task) override;
   bool ExecuteRR(TaskRunnablePtr task) override;
@@ -309,7 +309,7 @@ class PriorWorkerSet : public WorkerSet {
   }
 
   bool Init() override;
-  void Destroy() override;
+  void Stop() override;
 
   bool Execute(TaskRunnablePtr task) override;
   bool ExecuteRR(TaskRunnablePtr task) override;

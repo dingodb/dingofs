@@ -285,6 +285,27 @@ TEST_F(VFSImplTest, Fallocate_RejectsRangeAboveLimit) {
   EXPECT_EQ(s.ToSysErrNo(), EFBIG);
 }
 
+TEST_F(VFSImplTest, FallocateCollapseRejectsUnalignedRangeBeforeMetaCall) {
+  EXPECT_CALL(*mock_meta_system_, Fallocate(_, _, _, _, _)).Times(0);
+
+  Status s = vfs_->Fallocate(ctx_, 55, FALLOC_FL_COLLAPSE_RANGE, 1,
+                             test::MakeTestFsInfo().chunk_size);
+
+  EXPECT_TRUE(s.IsInvalidParam()) << s.ToString();
+  EXPECT_EQ(s.ToSysErrNo(), EINVAL);
+}
+
+TEST_F(VFSImplTest, FallocateCollapseRejectsCombinedFlagsBeforeMetaCall) {
+  EXPECT_CALL(*mock_meta_system_, Fallocate(_, _, _, _, _)).Times(0);
+
+  Status s =
+      vfs_->Fallocate(ctx_, 55, FALLOC_FL_COLLAPSE_RANGE | FALLOC_FL_KEEP_SIZE,
+                      0, test::MakeTestFsInfo().chunk_size);
+
+  EXPECT_TRUE(s.IsInvalidParam()) << s.ToString();
+  EXPECT_EQ(s.ToSysErrNo(), EINVAL);
+}
+
 TEST_F(VFSImplTest, CopyFileRange_RejectsDestinationAboveLimit) {
   uint64_t max_file_size = kMaxFileLength;
   uint64_t copied = 123;

@@ -34,7 +34,7 @@ class S3Accesser : public Accesser {
   ~S3Accesser() override = default;
 
   bool Init() override;
-  bool Destroy() override;
+  bool Stop() override;
 
   bool ContainerExist() override;
 

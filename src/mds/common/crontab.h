@@ -83,7 +83,7 @@ class CrontabManager {
   void PauseCrontab(uint32_t crontab_id);
   void DeleteCrontab(uint32_t crontab_id);
 
-  void Destroy();
+  void Stop();
 
   void DescribeByJson(Json::Value& value);
 
@@ -99,6 +99,8 @@ class CrontabManager {
   bthread_mutex_t mutex_;
   // Store all crontab, key(crontab_id) / value(Crontab)
   std::map<uint32_t, CrontabSPtr> crontabs_;
+  // In-flight async crontab tasks; Stop() waits until it drops to zero.
+  std::atomic<int64_t> inflight_async_count_{0};
 };
 
 }  // namespace mds

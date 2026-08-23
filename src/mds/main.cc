@@ -13,13 +13,13 @@
 // limitations under the License.
 
 #include <csignal>
-#include "../common/helper.h"
 #include <iostream>
 #include <string>
 #include <thread>
 
 #include "backtrace.h"
 #include "common/flag.h"
+#include "common/helper.h"
 #include "common/options/blockaccess.h"
 #include "common/options/common.h"
 #include "common/options/mds.h"
@@ -91,15 +91,15 @@ static void ErrorCallback(void* vdata, const char* msg, int errnum) {
 
 // The signal handler
 static void SignalHandler(int signo) {
+  if (signo == SIGTERM) {
+    // Only set a flag here (async-signal-safe); the main thread exits the
+    // Run() loop and performs the actual Stop().
+    dingofs::mds::Server::GetInstance().AskStop();
+    return;
+  }
+
   // flush log
   dingofs::Logger::FlushLogs();
-
-  if (signo == SIGTERM) {
-    dingofs::mds::Server& server = dingofs::mds::Server::GetInstance();
-    server.Stop();
-
-    _exit(0);
-  }
 
   std::cerr << "received signal: " << signo << '\n';
   std::cerr << "stack trace:\n";
@@ -316,8 +316,10 @@ int main(int argc, char* argv[]) {
 
   dingofs::mds::Server& server = dingofs::mds::Server::GetInstance();
 
-  CHECK(server.InitLog()) << "init log error.";
-  CHECK(server.InitLogCleanManager()) << "init log clean manager error.";
+  if (!server.InitLog()) {
+    LOG(ERROR) << "init log error.";
+    return -1;
+  }
 
   // print current gflags
   LOG(INFO) << dingofs::GenCurrentFlags();
@@ -326,23 +328,15 @@ int main(int argc, char* argv[]) {
   // print dingo eureka version
   LOG(INFO) << FormatDingoEurekaVersion();
 
-  CHECK(server.InitConfig(FLAGS_conf)) << fmt::format("init config({}) error.", FLAGS_conf);
-  CHECK(GeneratePidFile(server.GetPidFilePath())) << "generate pid file error.";
-  CHECK(server.InitStorage(FLAGS_storage_url)) << "init storage error.";
-  CHECK(server.InitOperationProcessor()) << "init operation processor error.";
-  CHECK(server.InitCacheGroupMemberManager()) << "init cache group member manager error.";
-  CHECK(server.InitHeartbeat()) << "init heartbeat error.";
-  CHECK(server.InitMDSMeta()) << "init mds meta error.";
-  CHECK(server.InitNotifyBuddy()) << "init notify buddy error.";
-  CHECK(server.InitFileSystem()) << "init file system set error.";
-  CHECK(server.InitFsInfoSync()) << "init fs info sync error.";
-  CHECK(server.InitCacheMemberSynchronizer()) << "init cache member synchronizer error.";
-  CHECK(server.InitMonitor()) << "init mds monitor error.";
-  CHECK(server.InitGcProcessor()) << "init gc error.";
-  CHECK(server.InitQuotaSynchronizer()) << "init quota synchronizer error.";
-  CHECK(server.InitDirStatsSynchronizer()) << "init dir-stats synchronizer error.";
-  CHECK(server.InitCrontab()) << "init crontab error.";
-  CHECK(server.InitService()) << "init service error.";
+  if (!GeneratePidFile(server.GetPidFilePath())) {
+    LOG(ERROR) << "generate pid file error.";
+    return -1;
+  }
+
+  if (!server.Init(FLAGS_conf, FLAGS_storage_url)) {
+    LOG(ERROR) << fmt::format("init server({}) error.", FLAGS_conf);
+    return -1;
+  }
 
   LOG(INFO) << "##################### init finish ######################";
 

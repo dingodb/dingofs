@@ -93,7 +93,7 @@ bool Worker::Init() {
   return true;
 }
 
-void Worker::Destroy() {
+void Worker::Stop() {
   is_available_.store(false, std::memory_order_relaxed);
 
   if (bthread::execution_queue_stop(queue_id_) != 0) {
@@ -252,10 +252,8 @@ bool ExecqWorkerSet::Init() {
   return true;
 }
 
-void ExecqWorkerSet::Destroy() {
-  for (const auto& worker : workers_) {
-    worker->Destroy();
-  }
+void ExecqWorkerSet::Stop() {
+  for (const auto& worker : workers_) worker->Stop();
 }
 
 bool ExecqWorkerSet::ExecuteRR(TaskRunnablePtr task) {
@@ -431,11 +429,9 @@ bool SimpleWorkerSet::Init() {
   return true;
 }
 
-void SimpleWorkerSet::Destroy() {
+void SimpleWorkerSet::Stop() {
   // guarantee idempotent
-  if (IsDestroied()) {
-    return;
-  }
+  if (IsDestroied()) return;
 
   // stop worker thread/bthread
   bthread_mutex_lock(&mutex_);
@@ -541,8 +537,6 @@ PriorWorkerSet::PriorWorkerSet(std::string name, uint32_t worker_num, int64_t ma
 }
 
 PriorWorkerSet::~PriorWorkerSet() {
-  Destroy();
-
   bthread_cond_destroy(&cond_);
   bthread_mutex_destroy(&mutex_);
 }
@@ -597,7 +591,7 @@ bool PriorWorkerSet::Init() {
   return true;
 }
 
-void PriorWorkerSet::Destroy() {
+void PriorWorkerSet::Stop() {
   // guarantee idempotent
   if (IsDestroied()) {
     return;

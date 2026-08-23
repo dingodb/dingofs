@@ -136,10 +136,8 @@ class FileSystemSetTest : public testing::Test {
     mds_meta.SetState(MDSMeta::State::kInit);
 
     auto mds_meta_map = MDSMetaMap::New();
-    fs_set = FileSystemSet::New(coordinator_client, std::move(fs_id_generator),
-                                slice_id_generator, kv_storage, mds_meta,
-                                mds_meta_map, operation_processor, nullptr,
-                                nullptr, nullptr);
+    fs_set = FileSystemSet::New(kv_storage, mds_meta, mds_meta_map,
+                                operation_processor, nullptr);
     ASSERT_TRUE(fs_set->Init()) << "init fs set fail.";
   }
 
@@ -147,7 +145,7 @@ class FileSystemSetTest : public testing::Test {
     fs_set = nullptr;
 
     if (operation_processor != nullptr) {
-      operation_processor->Destroy();
+      operation_processor->Stop();
       operation_processor = nullptr;
     }
   }
@@ -196,8 +194,8 @@ class FileSystemTest : public testing::Test {
 
     fs = FileSystem::New(kMdsId, FsInfo::New(fs_info),
                          std::move(inode_id_generator), slice_id_generator,
-                         kv_storage, operation_processor, nullptr,
-                         quota_worker_set, quota_worker_set, nullptr);
+                         operation_processor, nullptr, nullptr, quota_worker_set,
+                         quota_worker_set, nullptr);
     auto status = fs->CreateRoot();
     ASSERT_TRUE(status.ok())
         << "create root fail, error: " << status.error_str();
@@ -207,7 +205,7 @@ class FileSystemTest : public testing::Test {
     fs = nullptr;
 
     if (operation_processor != nullptr) {
-      operation_processor->Destroy();
+      operation_processor->Stop();
       operation_processor = nullptr;
     }
   }

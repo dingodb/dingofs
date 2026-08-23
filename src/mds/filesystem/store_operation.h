@@ -1000,7 +1000,6 @@ class GetChunkOperation : public Operation {
   ~GetChunkOperation() override = default;
 
   struct Result {
-    AttrEntry attr;
     std::vector<ChunkEntry> chunks;
   };
 
@@ -1028,7 +1027,6 @@ class ScanChunkOperation : public Operation {
   ~ScanChunkOperation() override = default;
 
   struct Result {
-    AttrEntry attr;
     std::vector<ChunkEntry> chunks;
   };
 
@@ -1185,6 +1183,7 @@ class FallocateOperation : public Operation {
  private:
   void PreAlloc(AttrEntry& attr, uint64_t offset, uint64_t len, bool keep_size);
   void SetZero(BatchSharedParam& shared_param, AttrEntry& attr, uint64_t offset, uint64_t len, bool keep_size);
+  Status CollapseRange(TxnUPtr& txn, BatchSharedParam& shared_param, AttrEntry& attr);
 
   Param param_;
 
@@ -2867,7 +2866,7 @@ class OperationProcessor : public std::enable_shared_from_this<OperationProcesso
   KVStorageSPtr GetKVStorage() const { return kv_storage_; }
 
   bool Init();
-  bool Destroy();
+  bool Stop();
 
   bool RunBatched(Operation* operation);
   Status RunAlone(Operation* operation);
