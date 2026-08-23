@@ -7,6 +7,7 @@ python3 - "${ROOT}" <<'PY'
 import json
 import os
 import pathlib
+import re
 import subprocess
 import sys
 
@@ -19,6 +20,7 @@ except ImportError:
 root = pathlib.Path(sys.argv[1])
 pr_check_path = root / ".github/workflows/pr-check.yml"
 source_path = root / ".github/workflows/pr-source.yml"
+pipeline_path = root / "scripts/jenkins/dingofs-merge-regression.Jenkinsfile"
 
 
 class WorkflowLoadError(RuntimeError):
@@ -303,12 +305,58 @@ def validate_contract_test_step(workflow):
     )
 
 
+def validate_topology_template():
+    pipeline = pipeline_path.read_text()
+    match = re.search(
+        r"cat >\"\$\{topology_file\}\" <<'TOPOLOGY'\n(.*?)\nTOPOLOGY",
+        pipeline,
+        flags=re.DOTALL,
+    )
+    require(
+        match is not None,
+        "Jenkinsfile: topology heredoc must be single-quoted to preserve dingo variables",
+    )
+    for marker, shell_variable in (
+        ("@CANDIDATE_IMAGE_TAG@", "candidate_image_tag"),
+        ("@CLUSTER_RUNTIME@", "cluster_runtime"),
+        ("@STORE_IMAGE@", "STORE_IMAGE"),
+        ("@EXECUTOR_IMAGE@", "EXECUTOR_IMAGE"),
+    ):
+        require(
+            f's|{marker}|${{{shell_variable}}}|g' in pipeline,
+            f"Jenkinsfile: topology renderer must replace {marker}",
+        )
+    template = match.group(1)
+    rendered = (
+        template.replace("@CANDIDATE_IMAGE_TAG@", "candidate-image")
+        .replace("@CLUSTER_RUNTIME@", "/regression/runtime")
+        .replace("@STORE_IMAGE@", "store-image")
+        .replace("@EXECUTOR_IMAGE@", "executor-image")
+    )
+    require(
+        "/regression/runtime/data/${service_role}${service_host_sequence}"
+        in rendered,
+        "Jenkinsfile: rendered topology must preserve dingo service variables",
+    )
+    require(
+        all(
+            marker not in rendered
+            for marker in (
+                "@CANDIDATE_IMAGE_TAG@",
+                "@CLUSTER_RUNTIME@",
+                "@STORE_IMAGE@",
+                "@EXECUTOR_IMAGE@",
+            )
+        ),
+        "Jenkinsfile: rendered topology contains unresolved protected markers",
+    )
 try:
     pr_check = load_workflow(pr_check_path)
     source = load_workflow(source_path)
     validate_source_workflow(source)
     validate_jenkins_job(pr_check)
     validate_contract_test_step(pr_check)
+    validate_topology_template()
     require_external_configuration(
         source_path,
         {
