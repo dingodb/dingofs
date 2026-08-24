@@ -94,6 +94,7 @@ class Inode {
         base_version_(attr_with_mutation.attr.version()),
         parents_(attr_with_mutation.attr.parents().begin(), attr_with_mutation.attr.parents().end()) {
     last_active_time_s_ = utils::Timestamp();
+    last_refresh_time_s_ = utils::Timestamp();
 
     total_delta_version_ = 0;
     delta_versions_.resize(kDirAttrMutationNum, 0);
@@ -219,6 +220,8 @@ class Inode {
   void UpdateLastActiveTime() { last_active_time_s_.store(utils::Timestamp(), std::memory_order_relaxed); }
   uint64_t LastActiveTimeS() { return last_active_time_s_.load(std::memory_order_relaxed); }
 
+  bool IsFresh();
+
  private:
   void Put(const AttrEntry& attr);
   void ApplyMutation(const AttrWithMutation& attr_with_mutation);
@@ -258,6 +261,7 @@ class Inode {
   uint64_t total_delta_version_{0};
 
   std::atomic<uint64_t> last_active_time_s_{0};
+  std::atomic<uint64_t> last_refresh_time_s_{0};
 };
 
 class InodeCache;
