@@ -49,12 +49,14 @@ class DirShard {
       children_[dentry.Name()] = dentry;
     }
     last_active_time_s_ = utils::Timestamp();
+    last_refresh_time_s_ = utils::Timestamp();
   }
   DirShard(uint64_t id, const Range& range, uint64_t version, absl::btree_map<std::string, Dentry>&& dentries)
       : id_(id), range_{range}, version_(version) {
     // ingest dentries to map
     children_ = std::move(dentries);
     last_active_time_s_ = utils::Timestamp();
+    last_refresh_time_s_ = utils::Timestamp();
   }
 
   static DirShardSPtr New(uint64_t id, const Range& range, uint64_t version, const std::vector<Dentry>& dentries) {
@@ -94,6 +96,10 @@ class DirShard {
   void UpdateLastActiveTime() { last_active_time_s_.store(utils::Timestamp(), std::memory_order_relaxed); }
   uint64_t LastActiveTimeS() { return last_active_time_s_.load(std::memory_order_relaxed); }
 
+  void UpdateLastRefreshTime() { last_refresh_time_s_.store(utils::Timestamp(), std::memory_order_relaxed); }
+  uint64_t LastRefreshTimeS() { return last_refresh_time_s_.load(std::memory_order_relaxed); }
+  bool IsFresh();
+
   uint64_t Version() const { return version_; }
 
   std::pair<DirShardSPtr, DirShardSPtr> Split(const std::string& key, uint64_t left_id, uint64_t right_id);
@@ -111,6 +117,7 @@ class DirShard {
   absl::btree_map<std::string, Dentry> children_;
 
   std::atomic<uint64_t> last_active_time_s_{0};
+  std::atomic<uint64_t> last_refresh_time_s_{0};
 };
 
 class ShardPartition;
@@ -194,8 +201,8 @@ class ShardPartition {
   void DeleteShard(const std::string& start);
   void DeleteShardNoLock(const std::string& start);
 
-  Status FetchDirShard(const Range& range, DirShardSPtr& out_shard);
-  Status DoFetchDirShard(const Range& range, DirShardSPtr& out_shard);
+  Status FetchDirShard(const Range& range, const std::string& reason, DirShardSPtr& out_shard);
+  Status DoFetchDirShard(const Range& range, const std::string& reason, DirShardSPtr& out_shard);
 
   // refresh partition with latest inode
   bool Refresh(uint64_t new_version);

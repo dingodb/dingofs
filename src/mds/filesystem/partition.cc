@@ -43,6 +43,9 @@ DEFINE_uint32(mds_partition_shard_split_threshold, 8192, "split shard when dentr
 DEFINE_bool(mds_dirshard_inflight_controller_enable, true, "DirShard inflight controller enable.");
 DEFINE_validator(mds_dirshard_inflight_controller_enable, brpc::PassValidate);
 
+DEFINE_uint32(mds_dentry_fresh_time_s, 0, "dentry fresh seconds");
+DEFINE_validator(mds_dentry_fresh_time_s, brpc::PassValidate);
+
 // --- DirShard implementation ---
 
 void DirShard::Put(const Dentry& dentry) {
@@ -51,6 +54,7 @@ void DirShard::Put(const Dentry& dentry) {
   children_[dentry.Name()] = dentry;
 
   UpdateLastActiveTime();
+  UpdateLastRefreshTime();
 }
 
 void DirShard::Delete(const std::string& name) {
@@ -59,6 +63,13 @@ void DirShard::Delete(const std::string& name) {
   children_.erase(name);
 
   UpdateLastActiveTime();
+  UpdateLastRefreshTime();
+}
+
+bool DirShard::IsFresh() {
+  if (FLAGS_mds_dentry_fresh_time_s == 0) return true;
+
+  return (utils::Timestamp() - last_refresh_time_s_.load(std::memory_order_relaxed)) < FLAGS_mds_dentry_fresh_time_s;
 }
 
 bool DirShard::Get(const std::string& name, Dentry& out) {
@@ -186,7 +197,7 @@ Status ShardPartition::Get(const std::string& name, Dentry& out) {
   do {
     Range range;
     auto shard = GetShard(name, range);
-    if (shard != nullptr) {
+    if (shard != nullptr && shard->IsFresh()) {
       if (shard->IsFull()) AsyncSplitDirShard(range);
 
       if (shard->Get(name, out)) {
@@ -197,7 +208,8 @@ Status ShardPartition::Get(const std::string& name, Dentry& out) {
     }
 
     // Shard not in cache, try to fetch
-    auto status = FetchDirShard(range, shard);
+    const std::string reason = (shard == nullptr) ? "get-miss" : "get-stale";
+    auto status = FetchDirShard(range, reason, shard);
     if (!status.ok()) return status;
 
   } while (true);
@@ -224,8 +236,9 @@ Status ShardPartition::Scan(const std::string& trace_id, const std::string& star
   do {
     Range range;
     auto shard = GetShard(next_name, range);
-    if (shard == nullptr) {
-      auto status = FetchDirShard(range, shard);
+    if (shard == nullptr || !shard->IsFresh()) {
+      const std::string reason = (shard == nullptr) ? "scan-miss" : "scan-stale";
+      auto status = FetchDirShard(range, reason, shard);
       if (!status.ok()) return status;
       continue;
     }
@@ -454,9 +467,9 @@ void ShardPartition::DeleteShard(const std::string& start) {
 
 void ShardPartition::DeleteShardNoLock(const std::string& start) { shard_map_.erase(start); }
 
-Status ShardPartition::FetchDirShard(const Range& range, DirShardSPtr& out_shard) {
+Status ShardPartition::FetchDirShard(const Range& range, const std::string& reason, DirShardSPtr& out_shard) {
   if (!FLAGS_mds_dirshard_inflight_controller_enable) {
-    return DoFetchDirShard(range, out_shard);
+    return DoFetchDirShard(range, reason, out_shard);
   }
 
   bool is_leader = false;
@@ -468,7 +481,7 @@ Status ShardPartition::FetchDirShard(const Range& range, DirShardSPtr& out_shard
     return inflight->status;
   }
 
-  inflight->status = DoFetchDirShard(range, out_shard);
+  inflight->status = DoFetchDirShard(range, reason, out_shard);
   inflight->value = out_shard;
   shard_inflight_controller_.Delete(range.ToString());
 
@@ -477,7 +490,7 @@ Status ShardPartition::FetchDirShard(const Range& range, DirShardSPtr& out_shard
   return inflight->status;
 }
 
-Status ShardPartition::DoFetchDirShard(const Range& range, DirShardSPtr& out_shard) {
+Status ShardPartition::DoFetchDirShard(const Range& range, const std::string& reason, DirShardSPtr& out_shard) {
   utils::Duration duration;
   absl::btree_map<std::string, Dentry> dentries;
   Trace trace;
@@ -497,8 +510,8 @@ Status ShardPartition::DoFetchDirShard(const Range& range, DirShardSPtr& out_sha
 
   PutShard(out_shard);
 
-  LOG(INFO) << fmt::format("[partition.{}.{}][{}us] fetch dir shard, range{} {}.", fs_id_, ino_, duration.ElapsedUs(),
-                           range.ToString(), out_shard->ToString());
+  LOG(INFO) << fmt::format("[partition.{}.{}][{}us] fetch dir shard, range{} {} reason({}).", fs_id_, ino_,
+                           duration.ElapsedUs(), range.ToString(), out_shard->ToString(), reason);
 
   return Status::OK();
 }
