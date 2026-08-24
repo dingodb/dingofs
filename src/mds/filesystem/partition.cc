@@ -66,12 +66,6 @@ void DirShard::Delete(const std::string& name) {
   UpdateLastRefreshTime();
 }
 
-bool DirShard::IsFresh() {
-  if (FLAGS_mds_dentry_fresh_time_s == 0) return true;
-
-  return (utils::Timestamp() - last_refresh_time_s_.load(std::memory_order_relaxed)) < FLAGS_mds_dentry_fresh_time_s;
-}
-
 bool DirShard::Get(const std::string& name, Dentry& out) {
   utils::ReadLockGuard lk(lock_);
 
@@ -123,22 +117,10 @@ std::string DirShard::Mid() {
   return it->first;
 }
 
-bool DirShard::Empty() const {
-  utils::ReadLockGuard lk(lock_);
+bool DirShard::IsFresh() {
+  if (FLAGS_mds_dentry_fresh_time_s == 0) return true;
 
-  return children_.empty();
-}
-
-size_t DirShard::Size() const {
-  utils::ReadLockGuard lk(lock_);
-
-  return children_.size();
-}
-
-size_t DirShard::Bytes() const {
-  utils::ReadLockGuard lk(lock_);
-
-  return children_.size() * sizeof(Dentry);
+  return (utils::Timestamp() - last_refresh_time_s_.load(std::memory_order_relaxed)) < FLAGS_mds_dentry_fresh_time_s;
 }
 
 // split shard into two by key, [start, key), [key, end)
@@ -167,6 +149,24 @@ std::pair<DirShardSPtr, DirShardSPtr> DirShard::Split(const std::string& key, ui
 std::string DirShard::ToString() const {
   return fmt::format("id({}) range[{},{}) version({}) size({})", id_, ::dingofs::Helper::StringToHex(range_.start),
                      ::dingofs::Helper::StringToHex(range_.end), version_, Size());
+}
+
+bool DirShard::Empty() const {
+  utils::ReadLockGuard lk(lock_);
+
+  return children_.empty();
+}
+
+size_t DirShard::Size() const {
+  utils::ReadLockGuard lk(lock_);
+
+  return children_.size();
+}
+
+size_t DirShard::Bytes() const {
+  utils::ReadLockGuard lk(lock_);
+
+  return children_.size() * sizeof(Dentry);
 }
 
 void DirShard::Dump(Json::Value& value) const {
@@ -356,6 +356,60 @@ size_t ShardPartition::Bytes() const {
   }
 
   return bytes;
+}
+
+void ShardPartition::Dump(Json::Value& value) const {
+  utils::ReadLockGuard lk(lock_);
+
+  value["fs_id"] = fs_id_;
+  value["ino"] = ino_;
+  value["base_version"] = base_version_;
+  value["delta_version"] = delta_version_;
+  value["delta_dentry_ops_count"] = delta_dentry_ops_.size();
+
+  std::map<std::string, Json::Value> shard_map_value;
+  if (shard_boundaries_.empty()) {
+    Json::Value shard_value(Json::objectValue);
+    shard_value["start"] = "";
+    shard_value["end"] = "";
+    shard_map_value[""] = shard_value;
+
+  } else {
+    for (size_t i = 0; i <= shard_boundaries_.size(); ++i) {
+      Json::Value shard_value(Json::objectValue);
+      if (i == 0) {
+        shard_value["start"] = "";
+        shard_value["end"] = shard_boundaries_[i];
+        shard_map_value[""] = shard_value;
+      } else if (i == shard_boundaries_.size()) {
+        shard_value["start"] = shard_boundaries_[i - 1];
+        shard_value["end"] = "";
+        shard_map_value[shard_boundaries_[i - 1]] = shard_value;
+
+      } else {
+        shard_value["start"] = shard_boundaries_[i - 1];
+        shard_value["end"] = shard_boundaries_[i];
+        shard_map_value[shard_boundaries_[i - 1]] = shard_value;
+      }
+    }
+  }
+
+  for (const auto& [shard_key, shard] : shard_map_) {
+    auto it = shard_map_value.find(shard_key);
+    if (it == shard_map_value.end()) continue;
+
+    auto& shard_value = it->second;
+    shard_value["id"] = shard->ID();
+    shard_value["size"] = shard->Size();
+    shard_value["version"] = shard->Version();
+  }
+
+  Json::Value shards_value(Json::arrayValue);
+  for (auto& it : shard_map_value) {
+    shards_value.append(it.second);
+  }
+
+  value["shards"] = shards_value;
 }
 
 // --- ShardPartition private helpers ---
@@ -657,60 +711,6 @@ size_t ShardPartition::CleanExpired(uint64_t expire_s) {
   }
 
   return clean_count;
-}
-
-void ShardPartition::Dump(Json::Value& value) const {
-  utils::ReadLockGuard lk(lock_);
-
-  value["fs_id"] = fs_id_;
-  value["ino"] = ino_;
-  value["base_version"] = base_version_;
-  value["delta_version"] = delta_version_;
-  value["delta_dentry_ops_count"] = delta_dentry_ops_.size();
-
-  std::map<std::string, Json::Value> shard_map_value;
-  if (shard_boundaries_.empty()) {
-    Json::Value shard_value(Json::objectValue);
-    shard_value["start"] = "";
-    shard_value["end"] = "";
-    shard_map_value[""] = shard_value;
-
-  } else {
-    for (size_t i = 0; i <= shard_boundaries_.size(); ++i) {
-      Json::Value shard_value(Json::objectValue);
-      if (i == 0) {
-        shard_value["start"] = "";
-        shard_value["end"] = shard_boundaries_[i];
-        shard_map_value[""] = shard_value;
-      } else if (i == shard_boundaries_.size()) {
-        shard_value["start"] = shard_boundaries_[i - 1];
-        shard_value["end"] = "";
-        shard_map_value[shard_boundaries_[i - 1]] = shard_value;
-
-      } else {
-        shard_value["start"] = shard_boundaries_[i - 1];
-        shard_value["end"] = shard_boundaries_[i];
-        shard_map_value[shard_boundaries_[i - 1]] = shard_value;
-      }
-    }
-  }
-
-  for (const auto& [shard_key, shard] : shard_map_) {
-    auto it = shard_map_value.find(shard_key);
-    if (it == shard_map_value.end()) continue;
-
-    auto& shard_value = it->second;
-    shard_value["id"] = shard->ID();
-    shard_value["size"] = shard->Size();
-    shard_value["version"] = shard->Version();
-  }
-
-  Json::Value shards_value(Json::arrayValue);
-  for (auto& it : shard_map_value) {
-    shards_value.append(it.second);
-  }
-
-  value["shards"] = shards_value;
 }
 
 PartitionCache::PartitionCache(uint32_t fs_id)
