@@ -13,19 +13,19 @@
 // limitations under the License.
 
 #include "mds/common/codec.h"
-#include "common/helper.h"
 
 #include <cstddef>
 #include <cstdint>
 #include <string>
 #include <utility>
 
+#include "common/helper.h"
 #include "dingofs/mds.pb.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
 #include "mds/common/helper.h"
-#include "mds/common/trash.h"
 #include "mds/common/serial_helper.h"
+#include "mds/common/trash.h"
 
 namespace dingofs {
 namespace mds {
@@ -721,7 +721,8 @@ std::string MetaCodec::EncodeAutoIncrementIDKey(const std::string& name) {
 }
 
 void MetaCodec::DecodeAutoIncrementIDKey(const std::string& key, std::string& name) {
-  CHECK(IsAutoIncrementIDKey(key)) << fmt::format("invalid auto increment id key({}).", ::dingofs::Helper::StringToHex(key));
+  CHECK(IsAutoIncrementIDKey(key)) << fmt::format("invalid auto increment id key({}).",
+                                                  ::dingofs::Helper::StringToHex(key));
 
   name = key.substr(kAutoIncrementIDKeyHeaderSize);
 }
@@ -796,7 +797,8 @@ std::string MetaCodec::EncodeHeartbeatKey(int64_t mds_id) {
 }
 
 std::string MetaCodec::EncodeHeartbeatKey(const std::string& client_id) {
-  CHECK(client_id.size() == 36) << fmt::format("client_id({}) length is invalid.", ::dingofs::Helper::StringToHex(client_id));
+  CHECK(client_id.size() == 36) << fmt::format("client_id({}) length is invalid.",
+                                               ::dingofs::Helper::StringToHex(client_id));
 
   std::string key;
   key.reserve(kHeartbeatClientKeySize);
@@ -811,7 +813,8 @@ std::string MetaCodec::EncodeHeartbeatKey(const std::string& client_id) {
 }
 
 std::string MetaCodec::EncodeHeartbeatCacheMemberKey(const std::string& member_id) {
-  CHECK(member_id.size() == 36) << fmt::format("member_id({}) length is invalid.", ::dingofs::Helper::StringToHex(member_id));
+  CHECK(member_id.size() == 36) << fmt::format("member_id({}) length is invalid.",
+                                               ::dingofs::Helper::StringToHex(member_id));
 
   std::string key;
   key.reserve(kHeartbeatCacheMemberKeySize);
@@ -832,7 +835,8 @@ void MetaCodec::DecodeHeartbeatKey(const std::string& key, int64_t& mds_id) {
 }
 
 void MetaCodec::DecodeHeartbeatKey(const std::string& key, std::string& client_id) {
-  CHECK(IsClientHeartbeatKey(key)) << fmt::format("invalid client heartbeat key({}).", ::dingofs::Helper::StringToHex(key));
+  CHECK(IsClientHeartbeatKey(key)) << fmt::format("invalid client heartbeat key({}).",
+                                                  ::dingofs::Helper::StringToHex(key));
 
   client_id = key.substr(kPrefixSize + 1 + 1 + 1);
 }
@@ -1129,7 +1133,8 @@ std::string MetaCodec::EncodeDirInodeMutationKey(uint32_t fs_id, Ino ino, uint32
 }
 
 void MetaCodec::DecodeDirInodeMutationKey(const std::string& key, uint32_t& fs_id, uint64_t& ino, uint32_t& index) {
-  CHECK(IsDirInodeMutationKey(key)) << fmt::format("invalid inode update op key({}).", ::dingofs::Helper::StringToHex(key));
+  CHECK(IsDirInodeMutationKey(key)) << fmt::format("invalid inode update op key({}).",
+                                                   ::dingofs::Helper::StringToHex(key));
   fs_id = SerialHelper::ReadInt(key.substr(kPrefixSize + 1));
   ino = SerialHelper::ReadULong(key.substr(kPrefixSize + 1 + 4 + 1));
   index = SerialHelper::ReadInt(key.substr(kPrefixSize + 1 + 4 + 1 + 8 + 1));
@@ -2039,7 +2044,7 @@ std::string MetaCodec::ParseKeyFromHex(const std::string& hex_key) {
           if (!enough(1 + 4 + 1 + 8 + 1)) {
             return fmt::format("{} truncated (missing ino/inode type), key({})", head, hex_key);
           }
-          uint64_t ino = SerialHelper::ReadULong(key.substr(p + 1 + 4 + 1));
+          Ino ino = SerialHelper::ReadULong(key.substr(p + 1 + 4 + 1));
           const unsigned char inode_type = static_cast<unsigned char>(key.at(p + 1 + 4 + 1 + 8));
           switch (inode_type) {
             case kFsInodeAttr:
@@ -2068,7 +2073,7 @@ std::string MetaCodec::ParseKeyFromHex(const std::string& hex_key) {
 
         case kMetaFsFileSession: {
           // format: ${prefix} kTableFsMeta {fs_id} kMetaFsFileSession {ino} {session_id}
-          uint64_t ino = SerialHelper::ReadULong(key.substr(p + 1 + 4 + 1));
+          Ino ino = SerialHelper::ReadULong(key.substr(p + 1 + 4 + 1));
           std::string session_id = key.substr(p + 1 + 4 + 1 + 8);
           return fmt::format("{} ino({}) session_id({})", head, ino, session_id);
         }
@@ -2076,13 +2081,13 @@ std::string MetaCodec::ParseKeyFromHex(const std::string& hex_key) {
         case kMetaFsDirQuota:
         case kMetaFsDelFile: {
           // format: ${prefix} kTableFsMeta {fs_id} {meta_type} {ino}
-          uint64_t ino = SerialHelper::ReadULong(key.substr(p + 1 + 4 + 1));
+          Ino ino = SerialHelper::ReadULong(key.substr(p + 1 + 4 + 1));
           return fmt::format("{} ino({})", head, ino);
         }
 
         case kMetaFsDelSlice: {
           // format: ${prefix} kTableFsMeta {fs_id} kMetaFsDelSlice {ino} {chunk_index} {time_ns}
-          uint64_t ino = SerialHelper::ReadULong(key.substr(p + 1 + 4 + 1));
+          Ino ino = SerialHelper::ReadULong(key.substr(p + 1 + 4 + 1));
           uint64_t chunk_index = SerialHelper::ReadULong(key.substr(p + 1 + 4 + 1 + 8));
           uint64_t time_ns = SerialHelper::ReadULong(key.substr(p + 1 + 4 + 1 + 8 + 8));
           return fmt::format("{} ino({}) chunk_index({}) time_ns({})", head, ino, chunk_index, time_ns);

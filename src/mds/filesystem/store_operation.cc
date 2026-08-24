@@ -328,6 +328,9 @@ const char* Operation::OpName() const {
     case OpType::kGetChunk:
       return "GetChunk";
 
+    case OpType::kBatchGetFirstChunk:
+      return "BatchGetFirstChunk";
+
     case OpType::kScanChunk:
       return "ScanChunk";
 
@@ -1527,6 +1530,32 @@ Status GetChunkOperation::Run(TxnUPtr& txn) {
   return Status::OK();
 }
 
+Status BatchGetFirstChunkOperation::Run(TxnUPtr& txn) {
+  std::vector<std::string> keys;
+  keys.reserve(inoes_.size());
+  for (const auto& ino : inoes_) {
+    keys.push_back(MetaCodec::EncodeChunkKey(fs_id_, ino, 0));
+  }
+
+  std::vector<KeyValue> kvs;
+  auto status = txn->BatchGet(keys, kvs);
+  if (!status.ok()) return status;
+
+  result_.inoes.clear();
+  result_.chunks.clear();
+  for (const auto& kv : kvs) {
+    uint32_t fs_id;
+    Ino ino{0};
+    uint64_t chunk_index;
+    MetaCodec::DecodeChunkKey(kv.key, fs_id, ino, chunk_index);
+    result_.inoes.push_back(ino);
+
+    result_.chunks.push_back(MetaCodec::DecodeChunkValue(kv.value));
+  }
+
+  return Status::OK();
+}
+
 Status ScanChunkOperation::Run(TxnUPtr& txn) {
   Range range = MetaCodec::GetChunkRange(fs_id_, ino_);
 
@@ -1938,7 +1967,7 @@ Status RollbackFileOperation::RunInBatch(TxnUPtr&, BatchSharedParam& shared_para
   return Status::OK();
 }
 
-static Status CheckDirEmpty(TxnUPtr& txn, uint32_t fs_id, uint64_t ino, bool& is_empty, Ino& child_ino) {
+static Status CheckDirEmpty(TxnUPtr& txn, uint32_t fs_id, Ino ino, bool& is_empty, Ino& child_ino) {
   Range range = MetaCodec::GetDentryRange(fs_id, ino, false);
 
   std::vector<KeyValue> kvs;
@@ -3117,7 +3146,7 @@ Status CopyFileRangeOperation::Run(TxnUPtr& txn) {
 
     } else if (MetaCodec::IsChunkKey(kv.key)) {
       uint32_t fs_id;
-      uint64_t ino;
+      Ino ino;
       uint64_t chunk_index;
       MetaCodec::DecodeChunkKey(kv.key, fs_id, ino, chunk_index);
       auto chunk = MetaCodec::DecodeChunkValue(kv.value);
@@ -3353,7 +3382,7 @@ Status LoadDirQuotasOperation::Run(TxnUPtr& txn) {
     if (!MetaCodec::IsDirQuotaKey(key)) return true;
 
     uint32_t fs_id;
-    uint64_t ino;
+    Ino ino;
     MetaCodec::DecodeDirQuotaKey(key, fs_id, ino);
 
     auto quota = MetaCodec::DecodeDirQuotaValue(value);
@@ -3377,7 +3406,7 @@ Status FlushDirUsagesOperation::Run(TxnUPtr& txn) {
 
   for (auto& kv : kvs) {
     uint32_t fs_id;
-    uint64_t ino;
+    Ino ino;
     MetaCodec::DecodeDirQuotaKey(kv.key, fs_id, ino);
 
     auto quota = MetaCodec::DecodeDirQuotaValue(kv.value);
@@ -3451,7 +3480,7 @@ Status FlushDirStatsOperation::Run(TxnUPtr& txn) {
   std::set<uint64_t> found;
   for (auto& kv : kvs) {
     uint32_t fs_id;
-    uint64_t ino;
+    Ino ino;
     MetaCodec::DecodeDirStatKey(kv.key, fs_id, ino);
     found.insert(ino);
 
@@ -4001,7 +4030,7 @@ Status BatchGetInodeAttrOperation::Run(TxnUPtr& txn) {
 
     } else if (MetaCodec::IsDirInodeMutationKey(kv.key)) {
       uint32_t fs_id, index;
-      uint64_t ino;
+      Ino ino;
       MetaCodec::DecodeDirInodeMutationKey(kv.key, fs_id, ino, index);
       attr_with_mutation_map[ino].mutations.push_back(MetaCodec::DecodeDirInodeMutationValue(kv.value));
 
@@ -4540,7 +4569,7 @@ static bool IsNeedAttrKey(const BatchOperation& batch_operation) {
 
 void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) {
   const uint32_t fs_id = batch_operation.fs_id;
-  const uint64_t ino = batch_operation.ino;
+  const Ino ino = batch_operation.ino;
   size_t count = batch_operation.setattr_operations.size() + batch_operation.create_operations.size();
 
   utils::Duration duration;

@@ -101,11 +101,12 @@ class Operation {
     kRestoreFromTrash = 42,
     kRollbackFile = 43,
 
-    kCompactChunk = 50,
-    kUpsertChunk = 51,
-    kGetChunk = 52,
-    kScanChunk = 53,
-    kCleanChunk = 54,
+    kCompactChunk = 45,
+    kUpsertChunk = 46,
+    kGetChunk = 47,
+    kBatchGetFirstChunk = 48,
+    kScanChunk = 49,
+    kCleanChunk = 50,
 
     kGetSliceRef = 55,
     kDecSliceRef = 56,
@@ -260,7 +261,7 @@ class Operation {
 
   struct Key {
     uint32_t fs_id{0};
-    uint64_t ino{0};
+    Ino ino{0};
 
     bool operator<(const Key& other) const {
       if (fs_id != other.fs_id) {
@@ -832,7 +833,7 @@ class UpdateAttrOperation : public Operation {
     uint64_t block_size{0};
   };
 
-  UpdateAttrOperation(Trace& trace, uint64_t ino, uint32_t to_set, const AttrEntry& attr, ExtraParam& extra_param)
+  UpdateAttrOperation(Trace& trace, Ino ino, uint32_t to_set, const AttrEntry& attr, ExtraParam& extra_param)
       : Operation(trace), ino_(ino), to_set_(to_set), attr_(attr), extra_param_(extra_param) {};
   ~UpdateAttrOperation() override = default;
 
@@ -858,7 +859,7 @@ class UpdateAttrOperation : public Operation {
   Result& GetResult() { return result_; }
 
  private:
-  uint64_t ino_;
+  Ino ino_;
   const uint32_t to_set_;
   const AttrEntry& attr_;
 
@@ -869,7 +870,7 @@ class UpdateAttrOperation : public Operation {
 
 class UpdateXAttrOperation : public Operation {
  public:
-  UpdateXAttrOperation(Trace& trace, uint32_t fs_id, uint64_t ino, const Inode::XAttrMap& xattrs)
+  UpdateXAttrOperation(Trace& trace, uint32_t fs_id, Ino ino, const Inode::XAttrMap& xattrs)
       : Operation(trace), fs_id_(fs_id), ino_(ino), xattrs_(xattrs) {};
   ~UpdateXAttrOperation() override = default;
 
@@ -890,7 +891,7 @@ class UpdateXAttrOperation : public Operation {
 
  private:
   uint32_t fs_id_;
-  uint64_t ino_;
+  Ino ino_;
   const Inode::XAttrMap& xattrs_;
 
   Result result_;
@@ -898,7 +899,7 @@ class UpdateXAttrOperation : public Operation {
 
 class RemoveXAttrOperation : public Operation {
  public:
-  RemoveXAttrOperation(Trace& trace, uint32_t fs_id, uint64_t ino, const std::string& name)
+  RemoveXAttrOperation(Trace& trace, uint32_t fs_id, Ino ino, const std::string& name)
       : Operation(trace), fs_id_(fs_id), ino_(ino), name_(name) {};
   ~RemoveXAttrOperation() override = default;
 
@@ -919,7 +920,7 @@ class RemoveXAttrOperation : public Operation {
 
  private:
   uint32_t fs_id_;
-  uint64_t ino_;
+  Ino ino_;
   std::string name_;
 
   Result result_;
@@ -927,7 +928,7 @@ class RemoveXAttrOperation : public Operation {
 
 class UpdateShardBoundariesOperation : public Operation {
  public:
-  UpdateShardBoundariesOperation(Trace& trace, uint32_t fs_id, uint64_t ino,
+  UpdateShardBoundariesOperation(Trace& trace, uint32_t fs_id, Ino ino,
                                  const std::vector<std::string>& shard_boundaries)
       : Operation(trace), fs_id_(fs_id), ino_(ino), shard_boundaries_(shard_boundaries) {};
   ~UpdateShardBoundariesOperation() override = default;
@@ -949,14 +950,14 @@ class UpdateShardBoundariesOperation : public Operation {
 
  private:
   uint32_t fs_id_;
-  uint64_t ino_;
+  Ino ino_;
   const std::vector<std::string>& shard_boundaries_;
   Result result_;
 };
 
 class UpsertChunkOperation : public Operation {
  public:
-  UpsertChunkOperation(Trace& trace, const FsInfoEntry fs_info, uint64_t ino,
+  UpsertChunkOperation(Trace& trace, const FsInfoEntry fs_info, Ino ino,
                        const std::vector<DeltaSliceEntry>& delta_slices)
       : Operation(trace), fs_info_(fs_info), ino_(ino), delta_slices_(delta_slices) {};
   ~UpsertChunkOperation() override = default;
@@ -984,7 +985,7 @@ class UpsertChunkOperation : public Operation {
 
  private:
   const FsInfoEntry fs_info_;
-  const uint64_t ino_;
+  const Ino ino_;
 
   const std::vector<DeltaSliceEntry> delta_slices_;
 
@@ -993,7 +994,7 @@ class UpsertChunkOperation : public Operation {
 
 class GetChunkOperation : public Operation {
  public:
-  GetChunkOperation(Trace& trace, uint32_t fs_id, uint64_t ino, const std::vector<uint32_t>& chunk_indexes)
+  GetChunkOperation(Trace& trace, uint32_t fs_id, Ino ino, const std::vector<uint32_t>& chunk_indexes)
       : Operation(trace), fs_id_(fs_id), ino_(ino), chunk_indexes_(chunk_indexes) {};
   ~GetChunkOperation() override = default;
 
@@ -1012,15 +1013,42 @@ class GetChunkOperation : public Operation {
 
  private:
   uint32_t fs_id_;
-  uint64_t ino_;
+  Ino ino_;
   std::vector<uint32_t> chunk_indexes_;
+
+  Result result_;
+};
+
+class BatchGetFirstChunkOperation : public Operation {
+ public:
+  BatchGetFirstChunkOperation(Trace& trace, uint32_t fs_id, std::vector<Ino> inoes)
+      : Operation(trace), fs_id_(fs_id), inoes_(inoes) {};
+  ~BatchGetFirstChunkOperation() override = default;
+
+  struct Result {
+    std::vector<Ino> inoes;
+    std::vector<ChunkEntry> chunks;
+  };
+
+  OpType GetOpType() const override { return OpType::kBatchGetFirstChunk; }
+
+  uint32_t GetFsId() const override { return fs_id_; }
+  Ino GetIno() const override { return inoes_.front(); }
+
+  Status Run(TxnUPtr& txn) override;
+
+  Result& GetResult() { return result_; }
+
+ private:
+  uint32_t fs_id_;
+  std::vector<Ino> inoes_;
 
   Result result_;
 };
 
 class ScanChunkOperation : public Operation {
  public:
-  ScanChunkOperation(Trace& trace, uint32_t fs_id, uint64_t ino, uint32_t max_slice_num = 0)
+  ScanChunkOperation(Trace& trace, uint32_t fs_id, Ino ino, uint32_t max_slice_num = 0)
       : Operation(trace), fs_id_(fs_id), ino_(ino), max_slice_num_(max_slice_num) {};
   ~ScanChunkOperation() override = default;
 
@@ -1039,7 +1067,7 @@ class ScanChunkOperation : public Operation {
 
  private:
   uint32_t fs_id_;
-  uint64_t ino_;
+  Ino ino_;
   uint32_t max_slice_num_{0};
 
   Result result_;
@@ -1047,7 +1075,7 @@ class ScanChunkOperation : public Operation {
 
 class CleanChunkOperation : public Operation {
  public:
-  CleanChunkOperation(Trace& trace, uint32_t fs_id, uint64_t ino, const std::vector<uint64_t>& chunk_indexs)
+  CleanChunkOperation(Trace& trace, uint32_t fs_id, Ino ino, const std::vector<uint64_t>& chunk_indexs)
       : Operation(trace), fs_id_(fs_id), ino_(ino), chunk_indexs_(chunk_indexs) {};
   ~CleanChunkOperation() override = default;
 
@@ -1064,7 +1092,7 @@ class CleanChunkOperation : public Operation {
 
  private:
   uint32_t fs_id_;
-  uint64_t ino_;
+  Ino ino_;
   std::vector<uint64_t> chunk_indexs_{0};
 
   Result result_;
@@ -1142,7 +1170,7 @@ class FallocateOperation : public Operation {
  public:
   struct Param {
     uint32_t fs_id;
-    uint64_t ino;
+    Ino ino;
     int32_t mode;
     uint64_t offset;
     uint64_t len;
@@ -1811,7 +1839,7 @@ class DeleteFsQuotaOperation : public Operation {
 
 class SetDirQuotaOperation : public Operation {
  public:
-  SetDirQuotaOperation(Trace& trace, uint32_t fs_id, uint64_t ino, const QuotaEntry& quota)
+  SetDirQuotaOperation(Trace& trace, uint32_t fs_id, Ino ino, const QuotaEntry& quota)
       : Operation(trace), fs_id_(fs_id), ino_(ino), quota_(quota) {};
   ~SetDirQuotaOperation() override = default;
 
@@ -1830,7 +1858,7 @@ class SetDirQuotaOperation : public Operation {
 
  private:
   uint32_t fs_id_;
-  uint64_t ino_;
+  Ino ino_;
   QuotaEntry quota_;
 
   Result result_;
@@ -1838,7 +1866,7 @@ class SetDirQuotaOperation : public Operation {
 
 class GetDirQuotaOperation : public Operation {
  public:
-  GetDirQuotaOperation(Trace& trace, uint32_t fs_id, uint64_t ino) : Operation(trace), fs_id_(fs_id), ino_(ino) {};
+  GetDirQuotaOperation(Trace& trace, uint32_t fs_id, Ino ino) : Operation(trace), fs_id_(fs_id), ino_(ino) {};
   ~GetDirQuotaOperation() override = default;
 
   struct Result {
@@ -1856,14 +1884,14 @@ class GetDirQuotaOperation : public Operation {
 
  private:
   const uint32_t fs_id_;
-  const uint64_t ino_;
+  const Ino ino_;
 
   Result result_;
 };
 
 class DeleteDirQuotaOperation : public Operation {
  public:
-  DeleteDirQuotaOperation(Trace& trace, uint32_t fs_id, uint64_t ino) : Operation(trace), fs_id_(fs_id), ino_(ino) {};
+  DeleteDirQuotaOperation(Trace& trace, uint32_t fs_id, Ino ino) : Operation(trace), fs_id_(fs_id), ino_(ino) {};
   ~DeleteDirQuotaOperation() override = default;
 
   struct Result {
@@ -1881,7 +1909,7 @@ class DeleteDirQuotaOperation : public Operation {
 
  private:
   uint32_t fs_id_;
-  uint64_t ino_;
+  Ino ino_;
 
   Result result_;
 };
@@ -2611,7 +2639,7 @@ class GetAndCompactFsStatsOperation : public Operation {
 
 class GetInodeAttrOperation : public Operation {
  public:
-  GetInodeAttrOperation(Trace& trace, uint32_t fs_id, uint64_t ino) : Operation(trace), fs_id_(fs_id), ino_(ino) {};
+  GetInodeAttrOperation(Trace& trace, uint32_t fs_id, Ino ino) : Operation(trace), fs_id_(fs_id), ino_(ino) {};
   ~GetInodeAttrOperation() override = default;
 
   struct Result {
@@ -2629,7 +2657,7 @@ class GetInodeAttrOperation : public Operation {
 
  private:
   const uint32_t fs_id_;
-  const uint64_t ino_;
+  const Ino ino_;
 
   Result result_;
 };

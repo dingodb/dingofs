@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include "mds/filesystem/fs_utils.h"
-#include "common/helper.h"
 
 #include <cstdint>
 #include <map>
@@ -22,9 +21,9 @@
 #include <vector>
 
 #include "common/const.h"
+#include "common/helper.h"
 #include "common/logging.h"
 #include "dingofs/mds.pb.h"
-#include "mds/common/trash.h"
 #include "fmt/format.h"
 #include "gflags/gflags.h"
 #include "glog/logging.h"
@@ -32,6 +31,7 @@
 #include "mds/common/helper.h"
 #include "mds/common/status.h"
 #include "mds/common/tracing.h"
+#include "mds/common/trash.h"
 #include "mds/common/type.h"
 #include "mds/filesystem/store_operation.h"
 #include "nlohmann/json.hpp"
@@ -75,7 +75,7 @@ static FsTreeNode* GenFsTreeStruct(OperationProcessorSPtr operation_processor, u
   Trace trace;
   ScanFsMetaTableOperation operation(trace, fs_id, [&](const std::string& key, const std::string& value) -> bool {
     uint32_t fs_id = 0;
-    uint64_t ino = 0;
+    Ino ino = 0;
 
     if (MetaCodec::IsInodeKey(key)) {
       MetaCodec::DecodeInodeKey(key, fs_id, ino);
@@ -93,7 +93,7 @@ static FsTreeNode* GenFsTreeStruct(OperationProcessorSPtr operation_processor, u
 
     } else if (MetaCodec::IsDirInodeMutationKey(key)) {
       uint32_t fs_id, index;
-      uint64_t ino = 0;
+      Ino ino = 0;
       MetaCodec::DecodeDirInodeMutationKey(key, fs_id, ino, index);
       auto op = MetaCodec::DecodeDirInodeMutationValue(value);
 
@@ -205,9 +205,9 @@ void FsUtils::GenFsTreeJson(FsTreeNode* node, nlohmann::json& doc) {
 
   // mode,nlink,uid,gid,size,ctime,mtime,atime
   doc["description"] =
-      fmt::format("{},{}/{},{},{},{},{},{},{},{}", attr.version(), attr.mode(), ::dingofs::Helper::FsModeToString(attr.mode()),
-                  attr.nlink(), attr.uid(), attr.gid(), attr.length(), FormatTime(attr.ctime()),
-                  FormatTime(attr.mtime()), FormatTime(attr.atime()));
+      fmt::format("{},{}/{},{},{},{},{},{},{},{}", attr.version(), attr.mode(),
+                  ::dingofs::Helper::FsModeToString(attr.mode()), attr.nlink(), attr.uid(), attr.gid(), attr.length(),
+                  FormatTime(attr.ctime()), FormatTime(attr.mtime()), FormatTime(attr.atime()));
 
   nlohmann::json children;
   for (FsTreeNode* child : node->children) {
@@ -267,9 +267,9 @@ Status FsUtils::GenRootDirJsonString(std::string& output) {
 
   // mode,nlink,uid,gid,size,ctime,mtime,atime
   item["description"] =
-      fmt::format("{},{}/{},{},{},{},{},{},{},{}", attr.version(), attr.mode(), ::dingofs::Helper::FsModeToString(attr.mode()),
-                  attr.nlink(), attr.uid(), attr.gid(), attr.length(), FormatTime(attr.ctime()),
-                  FormatTime(attr.mtime()), FormatTime(attr.atime()));
+      fmt::format("{},{}/{},{},{},{},{},{},{},{}", attr.version(), attr.mode(),
+                  ::dingofs::Helper::FsModeToString(attr.mode()), attr.nlink(), attr.uid(), attr.gid(), attr.length(),
+                  FormatTime(attr.ctime()), FormatTime(attr.mtime()), FormatTime(attr.atime()));
 
   doc.push_back(item);
 
@@ -360,9 +360,9 @@ Status FsUtils::GenDirJsonString(Ino parent, std::string& output) {
 
     // mode,nlink,uid,gid,size,ctime,mtime,atime
     item["description"] =
-        fmt::format("{},{}/{},{},{},{},{},{},{},{}", attr.version(), attr.mode(), ::dingofs::Helper::FsModeToString(attr.mode()),
-                    attr.nlink(), attr.uid(), attr.gid(), attr.length(), FormatTime(attr.ctime()),
-                    FormatTime(attr.mtime()), FormatTime(attr.atime()));
+        fmt::format("{},{}/{},{},{},{},{},{},{},{}", attr.version(), attr.mode(),
+                    ::dingofs::Helper::FsModeToString(attr.mode()), attr.nlink(), attr.uid(), attr.gid(), attr.length(),
+                    FormatTime(attr.ctime()), FormatTime(attr.mtime()), FormatTime(attr.atime()));
 
     doc.push_back(item);
   }
@@ -373,8 +373,7 @@ Status FsUtils::GenDirJsonString(Ino parent, std::string& output) {
   // Gated on trash_days > 0 to mirror the GC enabled check
   // (mds/background/gc.cc:1100) and the client-visible behavior.
   if (parent == kRootIno && fs_info_.trash_days() > 0) {
-    const auto attr =
-        BuildTrashInodeAttr(fs_info_.fs_id(), fs_info_.create_time_s() * 1000000000ULL);
+    const auto attr = BuildTrashInodeAttr(fs_info_.fs_id(), fs_info_.create_time_s() * 1000000000ULL);
     nlohmann::json item;
     item["ino"] = std::to_string(attr.ino());
     item["name"] = kTrashName;
@@ -387,11 +386,10 @@ Status FsUtils::GenDirJsonString(Ino parent, std::string& output) {
     } else {
       item["node"] = hash_router_->GetMDS(attr.ino());
     }
-    item["description"] = fmt::format(
-        "{},{}/{},{},{},{},{},{},{},{}", attr.version(), attr.mode(),
-        ::dingofs::Helper::FsModeToString(attr.mode()), attr.nlink(), attr.uid(), attr.gid(),
-        attr.length(), FormatTime(attr.ctime()), FormatTime(attr.mtime()),
-        FormatTime(attr.atime()));
+    item["description"] =
+        fmt::format("{},{}/{},{},{},{},{},{},{},{}", attr.version(), attr.mode(),
+                    ::dingofs::Helper::FsModeToString(attr.mode()), attr.nlink(), attr.uid(), attr.gid(), attr.length(),
+                    FormatTime(attr.ctime()), FormatTime(attr.mtime()), FormatTime(attr.atime()));
     doc.push_back(item);
   }
 

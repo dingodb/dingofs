@@ -71,9 +71,9 @@ class OpenFileMemo {
     uint32_t ref_count{0};
   };
 
-  bool IsOpened(uint64_t ino);
-  void Open(uint64_t ino);
-  void Close(uint64_t ino);
+  bool IsOpened(Ino ino);
+  void Open(Ino ino);
+  void Close(Ino ino);
 
  private:
   bthread_mutex_t mutex_;
@@ -92,13 +92,13 @@ class DataStorage {
   };
   using DataBufferPtr = std::shared_ptr<DataBuffer>;
 
-  Status Read(uint64_t ino, off_t off, size_t size, char* buf, size_t& rsize);
-  Status Write(uint64_t ino, off_t off, const char* buf, size_t size);
+  Status Read(Ino ino, off_t off, size_t size, char* buf, size_t& rsize);
+  Status Write(Ino ino, off_t off, const char* buf, size_t size);
 
-  bool GetLength(uint64_t ino, size_t& length);
+  bool GetLength(Ino ino, size_t& length);
 
  private:
-  DataBufferPtr GetDataBuffer(uint64_t ino);
+  DataBufferPtr GetDataBuffer(Ino ino);
 
   bthread_mutex_t mutex_;
   std::map<uint64_t, DataBufferPtr> data_map_;
@@ -111,8 +111,8 @@ class FileChunkMap {
 
   Status NewSliceId(uint64_t* id);
 
-  Status Read(uint64_t ino, uint64_t index, std::vector<Slice>* slices);
-  Status Write(uint64_t ino, uint64_t index, const std::vector<Slice>& slices);
+  Status Read(Ino ino, uint64_t index, std::vector<Slice>* slices);
+  Status Write(Ino ino, uint64_t index, const std::vector<Slice>& slices);
 
  private:
   struct Chunk {
@@ -304,17 +304,16 @@ class MemoryMetaSystem : public vfs::MetaSystem {
   bool IsEmptyDentry(const Dentry& dentry);
 
   void AddInode(const PBInode& inode);
-  void DeleteInode(uint64_t ino);
-  bool GetInode(uint64_t ino, PBInode& inode);
+  void DeleteInode(Ino ino);
+  bool GetInode(Ino ino, PBInode& inode);
 
   void UpdateInode(const PBInode& inode,
                    const std::vector<std::string>& fields);
-  void IncInodeNlink(uint64_t ino);
-  void DecOrDeleteInodeNlink(uint64_t ino);
-  void UpdateXAttr(uint64_t ino, const std::string& name,
-                   const std::string& value);
-  void RemoveXAttr(uint64_t ino, const std::string& name);
-  void UpdateInodeLength(uint64_t ino, size_t length);
+  void IncInodeNlink(Ino ino);
+  void DecOrDeleteInodeNlink(Ino ino);
+  void UpdateXAttr(Ino ino, const std::string& name, const std::string& value);
+  void RemoveXAttr(Ino ino, const std::string& name);
+  void UpdateInodeLength(Ino ino, size_t length);
 
   bthread_mutex_t mutex_;
   // name: ino
