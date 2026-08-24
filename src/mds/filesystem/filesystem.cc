@@ -398,33 +398,33 @@ Status FileSystem::BatchCreate(Context& ctx, Ino parent, const std::vector<MkNod
   auto& result = operation.GetResult();
   auto& parent_attr_or_mutation = result.parent_attr_or_mutation;
 
-  // update cache
+  // add file session
   for (auto& file_session : file_sessions) file_session_manager_.Put(file_session);
 
+  // update inode cache
   std::string reason = fmt::format("create.{}.{}.{}", request_id, parent, names);
   for (auto& attr : attrs) UpsertInodeCache(attr, reason);
 
+  // add dentry to partition
   AttrEntry last_parent_attr = parent_inode->ToAttr();
-
   for (auto& dentry : dentries) AddDentryToPartition(parent, dentry, last_parent_attr.version());
 
   // update quota
   quota_manager_.AsyncUpdateFsUsage(0, params.size(), reason);
   quota_manager_.AsyncUpdateDirUsage(parent, 0, params.size(), reason);
-  UpdateDirStat(parent, 0, static_cast<int64_t>(params.size()), 0, reason);
+  AsyncUpdateDirStat(parent, 0, static_cast<int64_t>(params.size()), 0, reason);
 
   // update parent memo
   for (auto& dentry : dentries) parent_memo_.Remeber(dentry.INo(), parent);
 
-  // set output
+  // notify buddy
+  if (operation.GetBatchIndex() == 0 && IsParentHashPartition()) {
+    NotifyBuddyRefreshInode(last_parent_attr.parents(), parent_attr_or_mutation, reason);
+  }
+
+  // output
   entry_out.parent_attr = last_parent_attr;
   entry_out.attrs.swap(attrs);
-
-  // notify buddy mds to refresh inode
-  if (operation.GetBatchIndex() == 0 && IsParentHashPartition()) {
-    std::vector<Ino> parents = ::dingofs::Helper::PbRepeatedToVector(last_parent_attr.parents());
-    NotifyBuddyRefreshInode(parents, parent_attr_or_mutation, reason);
-  }
 
   trace.RecordElapsedTime("post_handle");
 
@@ -512,28 +512,29 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryWithPaOut& 
   auto& result = operation.GetResult();
   auto& parent_attr_or_mutation = result.parent_attr_or_mutation;
 
-  // update cache
+  // update inode cache
   UpsertInodeCache(attr, reason);
-
+  // add dentry to partition
   AttrEntry last_parent_attr = parent_inode->ToAttr();
   AddDentryToPartition(parent, dentry, last_parent_attr.version());
 
   // update quota
   quota_manager_.AsyncUpdateFsUsage(0, 1, reason);
   quota_manager_.AsyncUpdateDirUsage(param.parent, 0, 1, reason);
-  UpdateDirStat(param.parent, 0, 1, 0, reason);
+  // update dir stat
+  AsyncUpdateDirStat(param.parent, 0, 1, 0, reason);
 
   // update parent memo
   parent_memo_.Remeber(attr.ino(), param.parent);
 
+  // notify buddy
+  if (operation.GetBatchIndex() == 0 && IsParentHashPartition()) {
+    NotifyBuddyRefreshInode(last_parent_attr.parents(), parent_attr_or_mutation, reason);
+  }
+
   // set output
   entry_out.parent_attr = last_parent_attr;
   entry_out.attr.Swap(&attr);
-
-  if (operation.GetBatchIndex() == 0 && IsParentHashPartition()) {
-    std::vector<Ino> parents = ::dingofs::Helper::PbRepeatedToVector(last_parent_attr.parents());
-    NotifyBuddyRefreshInode(parents, parent_attr_or_mutation, reason);
-  }
 
   trace.RecordElapsedTime("post_handle");
 
@@ -631,28 +632,31 @@ Status FileSystem::BatchMkNod(Context& ctx, const std::vector<MkNodParam>& param
   auto& result = operation.GetResult();
   auto& parent_attr_or_mutation = result.parent_attr_or_mutation;
 
-  // update cache
+  // update inode cache
   std::string reason = fmt::format("batchmknod.{}.{}.{}", request_id, parent, join_name);
   AttrEntry last_parent_attr = parent_inode->ToAttr();
   for (const auto& attr : attrs) UpsertInodeCache(attr, reason);
+
+  // add dentry to partition
   for (const auto& dentry : dentries) AddDentryToPartition(parent, dentry, last_parent_attr.version());
 
   // update quota
   quota_manager_.AsyncUpdateFsUsage(0, params.size(), reason);
   quota_manager_.AsyncUpdateDirUsage(parent, 0, params.size(), reason);
-  UpdateDirStat(parent, 0, static_cast<int64_t>(params.size()), 0, reason);
+  // update dir stat
+  AsyncUpdateDirStat(parent, 0, static_cast<int64_t>(params.size()), 0, reason);
 
   // update parent memo
   for (const auto& dentry : dentries) parent_memo_.Remeber(dentry.INo(), parent);
 
+  // notify buddy
+  if (operation.GetBatchIndex() == 0 && IsParentHashPartition()) {
+    NotifyBuddyRefreshInode(last_parent_attr.parents(), parent_attr_or_mutation, reason);
+  }
+
   // set output
   entry_out.parent_attr = last_parent_attr;
   entry_out.attrs.swap(attrs);
-
-  if (operation.GetBatchIndex() == 0 && IsParentHashPartition()) {
-    std::vector<Ino> parents = ::dingofs::Helper::PbRepeatedToVector(last_parent_attr.parents());
-    NotifyBuddyRefreshInode(parents, parent_attr_or_mutation, reason);
-  }
 
   trace.RecordElapsedTime("post_handle");
 
@@ -772,10 +776,12 @@ Status FileSystem::Open(Context& ctx, Ino ino, const OpenParam& param, EntryOutF
   auto& attr = result.attr;
   int64_t delta_bytes = result.delta_bytes;
   auto& chunks = result.chunks;
+
   LOG_DEBUG << fmt::format("[fs.{}.{}.{}.{}][{}us] open {} finish, flags({:o}:{}) fetch_chunk({}:{}) status({}).",
                            fs_id_, ino, ctx.RequestId(), trace.GetReqTypeInt(), duration.ElapsedUs(), param.session_id,
                            flags, dingofs::Helper::DescOpenFlags(flags), fetch_from,
                            out.chunks.empty() ? chunks.size() : out.chunks.size(), status.error_str());
+
   trace.RecordElapsedTime("resume");
 
   if (!status.ok()) return status;
@@ -784,26 +790,27 @@ Status FileSystem::Open(Context& ctx, Ino ino, const OpenParam& param, EntryOutF
     return Status(pb::error::EDELETED, "file is deleted");
   }
 
-  // set output
-  out.attr = attr;
-  for (auto& chunk : chunks) out.chunks.push_back(chunk);
-
-  // update quota
+  // add file session
   std::string reason = fmt::format("open.{}.{}", request_id, ino);
   bool put_success = file_session_manager_.Put(file_session);
   if (put_success && delta_bytes != 0) {
+    // update quota and dir stat
     quota_manager_.AsyncUpdateFsUsage(delta_bytes, 0, reason);
-    for (auto parent : attr.parents()) {
+    for (const auto& parent : attr.parents()) {
       quota_manager_.AsyncUpdateDirUsage(parent, delta_bytes, 0, reason);
-      UpdateDirStat(parent, delta_bytes, 0, 0, reason);
+      AsyncUpdateDirStat(parent, delta_bytes, 0, 0, reason);
     }
   }
 
-  // update cache
+  // update inode cache
   UpsertInodeCache(attr, reason);
 
   // update chunk cache
-  for (auto& chunk : chunks) chunk_cache_.PutIf(ino, std::move(chunk));
+  for (const auto& chunk : chunks) chunk_cache_.PutIf(ino, chunk);
+
+  // set output
+  out.attr = attr;
+  for (const auto& chunk : chunks) out.chunks.push_back(chunk);
 
   trace.RecordElapsedTime("post_handle");
 
@@ -832,15 +839,13 @@ Status FileSystem::Release(Context& ctx, Ino ino, const std::string& session_id)
                            ctx.RequestId(), trace.GetReqTypeInt(), duration.ElapsedUs(), ino, session_id,
                            status.error_str());
 
-  // delete cache
+  // delete file session
   file_session_manager_.Delete(ino, session_id);
 
   // delete inode cache if nlink == 0
   InodeSPtr inode;
   GetInode(ctx, ino, inode);
-  if (inode != nullptr && inode->IsDeleted()) {
-    DeleteInodeFromCache(ino);
-  }
+  if (inode != nullptr && inode->IsDeleted()) DeleteInodeFromCache(ino);
 
   trace.RecordElapsedTime("post_handle");
 
@@ -892,23 +897,23 @@ Status FileSystem::FlushFile(Context& ctx, Ino ino, const FlushFileParam& param,
                            ino, ctx.RequestId(), trace.GetReqTypeInt(), duration.ElapsedUs(), delta_bytes,
                            attr.version(), status.error_str());
 
-  // set output
-  entry_out.attr = attr;
-  entry_out.expand_file = (delta_bytes > 0) ? true : false;
-
-  // update quota
+  // update quota and dir stat
   std::string reason = fmt::format("flushfile.{}.{}", request_id, ino);
   if (delta_bytes != 0 && attr.nlink() > 0) {
     quota_manager_.AsyncUpdateFsUsage(delta_bytes, 0, reason);
 
     for (const auto& parent : attr.parents()) {
       quota_manager_.AsyncUpdateDirUsage(parent, delta_bytes, 0, reason);
-      UpdateDirStat(parent, delta_bytes, 0, 0, reason);
+      AsyncUpdateDirStat(parent, delta_bytes, 0, 0, reason);
     }
   }
 
-  // update cache
+  // update inode cache
   UpsertInodeCache(attr, reason);
+
+  // set output
+  entry_out.attr = attr;
+  entry_out.expand_file = (delta_bytes > 0) ? true : false;
 
   trace.RecordElapsedTime("post_handle");
 
@@ -956,26 +961,26 @@ Status FileSystem::RollbackFile(Context& ctx, Ino ino, const RollbackFileParam& 
                            fs_id_, ino, ctx.RequestId(), trace.GetReqTypeInt(), duration.ElapsedUs(), delta_bytes,
                            attr.version(), status.error_str());
 
-  // set output
-  entry_out.attr = attr;
-  entry_out.shrink_file = (delta_bytes < 0) ? true : false;
-
-  // update quota
+  // update quota and dir stat
   std::string reason = fmt::format("rollbackfile.{}.{}", request_id, ino);
   if (delta_bytes != 0 && attr.nlink() > 0) {
     quota_manager_.AsyncUpdateFsUsage(delta_bytes, 0, reason);
 
     for (const auto& parent : attr.parents()) {
       quota_manager_.AsyncUpdateDirUsage(parent, delta_bytes, 0, reason);
-      UpdateDirStat(parent, delta_bytes, 0, 0, reason);
+      AsyncUpdateDirStat(parent, delta_bytes, 0, 0, reason);
     }
   }
 
   // update chunk cache
   for (auto& chunk : effected_chunks) chunk_cache_.PutIf(ino, std::move(chunk));
 
-  // update cache
+  // update inode cache
   UpsertInodeCache(attr, reason);
+
+  // set output
+  entry_out.attr = attr;
+  entry_out.shrink_file = (delta_bytes < 0) ? true : false;
 
   trace.RecordElapsedTime("post_handle");
 
@@ -1104,31 +1109,30 @@ Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryWithPaOut& 
   auto& result = operation.GetResult();
   auto& parent_attr = result.parent_attr;
 
-  // update cache
+  // update inode cache
   std::string reason = fmt::format("mkdir.{}.{}.{}", request_id, parent, param.name);
   UpsertInodeCache(attr, reason);
   InodeSPtr last_parent_inode = UpsertInodeCache(parent_attr, reason);
+  // add dentry to partition
   AddDentryToPartition(parent, dentry, last_parent_inode->Version());
-
-  if (IsMonoPartition()) {
-    partition_cache_.PutIf(ShardPartition::New(operation_processor_, attr));
-  }
 
   // update quota
   quota_manager_.AsyncUpdateFsUsage(0, 1, reason);
   quota_manager_.AsyncUpdateDirUsage(param.parent, 0, 1, reason);
-  UpdateDirStat(param.parent, 0, 1, /*dir_delta=*/1, reason);
+  // update dir stat
+  AsyncUpdateDirStat(param.parent, 0, 1, 1, reason);
 
   // update parent memo
   parent_memo_.Remeber(attr.ino(), param.parent);
 
-  // set output
-  entry_out.parent_attr = last_parent_inode->ToAttr();
-  entry_out.attr.Swap(&attr);
-
+  // notify buddy
   if (operation.GetBatchIndex() == 0 && IsParentHashPartition()) {
     NotifyBuddyRefreshInode(parent_attr, reason);
   }
+
+  // set output
+  entry_out.parent_attr = last_parent_inode->ToAttr();
+  entry_out.attr.Swap(&attr);
 
   trace.RecordElapsedTime("post_handle");
 
@@ -1222,32 +1226,30 @@ Status FileSystem::BatchMkDir(Context& ctx, const std::vector<MkDirParam>& param
   auto& result = operation.GetResult();
   auto& parent_attr = result.parent_attr;
 
-  // update cache
+  // update inode cache
   std::string reason = fmt::format("batchmkdir.{}.{}.{}", request_id, parent, join_name);
   for (auto& attr : attrs) UpsertInodeCache(attr, reason);
   InodeSPtr last_parent_inode = UpsertInodeCache(parent_attr, reason);
+  // add dentry to partition
   for (auto& dentry : dentries) AddDentryToPartition(parent, dentry, last_parent_inode->Version());
-
-  if (IsMonoPartition()) {
-    for (auto& attr : attrs) partition_cache_.PutIf(ShardPartition::New(operation_processor_, attr));
-  }
 
   // update quota
   quota_manager_.AsyncUpdateFsUsage(0, params.size(), reason);
   quota_manager_.AsyncUpdateDirUsage(parent, 0, params.size(), reason);
-  UpdateDirStat(parent, 0, static_cast<int64_t>(params.size()),
-                /*dir_delta=*/static_cast<int64_t>(params.size()), reason);
+  // update dir stat
+  AsyncUpdateDirStat(parent, 0, static_cast<int64_t>(params.size()), static_cast<int64_t>(params.size()), reason);
 
   // update parent memo
   for (const auto& dentry : dentries) parent_memo_.Remeber(dentry.INo(), dentry.ParentIno());
 
-  // set output
-  entry_out.parent_attr = last_parent_inode->ToAttr();
-  entry_out.attrs.swap(attrs);
-
+  // notify buddy
   if (operation.GetBatchIndex() == 0 && IsParentHashPartition()) {
     NotifyBuddyRefreshInode(parent_attr, reason);
   }
+
+  // set output
+  entry_out.parent_attr = last_parent_inode->ToAttr();
+  entry_out.attrs.swap(attrs);
 
   trace.RecordElapsedTime("post_handle");
 
@@ -1313,15 +1315,17 @@ Status FileSystem::RmDir(Context& ctx, Ino parent, const std::string& name, Entr
   LOG_DEBUG << fmt::format("[fs.{}.{}.{}][{}us] rmdir {}/{} finish, trash({},{}) status({}).", fs_id_, ctx.RequestId(),
                            trace.GetReqTypeInt(), duration.ElapsedUs(), parent, name, enable_trash,
                            immediate_trash_quota, status.error_str());
+
   trace.RecordElapsedTime("resume");
   if (!status.ok()) return status;
 
   auto& parent_attr = result.parent_attr;
   auto& dentry = result.dentry;
 
-  // update cache
+  // update  inodecache
   std::string reason = fmt::format("rmdir.{}.{}.{}", request_id, parent, name);
   InodeSPtr last_parent_inode = UpsertInodeCache(parent_attr, reason);
+  // delete dentry from partition
   DeleteDentryFromPartition(parent, name, last_parent_inode->Version());
   if (enable_trash) {
     // Refresh child inode cache so immutability gates (CheckCreateInTrash etc.)
@@ -1360,22 +1364,24 @@ Status FileSystem::RmDir(Context& ctx, Ino parent, const std::string& name, Entr
       quota_manager_.AsyncDeleteDirQuota(dentry.ino());
     }
 
-    UpdateDirStat(parent, 0, -1, /*dir_delta=*/-1, reason);
+    AsyncUpdateDirStat(parent, 0, -1, -1, reason);
   }
 
   // update parent memo
   parent_memo_.Forget(dentry.ino());
 
-  // set output
-  entry_out.attr.set_ino(dentry.ino());
-  entry_out.parent_attr = last_parent_inode->ToAttr();
-
+  // notify buddy
   if (IsParentHashPartition()) {
     NotifyBuddyRefreshInode(parent_attr, reason);
     NotifyBuddyCleanPartitionCache(dentry.ino(), reason);
+
   } else {
     partition_cache_.Delete(dentry.ino());
   }
+
+  // set output
+  entry_out.attr.set_ino(dentry.ino());
+  entry_out.parent_attr = last_parent_inode->ToAttr();
 
   trace.RecordElapsedTime("post_handle");
 
@@ -1498,25 +1504,28 @@ Status FileSystem::Link(Context& ctx, Ino ino, Ino new_parent, const std::string
   auto& parent_attr_or_mutation = result.parent_attr_or_mutation;
   auto& attr = result.child_attr;
 
-  // update quota
   std::string reason = fmt::format("link.{}.{}.{}.{}", request_id, ino, new_parent, new_name);
-  quota_manager_.AsyncUpdateDirUsage(new_parent, attr.length(), 1, reason);
-  UpdateDirStat(new_parent, attr.type() == pb::mds::FileType::FILE ? static_cast<int64_t>(attr.length()) : 0, 1, 0,
-                reason);
 
-  // update cache
+  // update inode cache
   UpsertInodeCache(attr, reason);
+  // add dentry to partition
   AttrEntry last_parent_attr = parent_inode->ToAttr();
   AddDentryToPartition(new_parent, dentry, last_parent_attr.version());
+
+  // update quota
+  quota_manager_.AsyncUpdateDirUsage(new_parent, attr.length(), 1, reason);
+  // update dir stat
+  AsyncUpdateDirStat(new_parent, attr.type() == pb::mds::FileType::FILE ? static_cast<int64_t>(attr.length()) : 0, 1, 0,
+                     reason);
+
+  // notify buddy
+  if (operation.GetBatchIndex() == 0 && IsParentHashPartition()) {
+    NotifyBuddyRefreshInode(last_parent_attr.parents(), parent_attr_or_mutation, reason);
+  }
 
   // set output
   entry_out.parent_attr = last_parent_attr;
   entry_out.attr.Swap(&attr);
-
-  if (operation.GetBatchIndex() == 0 && IsParentHashPartition()) {
-    std::vector<Ino> parents = ::dingofs::Helper::PbRepeatedToVector(last_parent_attr.parents());
-    NotifyBuddyRefreshInode(parents, parent_attr_or_mutation, reason);
-  }
 
   trace.RecordElapsedTime("post_handle");
 
@@ -1591,6 +1600,12 @@ Status FileSystem::UnLink(Context& ctx, Ino parent, const std::string& name, Ent
 
   std::string reason = fmt::format("unlink.{}.{}.{}", request_id, parent, name);
 
+  // update inode cache
+  UpsertInodeCache(attr, reason);
+  // delete dentry from partition
+  AttrEntry last_parent_attr = parent_inode->ToAttr();
+  DeleteDentryFromPartition(parent, name, last_parent_attr.version());
+
   // update quota:
   //  - plain unlink: debit fs-level + per-dir immediately.
   //  - trash-unlink with immediate_trash_quota: debit per-dir of `parent`
@@ -1617,26 +1632,22 @@ Status FileSystem::UnLink(Context& ctx, Ino parent, const std::string& name, Ent
       quota_manager_.AsyncUpdateDirUsage(parent, -delta_bytes, -1, reason);
     }
 
-    // dir-stat: debit `parent` at dentry-move time (see UpdateDirStat docs).
-    UpdateDirStat(parent, -delta_bytes, -1, 0, reason);
+    // dir-stat: debit `parent` at dentry-move time (see AsyncUpdateDirStat docs).
+    AsyncUpdateDirStat(parent, -delta_bytes, -1, 0, reason);
   }
 
   if (IsDeleted(attr)) chunk_cache_.Delete(attr.ino());
 
-  // update cache
-  UpsertInodeCache(attr, reason);
-  AttrEntry last_parent_attr = parent_inode->ToAttr();
-  DeleteDentryFromPartition(parent, name, last_parent_attr.version());
   if (enable_trash) RecordTrashMoveOutcome(trash.bucket_ino);
+
+  // notify buddy
+  if (operation.GetBatchIndex() == 0 && IsParentHashPartition()) {
+    NotifyBuddyRefreshInode(last_parent_attr.parents(), parent_attr_or_mutation, reason);
+  }
 
   // set output
   entry_out.parent_attr = last_parent_attr;
   entry_out.attr.Swap(&attr);
-
-  if (operation.GetBatchIndex() == 0 && IsParentHashPartition()) {
-    std::vector<Ino> parents = ::dingofs::Helper::PbRepeatedToVector(last_parent_attr.parents());
-    NotifyBuddyRefreshInode(parents, parent_attr_or_mutation, reason);
-  }
 
   trace.RecordElapsedTime("post_handle");
 
@@ -1717,11 +1728,20 @@ Status FileSystem::BatchUnLink(Context& ctx, Ino parent, const std::vector<std::
 
   if (!status.ok()) return status;
 
+  std::string reason = fmt::format("unlink.{}.{}.{}", request_id, parent, join_name);
+
+  // update inode cache
+  for (const auto& attr : child_attrs) UpsertInodeCache(attr, reason);
+  // delete dentry from partition
+  AttrEntry last_parent_attr = parent_inode->ToAttr();
+  DeleteDentryFromPartition(parent, names, last_parent_attr.version());
+
+  if (enable_trash) RecordTrashMoveOutcome(trash.bucket_ino);
+
   // Quota: same matrix as UnLink, applied per-child. Manual-cleanup parses
   // the per-entry origin parent from names[i] (trash entry name encoding).
-  std::string reason = fmt::format("unlink.{}.{}.{}", request_id, parent, join_name);
   // dir-stat: accumulate all removed children's deltas and apply once (one lock
-  // acquisition) after the loop. See UpdateDirStat docs for trash policy.
+  // acquisition) after the loop. See AsyncUpdateDirStat docs for trash policy.
   DirStatDelta dir_stat_delta;
   for (size_t i = 0; i < child_attrs.size(); ++i) {
     const auto& attr = child_attrs[i];
@@ -1753,23 +1773,17 @@ Status FileSystem::BatchUnLink(Context& ctx, Ino parent, const std::vector<std::
     if (IsDeleted(attr)) chunk_cache_.Delete(attr.ino());
   }
   if (dir_stat_delta.inodes != 0) {
-    UpdateDirStat(parent, dir_stat_delta.length, dir_stat_delta.inodes, 0, reason);
+    AsyncUpdateDirStat(parent, dir_stat_delta.length, dir_stat_delta.inodes, 0, reason);
   }
 
-  // update cache
-  for (const auto& attr : child_attrs) UpsertInodeCache(attr, reason);
-  AttrEntry last_parent_attr = parent_inode->ToAttr();
-  DeleteDentryFromPartition(parent, names, last_parent_attr.version());
-  if (enable_trash) RecordTrashMoveOutcome(trash.bucket_ino);
+  // notify buddy
+  if (operation.GetBatchIndex() == 0 && IsParentHashPartition()) {
+    NotifyBuddyRefreshInode(last_parent_attr.parents(), parent_attr_or_mutation, reason);
+  }
 
   // set output
   entry_out.parent_attr = last_parent_attr;
   entry_out.attrs.swap(child_attrs);
-
-  if (operation.GetBatchIndex() == 0 && IsParentHashPartition()) {
-    std::vector<Ino> parents = ::dingofs::Helper::PbRepeatedToVector(last_parent_attr.parents());
-    NotifyBuddyRefreshInode(parents, parent_attr_or_mutation, reason);
-  }
 
   trace.RecordElapsedTime("post_handle");
 
@@ -1854,28 +1868,29 @@ Status FileSystem::Symlink(Context& ctx, const std::string& symlink, Ino new_par
   auto& result = operation.GetResult();
   auto& parent_attr_or_mutation = result.parent_attr_or_mutation;
 
-  // update cache
   std::string reason = fmt::format("symlink.{}.{}.{}", request_id, new_parent, new_name);
+
+  // update inode cache
   UpsertInodeCache(attr, reason);
+  // add dentry to partition
   AttrEntry last_parent_attr = parent_inode->ToAttr();
   AddDentryToPartition(new_parent, dentry, last_parent_attr.version());
 
   // update quota
-
   quota_manager_.AsyncUpdateFsUsage(0, 1, reason);
   quota_manager_.AsyncUpdateDirUsage(new_parent, 0, 1, reason);
   // symlink contributes 0 length (consistent with
   // CalcDirStat treating non-FILE as length 0).
-  UpdateDirStat(new_parent, 0, 1, 0, reason);
+  AsyncUpdateDirStat(new_parent, 0, 1, 0, reason);
+
+  // note buddy
+  if (operation.GetBatchIndex() == 0 && IsParentHashPartition()) {
+    NotifyBuddyRefreshInode(last_parent_attr.parents(), parent_attr_or_mutation, reason);
+  }
 
   // set output
   entry_out.parent_attr = last_parent_attr;
   entry_out.attr.Swap(&attr);
-
-  if (operation.GetBatchIndex() == 0 && IsParentHashPartition()) {
-    std::vector<Ino> parents = ::dingofs::Helper::PbRepeatedToVector(last_parent_attr.parents());
-    NotifyBuddyRefreshInode(parents, parent_attr_or_mutation, reason);
-  }
 
   trace.RecordElapsedTime("post_handle");
 
@@ -1953,34 +1968,36 @@ Status FileSystem::SetAttr(Context& ctx, Ino ino, const SetAttrParam& param, Ent
   int64_t delta_bytes = result.delta_bytes;
   auto& effected_chunks = result.effected_chunks;
 
-  // update quota
   std::string reason = fmt::format("setattr.{}.{}", request_id, ino);
+
+  // update cache
+  auto last_inode = UpsertInodeCache(attr, reason);
+
+  // update chunk cache
+  for (auto& chunk : effected_chunks) chunk_cache_.PutIf(ino, chunk);
+
+  // update quota and dir stat
   if (param.to_set & kSetAttrSize && attr.nlink() > 0) {
     quota_manager_.AsyncUpdateFsUsage(delta_bytes, 0, reason);
 
     for (const auto& parent : attr.parents()) {
       quota_manager_.AsyncUpdateDirUsage(parent, delta_bytes, 0, reason);
-      UpdateDirStat(parent, delta_bytes, 0, 0, reason);
+      AsyncUpdateDirStat(parent, delta_bytes, 0, 0, reason);
     }
   }
 
-  // update chunk cache
-  for (auto& chunk : effected_chunks) chunk_cache_.PutIf(ino, chunk);
-
-  // update cache
-  auto last_inode = UpsertInodeCache(attr, reason);
+  // notify buddy
+  if (operation.GetBatchIndex() == 0 && IsDir(ino) && IsParentHashPartition()) {
+    NotifyBuddyRefreshInode(attr, reason);
+  }
 
   // set output
-  entry_out.attr = (IsDir(ino) && HasDirAttrMutation()) ? last_inode->ToAttr() : attr;
+  entry_out.attr = last_inode->ToAttr();
   entry_out.shrink_file = (delta_bytes < 0) ? true : false;
   entry_out.expand_file = (delta_bytes > 0) ? true : false;
   entry_out.chunks.swap(effected_chunks);
 
   if (IsDir(ino)) RefreshPartitionDeltaVersion(ino, entry_out.attr.version());
-
-  if (operation.GetBatchIndex() == 0 && IsDir(ino) && IsParentHashPartition()) {
-    NotifyBuddyRefreshInode(attr, reason);
-  }
 
   trace.RecordElapsedTime("post_handle");
 
@@ -2077,18 +2094,19 @@ Status FileSystem::SetXAttr(Context& ctx, Ino ino, const Inode::XAttrMap& xattrs
   auto& result = operation.GetResult();
   auto& attr = result.attr;
 
-  // update cache
+  // update inode cache
   std::string reason = fmt::format("setxattr.{}.{}", request_id, ino);
   auto last_inode = UpsertInodeCache(attr, reason);
 
-  // set output
-  entry_out.attr = (IsDir(ino) && HasDirAttrMutation()) ? last_inode->ToAttr() : attr;
-
-  if (IsDir(ino)) RefreshPartitionDeltaVersion(ino, entry_out.attr.version());
-
+  // notify buddy
   if (operation.GetBatchIndex() == 0 && IsDir(ino) && IsParentHashPartition()) {
     NotifyBuddyRefreshInode(attr, reason);
   }
+
+  // set output
+  entry_out.attr = last_inode->ToAttr();
+
+  if (IsDir(ino)) RefreshPartitionDeltaVersion(ino, entry_out.attr.version());
 
   trace.RecordElapsedTime("post_handle");
 
@@ -2129,18 +2147,19 @@ Status FileSystem::RemoveXAttr(Context& ctx, Ino ino, const std::string& name, E
   auto& result = operation.GetResult();
   auto& attr = result.attr;
 
-  // update cache
+  // update inode cache
   std::string reason = fmt::format("removexattr.{}.{}", request_id, ino);
   auto last_inode = UpsertInodeCache(attr, reason);
 
-  // set output
-  entry_out.attr = (IsDir(ino) && HasDirAttrMutation()) ? last_inode->ToAttr() : attr;
-
-  if (IsDir(ino)) RefreshPartitionDeltaVersion(ino, entry_out.attr.version());
-
+  // notify buddy
   if (operation.GetBatchIndex() == 0 && IsDir(ino) && IsParentHashPartition()) {
     NotifyBuddyRefreshInode(attr, reason);
   }
+
+  // set output
+  entry_out.attr = last_inode->ToAttr();
+
+  if (IsDir(ino)) RefreshPartitionDeltaVersion(ino, entry_out.attr.version());
 
   trace.RecordElapsedTime("post_handle");
 
@@ -2354,14 +2373,14 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, RenameResult& 
     const bool src_is_dir = (dentry.Type() == pb::mds::FileType::DIRECTORY);
     const int64_t src_len = src_is_file ? static_cast<int64_t>(old_attr.length()) : 0;
     if (!is_same_parent) {
-      UpdateDirStat(old_parent, -src_len, -1, /*dir_delta=*/src_is_dir ? -1 : 0, reason);
-      UpdateDirStat(new_parent, +src_len, +1, /*dir_delta=*/src_is_dir ? +1 : 0, reason);
+      AsyncUpdateDirStat(old_parent, -src_len, -1, /*dir_delta=*/src_is_dir ? -1 : 0, reason);
+      AsyncUpdateDirStat(new_parent, +src_len, +1, /*dir_delta=*/src_is_dir ? +1 : 0, reason);
     }
     if (is_exist_new_dentry) {
       const bool tgt_is_file = (prev_new_attr.type() == pb::mds::FileType::FILE);
       const bool tgt_is_dir = (prev_new_attr.type() == pb::mds::FileType::DIRECTORY);
       const int64_t tgt_len = tgt_is_file ? static_cast<int64_t>(prev_new_attr.length()) : 0;
-      UpdateDirStat(new_parent, -tgt_len, -1, /*dir_delta=*/tgt_is_dir ? -1 : 0, reason);
+      AsyncUpdateDirStat(new_parent, -tgt_len, -1, /*dir_delta=*/tgt_is_dir ? -1 : 0, reason);
     }
   }
 
@@ -2523,9 +2542,9 @@ Status FileSystem::RestoreFromTrash(Context& ctx, Ino trash_parent, const std::s
   // The only dst we must NOT credit is the trash bucket itself (which is never
   // tracked); a bucket-range dst means the entry stays loose in trash.
   if (!IsTrashInode(actual_dst_parent)) {
-    UpdateDirStat(actual_dst_parent,
-                  file_attr.type() == pb::mds::FileType::FILE ? static_cast<int64_t>(file_attr.length()) : 0, 1,
-                  /*dir_delta=*/file_attr.type() == pb::mds::FileType::DIRECTORY ? 1 : 0, cache_reason);
+    AsyncUpdateDirStat(actual_dst_parent,
+                       file_attr.type() == pb::mds::FileType::FILE ? static_cast<int64_t>(file_attr.length()) : 0, 1,
+                       /*dir_delta=*/file_attr.type() == pb::mds::FileType::DIRECTORY ? 1 : 0, cache_reason);
   }
 
   trace.RecordElapsedTime("post_handle");
@@ -2623,7 +2642,7 @@ Status FileSystem::WriteSlice(Context& ctx, Ino ino, const std::vector<DeltaSlic
 
     for (const auto& parent : attr.parents()) {
       quota_manager_.AsyncUpdateDirUsage(parent, delta_bytes, 0, reason);
-      UpdateDirStat(parent, delta_bytes, 0, 0, reason);
+      AsyncUpdateDirStat(parent, delta_bytes, 0, 0, reason);
     }
   }
 
@@ -2760,7 +2779,7 @@ Status FileSystem::CopyFileRange(Context& ctx, const CopyFileRangeParam& param, 
     // sums over a directory's children), not the file inode. dst_attr carries
     // the parent list.
     for (const auto& parent : dst_attr.parents()) {
-      UpdateDirStat(parent, length_delta, 0, 0, reason);
+      AsyncUpdateDirStat(parent, length_delta, 0, 0, reason);
     }
   }
 
@@ -2883,7 +2902,7 @@ Status FileSystem::Fallocate(Context& ctx, Ino ino, int32_t mode, uint64_t offse
 
     for (const auto& parent : attr.parents()) {
       quota_manager_.AsyncUpdateDirUsage(parent, delta_bytes, 0, reason);
-      UpdateDirStat(parent, delta_bytes, 0, 0, reason);
+      AsyncUpdateDirStat(parent, delta_bytes, 0, 0, reason);
     }
   }
 
@@ -3719,10 +3738,9 @@ void FileSystem::DeleteDentryFromPartition(Ino parent, const std::vector<std::st
 
 void FileSystem::RefreshPartitionDeltaVersion(Ino parent, uint64_t version) {
   if (IsTrashInode(parent)) return;
+
   auto partition = GetPartitionFromCache(parent);
-  if (partition != nullptr) {
-    partition->RefreshDeltaVersion(version);
-  }
+  if (partition != nullptr) partition->RefreshDeltaVersion(version);
 }
 
 Status FileSystem::GetPartition(Context& ctx, Ino parent, PartitionPtr& out_partition) {
@@ -4145,10 +4163,10 @@ void FileSystem::NotifyBuddyRefreshFsInfo(std::vector<uint64_t> mds_ids, const F
 }
 
 void FileSystem::NotifyBuddyRefreshInode(const AttrEntry& attr, const std::string& reason) {
-  NotifyBuddyRefreshInode(::dingofs::Helper::PbRepeatedToVector(attr.parents()), {.attr = attr}, reason);
+  NotifyBuddyRefreshInode(attr.parents(), {.attr = attr}, reason);
 }
 
-void FileSystem::NotifyBuddyRefreshInode(const std::vector<Ino>& parents, const AttrOrMutation& attr_or_mutation,
+void FileSystem::NotifyBuddyRefreshInode(const PBvector<Ino>& parents, const AttrOrMutation& attr_or_mutation,
                                          const std::string& reason) {
   if (notify_buddy_ == nullptr) return;
 
@@ -4183,12 +4201,12 @@ void FileSystem::NotifyBuddyCleanPartitionCache(Ino ino, const std::string& reas
     partition_cache_.Delete(ino);
 
   } else {
-    notify_buddy_->AsyncNotify(notify::CleanPartitionCacheMessage::Create(mds_id, fs_id_, ino, 0, reason));
+    notify_buddy_->AsyncNotify(notify::RefreshPartitionMessage::Create(mds_id, fs_id_, ino, 0, reason));
   }
 }
 
-void FileSystem::UpdateDirStat(Ino parent, int64_t length_delta, int64_t inode_delta, int64_t dir_delta,
-                               const std::string& reason) {
+void FileSystem::AsyncUpdateDirStat(Ino parent, int64_t length_delta, int64_t inode_delta, int64_t dir_delta,
+                                    const std::string& reason) {
   if (!EnableDirStats()) return;
   // Trash buckets (kTrashInodeId and the hour-bucket inodes) are never tracked.
   // Gate here so every caller is covered in one place -- e.g. a Rename rescuing
@@ -4196,6 +4214,7 @@ void FileSystem::UpdateDirStat(Ino parent, int64_t length_delta, int64_t inode_d
   // parents still include a bucket -- instead of each site needing its own guard
   // (a missed one silently materializes a never-reclaimed bucket record).
   if (IsTrashInode(parent)) return;
+
   dir_stat_manager_.AsyncUpdateDirStat(parent, length_delta, inode_delta, dir_delta, reason);
 }
 

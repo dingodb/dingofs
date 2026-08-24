@@ -3233,13 +3233,13 @@ void MDSServiceImpl::DoNotifyBuddy(google::protobuf::RpcController*, const pb::m
                                   message.reason());
       } break;
 
-      case pb::mds::NotifyBuddyRequest::TYPE_CLEAN_PARTITION_CACHE: {
+      case pb::mds::NotifyBuddyRequest::TYPE_REFRESH_PARTITION: {
         auto file_system = GetFileSystem(message.fs_id());
         if (file_system == nullptr) {
           return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
         }
 
-        file_system->GetPartitionCache().Delete(message.clean_partition_cache().ino());
+        file_system->GetPartitionCache().Delete(message.refresh_partition().ino());
 
       } break;
 

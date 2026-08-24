@@ -273,14 +273,14 @@ void NotifyBuddy::SendMessage(uint64_t mds_id, BatchMessage& batch_message) {
 
       } break;
 
-      case Type::kCleanPartitionCache: {
-        mut_message->set_type(pb::mds::NotifyBuddyRequest::TYPE_CLEAN_PARTITION_CACHE);
+      case Type::kRefreshPartition: {
+        mut_message->set_type(pb::mds::NotifyBuddyRequest::TYPE_REFRESH_PARTITION);
 
-        auto clean_partition_cache_message = std::dynamic_pointer_cast<CleanPartitionCacheMessage>(message);
-        mut_message->mutable_clean_partition_cache()->set_ino(clean_partition_cache_message->ino);
+        auto refresh_partition_message = std::dynamic_pointer_cast<RefreshPartitionMessage>(message);
+        mut_message->mutable_refresh_partition()->set_ino(refresh_partition_message->ino);
 
-        LOG_DEBUG << fmt::format("[notify.{}.{}.{}] clean partition cache({}/{}) info.", mds_id, id, batch_size,
-                                 message->fs_id, clean_partition_cache_message->ino);
+        LOG_DEBUG << fmt::format("[notify.{}.{}.{}] refresh partition({}/{}) info.", mds_id, id, batch_size,
+                                 message->fs_id, refresh_partition_message->ino);
 
       } break;
 

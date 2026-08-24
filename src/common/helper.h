@@ -49,6 +49,12 @@ namespace dingofs {
 
 static const uint32_t kMaxHostNameLength = 255;
 
+template <typename T>
+using PBvector = google::protobuf::RepeatedField<T>;
+
+template <typename T>
+using PBPtrvector = google::protobuf::RepeatedPtrField<T>;
+
 class Helper {
  public:
   static int64_t GetPid();
@@ -105,15 +111,13 @@ class Helper {
                           std::string& json);
 
   template <typename T>
-  static std::vector<T> PbRepeatedToVector(
-      const google::protobuf::RepeatedPtrField<T>& data) {
+  static std::vector<T> PbRepeatedToVector(const PBPtrvector<T>& data) {
     // const source: elements are copied.
     return {data.begin(), data.end()};
   }
 
   template <typename T>
-  static std::vector<T> PbRepeatedToVector(
-      google::protobuf::RepeatedPtrField<T>* data) {
+  static std::vector<T> PbRepeatedToVector(PBPtrvector<T>* data) {
     // mutable source: elements are moved out, leaving them unspecified.
     std::vector<T> vec;
     vec.reserve(data->size());
@@ -125,8 +129,7 @@ class Helper {
   }
 
   template <typename T>
-  static std::vector<T> PbRepeatedToVector(
-      const google::protobuf::RepeatedField<T>& data) {
+  static std::vector<T> PbRepeatedToVector(const PBvector<T>& data) {
     std::vector<T> vec;
     vec.reserve(data.size());
     for (auto& item : data) {
@@ -137,8 +140,7 @@ class Helper {
   }
 
   template <typename T>
-  static std::vector<T> PbRepeatedToVector(
-      google::protobuf::RepeatedField<T>* data) {
+  static std::vector<T> PbRepeatedToVector(PBvector<T>* data) {
     std::vector<T> vec;
     vec.reserve(data->size());
     for (auto& item : *data) {
@@ -157,8 +159,7 @@ class Helper {
   }
 
   template <typename T>
-  static void VectorToPbRepeated(const std::vector<T>& vec,
-                                 google::protobuf::RepeatedField<T>* out) {
+  static void VectorToPbRepeated(const std::vector<T>& vec, PBvector<T>* out) {
     for (auto& item : vec) {
       out->Add(item);
     }
@@ -174,6 +175,21 @@ class Helper {
       }
     }
     return str;
+  }
+
+  static void PbMapToMap(
+      const google::protobuf::Map<std::string, std::string>& pb_map,
+      std::map<std::string, std::string>& out) {
+    for (const auto& item : pb_map) {
+      out[item.first] = item.second;
+    }
+  }
+
+  static void MapToPbMap(const std::map<std::string, std::string>& map,
+                         google::protobuf::Map<std::string, std::string>* out) {
+    for (const auto& item : map) {
+      (*out)[item.first] = item.second;
+    }
   }
 
   static std::string GetHostName() {
