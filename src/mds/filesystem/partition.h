@@ -89,22 +89,22 @@ class DirShard {
   // get mid key of the shard, used for split
   std::string Mid();
 
-  bool Empty() const;
-  size_t Size() const;
-  size_t Bytes() const;
-
   void UpdateLastActiveTime() { last_active_time_s_.store(utils::Timestamp(), std::memory_order_relaxed); }
   uint64_t LastActiveTimeS() { return last_active_time_s_.load(std::memory_order_relaxed); }
 
+  bool IsFresh();
   void UpdateLastRefreshTime() { last_refresh_time_s_.store(utils::Timestamp(), std::memory_order_relaxed); }
   uint64_t LastRefreshTimeS() { return last_refresh_time_s_.load(std::memory_order_relaxed); }
-  bool IsFresh();
 
   uint64_t Version() const { return version_; }
 
   std::pair<DirShardSPtr, DirShardSPtr> Split(const std::string& key, uint64_t left_id, uint64_t right_id);
 
   std::string ToString() const;
+
+  bool Empty() const;
+  size_t Size() const;
+  size_t Bytes() const;
 
   void Dump(Json::Value& value) const;
 

@@ -209,450 +209,6 @@ bool FileSystem::Init() {
 
 void FileSystem::Stop() {}
 
-// odd number is dir inode
-Status FileSystem::GenDirIno(Ino& ino) {
-  bool ret = ino_id_generator_->GenID(2, ino);
-
-  if (!FLAGS_mds_ino_generator_share_enable) {
-    ino = (self_mds_id_ << kInoShiftBits) + (ino & 0xFFFFFFFFFF);
-  }
-  ino = (ino & 1) ? ino : (ino + 1);  // ensure odd number for dir inode
-
-  return ret ? Status::OK() : Status(pb::error::EALLOC_ID, "generate inode id fail");
-}
-
-// even number is file inode
-Status FileSystem::GenFileIno(Ino& ino) {
-  bool ret = ino_id_generator_->GenID(2, ino);
-
-  if (!FLAGS_mds_ino_generator_share_enable) {
-    ino = (self_mds_id_ << kInoShiftBits) + (ino & 0xFFFFFFFFFF);
-  }
-  ino = (ino & 1) ? (ino + 1) : ino;  // ensure even number for file inode
-
-  return ret ? Status::OK() : Status(pb::error::EALLOC_ID, "generate inode id fail");
-}
-
-bool FileSystem::CanServe(uint64_t self_mds_id) {
-  const auto& partition_policy = fs_info_->GetPartitionPolicy();
-  if (partition_policy.type() == pb::mds::PartitionType::MONOLITHIC_PARTITION) {
-    return partition_policy.mono().mds_id() == self_mds_id;
-
-  } else if (partition_policy.type() == pb::mds::PartitionType::PARENT_ID_HASH_PARTITION) {
-    return partition_policy.parent_hash().distributions().contains(self_mds_id);
-  }
-
-  return false;
-}
-
-void FileSystem::AddDentryToPartition(Ino parent, const Dentry& dentry, uint64_t version) {
-  // Trash parents (.trash root + hour buckets) never enter partition_cache_;
-  // see FetchPartition for the design rationale.
-  if (IsTrashInode(parent)) return;
-  auto partition = GetPartitionFromCache(parent);
-  if (partition != nullptr) {
-    partition->Put(dentry, version);
-  } else {
-    LOG(WARNING) << fmt::format("partition({}) not exist in cache.", parent);
-  }
-}
-
-void FileSystem::DeleteDentryFromPartition(Ino parent, const std::string& name, uint64_t version) {
-  if (IsTrashInode(parent)) return;
-  auto partition = GetPartitionFromCache(parent);
-  if (partition != nullptr) {
-    partition->Delete(name, version);
-  } else {
-    LOG(WARNING) << fmt::format("partition({}) not exist in cache.", parent);
-  }
-}
-
-void FileSystem::DeleteDentryFromPartition(Ino parent, const std::vector<std::string>& names, uint64_t version) {
-  if (IsTrashInode(parent)) return;
-  auto partition = GetPartitionFromCache(parent);
-  if (partition != nullptr) {
-    partition->Delete(names, version);
-  } else {
-    LOG(WARNING) << fmt::format("partition({}) not exist in cache.", parent);
-  }
-}
-
-void FileSystem::RefreshPartitionDeltaVersion(Ino parent, uint64_t version) {
-  if (IsTrashInode(parent)) return;
-  auto partition = GetPartitionFromCache(parent);
-  if (partition != nullptr) {
-    partition->RefreshDeltaVersion(version);
-  }
-}
-
-Status FileSystem::GetPartition(Context& ctx, Ino parent, PartitionPtr& out_partition) {
-  auto status = GetPartition(ctx, ctx.GetInodeVersion(), parent, out_partition);
-  if (status.ok()) {
-    LOG_DEBUG << fmt::format("[fs.{}.{}.{}] get partition({}/{}) this({}).", fs_id_, out_partition->INo(),
-                             ctx.RequestId(), out_partition->BaseVersion(), out_partition->DeltaVersion(),
-                             (void*)out_partition.get());
-  }
-
-  return status;
-}
-
-Status FileSystem::GetPartition(Context& ctx, uint64_t version, Ino parent, PartitionPtr& out_partition) {
-  auto& trace = ctx.GetTrace();
-  const bool bypass_cache = ctx.IsBypassCache();
-  const bool use_base_version = ctx.UseBaseVersion();
-  const std::string& request_id = ctx.RequestId();
-  const std::string& method_name = ctx.MethodName();
-
-  // Trash parents bypass partition_cache_: client routing fans them across
-  // MDSes (random fallback), buckets have a frozen attr.version, and GC
-  // patches KV out-of-band — any cache would go stale undetectably. Trash
-  // listing is admin-rare, so a per-request ShardPartition is acceptable.
-  if (IsTrashInode(parent)) {
-    return FetchPartition(ctx, parent, fmt::format("Trash.{}.{}", method_name, request_id), out_partition);
-  }
-
-  if (bypass_cache) {
-    auto status = FetchPartition(ctx, parent, fmt::format("bypass.{}.{}", method_name, request_id), out_partition);
-    if (!status.ok()) {
-      return Status(status.error_code(), fmt::format("not found partition({}), {}.", parent, status.error_str()));
-    }
-
-    return status;
-  }
-
-  auto partition = GetPartitionFromCache(parent);
-  if (partition == nullptr) {
-    auto status = FetchPartition(ctx, parent, fmt::format("cache-miss.{}.{}", method_name, request_id), out_partition);
-    if (!status.ok()) {
-      return Status(status.error_code(), fmt::format("not found partition({}), {}.", parent, status.error_str()));
-    }
-
-    return status;
-  }
-
-  uint64_t cache_version = use_base_version ? partition->BaseVersion() : partition->DeltaVersion();
-  if (version > cache_version) {
-    std::string reason = fmt::format("out-of-date.{}.{}.[{},cache{},req{}]", method_name, request_id, use_base_version,
-                                     cache_version, version);
-    auto status = FetchPartition(ctx, parent, reason, out_partition);
-    if (!status.ok()) {
-      return Status(status.error_code(), fmt::format("not found partition({}), {}.", parent, status.error_str()));
-    }
-
-    // singleflight may have piggybacked on a fetch started before this
-    // request; re-validate and refetch (as a new leader) if still stale.
-    uint64_t got_version = use_base_version ? out_partition->BaseVersion() : out_partition->DeltaVersion();
-    if (version > got_version) {
-      status = FetchPartition(ctx, parent, reason + ".retry", out_partition);
-      if (!status.ok()) {
-        return Status(status.error_code(), fmt::format("not found partition({}), {}.", parent, status.error_str()));
-      }
-    }
-
-    return status;
-  }
-
-  if (partition->NeedCompact()) {
-    auto status = FetchPartition(ctx, parent, "compact", out_partition);
-    if (!status.ok()) {
-      return Status(status.error_code(), fmt::format("not found partition({}), {}.", parent, status.error_str()));
-    }
-
-    return status;
-  }
-
-  trace.SetHitPartition();
-  out_partition = partition;
-
-  return Status::OK();
-}
-
-PartitionPtr FileSystem::GetPartitionFromCache(Ino parent) { return partition_cache_.Get(parent); }
-
-std::vector<PartitionPtr> FileSystem::GetAllPartitionsFromCache() { return partition_cache_.GetAll(); }
-
-Status FileSystem::FetchPartition(Context& ctx, Ino parent, const std::string& reason, PartitionPtr& out_partition) {
-  // Trash parents never enter partition_cache_ and are admin-rare — skip singleflight.
-  if (IsTrashInode(parent)) {
-    return DoFetchPartition(ctx, parent, reason, out_partition);
-  }
-
-  if (!FLAGS_mds_partition_inflight_controller_enable) {
-    return DoFetchPartition(ctx, parent, reason, out_partition);
-  }
-
-  // singleflight: coalesce concurrent store fetches of the same parent. The
-  // leader fetches, followers wait and share status/partition. OutOfDate
-  // callers re-validate the version in GetPartition and refetch if stale.
-  // std::shared_ptr<InflightPartitionFetch> inflight;
-  bool is_leader = false;
-  auto inflight = partition_inflight_controller_.GetOrCreate(parent, is_leader);
-
-  if (!is_leader) {
-    inflight->done.wait();
-    out_partition = inflight->value;
-    return inflight->status;
-  }
-
-  inflight->status = DoFetchPartition(ctx, parent, reason, out_partition);
-  inflight->value = out_partition;
-  partition_inflight_controller_.Delete(parent);
-
-  inflight->done.signal();
-
-  return inflight->status;
-}
-
-Status FileSystem::DoFetchPartition(Context& ctx, Ino parent, const std::string& reason, PartitionPtr& out_partition) {
-  auto& trace = ctx.GetTrace();
-  const std::string& request_id = ctx.RequestId();
-  const std::string& method_name = ctx.MethodName();
-
-  utils::Duration duration;
-
-  // Trash parents never enter partition_cache_ — rationale in GetPartition().
-  // Build a fresh ShardPartition (empty shard_boundaries_ → one Range{"",""}
-  // shard loaded on first access) and return before the cache PutIf at the
-  // bottom of this function.
-  if (IsTrashInode(parent)) {
-    AttrEntry attr;
-    if (parent == kTrashInodeId) {
-      attr = BuildTrashInodeAttr(fs_id_, GetFsInfo().create_time_s() * 1000000000ULL);
-    } else {
-      GetInodeAttrOperation operation(trace, fs_id_, parent);
-      auto status = RunOperation(&operation);
-      if (!status.ok()) return status;
-      attr = operation.GetResult().attr_with_mutation.ToCompleteAttr();
-    }
-    out_partition = ShardPartition::New(operation_processor_, attr);
-    LOG_DEBUG << fmt::format("[fs.{}.{}.{}.{}][{}us] fetch partition (trash, no-cache), version({}) reason({}).",
-                             fs_id_, parent, method_name, request_id, duration.ElapsedUs(), attr.version(), reason);
-    return Status::OK();
-  }
-
-  GetInodeAttrOperation operation(trace, fs_id_, parent);
-  auto status = RunOperation(&operation);
-  if (!status.ok()) return status;
-  auto attr_with_mutation = std::move(operation.GetResult().attr_with_mutation);
-  auto attr = attr_with_mutation.ToCompleteAttr();
-
-  auto partition = ShardPartition::New(operation_processor_, attr);
-  out_partition = partition_cache_.PutIf(partition);
-
-  UpsertInodeCache(attr_with_mutation, reason);
-
-  LOG_DEBUG << fmt::format(
-      "[fs.{}.{}.{}.{}][{}us] fetch partition, version({}) shard_boundaries({}) reason({}).", fs_id_, parent,
-      method_name, request_id, duration.ElapsedUs(), attr.version(),
-      ::dingofs::Helper::VectorToString(::dingofs::Helper::PbRepeatedToVector(attr.shard_boundaries())), reason);
-
-  return Status::OK();
-}
-
-Status FileSystem::GetDentryFromStore(Ino parent, const std::string& name, Dentry& dentry) {
-  Trace trace;
-  GetDentryOperation operation(trace, fs_id_, parent, name);
-
-  auto status = RunOperation(&operation);
-  if (!status.ok()) return status;
-  LOG_DEBUG << fmt::format("[fs.{}] fetch dentry({}/{}).", fs_id_, parent, name);
-
-  auto& result = operation.GetResult();
-  dentry = Dentry(result.dentry);
-
-  return Status::OK();
-}
-
-Status FileSystem::ListDentryFromStore(Ino parent, const std::string& last_name, uint32_t limit, bool is_only_dir,
-                                       std::vector<Dentry>& dentries) {
-  limit = limit > 0 ? limit : UINT32_MAX;
-
-  Trace trace;
-  ScanDentryOperation operation(trace, fs_id_, parent, last_name, [&](DentryEntry dentry) -> bool {
-    if (is_only_dir && dentry.type() != pb::mds::FileType::DIRECTORY) {
-      return true;  // skip non-directory entries
-    }
-
-    dentries.push_back(Dentry(dentry));
-    return dentries.size() < limit;
-  });
-
-  return RunOperation(&operation);
-}
-
-Status FileSystem::GetInode(Context& ctx, Ino ino, InodeSPtr& out_inode) {
-  return GetInode(ctx, ctx.GetInodeVersion(), ino, out_inode);
-}
-
-Status FileSystem::GetInode(Context& ctx, uint64_t version, Ino ino, InodeSPtr& out_inode) {
-  auto& trace = ctx.GetTrace();
-  const bool bypass_cache = ctx.IsBypassCache();
-  const bool use_base_version = ctx.UseBaseVersion();
-  const std::string& request_id = ctx.RequestId();
-  const std::string& method_name = ctx.MethodName();
-
-  if (bypass_cache) {
-    return GetInodeFromStore(ctx, ino, fmt::format("bypass.{}.{}", method_name, request_id), false, out_inode);
-  }
-
-  auto inode = GetInodeFromCache(ino);
-  if (inode == nullptr) {
-    return GetInodeFromStore(ctx, ino, fmt::format("cache-miss.{}.{}", method_name, request_id), true, out_inode);
-  }
-
-  if (!inode->IsFresh()) {
-    std::string reason = fmt::format("stale.{}.{}", method_name, request_id);
-    return GetInodeFromStore(ctx, ino, reason, true, out_inode);
-  }
-
-  uint64_t cache_version = use_base_version ? inode->BaseVersion() : inode->Version();
-  if (cache_version < version) {
-    std::string reason = fmt::format("out-of-date.{}.{}.[{},cache{},req{}]", method_name, request_id, use_base_version,
-                                     cache_version, version);
-    return GetInodeFromStore(ctx, ino, reason, true, out_inode);
-  }
-
-  out_inode = inode;
-  trace.SetHitInode();
-
-  return Status::OK();
-}
-
-Status FileSystem::GetInodeFromStore(Context& ctx, Ino ino, const std::string& reason, bool is_cache,
-                                     InodeSPtr& out_inode) {
-  const auto& request_id = ctx.RequestId();
-  const auto& method_name = ctx.MethodName();
-
-  // kTrashInodeId is virtual — synthesize its attr on demand.
-  if (ino == kTrashInodeId) {
-    auto attr = BuildTrashInodeAttr(fs_id_, GetFsInfo().create_time_s() * 1000000000ULL);
-    out_inode = Inode::New(attr);
-    if (is_cache) {
-      std::string reason = fmt::format("trash-virtual.{}.{}", method_name, request_id);
-      UpsertInodeCache(attr, reason);
-    }
-    return Status::OK();
-  }
-
-  Trace trace;
-  GetInodeAttrOperation operation(trace, fs_id_, ino);
-
-  auto status = RunOperation(&operation);
-  if (!status.ok()) {
-    if (status.error_code() != pb::error::ENOT_FOUND) {
-      LOG(ERROR) << fmt::format("[fs.{}.{}.{}.{}] fetch inode from store fail, reason({}), status({}).", fs_id_,
-                                method_name, request_id, ino, reason, status.error_str());
-    }
-    return Status(status.error_code(), fmt::format("get inode({}) {}.", ino, status.error_str()));
-  }
-
-  auto& result = operation.GetResult();
-  auto& attr_with_mutation = result.attr_with_mutation;
-
-  out_inode = is_cache ? UpsertInodeCache(attr_with_mutation, reason) : Inode::New(attr_with_mutation);
-
-  LOG_DEBUG << fmt::format("[fs.{}.{}.{}.{}] fetch inode, version({}) is_cache({}) reason({}).", fs_id_, method_name,
-                           request_id, ino, attr_with_mutation.attr.version(), is_cache, reason);
-
-  return Status::OK();
-}
-
-Status FileSystem::BatchGetInodeFromStore(Context& ctx, std::vector<uint64_t> inoes, const std::string& reason,
-                                          bool is_cache, std::vector<InodeSPtr>& out_inodes) {
-  auto& trace = ctx.GetTrace();
-  const auto& request_id = ctx.RequestId();
-  const auto& method_name = ctx.MethodName();
-
-  BatchGetInodeAttrOperation operation(trace, fs_id_, inoes);
-
-  auto status = RunOperation(&operation);
-  if (!status.ok()) return status;
-
-  auto& result = operation.GetResult();
-  for (auto& attr_with_mutation : result.attr_with_mutations) {
-    out_inodes.push_back(is_cache ? UpsertInodeCache(attr_with_mutation, reason) : Inode::New(attr_with_mutation));
-
-    const auto& attr = attr_with_mutation.attr;
-    LOG_DEBUG << fmt::format("[fs.{}.{}.{}.{}] fetch inode, version({}) is_cache({}) reason({}).", fs_id_, method_name,
-                             request_id, attr.ino(), attr.version(), is_cache, reason);
-  }
-
-  return Status::OK();
-}
-
-Status FileSystem::GetDelFileFromStore(Ino ino, AttrEntry& out_attr) {
-  Trace trace;
-  GetDelFileOperation operation(trace, fs_id_, ino);
-
-  auto status = RunOperation(&operation);
-  if (!status.ok()) return status;
-
-  auto& result = operation.GetResult();
-  out_attr = result.attr;
-
-  return Status::OK();
-}
-
-InodeSPtr FileSystem::GetInodeFromCache(Ino ino) { return inode_cache_.Get(ino); }
-
-std::vector<InodeSPtr> FileSystem::GetAllInodesFromCache() { return inode_cache_.GetAll(); }
-
-InodeSPtr FileSystem::UpsertInodeCache(const AttrWithMutation& attr_with_mutation, const std::string& reason) {
-  return inode_cache_.PutIf(attr_with_mutation, reason);
-}
-
-InodeSPtr FileSystem::UpsertInodeCache(const AttrEntry& attr, const std::string& reason) {
-  return inode_cache_.PutIf(attr, reason);
-}
-
-void FileSystem::DeleteInodeFromCache(Ino ino) { inode_cache_.Delete(ino); }
-
-void FileSystem::ClearCache() {
-  ClearPartitionCache();
-  ClearInodeCache();
-  ClearChunkCache();
-}
-
-void FileSystem::ClearInodeCache() { inode_cache_.Clear(); }
-
-void FileSystem::ClearPartitionCache() { partition_cache_.Clear(); }
-
-void FileSystem::ClearChunkCache() { chunk_cache_.Clear(); }
-
-void FileSystem::BatchDeleteCache(uint32_t bucket_num, const std::set<uint32_t>& bucket_ids) {
-  if (bucket_ids.empty()) return;
-
-  auto check_fn = [&](const Ino& ino) -> bool {
-    uint32_t bucket_id = ino % bucket_num;
-
-    return (bucket_ids.find(bucket_id) != bucket_ids.end());
-  };
-
-  partition_cache_.DeleteIf(check_fn);
-  inode_cache_.DeleteIf(check_fn);
-  chunk_cache_.BatchDeleteIf(check_fn);
-}
-
-Status FileSystem::RunOperation(Operation* operation) {
-  CHECK(operation != nullptr) << "operation is null.";
-
-  if (!operation->IsBatchRun()) {
-    return operation_processor_->RunAlone(operation);
-  }
-
-  bthread::CountdownEvent count_down(1);
-
-  operation->SetEvent(&count_down);
-
-  if (!operation_processor_->RunBatched(operation)) {
-    return Status(pb::error::EINTERNAL, "commit mutation fail");
-  }
-
-  CHECK(count_down.wait() == 0) << "count down wait fail.";
-
-  return operation->GetStatus();
-}
-
 Status FileSystem::CreateRoot() {
   CHECK(fs_id_ > 0) << "fs_id is invalid.";
 
@@ -749,27 +305,6 @@ Status FileSystem::Lookup(Context& ctx, Ino parent, const std::string& name, Ent
   trace.RecordElapsedTime("post_handle");
 
   return Status::OK();
-}
-
-uint64_t FileSystem::GetMdsIdByIno(Ino ino) {
-  ino = (ino != kRootParentIno) ? ino : kRootIno;
-  auto partition_policy = fs_info_->GetPartitionPolicy();
-  const auto& parent_hash = partition_policy.parent_hash();
-
-  uint64_t target_mds_id = 0;
-  uint32_t target_bucket_id = ino % parent_hash.bucket_num();
-  for (const auto& [mds_id, bucket_set] : parent_hash.distributions()) {
-    for (const auto& bucket_id : bucket_set.bucket_ids()) {
-      if (bucket_id == target_bucket_id) {
-        target_mds_id = mds_id;
-        break;
-      }
-    }
-
-    if (target_mds_id > 0) break;
-  }
-
-  return target_mds_id;
 }
 
 Status FileSystem::BatchCreate(Context& ctx, Ino parent, const std::vector<MkNodParam>& params,
@@ -2369,24 +1904,6 @@ Status FileSystem::ReadLink(Context& ctx, Ino ino, std::string& link) {
   return Status::OK();
 }
 
-Status FileSystem::GetAttr(Context& ctx, Ino ino, EntryOut& entry_out) {
-  if (!CanServe(ctx)) {
-    return Status(pb::error::ENOT_SERVE, "can not serve");
-  }
-
-  auto& trace = ctx.GetTrace();
-
-  InodeSPtr inode;
-  auto status = GetInode(ctx, ino, inode);
-  if (!status.ok()) return status;
-  trace.RecordElapsedTime("prepare");
-
-  entry_out.attr = inode->ToAttr();
-  trace.RecordElapsedTime("post_handle");
-
-  return Status::OK();
-}
-
 Status FileSystem::SetAttr(Context& ctx, Ino ino, const SetAttrParam& param, EntryWithChunkOut& entry_out) {
   if (!CanServe(ctx)) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
@@ -2465,6 +1982,24 @@ Status FileSystem::SetAttr(Context& ctx, Ino ino, const SetAttrParam& param, Ent
     NotifyBuddyRefreshInode(attr, reason);
   }
 
+  trace.RecordElapsedTime("post_handle");
+
+  return Status::OK();
+}
+
+Status FileSystem::GetAttr(Context& ctx, Ino ino, EntryOut& entry_out) {
+  if (!CanServe(ctx)) {
+    return Status(pb::error::ENOT_SERVE, "can not serve");
+  }
+
+  auto& trace = ctx.GetTrace();
+
+  InodeSPtr inode;
+  auto status = GetInode(ctx, ino, inode);
+  if (!status.ok()) return status;
+  trace.RecordElapsedTime("prepare");
+
+  entry_out.attr = inode->ToAttr();
   trace.RecordElapsedTime("post_handle");
 
   return Status::OK();
@@ -2610,71 +2145,6 @@ Status FileSystem::RemoveXAttr(Context& ctx, Ino ino, const std::string& name, E
   trace.RecordElapsedTime("post_handle");
 
   return Status::OK();
-}
-
-void FileSystem::UpdateParentMemo(const std::vector<Ino>& ancestors) {
-  if (IsParentHashPartition()) {
-    for (size_t i = 1; i < ancestors.size(); ++i) {
-      const Ino& ino = ancestors[i - 1];
-      const Ino& parent = ancestors[i];
-
-      // update parent memo
-      parent_memo_.Remeber(ino, parent);
-    }
-  }
-}
-
-void FileSystem::NotifyBuddyRefreshFsInfo(std::vector<uint64_t> mds_ids, const FsInfoEntry& fs_info,
-                                          const std::string& reason) {
-  for (auto mds_id : mds_ids) {
-    if (mds_id == 0 || mds_id == self_mds_id_) continue;
-
-    notify_buddy_->AsyncNotify(
-        notify::RefreshFsInfoMessage::Create(mds_id, fs_info.fs_id(), fs_info.fs_name(), reason));
-  }
-}
-
-void FileSystem::NotifyBuddyRefreshInode(const AttrEntry& attr, const std::string& reason) {
-  NotifyBuddyRefreshInode(::dingofs::Helper::PbRepeatedToVector(attr.parents()), {.attr = attr}, reason);
-}
-
-void FileSystem::NotifyBuddyRefreshInode(const std::vector<Ino>& parents, const AttrOrMutation& attr_or_mutation,
-                                         const std::string& reason) {
-  if (notify_buddy_ == nullptr) return;
-
-  Ino ino = attr_or_mutation.attr.ino() != 0 ? attr_or_mutation.attr.ino() : attr_or_mutation.mutation.ino();
-  if (ino == kRootIno) return;
-
-  CHECK(parents.size() >= 1) << fmt::format("parent size should be 1, but is {} ino({}).", parents.size(), ino);
-
-  const std::string notify_reason = reason + ".notifybuddy";
-  absl::flat_hash_set<uint64_t> notified_mds_ids;
-  for (const Ino& parent : parents) {
-    uint64_t mds_id = GetMdsIdByIno(parent);
-
-    CHECK(mds_id != 0) << fmt::format("mds id should not be 0, ino({}).", parent);
-    if (notified_mds_ids.contains(mds_id)) continue;
-
-    if (mds_id != self_mds_id_) {
-      notify_buddy_->AsyncNotify(notify::RefreshInodeMessage::Create(mds_id, fs_id_, attr_or_mutation.attr,
-                                                                     attr_or_mutation.mutation, notify_reason));
-    }
-
-    notified_mds_ids.insert(mds_id);
-  }
-}
-
-void FileSystem::NotifyBuddyCleanPartitionCache(Ino ino, const std::string& reason) {
-  if (notify_buddy_ == nullptr) return;
-
-  auto mds_id = GetMdsIdByIno(ino);
-  CHECK(mds_id != 0) << fmt::format("mds id should not be 0, ino({}).", ino);
-  if (mds_id == self_mds_id_) {
-    partition_cache_.Delete(ino);
-
-  } else {
-    notify_buddy_->AsyncNotify(notify::CleanPartitionCacheMessage::Create(mds_id, fs_id_, ino, 0, reason));
-  }
 }
 
 Status FileSystem::Rename(Context& ctx, const RenameParam& param, RenameResult& out) {
@@ -2920,6 +2390,143 @@ Status FileSystem::CommitRename(Context& ctx, const RenameParam& param, RenameRe
   auto status = renamer_.Execute<RenameParam>(GetSelfPtr(), ctx, param, out);
   trace.RecordElapsedTime("resume");
   if (!status.ok()) return status;
+
+  trace.RecordElapsedTime("post_handle");
+
+  return status;
+}
+
+Status FileSystem::RestoreFromTrash(Context& ctx, Ino trash_parent, const std::string& trash_name,
+                                    bool allow_trash_parent, uint64_t carried_bytes, uint64_t carried_inodes) {
+  // dst (parent + name) is always parsed from trash_name.
+  Ino actual_dst_parent = 0, orig_ino = 0;
+  std::string actual_dst_name;
+  if (!ParseTrashEntryName(trash_name, actual_dst_parent, orig_ino, actual_dst_name)) {
+    return Status(pb::error::EILLEGAL_PARAMTETER, "invalid trash entry name");
+  }
+
+  if (IsTrashInode(actual_dst_parent)) {
+    if (!allow_trash_parent) {
+      return Status(pb::error::ENOT_SUPPORT, "cannot restore into trash");
+    }
+    // In tree-rebuild mode, the dst is allowed to be a trashed user directory,
+    // but never the trash root itself. Whether it's also not an hour bucket is
+    // checked in RestoreFromTrashOperation::Run once we have dst_parent attrs.
+    if (actual_dst_parent == kTrashInodeId) {
+      return Status(pb::error::ENOT_SUPPORT, "cannot restore under .trash root");
+    }
+  }
+
+  auto& trace = ctx.GetTrace();
+  RestoreFromTrashOperation operation(trace, fs_id_, trash_parent, trash_name, actual_dst_parent, actual_dst_name,
+                                      allow_trash_parent, orig_ino);
+
+  trace.RecordElapsedTime("prepare");
+
+  auto status = RunOperation(&operation);
+
+  LOG(INFO) << fmt::format("[fs.{}.{}] restore {} from trash to {}/{}, status({}).", fs_id_, ctx.RequestId(),
+                           trash_name, actual_dst_parent, actual_dst_name, status.error_str());
+  trace.RecordElapsedTime("resume");
+
+  if (!status.ok()) return status;
+
+  auto& result = operation.GetResult();
+  auto& dst_parent_attr = result.dst_parent_attr;
+  auto& file_attr = result.file_attr;
+
+  // Update caches.
+  std::string cache_reason = fmt::format("trash-restore.{}.{}", trash_parent, trash_name);
+  UpsertInodeCache(dst_parent_attr, cache_reason);
+  UpsertInodeCache(file_attr, cache_reason);
+
+  // Add restored dentry to partition cache.
+  Dentry dentry(fs_id_, actual_dst_name, actual_dst_parent, result.file_ino, result.file_type, 0);
+  AddDentryToPartition(actual_dst_parent, dentry, dst_parent_attr.version());
+
+  // Push the fresh dst-parent/file attrs to the other MDSes caching them,
+  // mirroring MkNod/Rename. Parent-hash only: under mono GetMdsIdByIno reads
+  // an empty parent_hash() and the notify helpers CHECK(mds_id != 0).
+  if (IsParentHashPartition()) {
+    NotifyBuddyRefreshInode(dst_parent_attr, cache_reason);
+  }
+
+  // Trash partitions don't participate in partition_cache_ (see
+  // FetchPartition), so there's nothing to evict here — the next
+  // ls .trash/<bucket> reads dentries directly from KV.
+
+  // Refresh parent_memo_ for restored DIRECTORY: the dir's parents() just
+  // flipped from [trash_parent_] back to [actual_dst_parent]. Any
+  // AsyncUpdateDirUsage(parent=this_dir_ino, ...) that fires next (e.g. when
+  // a child file is restored or written into it) walks ancestors via
+  // DirQuotaMap::GetParent, which would otherwise either read the new value
+  // from KV or, worse, return a stale [trash_parent_] cached from when the
+  // dir was still in trash -- in which case the walk hits IsTrashInode and
+  // stops at the trash boundary, losing the per-dir quota credit. Updating
+  // the memo here closes that window for the in-process MDS.
+  if (result.file_type == pb::mds::FileType::DIRECTORY) {
+    parent_memo_.Remeber(result.file_ino, actual_dst_parent);
+  }
+
+  // Quota.
+  //  - immediate_trash_quota=false: nothing to do. Trash-move didn't touch
+  //    per-dir quota, so there's no debit to reverse.
+  //  - immediate_trash_quota=true: symmetric attach/detach model, same as
+  //    dir-stat below -- one debit per detach (trash-move), one credit per
+  //    attach (any restore leg, tree-rebuild grafts included). The ancestor
+  //    walk truncates at the trash-range boundary (the grafted-into dir is a
+  //    normal ino; the hour bucket is not), so a graft settles exactly the
+  //    rebuilt subtree's interior quotas, and put_back settles one hop into
+  //    the live chain. Crediting only on regular restores is NOT enough: a
+  //    put_back of a rebuilt directory carries the grafted children along
+  //    with no restore leg of their own, permanently losing their credits.
+  //    What stays unsettled is the live ancestors' share of a carried
+  //    subtree (put_back credits just the dir's own (0,+1)); that residual
+  //    is owned by the restore tool's ancestor-reconcile step.
+  //  - FS-level usage is untouched in all cases -- trash-move never debits
+  //    it (nlink is preserved) and it's released only when CleanTrashTask
+  //    actually purges the inode.
+  if (GetFsInfo().immediate_trash_quota()) {
+    int64_t delta_bytes = file_attr.type() == pb::mds::FileType::FILE ? static_cast<int64_t>(file_attr.length()) : 0;
+    int64_t delta_inodes = 1;
+    // Carried settlement: a directory put back after tree-rebuild carries its
+    // grafted subtree along with no restore leg of its own for the children.
+    // The restore tool measures the assembled subtree (dir-stats skeleton
+    // walk) and passes the totals; fold them into this one credit so the
+    // carried children's trash-move debits are settled on the live chain.
+    // Graft legs and files never carry (the tool sends 0; ignore defensively).
+    if (!allow_trash_parent && file_attr.type() == pb::mds::FileType::DIRECTORY) {
+      delta_bytes += static_cast<int64_t>(carried_bytes);
+      delta_inodes += static_cast<int64_t>(carried_inodes);
+    } else if (carried_bytes != 0 || carried_inodes != 0) {
+      LOG(WARNING) << fmt::format("[fs.{}.{}] ignore carried({},{}) on non-put-back-dir leg {}.", fs_id_,
+                                  ctx.RequestId(), carried_bytes, carried_inodes, trash_name);
+    }
+    std::string reason = fmt::format("trash-restore.{}.{}", trash_parent, trash_name);
+    // bypass_parent_memo: the boundary truncation must hold on any MDS. A
+    // stale memo entry (recorded before the trash-move, never invalidated
+    // cross-MDS) would walk this credit straight past the bucket into the
+    // live ancestors -- and if the rebuilt tree is later purged instead of
+    // put back, that credit is never re-debited.
+    quota_manager_.AsyncUpdateDirUsage(actual_dst_parent, delta_bytes, delta_inodes, reason,
+                                       /*bypass_parent_memo=*/true);
+  }
+
+  // dir-stat: any restore re-adds the dentry to actual_dst_parent, so credit
+  // that directory -- mirroring the trash-move debit symmetrically (debit at
+  // dentry-move time, credit at dentry-restore time), independent of
+  // immediate_trash_quota. This must be gated on "dst is a real user directory"
+  // rather than allow_trash_parent: a tree-rebuild graft (allow_trash_parent)
+  // still moves the dentry into a real (merely trashed) user dir, and that dir
+  // may later be put_back carrying the dentry along -- if we skip the credit
+  // here, the restored dir's stat permanently under-counts the grafted child.
+  // The only dst we must NOT credit is the trash bucket itself (which is never
+  // tracked); a bucket-range dst means the entry stays loose in trash.
+  if (!IsTrashInode(actual_dst_parent)) {
+    UpdateDirStat(actual_dst_parent,
+                  file_attr.type() == pb::mds::FileType::FILE ? static_cast<int64_t>(file_attr.length()) : 0, 1,
+                  /*dir_delta=*/file_attr.type() == pb::mds::FileType::DIRECTORY ? 1 : 0, cache_reason);
+  }
 
   trace.RecordElapsedTime("post_handle");
 
@@ -3334,65 +2941,6 @@ Status FileSystem::CompactChunk(Context& ctx, Ino ino, uint32_t index, const Com
   return Status::OK();
 }
 
-Status FileSystem::GetDentry(Context& ctx, Ino parent, const std::string& name, Dentry& dentry) {
-  bool bypass_cache = ctx.IsBypassCache();
-  auto& trace = ctx.GetTrace();
-
-  if (!bypass_cache) {
-    auto partition = GetPartitionFromCache(parent);
-    if (partition != nullptr) {
-      trace.SetHitPartition();
-      auto status = partition->Get(name, dentry);
-      if (!status.ok()) return status;
-
-      trace.SetHitDentry();
-      return Status::OK();
-    }
-  }
-
-  return GetDentryFromStore(parent, name, dentry);
-}
-
-void FileSystem::UpdateDirStat(Ino parent, int64_t length_delta, int64_t inode_delta, int64_t dir_delta,
-                               const std::string& reason) {
-  if (!EnableDirStats()) return;
-  // Trash buckets (kTrashInodeId and the hour-bucket inodes) are never tracked.
-  // Gate here so every caller is covered in one place -- e.g. a Rename rescuing
-  // a child out of an hour bucket, or a flush/setattr on a hardlinked file whose
-  // parents still include a bucket -- instead of each site needing its own guard
-  // (a missed one silently materializes a never-reclaimed bucket record).
-  if (IsTrashInode(parent)) return;
-  dir_stat_manager_.AsyncUpdateDirStat(parent, length_delta, inode_delta, dir_delta, reason);
-}
-
-template <typename Fn>
-Status FileSystem::ForEachDentryPage(Context& ctx, Ino ino, bool is_only_dir, Fn fn) {
-  constexpr uint32_t kDirStatScanPageSize = 1000;
-  std::string last_name;
-  for (;;) {
-    std::vector<Dentry> dentries;
-    auto status = ListDentry(ctx, ino, last_name, kDirStatScanPageSize, is_only_dir, dentries);
-    if (!status.ok()) return status;
-    if (dentries.empty()) break;
-
-    const bool full_page = dentries.size() >= kDirStatScanPageSize;
-    // The store-backed ListDentry scans inclusive of last_name while the cache
-    // path is exclusive; drop the duplicated boundary entry so it is never
-    // processed twice across pages (names are unique within a directory).
-    const bool dup_front = (!last_name.empty() && dentries.front().Name() == last_name);
-    last_name = dentries.back().Name();
-    if (dup_front) dentries.erase(dentries.begin());
-
-    if (!dentries.empty()) {
-      status = fn(dentries);
-      if (!status.ok()) return status;
-    }
-
-    if (!full_page) break;
-  }
-  return Status::OK();
-}
-
 Status FileSystem::CalcDirStat(Context& ctx, Ino ino, DirStatEntry& out) {
   out.Clear();
 
@@ -3444,6 +2992,25 @@ Status FileSystem::CalcDirStat(Context& ctx, Ino ino, DirStatEntry& out) {
   out.set_length(total_length);
 
   return Status::OK();
+}
+
+Status FileSystem::GetDentry(Context& ctx, Ino parent, const std::string& name, Dentry& dentry) {
+  bool bypass_cache = ctx.IsBypassCache();
+  auto& trace = ctx.GetTrace();
+
+  if (!bypass_cache) {
+    auto partition = GetPartitionFromCache(parent);
+    if (partition != nullptr) {
+      trace.SetHitPartition();
+      auto status = partition->Get(name, dentry);
+      if (!status.ok()) return status;
+
+      trace.SetHitDentry();
+      return Status::OK();
+    }
+  }
+
+  return GetDentryFromStore(parent, name, dentry);
 }
 
 Status FileSystem::ListDentry(Context& ctx, Ino parent, const std::string& last_name, uint32_t limit, bool is_only_dir,
@@ -4062,141 +3629,574 @@ Status FileSystem::DescribePartitionShard(Ino ino, Json::Value& value) {
   return Status::OK();
 }
 
-Status FileSystem::RestoreFromTrash(Context& ctx, Ino trash_parent, const std::string& trash_name,
-                                    bool allow_trash_parent, uint64_t carried_bytes, uint64_t carried_inodes) {
-  // dst (parent + name) is always parsed from trash_name.
-  Ino actual_dst_parent = 0, orig_ino = 0;
-  std::string actual_dst_name;
-  if (!ParseTrashEntryName(trash_name, actual_dst_parent, orig_ino, actual_dst_name)) {
-    return Status(pb::error::EILLEGAL_PARAMTETER, "invalid trash entry name");
+Status FileSystem::RunOperation(Operation* operation) {
+  CHECK(operation != nullptr) << "operation is null.";
+
+  if (!operation->IsBatchRun()) {
+    return operation_processor_->RunAlone(operation);
   }
 
-  if (IsTrashInode(actual_dst_parent)) {
-    if (!allow_trash_parent) {
-      return Status(pb::error::ENOT_SUPPORT, "cannot restore into trash");
-    }
-    // In tree-rebuild mode, the dst is allowed to be a trashed user directory,
-    // but never the trash root itself. Whether it's also not an hour bucket is
-    // checked in RestoreFromTrashOperation::Run once we have dst_parent attrs.
-    if (actual_dst_parent == kTrashInodeId) {
-      return Status(pb::error::ENOT_SUPPORT, "cannot restore under .trash root");
-    }
+  bthread::CountdownEvent count_down(1);
+
+  operation->SetEvent(&count_down);
+
+  if (!operation_processor_->RunBatched(operation)) {
+    return Status(pb::error::EINTERNAL, "commit mutation fail");
   }
 
+  CHECK(count_down.wait() == 0) << "count down wait fail.";
+
+  return operation->GetStatus();
+}
+
+// odd number is dir inode
+Status FileSystem::GenDirIno(Ino& ino) {
+  bool ret = ino_id_generator_->GenID(2, ino);
+
+  if (!FLAGS_mds_ino_generator_share_enable) {
+    ino = (self_mds_id_ << kInoShiftBits) + (ino & 0xFFFFFFFFFF);
+  }
+  ino = (ino & 1) ? ino : (ino + 1);  // ensure odd number for dir inode
+
+  return ret ? Status::OK() : Status(pb::error::EALLOC_ID, "generate inode id fail");
+}
+
+// even number is file inode
+Status FileSystem::GenFileIno(Ino& ino) {
+  bool ret = ino_id_generator_->GenID(2, ino);
+
+  if (!FLAGS_mds_ino_generator_share_enable) {
+    ino = (self_mds_id_ << kInoShiftBits) + (ino & 0xFFFFFFFFFF);
+  }
+  ino = (ino & 1) ? (ino + 1) : ino;  // ensure even number for file inode
+
+  return ret ? Status::OK() : Status(pb::error::EALLOC_ID, "generate inode id fail");
+}
+
+bool FileSystem::CanServe(uint64_t self_mds_id) {
+  const auto& partition_policy = fs_info_->GetPartitionPolicy();
+  if (partition_policy.type() == pb::mds::PartitionType::MONOLITHIC_PARTITION) {
+    return partition_policy.mono().mds_id() == self_mds_id;
+
+  } else if (partition_policy.type() == pb::mds::PartitionType::PARENT_ID_HASH_PARTITION) {
+    return partition_policy.parent_hash().distributions().contains(self_mds_id);
+  }
+
+  return false;
+}
+
+void FileSystem::AddDentryToPartition(Ino parent, const Dentry& dentry, uint64_t version) {
+  // Trash parents (.trash root + hour buckets) never enter partition_cache_;
+  // see FetchPartition for the design rationale.
+  if (IsTrashInode(parent)) return;
+  auto partition = GetPartitionFromCache(parent);
+  if (partition != nullptr) {
+    partition->Put(dentry, version);
+  } else {
+    LOG(WARNING) << fmt::format("partition({}) not exist in cache.", parent);
+  }
+}
+
+void FileSystem::DeleteDentryFromPartition(Ino parent, const std::string& name, uint64_t version) {
+  if (IsTrashInode(parent)) return;
+  auto partition = GetPartitionFromCache(parent);
+  if (partition != nullptr) {
+    partition->Delete(name, version);
+  } else {
+    LOG(WARNING) << fmt::format("partition({}) not exist in cache.", parent);
+  }
+}
+
+void FileSystem::DeleteDentryFromPartition(Ino parent, const std::vector<std::string>& names, uint64_t version) {
+  if (IsTrashInode(parent)) return;
+  auto partition = GetPartitionFromCache(parent);
+  if (partition != nullptr) {
+    partition->Delete(names, version);
+  } else {
+    LOG(WARNING) << fmt::format("partition({}) not exist in cache.", parent);
+  }
+}
+
+void FileSystem::RefreshPartitionDeltaVersion(Ino parent, uint64_t version) {
+  if (IsTrashInode(parent)) return;
+  auto partition = GetPartitionFromCache(parent);
+  if (partition != nullptr) {
+    partition->RefreshDeltaVersion(version);
+  }
+}
+
+Status FileSystem::GetPartition(Context& ctx, Ino parent, PartitionPtr& out_partition) {
+  auto status = GetPartition(ctx, ctx.GetInodeVersion(), parent, out_partition);
+  if (status.ok()) {
+    LOG_DEBUG << fmt::format("[fs.{}.{}.{}] get partition({}/{}) this({}).", fs_id_, out_partition->INo(),
+                             ctx.RequestId(), out_partition->BaseVersion(), out_partition->DeltaVersion(),
+                             (void*)out_partition.get());
+  }
+
+  return status;
+}
+
+Status FileSystem::GetPartition(Context& ctx, uint64_t version, Ino parent, PartitionPtr& out_partition) {
   auto& trace = ctx.GetTrace();
-  RestoreFromTrashOperation operation(trace, fs_id_, trash_parent, trash_name, actual_dst_parent, actual_dst_name,
-                                      allow_trash_parent, orig_ino);
+  const bool bypass_cache = ctx.IsBypassCache();
+  const bool use_base_version = ctx.UseBaseVersion();
+  const std::string& request_id = ctx.RequestId();
+  const std::string& method_name = ctx.MethodName();
 
-  trace.RecordElapsedTime("prepare");
+  // Trash parents bypass partition_cache_: client routing fans them across
+  // MDSes (random fallback), buckets have a frozen attr.version, and GC
+  // patches KV out-of-band — any cache would go stale undetectably. Trash
+  // listing is admin-rare, so a per-request ShardPartition is acceptable.
+  if (IsTrashInode(parent)) {
+    return FetchPartition(ctx, parent, fmt::format("Trash.{}.{}", method_name, request_id), out_partition);
+  }
+
+  if (bypass_cache) {
+    auto status = FetchPartition(ctx, parent, fmt::format("bypass.{}.{}", method_name, request_id), out_partition);
+    if (!status.ok()) {
+      return Status(status.error_code(), fmt::format("not found partition({}), {}.", parent, status.error_str()));
+    }
+
+    return status;
+  }
+
+  auto partition = GetPartitionFromCache(parent);
+  if (partition == nullptr) {
+    auto status = FetchPartition(ctx, parent, fmt::format("cache-miss.{}.{}", method_name, request_id), out_partition);
+    if (!status.ok()) {
+      return Status(status.error_code(), fmt::format("not found partition({}), {}.", parent, status.error_str()));
+    }
+
+    return status;
+  }
+
+  uint64_t cache_version = use_base_version ? partition->BaseVersion() : partition->DeltaVersion();
+  if (version > cache_version) {
+    std::string reason = fmt::format("out-of-date.{}.{}.[{},cache{},req{}]", method_name, request_id, use_base_version,
+                                     cache_version, version);
+    auto status = FetchPartition(ctx, parent, reason, out_partition);
+    if (!status.ok()) {
+      return Status(status.error_code(), fmt::format("not found partition({}), {}.", parent, status.error_str()));
+    }
+
+    // singleflight may have piggybacked on a fetch started before this
+    // request; re-validate and refetch (as a new leader) if still stale.
+    uint64_t got_version = use_base_version ? out_partition->BaseVersion() : out_partition->DeltaVersion();
+    if (version > got_version) {
+      status = FetchPartition(ctx, parent, reason + ".retry", out_partition);
+      if (!status.ok()) {
+        return Status(status.error_code(), fmt::format("not found partition({}), {}.", parent, status.error_str()));
+      }
+    }
+
+    return status;
+  }
+
+  if (partition->NeedCompact()) {
+    auto status = FetchPartition(ctx, parent, "compact", out_partition);
+    if (!status.ok()) {
+      return Status(status.error_code(), fmt::format("not found partition({}), {}.", parent, status.error_str()));
+    }
+
+    return status;
+  }
+
+  trace.SetHitPartition();
+  out_partition = partition;
+
+  return Status::OK();
+}
+
+PartitionPtr FileSystem::GetPartitionFromCache(Ino parent) { return partition_cache_.Get(parent); }
+
+std::vector<PartitionPtr> FileSystem::GetAllPartitionsFromCache() { return partition_cache_.GetAll(); }
+
+Status FileSystem::FetchPartition(Context& ctx, Ino parent, const std::string& reason, PartitionPtr& out_partition) {
+  // Trash parents never enter partition_cache_ and are admin-rare — skip singleflight.
+  if (IsTrashInode(parent)) {
+    return DoFetchPartition(ctx, parent, reason, out_partition);
+  }
+
+  if (!FLAGS_mds_partition_inflight_controller_enable) {
+    return DoFetchPartition(ctx, parent, reason, out_partition);
+  }
+
+  // singleflight: coalesce concurrent store fetches of the same parent. The
+  // leader fetches, followers wait and share status/partition. OutOfDate
+  // callers re-validate the version in GetPartition and refetch if stale.
+  // std::shared_ptr<InflightPartitionFetch> inflight;
+  bool is_leader = false;
+  auto inflight = partition_inflight_controller_.GetOrCreate(parent, is_leader);
+
+  if (!is_leader) {
+    inflight->done.wait();
+    out_partition = inflight->value;
+    return inflight->status;
+  }
+
+  inflight->status = DoFetchPartition(ctx, parent, reason, out_partition);
+  inflight->value = out_partition;
+  partition_inflight_controller_.Delete(parent);
+
+  inflight->done.signal();
+
+  return inflight->status;
+}
+
+Status FileSystem::DoFetchPartition(Context& ctx, Ino parent, const std::string& reason, PartitionPtr& out_partition) {
+  auto& trace = ctx.GetTrace();
+  const std::string& request_id = ctx.RequestId();
+  const std::string& method_name = ctx.MethodName();
+
+  utils::Duration duration;
+
+  // Trash parents never enter partition_cache_ — rationale in GetPartition().
+  // Build a fresh ShardPartition (empty shard_boundaries_ → one Range{"",""}
+  // shard loaded on first access) and return before the cache PutIf at the
+  // bottom of this function.
+  if (IsTrashInode(parent)) {
+    AttrEntry attr;
+    if (parent == kTrashInodeId) {
+      attr = BuildTrashInodeAttr(fs_id_, GetFsInfo().create_time_s() * 1000000000ULL);
+    } else {
+      GetInodeAttrOperation operation(trace, fs_id_, parent);
+      auto status = RunOperation(&operation);
+      if (!status.ok()) return status;
+      attr = operation.GetResult().attr_with_mutation.ToCompleteAttr();
+    }
+    out_partition = ShardPartition::New(operation_processor_, attr);
+    LOG_DEBUG << fmt::format("[fs.{}.{}.{}.{}][{}us] fetch partition (trash, no-cache), version({}) reason({}).",
+                             fs_id_, parent, method_name, request_id, duration.ElapsedUs(), attr.version(), reason);
+    return Status::OK();
+  }
+
+  GetInodeAttrOperation operation(trace, fs_id_, parent);
+  auto status = RunOperation(&operation);
+  if (!status.ok()) return status;
+  auto attr_with_mutation = std::move(operation.GetResult().attr_with_mutation);
+  auto attr = attr_with_mutation.ToCompleteAttr();
+
+  auto partition = ShardPartition::New(operation_processor_, attr);
+  out_partition = partition_cache_.PutIf(partition);
+
+  UpsertInodeCache(attr_with_mutation, reason);
+
+  LOG_DEBUG << fmt::format(
+      "[fs.{}.{}.{}.{}][{}us] fetch partition, version({}) shard_boundaries({}) reason({}).", fs_id_, parent,
+      method_name, request_id, duration.ElapsedUs(), attr.version(),
+      ::dingofs::Helper::VectorToString(::dingofs::Helper::PbRepeatedToVector(attr.shard_boundaries())), reason);
+
+  return Status::OK();
+}
+
+Status FileSystem::GetDentryFromStore(Ino parent, const std::string& name, Dentry& dentry) {
+  Trace trace;
+  GetDentryOperation operation(trace, fs_id_, parent, name);
 
   auto status = RunOperation(&operation);
+  if (!status.ok()) return status;
+  LOG_DEBUG << fmt::format("[fs.{}] fetch dentry({}/{}).", fs_id_, parent, name);
 
-  LOG(INFO) << fmt::format("[fs.{}.{}] restore {} from trash to {}/{}, status({}).", fs_id_, ctx.RequestId(),
-                           trash_name, actual_dst_parent, actual_dst_name, status.error_str());
-  trace.RecordElapsedTime("resume");
+  auto& result = operation.GetResult();
+  dentry = Dentry(result.dentry);
 
+  return Status::OK();
+}
+
+Status FileSystem::ListDentryFromStore(Ino parent, const std::string& last_name, uint32_t limit, bool is_only_dir,
+                                       std::vector<Dentry>& dentries) {
+  limit = limit > 0 ? limit : UINT32_MAX;
+
+  Trace trace;
+  ScanDentryOperation operation(trace, fs_id_, parent, last_name, [&](DentryEntry dentry) -> bool {
+    if (is_only_dir && dentry.type() != pb::mds::FileType::DIRECTORY) {
+      return true;  // skip non-directory entries
+    }
+
+    dentries.push_back(Dentry(dentry));
+    return dentries.size() < limit;
+  });
+
+  return RunOperation(&operation);
+}
+
+template <typename Fn>
+Status FileSystem::ForEachDentryPage(Context& ctx, Ino ino, bool is_only_dir, Fn fn) {
+  constexpr uint32_t kDirStatScanPageSize = 1000;
+  std::string last_name;
+  for (;;) {
+    std::vector<Dentry> dentries;
+    auto status = ListDentry(ctx, ino, last_name, kDirStatScanPageSize, is_only_dir, dentries);
+    if (!status.ok()) return status;
+    if (dentries.empty()) break;
+
+    const bool full_page = dentries.size() >= kDirStatScanPageSize;
+    // The store-backed ListDentry scans inclusive of last_name while the cache
+    // path is exclusive; drop the duplicated boundary entry so it is never
+    // processed twice across pages (names are unique within a directory).
+    const bool dup_front = (!last_name.empty() && dentries.front().Name() == last_name);
+    last_name = dentries.back().Name();
+    if (dup_front) dentries.erase(dentries.begin());
+
+    if (!dentries.empty()) {
+      status = fn(dentries);
+      if (!status.ok()) return status;
+    }
+
+    if (!full_page) break;
+  }
+  return Status::OK();
+}
+
+Status FileSystem::GetInode(Context& ctx, Ino ino, InodeSPtr& out_inode) {
+  return GetInode(ctx, ctx.GetInodeVersion(), ino, out_inode);
+}
+
+Status FileSystem::GetInode(Context& ctx, uint64_t version, Ino ino, InodeSPtr& out_inode) {
+  auto& trace = ctx.GetTrace();
+  const bool bypass_cache = ctx.IsBypassCache();
+  const bool use_base_version = ctx.UseBaseVersion();
+  const std::string& request_id = ctx.RequestId();
+  const std::string& method_name = ctx.MethodName();
+
+  if (bypass_cache) {
+    return GetInodeFromStore(ctx, ino, fmt::format("bypass.{}.{}", method_name, request_id), false, out_inode);
+  }
+
+  auto inode = GetInodeFromCache(ino);
+  if (inode == nullptr) {
+    return GetInodeFromStore(ctx, ino, fmt::format("cache-miss.{}.{}", method_name, request_id), true, out_inode);
+  }
+
+  if (!inode->IsFresh()) {
+    std::string reason = fmt::format("stale.{}.{}", method_name, request_id);
+    return GetInodeFromStore(ctx, ino, reason, true, out_inode);
+  }
+
+  uint64_t cache_version = use_base_version ? inode->BaseVersion() : inode->Version();
+  if (cache_version < version) {
+    std::string reason = fmt::format("out-of-date.{}.{}.[{},cache{},req{}]", method_name, request_id, use_base_version,
+                                     cache_version, version);
+    return GetInodeFromStore(ctx, ino, reason, true, out_inode);
+  }
+
+  out_inode = inode;
+  trace.SetHitInode();
+
+  return Status::OK();
+}
+
+Status FileSystem::GetInodeFromStore(Context& ctx, Ino ino, const std::string& reason, bool is_cache,
+                                     InodeSPtr& out_inode) {
+  const auto& request_id = ctx.RequestId();
+  const auto& method_name = ctx.MethodName();
+
+  // kTrashInodeId is virtual — synthesize its attr on demand.
+  if (ino == kTrashInodeId) {
+    auto attr = BuildTrashInodeAttr(fs_id_, GetFsInfo().create_time_s() * 1000000000ULL);
+    out_inode = Inode::New(attr);
+    if (is_cache) {
+      std::string reason = fmt::format("trash-virtual.{}.{}", method_name, request_id);
+      UpsertInodeCache(attr, reason);
+    }
+    return Status::OK();
+  }
+
+  Trace trace;
+  GetInodeAttrOperation operation(trace, fs_id_, ino);
+
+  auto status = RunOperation(&operation);
+  if (!status.ok()) {
+    if (status.error_code() != pb::error::ENOT_FOUND) {
+      LOG(ERROR) << fmt::format("[fs.{}.{}.{}.{}] fetch inode from store fail, reason({}), status({}).", fs_id_,
+                                method_name, request_id, ino, reason, status.error_str());
+    }
+    return Status(status.error_code(), fmt::format("get inode({}) {}.", ino, status.error_str()));
+  }
+
+  auto& result = operation.GetResult();
+  auto& attr_with_mutation = result.attr_with_mutation;
+
+  out_inode = is_cache ? UpsertInodeCache(attr_with_mutation, reason) : Inode::New(attr_with_mutation);
+
+  LOG_DEBUG << fmt::format("[fs.{}.{}.{}.{}] fetch inode, version({}) is_cache({}) reason({}).", fs_id_, method_name,
+                           request_id, ino, attr_with_mutation.attr.version(), is_cache, reason);
+
+  return Status::OK();
+}
+
+Status FileSystem::BatchGetInodeFromStore(Context& ctx, std::vector<uint64_t> inoes, const std::string& reason,
+                                          bool is_cache, std::vector<InodeSPtr>& out_inodes) {
+  auto& trace = ctx.GetTrace();
+  const auto& request_id = ctx.RequestId();
+  const auto& method_name = ctx.MethodName();
+
+  BatchGetInodeAttrOperation operation(trace, fs_id_, inoes);
+
+  auto status = RunOperation(&operation);
   if (!status.ok()) return status;
 
   auto& result = operation.GetResult();
-  auto& dst_parent_attr = result.dst_parent_attr;
-  auto& file_attr = result.file_attr;
+  for (auto& attr_with_mutation : result.attr_with_mutations) {
+    out_inodes.push_back(is_cache ? UpsertInodeCache(attr_with_mutation, reason) : Inode::New(attr_with_mutation));
 
-  // Update caches.
-  std::string cache_reason = fmt::format("trash-restore.{}.{}", trash_parent, trash_name);
-  UpsertInodeCache(dst_parent_attr, cache_reason);
-  UpsertInodeCache(file_attr, cache_reason);
-
-  // Add restored dentry to partition cache.
-  Dentry dentry(fs_id_, actual_dst_name, actual_dst_parent, result.file_ino, result.file_type, 0);
-  AddDentryToPartition(actual_dst_parent, dentry, dst_parent_attr.version());
-
-  // Push the fresh dst-parent/file attrs to the other MDSes caching them,
-  // mirroring MkNod/Rename. Parent-hash only: under mono GetMdsIdByIno reads
-  // an empty parent_hash() and the notify helpers CHECK(mds_id != 0).
-  if (IsParentHashPartition()) {
-    NotifyBuddyRefreshInode(dst_parent_attr, cache_reason);
+    const auto& attr = attr_with_mutation.attr;
+    LOG_DEBUG << fmt::format("[fs.{}.{}.{}.{}] fetch inode, version({}) is_cache({}) reason({}).", fs_id_, method_name,
+                             request_id, attr.ino(), attr.version(), is_cache, reason);
   }
 
-  // Trash partitions don't participate in partition_cache_ (see
-  // FetchPartition), so there's nothing to evict here — the next
-  // ls .trash/<bucket> reads dentries directly from KV.
+  return Status::OK();
+}
 
-  // Refresh parent_memo_ for restored DIRECTORY: the dir's parents() just
-  // flipped from [trash_parent_] back to [actual_dst_parent]. Any
-  // AsyncUpdateDirUsage(parent=this_dir_ino, ...) that fires next (e.g. when
-  // a child file is restored or written into it) walks ancestors via
-  // DirQuotaMap::GetParent, which would otherwise either read the new value
-  // from KV or, worse, return a stale [trash_parent_] cached from when the
-  // dir was still in trash -- in which case the walk hits IsTrashInode and
-  // stops at the trash boundary, losing the per-dir quota credit. Updating
-  // the memo here closes that window for the in-process MDS.
-  if (result.file_type == pb::mds::FileType::DIRECTORY) {
-    parent_memo_.Remeber(result.file_ino, actual_dst_parent);
-  }
+Status FileSystem::GetDelFileFromStore(Ino ino, AttrEntry& out_attr) {
+  Trace trace;
+  GetDelFileOperation operation(trace, fs_id_, ino);
 
-  // Quota.
-  //  - immediate_trash_quota=false: nothing to do. Trash-move didn't touch
-  //    per-dir quota, so there's no debit to reverse.
-  //  - immediate_trash_quota=true: symmetric attach/detach model, same as
-  //    dir-stat below -- one debit per detach (trash-move), one credit per
-  //    attach (any restore leg, tree-rebuild grafts included). The ancestor
-  //    walk truncates at the trash-range boundary (the grafted-into dir is a
-  //    normal ino; the hour bucket is not), so a graft settles exactly the
-  //    rebuilt subtree's interior quotas, and put_back settles one hop into
-  //    the live chain. Crediting only on regular restores is NOT enough: a
-  //    put_back of a rebuilt directory carries the grafted children along
-  //    with no restore leg of their own, permanently losing their credits.
-  //    What stays unsettled is the live ancestors' share of a carried
-  //    subtree (put_back credits just the dir's own (0,+1)); that residual
-  //    is owned by the restore tool's ancestor-reconcile step.
-  //  - FS-level usage is untouched in all cases -- trash-move never debits
-  //    it (nlink is preserved) and it's released only when CleanTrashTask
-  //    actually purges the inode.
-  if (GetFsInfo().immediate_trash_quota()) {
-    int64_t delta_bytes = file_attr.type() == pb::mds::FileType::FILE ? static_cast<int64_t>(file_attr.length()) : 0;
-    int64_t delta_inodes = 1;
-    // Carried settlement: a directory put back after tree-rebuild carries its
-    // grafted subtree along with no restore leg of its own for the children.
-    // The restore tool measures the assembled subtree (dir-stats skeleton
-    // walk) and passes the totals; fold them into this one credit so the
-    // carried children's trash-move debits are settled on the live chain.
-    // Graft legs and files never carry (the tool sends 0; ignore defensively).
-    if (!allow_trash_parent && file_attr.type() == pb::mds::FileType::DIRECTORY) {
-      delta_bytes += static_cast<int64_t>(carried_bytes);
-      delta_inodes += static_cast<int64_t>(carried_inodes);
-    } else if (carried_bytes != 0 || carried_inodes != 0) {
-      LOG(WARNING) << fmt::format("[fs.{}.{}] ignore carried({},{}) on non-put-back-dir leg {}.", fs_id_,
-                                  ctx.RequestId(), carried_bytes, carried_inodes, trash_name);
+  auto status = RunOperation(&operation);
+  if (!status.ok()) return status;
+
+  auto& result = operation.GetResult();
+  out_attr = result.attr;
+
+  return Status::OK();
+}
+
+InodeSPtr FileSystem::GetInodeFromCache(Ino ino) { return inode_cache_.Get(ino); }
+
+std::vector<InodeSPtr> FileSystem::GetAllInodesFromCache() { return inode_cache_.GetAll(); }
+
+InodeSPtr FileSystem::UpsertInodeCache(const AttrWithMutation& attr_with_mutation, const std::string& reason) {
+  return inode_cache_.PutIf(attr_with_mutation, reason);
+}
+
+InodeSPtr FileSystem::UpsertInodeCache(const AttrEntry& attr, const std::string& reason) {
+  return inode_cache_.PutIf(attr, reason);
+}
+
+void FileSystem::DeleteInodeFromCache(Ino ino) { inode_cache_.Delete(ino); }
+
+void FileSystem::ClearCache() {
+  ClearPartitionCache();
+  ClearInodeCache();
+  ClearChunkCache();
+}
+
+void FileSystem::ClearInodeCache() { inode_cache_.Clear(); }
+
+void FileSystem::ClearPartitionCache() { partition_cache_.Clear(); }
+
+void FileSystem::ClearChunkCache() { chunk_cache_.Clear(); }
+
+void FileSystem::BatchDeleteCache(uint32_t bucket_num, const std::set<uint32_t>& bucket_ids) {
+  if (bucket_ids.empty()) return;
+
+  auto check_fn = [&](const Ino& ino) -> bool {
+    uint32_t bucket_id = ino % bucket_num;
+
+    return (bucket_ids.find(bucket_id) != bucket_ids.end());
+  };
+
+  partition_cache_.DeleteIf(check_fn);
+  inode_cache_.DeleteIf(check_fn);
+  chunk_cache_.BatchDeleteIf(check_fn);
+}
+
+uint64_t FileSystem::GetMdsIdByIno(Ino ino) {
+  ino = (ino != kRootParentIno) ? ino : kRootIno;
+  auto partition_policy = fs_info_->GetPartitionPolicy();
+  const auto& parent_hash = partition_policy.parent_hash();
+
+  uint64_t target_mds_id = 0;
+  uint32_t target_bucket_id = ino % parent_hash.bucket_num();
+  for (const auto& [mds_id, bucket_set] : parent_hash.distributions()) {
+    for (const auto& bucket_id : bucket_set.bucket_ids()) {
+      if (bucket_id == target_bucket_id) {
+        target_mds_id = mds_id;
+        break;
+      }
     }
-    std::string reason = fmt::format("trash-restore.{}.{}", trash_parent, trash_name);
-    // bypass_parent_memo: the boundary truncation must hold on any MDS. A
-    // stale memo entry (recorded before the trash-move, never invalidated
-    // cross-MDS) would walk this credit straight past the bucket into the
-    // live ancestors -- and if the rebuilt tree is later purged instead of
-    // put back, that credit is never re-debited.
-    quota_manager_.AsyncUpdateDirUsage(actual_dst_parent, delta_bytes, delta_inodes, reason,
-                                       /*bypass_parent_memo=*/true);
+
+    if (target_mds_id > 0) break;
   }
 
-  // dir-stat: any restore re-adds the dentry to actual_dst_parent, so credit
-  // that directory -- mirroring the trash-move debit symmetrically (debit at
-  // dentry-move time, credit at dentry-restore time), independent of
-  // immediate_trash_quota. This must be gated on "dst is a real user directory"
-  // rather than allow_trash_parent: a tree-rebuild graft (allow_trash_parent)
-  // still moves the dentry into a real (merely trashed) user dir, and that dir
-  // may later be put_back carrying the dentry along -- if we skip the credit
-  // here, the restored dir's stat permanently under-counts the grafted child.
-  // The only dst we must NOT credit is the trash bucket itself (which is never
-  // tracked); a bucket-range dst means the entry stays loose in trash.
-  if (!IsTrashInode(actual_dst_parent)) {
-    UpdateDirStat(actual_dst_parent,
-                  file_attr.type() == pb::mds::FileType::FILE ? static_cast<int64_t>(file_attr.length()) : 0, 1,
-                  /*dir_delta=*/file_attr.type() == pb::mds::FileType::DIRECTORY ? 1 : 0, cache_reason);
+  return target_mds_id;
+}
+
+void FileSystem::UpdateParentMemo(const std::vector<Ino>& ancestors) {
+  if (IsParentHashPartition()) {
+    for (size_t i = 1; i < ancestors.size(); ++i) {
+      const Ino& ino = ancestors[i - 1];
+      const Ino& parent = ancestors[i];
+
+      // update parent memo
+      parent_memo_.Remeber(ino, parent);
+    }
   }
+}
 
-  trace.RecordElapsedTime("post_handle");
+void FileSystem::NotifyBuddyRefreshFsInfo(std::vector<uint64_t> mds_ids, const FsInfoEntry& fs_info,
+                                          const std::string& reason) {
+  for (auto mds_id : mds_ids) {
+    if (mds_id == 0 || mds_id == self_mds_id_) continue;
 
-  return status;
+    notify_buddy_->AsyncNotify(
+        notify::RefreshFsInfoMessage::Create(mds_id, fs_info.fs_id(), fs_info.fs_name(), reason));
+  }
+}
+
+void FileSystem::NotifyBuddyRefreshInode(const AttrEntry& attr, const std::string& reason) {
+  NotifyBuddyRefreshInode(::dingofs::Helper::PbRepeatedToVector(attr.parents()), {.attr = attr}, reason);
+}
+
+void FileSystem::NotifyBuddyRefreshInode(const std::vector<Ino>& parents, const AttrOrMutation& attr_or_mutation,
+                                         const std::string& reason) {
+  if (notify_buddy_ == nullptr) return;
+
+  Ino ino = attr_or_mutation.attr.ino() != 0 ? attr_or_mutation.attr.ino() : attr_or_mutation.mutation.ino();
+  if (ino == kRootIno) return;
+
+  CHECK(parents.size() >= 1) << fmt::format("parent size should be 1, but is {} ino({}).", parents.size(), ino);
+
+  const std::string notify_reason = reason + ".notifybuddy";
+  absl::flat_hash_set<uint64_t> notified_mds_ids;
+  for (const Ino& parent : parents) {
+    uint64_t mds_id = GetMdsIdByIno(parent);
+
+    CHECK(mds_id != 0) << fmt::format("mds id should not be 0, ino({}).", parent);
+    if (notified_mds_ids.contains(mds_id)) continue;
+
+    if (mds_id != self_mds_id_) {
+      notify_buddy_->AsyncNotify(notify::RefreshInodeMessage::Create(mds_id, fs_id_, attr_or_mutation.attr,
+                                                                     attr_or_mutation.mutation, notify_reason));
+    }
+
+    notified_mds_ids.insert(mds_id);
+  }
+}
+
+void FileSystem::NotifyBuddyCleanPartitionCache(Ino ino, const std::string& reason) {
+  if (notify_buddy_ == nullptr) return;
+
+  auto mds_id = GetMdsIdByIno(ino);
+  CHECK(mds_id != 0) << fmt::format("mds id should not be 0, ino({}).", ino);
+  if (mds_id == self_mds_id_) {
+    partition_cache_.Delete(ino);
+
+  } else {
+    notify_buddy_->AsyncNotify(notify::CleanPartitionCacheMessage::Create(mds_id, fs_id_, ino, 0, reason));
+  }
+}
+
+void FileSystem::UpdateDirStat(Ino parent, int64_t length_delta, int64_t inode_delta, int64_t dir_delta,
+                               const std::string& reason) {
+  if (!EnableDirStats()) return;
+  // Trash buckets (kTrashInodeId and the hour-bucket inodes) are never tracked.
+  // Gate here so every caller is covered in one place -- e.g. a Rename rescuing
+  // a child out of an hour bucket, or a flush/setattr on a hardlinked file whose
+  // parents still include a bucket -- instead of each site needing its own guard
+  // (a missed one silently materializes a never-reclaimed bucket record).
+  if (IsTrashInode(parent)) return;
+  dir_stat_manager_.AsyncUpdateDirStat(parent, length_delta, inode_delta, dir_delta, reason);
 }
 
 TrashMove FileSystem::BuildTrashMove(Ino parent) {
@@ -4320,124 +4320,6 @@ void FileSystemSet::Stop(bool is_force) {
   if (fs_id_generator_ != nullptr) {
     fs_id_generator_->Stop();
   }
-}
-
-IdGeneratorUPtr FileSystemSet::NewInoGenerator(uint32_t fs_id) {
-  return FLAGS_mds_ino_generator_share_enable ? NewInodeIdGenerator(fs_id, kv_storage_)
-                                              : NewInodeIdGenerator(fs_id, self_mds_meta_.ID(), kv_storage_);
-}
-
-void FileSystemSet::DestroyInoGenerator(uint32_t fs_id) { DestroyInodeIdGenerator(fs_id, kv_storage_); }
-
-Status FileSystemSet::GenFsId(uint32_t& fs_id) {
-  uint64_t temp_fs_id;
-  bool ret = fs_id_generator_->GenID(2, temp_fs_id);
-  fs_id = static_cast<uint32_t>(temp_fs_id);
-  return ret ? Status::OK() : Status(pb::error::EALLOC_ID, "generate fs id fail");
-}
-
-// gerenate parent hash partition
-static std::map<uint64_t, BucketSetEntry> GenParentHashDistribution(const std::vector<MDSMeta>& mds_metas,
-                                                                    uint32_t bucket_num) {
-  std::map<uint64_t, BucketSetEntry> mds_bucket_map;
-  for (const auto& mds_meta : mds_metas) {
-    mds_bucket_map[mds_meta.ID()] = BucketSetEntry();
-  }
-
-  for (uint32_t i = 0; i < bucket_num; ++i) {
-    const auto& mds_meta = mds_metas[i % mds_metas.size()];
-    mds_bucket_map[mds_meta.ID()].add_bucket_ids(i);
-  }
-
-  return mds_bucket_map;
-}
-
-FsInfoEntry FileSystemSet::GenFsInfo(uint32_t fs_id, const CreateFsParam& param) {
-  FsInfoEntry fs_info;
-  fs_info.set_fs_id(fs_id);
-  fs_info.set_fs_name(param.fs_name);
-  fs_info.set_fs_type(param.fs_type);
-  fs_info.set_root_ino(kRootIno);
-  fs_info.set_status(pb::mds::FsStatus::NORMAL);
-  fs_info.set_block_size(param.block_size);
-  fs_info.set_chunk_size(param.chunk_size);
-  fs_info.set_enable_dir_stats(param.enable_dir_stats);
-  fs_info.set_owner(param.owner);
-  fs_info.set_capacity(param.capacity);
-  fs_info.set_recycle_time_hour(param.recycle_time_hour > 0 ? param.recycle_time_hour
-                                                            : FLAGS_mds_filesystem_recycle_time_hour);
-  fs_info.set_trash_days(param.trash_days);
-  fs_info.set_immediate_trash_quota(param.immediate_trash_quota);
-  fs_info.set_enable_uid_gid_map(param.enable_uid_gid_map);
-  fs_info.mutable_extra()->CopyFrom(param.fs_extra);
-  fs_info.set_uuid(utils::GenerateUUID());
-
-  auto mds_metas = mds_meta_map_->GetAllMDSMeta();
-  auto* partition_policy = fs_info.mutable_partition_policy();
-  partition_policy->set_type(param.partition_type);
-  partition_policy->set_epoch(1);
-  if (param.partition_type == pb::mds::PartitionType::MONOLITHIC_PARTITION) {
-    auto* mono = partition_policy->mutable_mono();
-    if (param.candidate_mds_ids.empty()) {
-      int select_offset = ::dingofs::Helper::GenerateRealRandomInteger(0, 1000) % mds_metas.size();
-      mono->set_mds_id(mds_metas.at(select_offset).ID());
-    } else {
-      mono->set_mds_id(param.candidate_mds_ids.front());
-    }
-
-  } else if (param.partition_type == pb::mds::PartitionType::PARENT_ID_HASH_PARTITION) {
-    auto* parent_hash = partition_policy->mutable_parent_hash();
-    parent_hash->set_bucket_num(FLAGS_mds_filesystem_hash_bucket_num);
-    parent_hash->set_expect_mds_num(param.expect_mds_num == 0 ? FLAGS_mds_filesystem_hash_mds_num_default
-                                                              : param.expect_mds_num);
-
-    auto candidate_mds_metas = MdsHelper::RandomSelectMds(mds_metas, parent_hash->expect_mds_num());
-    CHECK(!candidate_mds_metas.empty()) << "candidate_mds_metas is empty.";
-    auto mds_bucket_map = GenParentHashDistribution(candidate_mds_metas, FLAGS_mds_filesystem_hash_bucket_num);
-    for (const auto& [mds_id, bucket_set] : mds_bucket_map) {
-      parent_hash->mutable_distributions()->insert({mds_id, bucket_set});
-    }
-  }
-
-  fs_info.set_create_time_s(utils::Timestamp());
-  fs_info.set_last_update_time_ns(utils::TimestampNs());
-
-  return fs_info;
-}
-
-bool FileSystemSet::IsExistMetaTable() {
-  auto range = MetaCodec::GetMetaTableRange();
-  LOG_DEBUG << fmt::format("[fsset] check meta table, {}.", range.ToString());
-
-  auto status = kv_storage_->IsExistTable(range.start, range.end);
-  if (!status.ok()) {
-    if (status.error_code() != pb::error::ENOT_FOUND) {
-      LOG(ERROR) << fmt::format("[fsset] check meta table exist fail, error({}).", status.error_str());
-    }
-    return false;
-  }
-
-  return true;
-}
-
-Status FileSystemSet::CreateFsMetaTable(uint32_t fs_id, const std::string& fs_name, int64_t& table_id) {
-  auto range = MetaCodec::GetFsMetaTableRange(fs_id);
-  KVStorage::TableOption option = {.start_key = range.start, .end_key = range.end};
-
-  std::string table_name = GenFsMetaTableName(MetaCodec::GetClusterID(), fs_name);
-  Status status = kv_storage_->CreateTable(table_name, option, table_id);
-  if (!status.ok()) {
-    return Status(pb::error::EINTERNAL, fmt::format("create fsmeta table fail, {}", status.error_str()));
-  }
-
-  return Status::OK();
-}
-
-Status FileSystemSet::DropFsMetaTable(uint32_t fs_id) {
-  auto range = MetaCodec::GetFsMetaTableRange(fs_id);
-  LOG(INFO) << fmt::format("[fsset.{}] drop fsmeta table, range{}.", fs_id, range.ToString());
-
-  return kv_storage_->DropTable(range);
 }
 
 static Status ValidateCreateFsParam(const FileSystemSet::CreateFsParam& param) {
@@ -4709,12 +4591,6 @@ Status FileSystemSet::AllocSliceId(uint32_t num, uint64_t min_slice_id, uint64_t
   return Status::OK();
 }
 
-bool FileSystemSet::AddFileSystem(FileSystemSPtr fs, bool is_force) {
-  return is_force ? fs_map_.Put(fs->FsId(), fs) : fs_map_.PutIfAbsent(fs->FsId(), fs);
-}
-
-void FileSystemSet::DeleteFileSystem(uint32_t fs_id) { fs_map_.Erase(fs_id); }
-
 bool FileSystemSet::IsExistFileSystem(uint32_t fs_id) { return fs_map_.IsExist(fs_id); }
 
 FileSystemSPtr FileSystemSet::GetFileSystem(uint32_t fs_id) { return fs_map_.Get(fs_id); }
@@ -4967,6 +4843,155 @@ void FileSystemSet::CleanExpiredCache() {
   }
 }
 
+void FileSystemSet::DescribeByJson(Json::Value& value) {
+  auto fses = GetAllFileSystem();
+
+  value["count"] = fses.size();
+
+  Json::Value fsset_value(Json::arrayValue);
+  for (const auto& fs : fses) {
+    Json::Value fs_value;
+    fs->DescribeByJson(fs_value);
+    fsset_value.append(fs_value);
+  }
+  value["filesystems"] = fsset_value;
+}
+
+void FileSystemSet::Summary(Json::Value& value) {
+  CHECK(value.isArray()) << "value is not array.";
+
+  auto fses = GetAllFileSystem();
+  for (auto& fs : fses) {
+    Json::Value fs_value(Json::objectValue);
+    fs->Summary(fs_value);
+    value.append(fs_value);
+  }
+}
+
+IdGeneratorUPtr FileSystemSet::NewInoGenerator(uint32_t fs_id) {
+  return FLAGS_mds_ino_generator_share_enable ? NewInodeIdGenerator(fs_id, kv_storage_)
+                                              : NewInodeIdGenerator(fs_id, self_mds_meta_.ID(), kv_storage_);
+}
+
+void FileSystemSet::DestroyInoGenerator(uint32_t fs_id) { DestroyInodeIdGenerator(fs_id, kv_storage_); }
+
+Status FileSystemSet::GenFsId(uint32_t& fs_id) {
+  uint64_t temp_fs_id;
+  bool ret = fs_id_generator_->GenID(2, temp_fs_id);
+  fs_id = static_cast<uint32_t>(temp_fs_id);
+  return ret ? Status::OK() : Status(pb::error::EALLOC_ID, "generate fs id fail");
+}
+
+// gerenate parent hash partition
+static std::map<uint64_t, BucketSetEntry> GenParentHashDistribution(const std::vector<MDSMeta>& mds_metas,
+                                                                    uint32_t bucket_num) {
+  std::map<uint64_t, BucketSetEntry> mds_bucket_map;
+  for (const auto& mds_meta : mds_metas) {
+    mds_bucket_map[mds_meta.ID()] = BucketSetEntry();
+  }
+
+  for (uint32_t i = 0; i < bucket_num; ++i) {
+    const auto& mds_meta = mds_metas[i % mds_metas.size()];
+    mds_bucket_map[mds_meta.ID()].add_bucket_ids(i);
+  }
+
+  return mds_bucket_map;
+}
+
+FsInfoEntry FileSystemSet::GenFsInfo(uint32_t fs_id, const CreateFsParam& param) {
+  FsInfoEntry fs_info;
+  fs_info.set_fs_id(fs_id);
+  fs_info.set_fs_name(param.fs_name);
+  fs_info.set_fs_type(param.fs_type);
+  fs_info.set_root_ino(kRootIno);
+  fs_info.set_status(pb::mds::FsStatus::NORMAL);
+  fs_info.set_block_size(param.block_size);
+  fs_info.set_chunk_size(param.chunk_size);
+  fs_info.set_enable_dir_stats(param.enable_dir_stats);
+  fs_info.set_owner(param.owner);
+  fs_info.set_capacity(param.capacity);
+  fs_info.set_recycle_time_hour(param.recycle_time_hour > 0 ? param.recycle_time_hour
+                                                            : FLAGS_mds_filesystem_recycle_time_hour);
+  fs_info.set_trash_days(param.trash_days);
+  fs_info.set_immediate_trash_quota(param.immediate_trash_quota);
+  fs_info.set_enable_uid_gid_map(param.enable_uid_gid_map);
+  fs_info.mutable_extra()->CopyFrom(param.fs_extra);
+  fs_info.set_uuid(utils::GenerateUUID());
+
+  auto mds_metas = mds_meta_map_->GetAllMDSMeta();
+  auto* partition_policy = fs_info.mutable_partition_policy();
+  partition_policy->set_type(param.partition_type);
+  partition_policy->set_epoch(1);
+  if (param.partition_type == pb::mds::PartitionType::MONOLITHIC_PARTITION) {
+    auto* mono = partition_policy->mutable_mono();
+    if (param.candidate_mds_ids.empty()) {
+      int select_offset = ::dingofs::Helper::GenerateRealRandomInteger(0, 1000) % mds_metas.size();
+      mono->set_mds_id(mds_metas.at(select_offset).ID());
+    } else {
+      mono->set_mds_id(param.candidate_mds_ids.front());
+    }
+
+  } else if (param.partition_type == pb::mds::PartitionType::PARENT_ID_HASH_PARTITION) {
+    auto* parent_hash = partition_policy->mutable_parent_hash();
+    parent_hash->set_bucket_num(FLAGS_mds_filesystem_hash_bucket_num);
+    parent_hash->set_expect_mds_num(param.expect_mds_num == 0 ? FLAGS_mds_filesystem_hash_mds_num_default
+                                                              : param.expect_mds_num);
+
+    auto candidate_mds_metas = MdsHelper::RandomSelectMds(mds_metas, parent_hash->expect_mds_num());
+    CHECK(!candidate_mds_metas.empty()) << "candidate_mds_metas is empty.";
+    auto mds_bucket_map = GenParentHashDistribution(candidate_mds_metas, FLAGS_mds_filesystem_hash_bucket_num);
+    for (const auto& [mds_id, bucket_set] : mds_bucket_map) {
+      parent_hash->mutable_distributions()->insert({mds_id, bucket_set});
+    }
+  }
+
+  fs_info.set_create_time_s(utils::Timestamp());
+  fs_info.set_last_update_time_ns(utils::TimestampNs());
+
+  return fs_info;
+}
+
+bool FileSystemSet::IsExistMetaTable() {
+  auto range = MetaCodec::GetMetaTableRange();
+  LOG_DEBUG << fmt::format("[fsset] check meta table, {}.", range.ToString());
+
+  auto status = kv_storage_->IsExistTable(range.start, range.end);
+  if (!status.ok()) {
+    if (status.error_code() != pb::error::ENOT_FOUND) {
+      LOG(ERROR) << fmt::format("[fsset] check meta table exist fail, error({}).", status.error_str());
+    }
+    return false;
+  }
+
+  return true;
+}
+
+Status FileSystemSet::CreateFsMetaTable(uint32_t fs_id, const std::string& fs_name, int64_t& table_id) {
+  auto range = MetaCodec::GetFsMetaTableRange(fs_id);
+  KVStorage::TableOption option = {.start_key = range.start, .end_key = range.end};
+
+  std::string table_name = GenFsMetaTableName(MetaCodec::GetClusterID(), fs_name);
+  Status status = kv_storage_->CreateTable(table_name, option, table_id);
+  if (!status.ok()) {
+    return Status(pb::error::EINTERNAL, fmt::format("create fsmeta table fail, {}", status.error_str()));
+  }
+
+  return Status::OK();
+}
+
+Status FileSystemSet::DropFsMetaTable(uint32_t fs_id) {
+  auto range = MetaCodec::GetFsMetaTableRange(fs_id);
+  LOG(INFO) << fmt::format("[fsset.{}] drop fsmeta table, range{}.", fs_id, range.ToString());
+
+  return kv_storage_->DropTable(range);
+}
+
+bool FileSystemSet::AddFileSystem(FileSystemSPtr fs, bool is_force) {
+  return is_force ? fs_map_.Put(fs->FsId(), fs) : fs_map_.PutIfAbsent(fs->FsId(), fs);
+}
+
+void FileSystemSet::DeleteFileSystem(uint32_t fs_id) { fs_map_.Erase(fs_id); }
+
 Status FileSystemSet::DestroyFsResource(uint32_t fs_id) {
   // fsmeta table
   auto status = DropFsMetaTable(fs_id);
@@ -4999,31 +5024,6 @@ Status FileSystemSet::RunOperation(Operation* operation) {
   CHECK(count_down.wait() == 0) << "count down wait fail.";
 
   return operation->GetStatus();
-}
-
-void FileSystemSet::DescribeByJson(Json::Value& value) {
-  auto fses = GetAllFileSystem();
-
-  value["count"] = fses.size();
-
-  Json::Value fsset_value(Json::arrayValue);
-  for (const auto& fs : fses) {
-    Json::Value fs_value;
-    fs->DescribeByJson(fs_value);
-    fsset_value.append(fs_value);
-  }
-  value["filesystems"] = fsset_value;
-}
-
-void FileSystemSet::Summary(Json::Value& value) {
-  CHECK(value.isArray()) << "value is not array.";
-
-  auto fses = GetAllFileSystem();
-  for (auto& fs : fses) {
-    Json::Value fs_value(Json::objectValue);
-    fs->Summary(fs_value);
-    value.append(fs_value);
-  }
 }
 
 }  // namespace mds
