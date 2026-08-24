@@ -492,17 +492,22 @@ Status FileSystem::GetInode(Context& ctx, uint64_t version, Ino ino, InodeSPtr& 
   const std::string& method_name = ctx.MethodName();
 
   if (bypass_cache) {
-    return GetInodeFromStore(ctx, ino, fmt::format("Bypass.{}.{}", method_name, request_id), false, out_inode);
+    return GetInodeFromStore(ctx, ino, fmt::format("bypass.{}.{}", method_name, request_id), false, out_inode);
   }
 
   auto inode = GetInodeFromCache(ino);
   if (inode == nullptr) {
-    return GetInodeFromStore(ctx, ino, fmt::format("CacheMiss.{}.{}", method_name, request_id), true, out_inode);
+    return GetInodeFromStore(ctx, ino, fmt::format("cache-miss.{}.{}", method_name, request_id), true, out_inode);
+  }
+
+  if (!inode->IsFresh()) {
+    std::string reason = fmt::format("stale.{}.{}", method_name, request_id);
+    return GetInodeFromStore(ctx, ino, reason, true, out_inode);
   }
 
   uint64_t cache_version = use_base_version ? inode->BaseVersion() : inode->Version();
   if (cache_version < version) {
-    std::string reason = fmt::format("OutOfDate.{}.{}.[{},cache{},req{}]", method_name, request_id, use_base_version,
+    std::string reason = fmt::format("out-of-date.{}.{}.[{},cache{},req{}]", method_name, request_id, use_base_version,
                                      cache_version, version);
     return GetInodeFromStore(ctx, ino, reason, true, out_inode);
   }

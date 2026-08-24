@@ -36,6 +36,9 @@ static const std::string kInodeCacheMetricsPrefix = "dingofs_{}_inode_cache_{}";
 DEFINE_uint32(mds_inode_cache_max_count, 4 * 1024 * 1024, "inode cache max count");
 DEFINE_validator(mds_inode_cache_max_count, brpc::PassValidate);
 
+DEFINE_uint32(mds_inode_fresh_time_s, 0, "inode cache fresh seconds");
+DEFINE_validator(mds_inode_fresh_time_s, brpc::PassValidate);
+
 void Inode::Put(const AttrEntry& attr) {
   // clone new attr
   length_ = attr.length();
@@ -64,6 +67,8 @@ void Inode::Put(const AttrEntry& attr) {
   }
 
   base_version_ = attr.version();
+
+  last_refresh_time_s_.store(utils::Timestamp(), std::memory_order_relaxed);
 }
 
 void Inode::ApplyMutation(const AttrWithMutation& attr_with_mutation) {
@@ -124,6 +129,8 @@ AttrEntry Inode::PutByMutation(const AttrMutationEntry& mutation, const std::str
   total_delta_version_ += (mutation.delta_version() - delta_version);
   delta_version = mutation.delta_version();
 
+  last_refresh_time_s_.store(utils::Timestamp(), std::memory_order_relaxed);
+
   return ToAttrNoLock();
 }
 
@@ -175,6 +182,12 @@ Inode::AttrEntry Inode::ToAttrNoLock() {
   attr.set_version(base_version_ + total_delta_version_);
 
   return attr;
+}
+
+bool Inode::IsFresh() {
+  if (FLAGS_mds_inode_fresh_time_s == 0) return true;
+
+  return (utils::Timestamp() - last_refresh_time_s_.load(std::memory_order_relaxed)) < FLAGS_mds_inode_fresh_time_s;
 }
 
 InodeCache::InodeCache(uint32_t fs_id)
