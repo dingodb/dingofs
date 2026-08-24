@@ -22,14 +22,12 @@
 #include <map>
 #include <memory>
 #include <mutex>
-#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 
-#include "absl/container/flat_hash_map.h"
 #include "bthread/countdown_event.h"
 #include "butil/containers/mpsc_queue.h"
 #include "dingofs/error.pb.h"

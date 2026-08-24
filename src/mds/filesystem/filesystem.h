@@ -24,6 +24,7 @@
 #include <utility>
 #include <vector>
 
+#include "common/helper.h"
 #include "dingofs/mds.pb.h"
 #include "json/value.h"
 #include "mds/common/context.h"
@@ -433,7 +434,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
 
   void NotifyBuddyRefreshFsInfo(std::vector<uint64_t> mds_ids, const FsInfoEntry& fs_info, const std::string& reason);
   void NotifyBuddyRefreshInode(const AttrEntry& attr, const std::string& reason);
-  void NotifyBuddyRefreshInode(const std::vector<Ino>& parents, const AttrOrMutation& attr_or_mutation,
+  void NotifyBuddyRefreshInode(const PBvector<Ino>& parents, const AttrOrMutation& attr_or_mutation,
                                const std::string& reason);
   void NotifyBuddyCleanPartitionCache(Ino ino, const std::string& reason);
 
@@ -441,8 +442,8 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   // child-count deltas (both signed). Debits (unlink/rmdir/trash-move) pass
   // negative deltas; a cleaned trash-bucket entry is never a tracked dir so it
   // contributes nothing. No-op unless EnableDirStats().
-  void UpdateDirStat(Ino parent, int64_t length_delta, int64_t inode_delta, int64_t dir_delta,
-                     const std::string& reason);
+  void AsyncUpdateDirStat(Ino parent, int64_t length_delta, int64_t inode_delta, int64_t dir_delta,
+                          const std::string& reason);
 
   TrashMove BuildTrashMove(Ino parent);
 

@@ -40,7 +40,7 @@ namespace notify {
 enum class Type : int8_t {
   kRefreshFsInfo = 0,
   kRefreshInode = 1,
-  kCleanPartitionCache = 2,
+  kRefreshPartition = 2,
   kSetDirQuota = 3,
   kDeleteDirQuota = 4,
 };
@@ -86,12 +86,12 @@ struct RefreshInodeMessage : public Message {
   AttrMutationEntry mutation;
 };
 
-struct CleanPartitionCacheMessage : public Message {
-  CleanPartitionCacheMessage(uint64_t mds_id, uint32_t fs_id, Ino ino, uint64_t version, const std::string& reason)
-      : Message{Type::kCleanPartitionCache, mds_id, fs_id, version, reason}, ino(ino) {}
+struct RefreshPartitionMessage : public Message {
+  RefreshPartitionMessage(uint64_t mds_id, uint32_t fs_id, Ino ino, uint64_t version, const std::string& reason)
+      : Message{Type::kRefreshPartition, mds_id, fs_id, version, reason}, ino(ino) {}
 
   static MessageSPtr Create(uint64_t mds_id, uint32_t fs_id, Ino ino, uint64_t version, const std::string& reason) {
-    return std::make_shared<CleanPartitionCacheMessage>(mds_id, fs_id, ino, version, reason);
+    return std::make_shared<RefreshPartitionMessage>(mds_id, fs_id, ino, version, reason);
   }
 
   Ino ino{0};

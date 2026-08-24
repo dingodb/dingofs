@@ -15,12 +15,12 @@
 #ifndef DINGOFS_MDS_COMMON_TYPE_H_
 #define DINGOFS_MDS_COMMON_TYPE_H_
 
-#include <absl/container/inlined_vector.h>
 #include <sys/types.h>
 
 #include <cstdint>
 #include <string>
 
+#include "absl/container/inlined_vector.h"
 #include "common/const.h"
 #include "dingofs/mds.pb.h"
 #include "fmt/format.h"

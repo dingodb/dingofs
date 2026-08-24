@@ -22,10 +22,9 @@
 #include "dingofs/error.pb.h"
 #include "dingofs/mds.pb.h"
 #include "fmt/core.h"
-#include "mds/common/context.h"
-#include "mds/common/helper.h"
 #include "mds/common/runnable.h"
 #include "mds/common/status.h"
+#include "mds/common/tracing.h"
 
 namespace dingofs {
 namespace mds {
@@ -39,79 +38,6 @@ class ServiceHelper {
   static void SetError(pb::error::Error* error, int errcode, const std::string& errmsg);
 
   static void SetResponseInfo(const Trace& trace, pb::mds::ResponseInfo* info);
-
-  // protobuf transform
-  template <typename T>
-  static std::vector<T> PbRepeatedToVector(const google::protobuf::RepeatedPtrField<T>& data) {
-    std::vector<T> vec;
-    vec.reserve(data.size());
-    for (auto& item : data) {
-      vec.emplace_back(std::move(item));
-    }
-
-    return vec;
-  }
-
-  template <typename T>
-  static std::vector<T> PbRepeatedToVector(google::protobuf::RepeatedPtrField<T>* data) {
-    std::vector<T> vec;
-    vec.reserve(data->size());
-    for (auto& item : *data) {
-      vec.emplace_back(std::move(item));
-    }
-
-    return vec;
-  }
-
-  template <typename T>
-  static std::vector<T> PbRepeatedToVector(const google::protobuf::RepeatedField<T>& data) {
-    std::vector<T> vec;
-    vec.reserve(data.size());
-    for (auto& item : data) {
-      vec.push_back(item);
-    }
-
-    return vec;
-  }
-
-  template <typename T>
-  static std::vector<T> PbRepeatedToVector(google::protobuf::RepeatedField<T>* data) {
-    std::vector<T> vec;
-    vec.reserve(data->size());
-    for (auto& item : *data) {
-      vec.push_back(item);
-    }
-
-    return vec;
-  }
-
-  template <typename T>
-  static void VectorToPbRepeated(const std::vector<T>& vec, google::protobuf::RepeatedPtrField<T>* out) {
-    for (auto& item : vec) {
-      *(out->Add()) = item;
-    }
-  }
-
-  template <typename T>
-  static void VectorToPbRepeated(const std::vector<T>& vec, google::protobuf::RepeatedField<T>* out) {
-    for (auto& item : vec) {
-      out->Add(item);
-    }
-  }
-
-  static void PbMapToMap(const google::protobuf::Map<std::string, std::string>& pb_map,
-                         std::map<std::string, std::string>& out) {
-    for (const auto& item : pb_map) {
-      out[item.first] = item.second;
-    }
-  }
-
-  static void MapToPbMap(const std::map<std::string, std::string>& map,
-                         google::protobuf::Map<std::string, std::string>* out) {
-    for (const auto& item : map) {
-      (*out)[item.first] = item.second;
-    }
-  }
 };
 
 // Handle service request in execute queue.

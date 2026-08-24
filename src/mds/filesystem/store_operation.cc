@@ -4526,7 +4526,7 @@ static void PostProcess(BatchOperation& batch_operation, Operation::BatchSharedP
   }
 }
 
-static bool IsNeedParentKey(const BatchOperation& batch_operation) {
+static bool IsNeedAttrKey(const BatchOperation& batch_operation) {
   for (auto* operation : batch_operation.create_operations) {
     if (!operation->IsDirMutationOperation()) return true;
   }
@@ -4548,8 +4548,8 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
   SetElapsedTime(batch_operation, "store_pending");
 
   uint32_t mutation_index = 0;
-  bool need_parent_key = !IsDir(ino) || conflict_controller_.GetIndexAndIncRunningCount(fs_id, ino, mutation_index) ||
-                         IsNeedParentKey(batch_operation);
+  bool need_attr_key = !IsDir(ino) || conflict_controller_.GetIndexAndIncRunningCount(fs_id, ino, mutation_index) ||
+                       IsNeedAttrKey(batch_operation);
   ON_SCOPE_EXIT([&] {
     if (IsDir(ino)) conflict_controller_.DecRunningCount(fs_id, ino);
   });
@@ -4560,7 +4560,7 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
   std::vector<std::string> prefetch_keys;
   prefetch_keys.reserve(kStoreOperationBatchSize);
   std::string parent_key, parent_mutation_key;
-  if (need_parent_key) {
+  if (need_attr_key) {
     parent_key = MetaCodec::EncodeInodeKey(fs_id, ino);
     prefetch_keys.push_back(parent_key);
 
@@ -4610,7 +4610,7 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
       break;
     }
 
-    if (need_parent_key) {
+    if (need_attr_key) {
       std::string value = FindValue(shared_param.prefetch_index, parent_key);
       if (value.empty()) {
         status = Status(pb::error::ENOT_FOUND, fmt::format("not found inode({})", ino));
@@ -4625,7 +4625,7 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
       if (!value.empty()) shared_param.attr_mutation = MetaCodec::DecodeDirInodeMutationValue(value);
     }
 
-    CHECK(!need_parent_key || shared_param.attr.ino() != 0)
+    CHECK(!need_attr_key || shared_param.attr.ino() != 0)
         << fmt::format("invalid attr ino({}).", shared_param.attr.ino());
 
     // run set attr operations
@@ -4640,7 +4640,7 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
       if (!s.ok()) operation->SetStatus(s);
     }
 
-    if (need_parent_key) {
+    if (need_attr_key) {
       shared_param.attr.set_version(shared_param.attr.version() + 1);
       txn->Put(parent_key, MetaCodec::EncodeInodeValue(shared_param.attr));
 
@@ -4675,8 +4675,8 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
     for (auto* operation : batch_operation.create_operations) operation->SetStatus(Status::OK());
 
     LOG(WARNING) << fmt::format(
-        "[operation.{}.{}][{}][{}us] batch run ({}) fail, count({}) parent_key({},{}) txn({}) retry({}) status({}).",
-        fs_id, ino, txn_id, once_duration.ElapsedUs(), op_names, count, need_parent_key, mutation_index, commit_type,
+        "[operation.{}.{}][{}][{}us] batch run ({}) fail, count({}) attr_key({},{}) txn({}) retry({}) status({}).",
+        fs_id, ino, txn_id, once_duration.ElapsedUs(), op_names, count, need_attr_key, mutation_index, commit_type,
         retry, status.error_str());
 
     if (once_duration.ElapsedMs() > FLAGS_mds_txn_timeout_ms) {
@@ -4688,11 +4688,11 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
   SetElapsedTime(batch_operation, "store_txn");
 
   LOG_DEBUG << fmt::format(
-      "[operation.{}.{}][{}][{}us] batch run ({}) finish, count({}) parent_key({},{}) txn({}) retry({}) status({}) "
+      "[operation.{}.{}][{}][{}us] batch run ({}) finish, count({}) attr_key({},{}) txn({}) retry({}) status({}) "
       "attr({}) chunks({}).",
-      fs_id, ino, txn_id, duration.ElapsedUs(), op_names, count, need_parent_key, mutation_index, commit_type, retry,
+      fs_id, ino, txn_id, duration.ElapsedUs(), op_names, count, need_attr_key, mutation_index, commit_type, retry,
       status.error_str(),
-      need_parent_key ? DescribeAttr(shared_param.attr) : DescribeAttrMutation(shared_param.attr_mutation),
+      need_attr_key ? DescribeAttr(shared_param.attr) : DescribeAttrMutation(shared_param.attr_mutation),
       shared_param.changed_chunk_indexes);
 
   if (status.ok()) {
