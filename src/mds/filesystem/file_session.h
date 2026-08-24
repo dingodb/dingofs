@@ -36,7 +36,7 @@ class FileSessionCache {
   ~FileSessionCache() = default;
 
   struct Key {
-    uint64_t ino{0};
+    Ino ino{0};
     std::string session_id;
 
     bool operator<(const Key& other) const {
@@ -49,13 +49,13 @@ class FileSessionCache {
 
   bool Put(FileSessionSPtr file_session);
   void Upsert(FileSessionSPtr file_session);
-  void Delete(uint64_t ino, const std::string& session_id);
-  void Delete(uint64_t ino);
+  void Delete(Ino ino, const std::string& session_id);
+  void Delete(Ino ino);
 
-  FileSessionSPtr Get(uint64_t ino, const std::string& session_id);
-  std::vector<FileSessionSPtr> Get(uint64_t ino);
-  bool IsExist(uint64_t ino);
-  bool IsExist(uint64_t ino, const std::string& session_id);
+  FileSessionSPtr Get(Ino ino, const std::string& session_id);
+  std::vector<FileSessionSPtr> Get(Ino ino);
+  bool IsExist(Ino ino);
+  bool IsExist(Ino ino, const std::string& session_id);
 
   size_t Size();
   size_t Bytes();
@@ -92,14 +92,14 @@ class FileSessionManager {
     return std::make_unique<FileSessionManager>(fs_id, operation_processor);
   }
 
-  FileSessionSPtr Create(uint64_t ino, const std::string& client_id, const std::string& session_id) const;
+  FileSessionSPtr Create(Ino ino, const std::string& client_id, const std::string& session_id) const;
   bool Put(FileSessionSPtr file_session);
-  Status IsExist(uint64_t ino, bool just_cache, bool& is_exist);
-  Status Delete(uint64_t ino, const std::string& session_id);
-  Status Delete(uint64_t ino);
+  Status IsExist(Ino ino, bool just_cache, bool& is_exist);
+  Status Delete(Ino ino, const std::string& session_id);
+  Status Delete(Ino ino);
 
-  FileSessionSPtr Get(uint64_t ino, const std::string& session_id, bool just_cache = false);
-  std::vector<FileSessionSPtr> Get(uint64_t ino, bool just_cache = false);
+  FileSessionSPtr Get(Ino ino, const std::string& session_id, bool just_cache = false);
+  std::vector<FileSessionSPtr> Get(Ino ino, bool just_cache = false);
   Status GetAll(std::vector<FileSessionEntry>& file_sessions);
 
   FileSessionCache& GetFileSessionCache() { return file_session_cache_; }
@@ -107,9 +107,9 @@ class FileSessionManager {
   void Summary(Json::Value& value) { file_session_cache_.Summary(value); }
 
  private:
-  Status GetFileSessionsFromStore(uint64_t ino, std::vector<FileSessionSPtr>& file_sessions);
-  Status GetFileSessionFromStore(uint64_t ino, const std::string& session_id, FileSessionSPtr& file_session);
-  Status IsExistFromStore(uint64_t ino, bool& is_exist);
+  Status GetFileSessionsFromStore(Ino ino, std::vector<FileSessionSPtr>& file_sessions);
+  Status GetFileSessionFromStore(Ino ino, const std::string& session_id, FileSessionSPtr& file_session);
+  Status IsExistFromStore(Ino ino, bool& is_exist);
 
   uint32_t fs_id_;
 

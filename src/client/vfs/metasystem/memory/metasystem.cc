@@ -115,14 +115,14 @@ OpenFileMemo::~OpenFileMemo() {
   CHECK(bthread_mutex_destroy(&mutex_) == 0) << "destroy mutex fail.";
 }
 
-bool OpenFileMemo::IsOpened(uint64_t ino) {
+bool OpenFileMemo::IsOpened(Ino ino) {
   BAIDU_SCOPED_LOCK(mutex_);
 
   auto iter = file_map_.find(ino);
   return iter != file_map_.end();
 }
 
-void OpenFileMemo::Open(uint64_t ino) {
+void OpenFileMemo::Open(Ino ino) {
   BAIDU_SCOPED_LOCK(mutex_);
 
   auto iter = file_map_.find(ino);
@@ -136,7 +136,7 @@ void OpenFileMemo::Open(uint64_t ino) {
   file_map_[ino] = state;
 }
 
-void OpenFileMemo::Close(uint64_t ino) {
+void OpenFileMemo::Close(Ino ino) {
   BAIDU_SCOPED_LOCK(mutex_);
 
   auto iter = file_map_.find(ino);
@@ -160,7 +160,7 @@ DataStorage::~DataStorage() {
   CHECK(bthread_mutex_destroy(&mutex_) == 0) << "destroy mutex fail.";
 }
 
-DataStorage::DataBufferPtr DataStorage::GetDataBuffer(uint64_t ino) {
+DataStorage::DataBufferPtr DataStorage::GetDataBuffer(Ino ino) {
   BAIDU_SCOPED_LOCK(mutex_);
 
   DataBufferPtr buffer;
@@ -177,7 +177,7 @@ DataStorage::DataBufferPtr DataStorage::GetDataBuffer(uint64_t ino) {
   return buffer;
 }
 
-Status DataStorage::Read(uint64_t ino, off_t off, size_t size, char* buf,
+Status DataStorage::Read(Ino ino, off_t off, size_t size, char* buf,
                          size_t& rsize) {
   DataBufferPtr buffer = GetDataBuffer(ino);
 
@@ -191,8 +191,7 @@ Status DataStorage::Read(uint64_t ino, off_t off, size_t size, char* buf,
   return Status::OK();
 }
 
-Status DataStorage::Write(uint64_t ino, off_t off, const char* buf,
-                          size_t size) {
+Status DataStorage::Write(Ino ino, off_t off, const char* buf, size_t size) {
   DataBufferPtr buffer = GetDataBuffer(ino);
   std::string& data = buffer->data;
 
@@ -204,7 +203,7 @@ Status DataStorage::Write(uint64_t ino, off_t off, const char* buf,
 
   return Status::OK();
 }
-bool DataStorage::GetLength(uint64_t ino, size_t& length) {
+bool DataStorage::GetLength(Ino ino, size_t& length) {
   BAIDU_SCOPED_LOCK(mutex_);
 
   auto it = data_map_.find(ino);
@@ -233,8 +232,7 @@ Status FileChunkMap::NewSliceId(uint64_t* id) {
   return Status::OK();
 }
 
-Status FileChunkMap::Read(uint64_t ino, uint64_t index,
-                          std::vector<Slice>* slices) {
+Status FileChunkMap::Read(Ino ino, uint64_t index, std::vector<Slice>* slices) {
   BAIDU_SCOPED_LOCK(mutex_);
 
   auto it = chunk_map_.find(ino);
@@ -247,7 +245,7 @@ Status FileChunkMap::Read(uint64_t ino, uint64_t index,
   return Status::OK();
 }
 
-Status FileChunkMap::Write(uint64_t ino, uint64_t index,
+Status FileChunkMap::Write(Ino ino, uint64_t index,
                            const std::vector<Slice>& slices) {
   BAIDU_SCOPED_LOCK(mutex_);
   auto it = chunk_map_.find(ino);
@@ -297,7 +295,7 @@ static pb::mds::FsInfo GenFsInfo() {
 }
 
 // root inode mode: S_IFDIR | 01777
-static MemoryMetaSystem::PBInode GenInode(uint32_t fs_id, uint64_t ino,
+static MemoryMetaSystem::PBInode GenInode(uint32_t fs_id, Ino ino,
                                           pb::mds::FileType type) {
   MemoryMetaSystem::PBInode inode;
   inode.set_ino(ino);
@@ -326,9 +324,8 @@ static MemoryMetaSystem::PBInode GenInode(uint32_t fs_id, uint64_t ino,
   return inode;
 }
 
-static MemoryMetaSystem::PBDentry GenDentry(uint32_t fs_id, uint64_t parent_ino,
-                                            uint64_t ino,
-                                            const std::string& name,
+static MemoryMetaSystem::PBDentry GenDentry(uint32_t fs_id, Ino parent_ino,
+                                            Ino ino, const std::string& name,
                                             pb::mds::FileType type) {
   MemoryMetaSystem::PBDentry dentry;
   dentry.set_ino(ino);
@@ -441,7 +438,7 @@ Status MemoryMetaSystem::MkNod(ContextSPtr ctx, Ino parent,
     return Status::Internal(pb::error::ENOT_FOUND, "not found parent dentry");
   }
 
-  uint64_t ino = GenIno();
+  Ino ino = GenIno();
   auto inode = GenInode(fs_id, ino, pb::mds::FileType::FILE);
   inode.set_mode(S_IFREG | mode);
   inode.set_uid(uid);
@@ -553,7 +550,7 @@ Status MemoryMetaSystem::MkDir(ContextSPtr ctx, Ino parent,
     return Status::Internal(pb::error::ENOT_FOUND, "not found parent dentry");
   }
 
-  uint64_t ino = GenIno();
+  Ino ino = GenIno();
   auto inode = GenInode(fs_id, ino, pb::mds::FileType::DIRECTORY);
   inode.set_mode(S_IFDIR | mode);
   inode.set_uid(uid);
@@ -1065,12 +1062,12 @@ void MemoryMetaSystem::DeleteDentry(const std::string& name) {
     return;
   }
 
-  uint64_t ino = it->second;
+  Ino ino = it->second;
   dentry_map_.erase(ino);
   name_ino_map_.erase(it);
 }
 
-void MemoryMetaSystem::DeleteChildDentry(uint64_t parent_ino,
+void MemoryMetaSystem::DeleteChildDentry(Ino parent_ino,
                                          const std::string& name) {
   BAIDU_SCOPED_LOCK(mutex_);
 
@@ -1148,13 +1145,13 @@ void MemoryMetaSystem::AddInode(const PBInode& inode) {
   inode_map_[inode.ino()] = inode;
 }
 
-void MemoryMetaSystem::DeleteInode(uint64_t ino) {
+void MemoryMetaSystem::DeleteInode(Ino ino) {
   BAIDU_SCOPED_LOCK(mutex_);
 
   inode_map_.erase(ino);
 }
 
-bool MemoryMetaSystem::GetInode(uint64_t ino, PBInode& inode) {
+bool MemoryMetaSystem::GetInode(Ino ino, PBInode& inode) {
   BAIDU_SCOPED_LOCK(mutex_);
 
   auto it = inode_map_.find(ino);
@@ -1199,7 +1196,7 @@ void MemoryMetaSystem::UpdateInode(const PBInode& inode,
   }
 }
 
-void MemoryMetaSystem::IncInodeNlink(uint64_t ino) {
+void MemoryMetaSystem::IncInodeNlink(Ino ino) {
   BAIDU_SCOPED_LOCK(mutex_);
 
   auto it = inode_map_.find(ino);
@@ -1211,7 +1208,7 @@ void MemoryMetaSystem::IncInodeNlink(uint64_t ino) {
   inode.set_nlink(inode.nlink() + 1);
 }
 
-void MemoryMetaSystem::DecOrDeleteInodeNlink(uint64_t ino) {
+void MemoryMetaSystem::DecOrDeleteInodeNlink(Ino ino) {
   BAIDU_SCOPED_LOCK(mutex_);
 
   auto it = inode_map_.find(ino);
@@ -1228,7 +1225,7 @@ void MemoryMetaSystem::DecOrDeleteInodeNlink(uint64_t ino) {
   }
 }
 
-void MemoryMetaSystem::UpdateXAttr(uint64_t ino, const std::string& name,
+void MemoryMetaSystem::UpdateXAttr(Ino ino, const std::string& name,
                                    const std::string& value) {
   BAIDU_SCOPED_LOCK(mutex_);
 
@@ -1247,7 +1244,7 @@ void MemoryMetaSystem::UpdateXAttr(uint64_t ino, const std::string& name,
   }
 }
 
-void MemoryMetaSystem::RemoveXAttr(uint64_t ino, const std::string& name) {
+void MemoryMetaSystem::RemoveXAttr(Ino ino, const std::string& name) {
   BAIDU_SCOPED_LOCK(mutex_);
 
   auto it = inode_map_.find(ino);
@@ -1263,7 +1260,7 @@ void MemoryMetaSystem::RemoveXAttr(uint64_t ino, const std::string& name) {
   }
 }
 
-void MemoryMetaSystem::UpdateInodeLength(uint64_t ino, size_t length) {
+void MemoryMetaSystem::UpdateInodeLength(Ino ino, size_t length) {
   BAIDU_SCOPED_LOCK(mutex_);
 
   auto it = inode_map_.find(ino);

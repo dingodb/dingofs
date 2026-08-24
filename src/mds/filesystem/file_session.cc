@@ -86,13 +86,13 @@ void FileSessionCache::Upsert(FileSessionSPtr file_session) {
       key.ino);
 }
 
-void FileSessionCache::Delete(uint64_t ino, const std::string& session_id) {
+void FileSessionCache::Delete(Ino ino, const std::string& session_id) {
   auto key = Key{.ino = ino, .session_id = session_id};
 
   shard_map_.withWLock([&key](Map& map) mutable { map.erase(key); }, key.ino);
 }
 
-void FileSessionCache::Delete(uint64_t ino) {
+void FileSessionCache::Delete(Ino ino) {
   auto key = Key{.ino = ino, .session_id = ""};
 
   shard_map_.withWLock(
@@ -106,7 +106,7 @@ void FileSessionCache::Delete(uint64_t ino) {
       key.ino);
 }
 
-FileSessionSPtr FileSessionCache::Get(uint64_t ino, const std::string& session_id) {
+FileSessionSPtr FileSessionCache::Get(Ino ino, const std::string& session_id) {
   auto key = Key{.ino = ino, .session_id = session_id};
 
   FileSessionSPtr file_session;
@@ -122,7 +122,7 @@ FileSessionSPtr FileSessionCache::Get(uint64_t ino, const std::string& session_i
   return file_session;
 }
 
-std::vector<FileSessionSPtr> FileSessionCache::Get(uint64_t ino) {
+std::vector<FileSessionSPtr> FileSessionCache::Get(Ino ino) {
   auto key = Key{.ino = ino, .session_id = ""};
 
   std::vector<FileSessionSPtr> file_sessions;
@@ -139,7 +139,7 @@ std::vector<FileSessionSPtr> FileSessionCache::Get(uint64_t ino) {
   return file_sessions;
 }
 
-bool FileSessionCache::IsExist(uint64_t ino) {
+bool FileSessionCache::IsExist(Ino ino) {
   auto key = Key{.ino = ino, .session_id = ""};
 
   bool is_exist = false;
@@ -148,7 +148,7 @@ bool FileSessionCache::IsExist(uint64_t ino) {
   return is_exist;
 }
 
-bool FileSessionCache::IsExist(uint64_t ino, const std::string& session_id) {
+bool FileSessionCache::IsExist(Ino ino, const std::string& session_id) {
   auto key = Key{.ino = ino, .session_id = session_id};
 
   bool is_exist = false;
@@ -175,8 +175,7 @@ void FileSessionCache::Summary(Json::Value& value) {
 FileSessionManager::FileSessionManager(uint32_t fs_id, OperationProcessorSPtr operation_processor)
     : fs_id_(fs_id), file_session_cache_(fs_id), operation_processor_(operation_processor) {}
 
-FileSessionSPtr FileSessionManager::Create(uint64_t ino, const std::string& client_id,
-                                           const std::string& session_id) const {
+FileSessionSPtr FileSessionManager::Create(Ino ino, const std::string& client_id, const std::string& session_id) const {
   return NewFileSession(fs_id_, ino, client_id, session_id);
 }
 
@@ -190,7 +189,7 @@ bool FileSessionManager::Put(FileSessionSPtr file_session) {
   return true;
 }
 
-FileSessionSPtr FileSessionManager::Get(uint64_t ino, const std::string& session_id, bool just_cache) {
+FileSessionSPtr FileSessionManager::Get(Ino ino, const std::string& session_id, bool just_cache) {
   auto file_session = file_session_cache_.Get(ino, session_id);
   if (file_session != nullptr) {
     return file_session;
@@ -212,7 +211,7 @@ FileSessionSPtr FileSessionManager::Get(uint64_t ino, const std::string& session
   return file_session;
 }
 
-std::vector<FileSessionSPtr> FileSessionManager::Get(uint64_t ino, bool just_cache) {
+std::vector<FileSessionSPtr> FileSessionManager::Get(Ino ino, bool just_cache) {
   auto file_sessions = file_session_cache_.Get(ino);
   if (!file_sessions.empty()) {
     return file_sessions;
@@ -246,7 +245,7 @@ Status FileSessionManager::GetAll(std::vector<FileSessionEntry>& file_sessions) 
   return Status::OK();
 }
 
-Status FileSessionManager::IsExist(uint64_t ino, bool just_cache, bool& is_exist) {
+Status FileSessionManager::IsExist(Ino ino, bool just_cache, bool& is_exist) {
   is_exist = file_session_cache_.IsExist(ino);
   if (is_exist) {
     return Status::OK();
@@ -259,21 +258,21 @@ Status FileSessionManager::IsExist(uint64_t ino, bool just_cache, bool& is_exist
   return IsExistFromStore(ino, is_exist);
 }
 
-Status FileSessionManager::Delete(uint64_t ino, const std::string& session_id) {
+Status FileSessionManager::Delete(Ino ino, const std::string& session_id) {
   // delete cache
   file_session_cache_.Delete(ino, session_id);
 
   return Status::OK();
 }
 
-Status FileSessionManager::Delete(uint64_t ino) {
+Status FileSessionManager::Delete(Ino ino) {
   // delete cache
   file_session_cache_.Delete(ino);
 
   return Status::OK();
 }
 
-Status FileSessionManager::GetFileSessionsFromStore(uint64_t ino, std::vector<FileSessionSPtr>& file_sessions) {
+Status FileSessionManager::GetFileSessionsFromStore(Ino ino, std::vector<FileSessionSPtr>& file_sessions) {
   Trace trace;
   ScanFileSessionOperation operation(trace, fs_id_, ino, [&](const FileSessionEntry& file_session) -> bool {
     file_sessions.push_back(std::make_shared<FileSessionEntry>(file_session));
@@ -289,7 +288,7 @@ Status FileSessionManager::GetFileSessionsFromStore(uint64_t ino, std::vector<Fi
   return Status::OK();
 }
 
-Status FileSessionManager::GetFileSessionFromStore(uint64_t ino, const std::string& session_id,
+Status FileSessionManager::GetFileSessionFromStore(Ino ino, const std::string& session_id,
                                                    FileSessionSPtr& file_session) {
   Trace trace;
   GetFileSessionOperation operation(trace, fs_id_, ino, session_id);
@@ -307,7 +306,7 @@ Status FileSessionManager::GetFileSessionFromStore(uint64_t ino, const std::stri
   return Status::OK();
 }
 
-Status FileSessionManager::IsExistFromStore(uint64_t ino, bool& is_exist) {
+Status FileSessionManager::IsExistFromStore(Ino ino, bool& is_exist) {
   Trace trace;
   ScanFileSessionOperation operation(trace, fs_id_, ino, [&](const FileSessionEntry&) -> bool {
     is_exist = true;

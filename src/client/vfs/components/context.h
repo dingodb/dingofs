@@ -79,14 +79,14 @@ struct WarmupTaskContext {
 };
 
 struct PrefetchContext {
-  PrefetchContext(uint64_t ino, int64_t prefetch_offset, int64_t file_size,
+  PrefetchContext(Ino ino, int64_t prefetch_offset, int64_t file_size,
                   int64_t prefetch_blocks)
       : ino(ino),
         prefetch_offset(prefetch_offset),
         file_size(file_size),
         prefetch_blocks(prefetch_blocks) {}
 
-  uint64_t ino;
+  Ino ino;
   int64_t prefetch_offset;
   int64_t file_size;
   int64_t prefetch_blocks;

@@ -1413,6 +1413,7 @@ Status FileSystem::ReadDir(Context& ctx, Ino ino, const std::string& last_name, 
 
   entry_outs.reserve(dentries.size());
 
+  std::vector<Ino> warmup_inoes;
   for (auto& dentry : dentries) {
     EntryWithNameOut entry_out;
     entry_out.name = dentry.Name();
@@ -1435,12 +1436,15 @@ Status FileSystem::ReadDir(Context& ctx, Ino ino, const std::string& last_name, 
       if (IsFile(dentry.INo()) && dingofs::Helper::IsSmallFile(entry_out.attr.length()) &&
           !chunk_cache_.IsExist(dentry.INo())) {
         // just first chunk because small file
-        warmup_processor_->Execute(
-            WarmupChunkTask::Param{.fs = GetSelfPtr(), .ino = dentry.INo(), .chunk_indexes = {0}});
+        warmup_inoes.push_back(dentry.INo());
       }
     }
 
     entry_outs.push_back(std::move(entry_out));
+  }
+
+  if (!warmup_inoes.empty()) {
+    warmup_processor_->Execute(WarmupChunkTask::Param{.fs = GetSelfPtr(), .inoes = warmup_inoes});
   }
 
   LOG_DEBUG << fmt::format("[fs.{}.{}.{}][{}us] readdir {}/{} finish, dentries({}).", fs_id_, ctx.RequestId(),

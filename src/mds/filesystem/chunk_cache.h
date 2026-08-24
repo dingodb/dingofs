@@ -42,15 +42,15 @@ class ChunkCache {
   static ChunkCacheUPtr New(uint32_t fs_id) { return std::make_unique<ChunkCache>(fs_id); }
 
   // if version is newer then put
-  bool PutIf(uint64_t ino, ChunkEntry chunk);
-  void Delete(uint64_t ino, uint64_t chunk_index);
-  void Delete(uint64_t ino);
+  bool PutIf(Ino ino, ChunkEntry chunk);
+  void Delete(Ino ino, uint64_t chunk_index);
+  void Delete(Ino ino);
   void BatchDeleteIf(const std::function<bool(const Ino&)>& f);
 
-  ChunkSPtr Get(uint64_t ino, uint64_t chunk_index);
-  std::vector<ChunkSPtr> Get(uint64_t ino);
+  ChunkSPtr Get(Ino ino, uint64_t chunk_index);
+  std::vector<ChunkSPtr> Get(Ino ino);
 
-  bool IsExist(uint64_t ino);
+  bool IsExist(Ino ino);
 
   size_t Size();
   size_t Bytes();
@@ -64,7 +64,7 @@ class ChunkCache {
 
  private:
   struct Key {
-    uint64_t ino{0};
+    Ino ino{0};
     uint64_t chunk_index{0};
 
     bool operator<(const Key& other) const {

@@ -2002,7 +2002,7 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
     // /FsStatService/delfiles/{fs_id}/{ino}
 
     uint32_t fs_id = ::dingofs::Helper::StringToInt32(params[1]);
-    uint64_t ino = ::dingofs::Helper::StringToUint64(params[2]);
+    Ino ino = ::dingofs::Helper::StringToUint64(params[2]);
 
     auto file_system_set = Server::GetInstance().GetFileSystemSet();
     auto file_system = file_system_set->GetFileSystem(fs_id);
@@ -2064,7 +2064,7 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
     // /FsStatService/{fs_id}/{ino}
 
     uint32_t fs_id = ::dingofs::Helper::StringToInt32(params[0]);
-    uint64_t ino = ::dingofs::Helper::StringToUint64(params[1]);
+    Ino ino = ::dingofs::Helper::StringToUint64(params[1]);
 
     auto file_system_set = Server::GetInstance().GetFileSystemSet();
     auto file_system = file_system_set->GetFileSystem(fs_id);
@@ -2086,7 +2086,7 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
     // /FsStatService/partition/{fs_id}/{ino}
 
     uint32_t fs_id = ::dingofs::Helper::StringToInt32(params[1]);
-    uint64_t ino = ::dingofs::Helper::StringToUint64(params[2]);
+    Ino ino = ::dingofs::Helper::StringToUint64(params[2]);
 
     LOG(INFO) << fmt::format("Get dir json, fs_id: {}, ino: {}", fs_id, ino);
 
@@ -2113,7 +2113,7 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
     // /FsStatService/chunk/{fs_id}/{ino}
 
     uint32_t fs_id = ::dingofs::Helper::StringToInt32(params[1]);
-    uint64_t ino = ::dingofs::Helper::StringToUint64(params[2]);
+    Ino ino = ::dingofs::Helper::StringToUint64(params[2]);
 
     FsUtils fs_utils(Server::GetInstance().GetOperationProcessor());
 
@@ -2130,7 +2130,7 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
     // /FsStatService/shard/{fs_id}/{ino}
 
     uint32_t fs_id = ::dingofs::Helper::StringToInt32(params[1]);
-    uint64_t ino = ::dingofs::Helper::StringToUint64(params[2]);
+    Ino ino = ::dingofs::Helper::StringToUint64(params[2]);
 
     auto file_system_set = Server::GetInstance().GetFileSystemSet();
     auto file_system = file_system_set->GetFileSystem(fs_id);

@@ -36,8 +36,7 @@ class WarmupChunkTask : public TaskRunnable {
  public:
   struct Param {
     FileSystemSPtr fs;
-    Ino ino;
-    std::vector<uint32_t> chunk_indexes;
+    std::vector<Ino> inoes;
   };
 
   WarmupChunkTask(const Param& param, WarmupProcessor& warmup_pocessor)
@@ -54,6 +53,7 @@ class WarmupChunkTask : public TaskRunnable {
 
  private:
   Status WarmupChunk();
+  Status WarmupBatchChunk(const std::vector<Ino>& inoes);
 
   Param param_;
 

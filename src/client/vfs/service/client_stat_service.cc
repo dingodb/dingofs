@@ -593,7 +593,7 @@ static std::string RenderDirEntries(const Json::Value& entries) {
   for (const auto& entry : entries) {
     result += "<br>";
     // get attr info
-    uint64_t ino = entry["ino"].asUInt64();
+    Ino ino = entry["ino"].asUInt64();
     std::string name = entry["name"].asString();
     const Json::Value& attr = entry["attr"];
 
@@ -653,7 +653,7 @@ static bool RenderDirInfoPage(const Json::Value& json_value,
 
   for (const auto& dir_iterator : dir_iterators) {
     uint64_t fh = dir_iterator["fh"].asUInt64();
-    uint64_t ino = dir_iterator["ino"].asUInt64();
+    Ino ino = dir_iterator["ino"].asUInt64();
     std::string last_name = dir_iterator["last_name"].asString();
     bool with_attr = dir_iterator["with_attr"].asBool();
     uint32_t offset = dir_iterator["offset"].asUInt();
@@ -770,7 +770,7 @@ static bool RenderFileSessionPage(const Json::Value& json_value,
   os << "</tr>";
 
   for (const auto& file_session : file_sessions) {
-    uint64_t ino = file_session["ino"].asUInt64();
+    Ino ino = file_session["ino"].asUInt64();
     uint32_t ref_count = file_session["ref_count"].asUInt();
     const auto& chunk_set_value = file_session["chunk_set"];
     if (!file_session["session_id_map"].isArray() ||
