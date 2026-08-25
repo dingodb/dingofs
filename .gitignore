@@ -86,6 +86,7 @@ thirdparties/etcdclient/*.h
 build
 build/
 build-coverage/
+build-blockcache/
 build-coverage-it/
 scripts/docker/rocky9/dingofs
 
@@ -109,6 +110,8 @@ mds_deploy_parameters.local
 *.so.with-debug
 bench_results/
 .issue/
+.style
+.task
 
 CONTEXT.md
 .pi-subagents/

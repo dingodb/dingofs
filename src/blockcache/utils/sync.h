@@ -28,6 +28,11 @@ namespace blockcache {
 
 class SingleFlight {
  public:
+  SingleFlight() = default;
+
+  SingleFlight(const SingleFlight&) = delete;
+  SingleFlight& operator=(const SingleFlight&) = delete;
+
   template <typename F>
   Future<Status> Do(F run) {
     if (running_) {

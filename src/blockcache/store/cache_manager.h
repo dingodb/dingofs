@@ -49,14 +49,12 @@ class CacheManager {
   Future<> Start();
   Future<> Shutdown();
 
-  void Insert(const BlockHandle& handle, uint32_t atime, bool staged);
-  std::optional<Entry> Find(const BlockHandle& handle) const;
-  std::optional<Entry> Touch(const BlockHandle& handle);
-  void EraseCache(const BlockHandle& handle);
-  void EraseStage(const BlockHandle& handle);
-  bool Exist(const BlockHandle& handle) const {
-    return entries_.contains(handle);
-  }
+  void Insert(BlockHandle handle, uint32_t atime, bool staged);
+  std::optional<Entry> Find(BlockHandle handle) const;
+  std::optional<Entry> Touch(BlockHandle handle);
+  void EraseCache(BlockHandle handle);
+  void EraseStage(BlockHandle handle);
+  bool Exist(BlockHandle handle) const { return entries_.contains(handle); }
 
   bool StageFull() const { return stage_full_; }
   bool CacheFull() const { return cache_full_; }

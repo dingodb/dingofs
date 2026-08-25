@@ -27,7 +27,10 @@ namespace blockcache {
 
 class IdleSpinner {
  public:
-  explicit IdleSpinner(bool poll_mode) : poll_mode_(poll_mode) {}
+  // `max_poll_ns` is snapshotted, not re-read: Spin() is the reactor's hottest
+  // idle path and this header stays a leaf that knows nothing about flags.
+  IdleSpinner(bool poll_mode, uint64_t max_poll_ns)
+      : max_poll_ns_(max_poll_ns), poll_mode_(poll_mode) {}
 
   // return true if should sleep
   bool Spin() {
@@ -51,7 +54,7 @@ class IdleSpinner {
       return false;
     }
 
-    return now - since_ns_ > kMaxPollTimeNs;
+    return now - since_ns_ > max_poll_ns_;
   }
 
   // return the time spent idle
@@ -67,8 +70,7 @@ class IdleSpinner {
   }
 
  private:
-  static constexpr uint64_t kMaxPollTimeNs = 200'000;
-
+  const uint64_t max_poll_ns_;
   uint64_t since_ns_ = 0;
   uint64_t spins_ = 0;
   bool idle_ = false;

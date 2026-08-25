@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-file(GLOB BLOCKCACHE_STORE_SRCS "${CMAKE_CURRENT_SOURCE_DIR}/*.cc")
+file(GLOB BLOCKCACHE_STORE_SRCS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cc")
 
 add_library(blockcache_store ${BLOCKCACHE_STORE_SRCS})
 target_compile_features(blockcache_store PRIVATE cxx_std_20)

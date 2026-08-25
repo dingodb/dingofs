@@ -44,10 +44,10 @@ concept Shutdownable = requires(S s) {
   { s.Shutdown() } -> std::same_as<Future<>>;
 };
 
-// One Service instance per shard, constructed and destroyed ON its shard.
+// One instance of T per shard, constructed and destroyed ON its shard.
 //
 // This is the only place a component admits the process has shards. The
-// Service is written as if it were the only one: plain members, no atomics,
+// instance is written as if it were the only one: plain members, no atomics,
 // no locks, and no way to ask which shard it is -- it just uses `this`.
 // Reaching a sibling is the container's job.
 //
@@ -55,7 +55,7 @@ concept Shutdownable = requires(S s) {
 // instances need, then StartOnAllShards builds them, each on the core that
 // will drive it, so the instance and everything its constructor allocates
 // come from that core's arena.
-template <typename Service>
+template <typename T>
 class Sharded {
  public:
   Sharded() = default;
@@ -66,13 +66,11 @@ class Sharded {
   Sharded(const Sharded&) = delete;
   Sharded& operator=(const Sharded&) = delete;
 
-  // -- external thread ------------------------------------------------------
-
   // `factory` runs ON its shard and may vary per instance -- hand each shard
   // its own slice of whatever the launcher prepared. All shards build at once;
   // if any fails, none survive.
   template <typename Factory>
-    requires std::is_invocable_r_v<Service*, Factory, unsigned>
+    requires std::is_invocable_r_v<T*, Factory, unsigned>
   Status StartOnAllShards(Factory factory) {
     CHECK(instances_.empty()) << "Sharded started twice";
     instances_.assign(ShardCount(), nullptr);
@@ -103,9 +101,7 @@ class Sharded {
     instances_.clear();
   }
 
-  // -- any thread -----------------------------------------------------------
-
-  // Fire-and-forget `func(service)` on every shard, waiting for none of them.
+  // Fire-and-forget `func(instance)` on every shard, waiting for none of them.
   // For publishing a value the shards should pick up when they get to it -- a
   // new topology, a reloaded config -- from a thread that must not block.
   //
@@ -122,8 +118,6 @@ class Sharded {
     }
   }
 
-  // -- shard ----------------------------------------------------------------
-
   template <typename Func>
   auto InvokeOn(unsigned shard, Func func) {
     return SubmitTo(shard, [this, func = std::move(func)]() mutable {
@@ -136,8 +130,7 @@ class Sharded {
   // the calling shard, so `reduce` needs no synchronisation.
   template <typename Value, typename Map, typename Reduce>
   Future<Value> MapReduce(Value init, Map map, Reduce reduce) {
-    using Part =
-        typename FutureTraits<std::invoke_result_t<Map, Service&>>::Value;
+    using Part = typename FutureTraits<std::invoke_result_t<Map, T&>>::Value;
 
     std::vector<Future<Part>> parts;
     parts.reserve(instances_.size());
@@ -150,10 +143,10 @@ class Sharded {
     co_return init;
   }
 
-  Service& Local() {
-    Service* service = instances_[ThisShardId()];
-    CHECK(service != nullptr) << "Sharded not started on this shard";
-    return *service;
+  T& Local() {
+    T* instance = instances_[ThisShardId()];
+    CHECK(instance != nullptr) << "Sharded not started on this shard";
+    return *instance;
   }
 
  private:
@@ -162,9 +155,9 @@ class Sharded {
     CallWork(Sharded* owner, Func func) : owner(owner), func(std::move(func)) {
       run = [](InboxWork* base) {
         auto* self = static_cast<CallWork*>(base);
-        Service* service = self->owner->instances_[ThisShardId()];
-        if (service != nullptr) {
-          self->func(*service);
+        T* instance = self->owner->instances_[ThisShardId()];
+        if (instance != nullptr) {
+          self->func(*instance);
         }
         delete self;
       };
@@ -176,24 +169,24 @@ class Sharded {
 
   // Installed before Start() runs, so a failed Start still leaves the instance
   // where ShutdownOnAllShards can find and destroy it.
-  static Future<Status> StartInstance(Service** slot, Service* service) {
-    *slot = service;
-    if constexpr (Startable<Service>) {
-      co_await service->Start();
+  static Future<Status> StartInstance(T** slot, T* instance) {
+    *slot = instance;
+    if constexpr (Startable<T>) {
+      co_await instance->Start();
     }
     co_return Status::OK();
   }
 
-  static Future<> StopInstance(Service* service) {
-    if constexpr (Shutdownable<Service>) {
-      if (service != nullptr) {
-        return service->Shutdown();
+  static Future<> StopInstance(T* instance) {
+    if constexpr (Shutdownable<T>) {
+      if (instance != nullptr) {
+        return instance->Shutdown();
       }
     }
     return MakeReadyFuture<>();
   }
 
-  std::vector<Service*> instances_;
+  std::vector<T*> instances_;
 };
 
 }  // namespace blockcache

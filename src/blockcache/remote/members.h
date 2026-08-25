@@ -68,8 +68,6 @@ class CacheGroupMemberSyncer {
   void Shutdown();
 
  private:
-  friend class CacheGroupMemberSyncerTest;
-
   void PeriodicSyncMembers();
   void SyncMembers();
   void PublishToAllShards(MemberGroupSPtr member_group);

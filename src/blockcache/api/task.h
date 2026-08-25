@@ -36,6 +36,10 @@ using AsyncCallback = std::function<void(Status)>;
 class AsyncTask {
  public:
   virtual ~AsyncTask() = default;
+  AsyncTask() = default;
+
+  AsyncTask(const AsyncTask&) = delete;
+  AsyncTask& operator=(const AsyncTask&) = delete;
 
   virtual Future<Status> RunOnShard(ShardedTierCache& cache) = 0;
   virtual void RunOnWorker(Status status) = 0;
@@ -45,6 +49,8 @@ class PutTask final : public AsyncTask {
  public:
   PutTask(BlockHandle handle, BufferViews block, AsyncCallback cb,
           PutOption option);
+  PutTask(const PutTask&) = delete;
+  PutTask& operator=(const PutTask&) = delete;
 
   Future<Status> RunOnShard(ShardedTierCache& cache) override;
   void RunOnWorker(Status status) override;

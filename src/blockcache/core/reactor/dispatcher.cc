@@ -16,6 +16,7 @@
 
 #include "blockcache/core/reactor/dispatcher.h"
 
+#include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <poll.h>
 #include <sys/eventfd.h>
@@ -31,6 +32,12 @@
 
 namespace dingofs {
 namespace blockcache {
+
+static bool Positive(const char* /*name*/, uint32_t value) { return value > 0; }
+
+DEFINE_uint32(task_quota_us, 500,
+              "microseconds a task may run before the reactor preempts it");
+DEFINE_validator(task_quota_us, Positive);
 
 struct UringOpcode {
   int op;
@@ -154,8 +161,8 @@ QuotaTicker::~QuotaTicker() {
 void QuotaTicker::Arm() const {
   auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(quota_);
   itimerspec its{};
-  its.it_value.tv_sec = ns.count() / 1'000'000'000;
-  its.it_value.tv_nsec = ns.count() % 1'000'000'000;
+  its.it_value.tv_sec = ns.count() / kNsPerSec;
+  its.it_value.tv_nsec = ns.count() % kNsPerSec;
   its.it_interval = its.it_value;
   if (::timerfd_settime(timerfd_, 0, &its, nullptr) < 0) {
     PLOG(FATAL) << "Fail to timerfd_settime(start)";
@@ -203,8 +210,9 @@ Dispatcher::RunScope::~RunScope() {
   tls_preempt_monitor = {};
 }
 
-Dispatcher::Dispatcher(const DispatcherOption& option)
-    : ring_(option.queue_len), ticker_(option.task_quota) {
+Dispatcher::Dispatcher()
+    : ring_(kEventRingLen),
+      ticker_(std::chrono::microseconds(FLAGS_task_quota_us)) {
   CHECK(tls_dispatcher == nullptr) << "one dispatcher per thread";
   ticker_.quiet_ = true;
   AddEvent(ticker_.fd(), &ticker_, EventMode::kReadRepeat);

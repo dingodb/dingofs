@@ -17,6 +17,8 @@
 #ifndef DINGOFS_BLOCKCACHE_BLOCK_LOCAL_CACHE_H_
 #define DINGOFS_BLOCKCACHE_BLOCK_LOCAL_CACHE_H_
 
+#include <memory>
+
 #include "blockcache/block/block_cache.h"
 #include "blockcache/block/retriever.h"
 #include "blockcache/block/uploader.h"
@@ -47,10 +49,6 @@ class LocalCache final : public BlockCache {
   Future<CacheStats> GetStats() override;
 
  private:
-  friend class LocalCacheBuilder;
-
-  LocalCache() = default;
-
   Future<Status> GetPart(BlockHandle handle, uint64_t offset, uint32_t length,
                          char* buffer);
   Future<Status> GetWhole(BlockHandle handle, uint64_t offset, uint32_t length,

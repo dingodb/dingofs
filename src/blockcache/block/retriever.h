@@ -108,6 +108,10 @@ class SharedBlock {
 
 class InflightTracker {
  public:
+  InflightTracker() = default;
+
+  InflightTracker(const InflightTracker&) = delete;
+  InflightTracker& operator=(const InflightTracker&) = delete;
   using Waiters = std::vector<Promise<StatusOr<SharedBlock>>>;
 
   Future<StatusOr<SharedBlock>> GetOrCreate(BlockHandle handle, bool* created);
@@ -124,6 +128,8 @@ using CacheFunc =
 class ObjectRetriever final {
  public:
   ObjectRetriever(ObjectStorage* storage, CacheFunc cache_func);
+  ObjectRetriever(const ObjectRetriever&) = delete;
+  ObjectRetriever& operator=(const ObjectRetriever&) = delete;
 
   Future<> Start();
   Future<> Shutdown();

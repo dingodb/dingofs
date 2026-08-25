@@ -47,6 +47,10 @@ struct DeleteOption {};
 class BlockCache {
  public:
   virtual ~BlockCache() = default;
+  BlockCache() = default;
+
+  BlockCache(const BlockCache&) = delete;
+  BlockCache& operator=(const BlockCache&) = delete;
 
   virtual Future<> Start() = 0;
   virtual Future<> Shutdown() = 0;

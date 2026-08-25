@@ -30,6 +30,8 @@ namespace blockcache {
 class Uploader final {
  public:
   Uploader(CacheStore* store, ObjectStorage* storage);
+  Uploader(const Uploader&) = delete;
+  Uploader& operator=(const Uploader&) = delete;
 
   Future<> Start();
   Future<> Shutdown();
@@ -51,7 +53,7 @@ class Uploader final {
 
   static bool IsGone(const Status& status) {
     return status.IsNotFound() || status.IsNotExist();
-  };
+  }
 
   bool running_ = false;
   CacheStore* store_;

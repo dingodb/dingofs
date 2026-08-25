@@ -79,13 +79,9 @@ class FixedFiles {
   std::vector<int> free_slots_;
 };
 
-struct IoRingOption {
-  unsigned queue_len = 512;
-};
-
 class IoRing final : public Poller {
  public:
-  explicit IoRing(const IoRingOption& option = {});
+  IoRing();
   ~IoRing() override;
 
   IoRing(const IoRing&) = delete;
@@ -131,6 +127,10 @@ class UringAwaiter : public IoCompletion, public IoAwaiter<Derived> {
 
  protected:
   ~UringAwaiter() = default;
+  UringAwaiter() = default;
+
+  UringAwaiter(const UringAwaiter&) = delete;
+  UringAwaiter& operator=(const UringAwaiter&) = delete;
 };
 
 // One-shot io_uring op; prep-closure pointees must outlive the suspension.

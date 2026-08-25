@@ -25,6 +25,9 @@
 namespace dingofs {
 namespace blockcache {
 
+inline constexpr uint64_t kKiB = 1024;
+inline constexpr uint64_t kMiB = 1024 * kKiB;
+
 inline constexpr size_t kCacheLineSize = 64;
 inline constexpr size_t kIoAlign = 4096;
 inline constexpr size_t kDirectIoAlign = 512;

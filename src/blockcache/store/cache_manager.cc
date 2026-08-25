@@ -71,8 +71,7 @@ Future<> CacheManager::Shutdown() {
             << "}";
 }
 
-void CacheManager::Insert(const BlockHandle& handle, uint32_t atime,
-                          bool staged) {
+void CacheManager::Insert(BlockHandle handle, uint32_t atime, bool staged) {
   auto [it, inserted] = entries_.try_emplace(handle);
   if (!inserted) {
     EraseEntry(it);
@@ -97,7 +96,7 @@ void CacheManager::Insert(const BlockHandle& handle, uint32_t atime,
 }
 
 std::optional<CacheManager::Entry> CacheManager::Find(
-    const BlockHandle& handle) const {
+    BlockHandle handle) const {
   const auto it = entries_.find(handle);
   if (it == entries_.end()) {
     return std::nullopt;
@@ -106,8 +105,7 @@ std::optional<CacheManager::Entry> CacheManager::Find(
   return Entry{.handle = it->first, .staged = it->second.staged};
 }
 
-std::optional<CacheManager::Entry> CacheManager::Touch(
-    const BlockHandle& handle) {
+std::optional<CacheManager::Entry> CacheManager::Touch(BlockHandle handle) {
   auto it = entries_.find(handle);
   if (it == entries_.end()) {
     return std::nullopt;
@@ -121,20 +119,35 @@ std::optional<CacheManager::Entry> CacheManager::Touch(
   return Entry{.handle = it->first, .staged = e.staged};
 }
 
-void CacheManager::EraseCache(const BlockHandle& handle) {
+void CacheManager::EraseCache(BlockHandle handle) {
   auto it = entries_.find(handle);
   if (it != entries_.end()) {
     EraseEntry(it);
   }
 }
 
-void CacheManager::EraseStage(const BlockHandle& handle) {
+void CacheManager::EraseStage(BlockHandle handle) {
   auto it = entries_.find(handle);
   if (it != entries_.end() && it->second.staged) {
     it->second.staged = false;
     staged_blocks_--;
     policy_->OnInsert(&it->second);
   }
+}
+
+CacheStats CacheManager::GetStats() const {
+  CacheStats stats;
+  stats.capacity_bytes = capacity_;
+  stats.used_bytes = used_bytes_;
+  stats.staged_blocks = staged_blocks_;
+  stats.cached_blocks = entries_.size() - staged_blocks_;
+  stats.evicted_blocks = evicted_blocks_;
+  stats.evicted_bytes = evicted_bytes_;
+  stats.expired_blocks = expired_blocks_;
+  for (const DeleteBatch& batch : unlink_queue_) {
+    stats.pending_unlinks += batch.items.size();
+  }
+  return stats;
 }
 
 void CacheManager::EraseEntry(BlockIndex::iterator it) {
@@ -279,21 +292,6 @@ Future<> CacheManager::DeleteBlocks() {
         deleted, batch.reason, freed_bytes / 1048576.0,
         (TimestampNs() - began) / 1e9);
   }
-}
-
-CacheStats CacheManager::GetStats() const {
-  CacheStats stats;
-  stats.capacity_bytes = capacity_;
-  stats.used_bytes = used_bytes_;
-  stats.staged_blocks = staged_blocks_;
-  stats.cached_blocks = entries_.size() - staged_blocks_;
-  stats.evicted_blocks = evicted_blocks_;
-  stats.evicted_bytes = evicted_bytes_;
-  stats.expired_blocks = expired_blocks_;
-  for (const DeleteBatch& batch : unlink_queue_) {
-    stats.pending_unlinks += batch.items.size();
-  }
-  return stats;
 }
 
 }  // namespace blockcache

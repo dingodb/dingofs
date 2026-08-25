@@ -65,18 +65,6 @@ class Buffer {
     return *this;
   }
 
-  char* data() const { return data_; }
-  size_t size() const { return size_; }
-  bool empty() const { return data_ == nullptr || size_ == 0; }
-
-  // Bytes writable at data(), which the pool's size classes make no smaller
-  // than the requested size rounded up to 4 KiB. A block body can therefore
-  // be padded out to what the device takes without being copied first.
-  size_t writable_bytes() const {
-    return data_ == nullptr ? 0
-                            : capacity_ - static_cast<size_t>(data_ - base_);
-  }
-
   // Drop bytes off either end of what the buffer shows. Memory does not move
   // -- the pool still frees the whole allocation -- so an io that had to be
   // widened to reach the device can hand the wire the part that was asked
@@ -91,6 +79,10 @@ class Buffer {
     DCHECK(n <= size_) << "pop past the buffer";
     size_ -= n;
   }
+
+  char* data() const { return data_; }
+  size_t size() const { return size_; }
+  bool empty() const { return data_ == nullptr || size_ == 0; }
 
   // Hands the memory to the wire layer, which borrows and never owns.
   BufferView view() const {
@@ -114,9 +106,9 @@ class Buffer {
 // The per-shard pool behind Buffer, held in a thread_local.
 class BufferPool {
  public:
-  // Creates one pool on every shard; call once, before anything allocates.
-  // External thread, after the shards are up.
-  static Status InitOnAllShards(size_t bytes_per_shard);
+  // Creates one pool of --buffer_pool_mb on every shard; call once, before
+  // anything allocates. External thread, after the shards are up.
+  static Status InitOnAllShards();
 
   // Destroys them again. Every Buffer must already be gone.
   static void ShutdownOnAllShards();

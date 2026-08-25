@@ -24,24 +24,28 @@
 namespace dingofs {
 namespace blockcache {
 
-inline const std::vector<FlagSection> kSections = {
+inline const std::vector<FlagSection> kBenchSections = {
     {"BENCH OPTIONS",
      {"op", "threads", "iodepth", "fsid", "blksize", "blocks", "offset",
       "length", "stage", "retrieve_storage", "runtime", "time_based", "conf"}},
     {"CLIENT OPTIONS",
      {"cache_store", "fill_group_cache", "queue_depth", "shards", "cpuset",
-      "pin_cpu", "poll_mode", "buffer_pool_mb", "offload_threads",
-      "offload_queue_capacity", "offload_cpu_min_bytes",
-      "offload_cpu_spin_us"}},
+      "pin_cpu", "poll_mode", "idle_poll_us", "task_quota_us", "io_queue_depth",
+      "buffer_pool_mb", "offload_threads", "offload_queue_capacity",
+      "offload_cpu_min_bytes", "offload_cpu_spin_us"}},
     {"MDS OPTIONS",
      {"mds_addrs", "cache_mds_rpc_timeout_ms", "cache_mds_rpc_retry_times",
       "cache_mds_request_retry_times"}},
     {"REMOTE CACHE OPTIONS",
-     {"cache_group", "periodic_sync_members_ms", "remote_rdma",
-      "remote_rdma_device", "remote_rdma_port_num",
-      "remote_rdma_max_connections", "remote_rpc_timeout_ms",
-      "remote_connect_timeout_ms", "remote_breaker_failures",
-      "remote_breaker_open_ms", "remote_breaker_max_open_ms"}},
+     {"cache_group", "periodic_sync_members_ms", "remote_rpc_timeout_ms",
+      "remote_connect_timeout_ms", "remote_rpc_max_retry",
+      "remote_breaker_failures", "remote_breaker_open_ms",
+      "remote_breaker_max_open_ms"}},
+    {"RDMA OPTIONS",
+     {"remote_rdma", "remote_rdma_device", "rdma_port_num", "rdma_gid_index",
+      "rdma_max_connections", "rdma_cq_entries", "rdma_max_inflight_rpcs",
+      "rdma_message_bytes", "rdma_max_inline_data", "rdma_bulk_send_wr",
+      "rdma_bulk_qps", "rdma_heartbeat_interval_s", "rdma_idle_timeout_s"}},
     {"CACHE STORE OPTIONS",
      {"cache_dir", "cache_dir_uuid", "cache_size_mb", "cache_expire_s",
       "cache_cleanup_expire_interval_ms", "cache_eviction", "free_space_ratio",
@@ -58,13 +62,13 @@ inline const std::vector<FlagSection> kSections = {
     {"LOGGING OPTIONS", {"log_dir", "log_level", "log_v"}},
 };
 
-inline const FlagParser::Usage kUsage = {
+inline const FlagParser::Usage kBenchUsage = {
     .program = "cb",
     .usage = "  cb [OPTIONS] --op <put|get|delete>",
     .examples =
         "  $ cb --mds_addrs=10.0.0.1:6900 --op=put --threads=4 --iodepth=16\n"
         "  $ cb --mds_addrs=10.0.0.1:6900 --op=get --time_based --runtime=60\n",
-    .sections = kSections,
+    .sections = kBenchSections,
     .essential = {"op", "threads", "iodepth", "fsid", "blksize", "blocks",
                   "stage", "retrieve_storage", "runtime", "time_based", "conf",
                   "mds_addrs", "cache_store", "cache_group", "remote_rdma",

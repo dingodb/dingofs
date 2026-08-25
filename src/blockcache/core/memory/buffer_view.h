@@ -20,14 +20,9 @@
 #include <cstdint>
 #include <span>
 
-// The vocabulary for borrowed bytes. A leaf on purpose: the store layer
-// speaks it without taking a dependency on the runtime that owns pools.
-
 namespace dingofs {
 namespace blockcache {
 
-// Borrowed range, owns nothing. Deliberately no lkey field (per-PD state).
-// uint32_t size: RegionDesc::len and LocalBuf::len are 32-bit.
 struct BufferView {
   void* data = nullptr;
   uint32_t size = 0;
@@ -39,14 +34,8 @@ struct BufferView {
   bool empty() const { return data == nullptr || size == 0; }
 };
 
-// One body spread over several ranges, in order. Borrowed twice over: both
-// the bytes and the array of views must outlive the operation reading them.
-// A writer accumulating into fixed-size pages hands its pages over this way
-// rather than gathering them into one buffer first.
 using BufferViews = std::span<const BufferView>;
 
-// The most ranges one body may be split into. A 4 MiB block accumulated in
-// 64 KiB pages is 64 of them; the rdma frame's kMaxRegions is held to this.
 inline constexpr size_t kMaxBufferViews = 64;
 
 inline uint64_t TotalBytes(BufferViews views) {

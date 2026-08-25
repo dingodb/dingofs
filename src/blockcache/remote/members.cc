@@ -155,7 +155,7 @@ void CacheGroupMemberSyncer::SyncMembers() {
 
   auto member_group = std::make_shared<const MemberGroup>(std::move(members));
   if (member_group->empty()) {
-    LOG(ERROR) << "Thers is no members in cache group=" << FLAGS_cache_group;
+    LOG(ERROR) << "There is no member in cache group=" << FLAGS_cache_group;
   } else if (*member_group != *member_group_) {
     LOG(INFO) << "Cache group=" << FLAGS_cache_group
               << " changed: " << member_group_->size() << " -> "

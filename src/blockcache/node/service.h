@@ -20,7 +20,8 @@
 #include <cstdint>
 
 #include "blockcache/block/sharded.h"
-#include "blockcache/net/protocol/proto_service.h"
+#include "blockcache/net/brpc/brpc_bridge.h"
+#include "blockcache/net/service.h"
 #include "dingofs/cache.pb.h"
 
 namespace dingofs {
@@ -30,20 +31,21 @@ class CacheService : public ProtoService {
  public:
   explicit CacheService(ShardedLocalCache* block_cache);
 
-  Future<> Put(Controller* cntl, const pb::cache::v2::PutRequest* request,
-               pb::cache::v2::PutResponse* response);
-  Future<> Get(Controller* cntl, const pb::cache::v2::GetRequest* request,
-               pb::cache::v2::GetResponse* response);
+  Future<> Put(Controller* cntl, const pb::blockcache::PutRequest* request,
+               pb::blockcache::PutResponse* response);
+  Future<> Get(Controller* cntl, const pb::blockcache::GetRequest* request,
+               pb::blockcache::GetResponse* response);
   Future<> Prefetch(Controller* cntl,
-                    const pb::cache::v2::PrefetchRequest* request,
-                    pb::cache::v2::PrefetchResponse* response);
-  Future<> Delete(Controller* cntl, const pb::cache::v2::DeleteRequest* request,
-                  pb::cache::v2::DeleteResponse* response);
-  Future<> Ping(Controller* cntl, const pb::cache::v2::PingRequest* request,
-                pb::cache::v2::PingResponse* response);
+                    const pb::blockcache::PrefetchRequest* request,
+                    pb::blockcache::PrefetchResponse* response);
+  Future<> Delete(Controller* cntl,
+                  const pb::blockcache::DeleteRequest* request,
+                  pb::blockcache::DeleteResponse* response);
+  Future<> Ping(Controller* cntl, const pb::blockcache::PingRequest* request,
+                pb::blockcache::PingResponse* response);
   Future<> GetNodeInfo(Controller* cntl,
-                       const pb::cache::v2::GetNodeInfoRequest* request,
-                       pb::cache::v2::GetNodeInfoResponse* response);
+                       const pb::blockcache::GetNodeInfoRequest* request,
+                       pb::blockcache::GetNodeInfoResponse* response);
 
  private:
   struct AlignedRange {
@@ -52,13 +54,44 @@ class CacheService : public ProtoService {
   };
   static AlignedRange AlignRequest(uint64_t offset, uint32_t length);
 
-  static Status CheckHandle(const pb::cache::v2::BlockHandle& handle);
-  static Status CheckAttachment(const pb::cache::v2::BlockHandle& handle,
+  static Status CheckHandle(const pb::blockcache::BlockHandle& handle);
+  static Status CheckAttachment(const pb::blockcache::BlockHandle& handle,
                                 uint32_t attachment_size);
-  static Status CheckRange(const pb::cache::v2::BlockHandle& handle,
+  static Status CheckRange(const pb::blockcache::BlockHandle& handle,
                            uint64_t offset, uint32_t length);
 
   ShardedLocalCache* block_cache_;
+};
+
+class RawCacheService final : public pb::blockcache::CacheService {
+ public:
+  using Impl = ::dingofs::blockcache::CacheService;
+
+  RawCacheService(BrpcServer* server, Impl* impl)
+      : server_(server), impl_(impl) {}
+
+#define DINGOFS_BRIDGE_METHOD(name)                                        \
+  void name(google::protobuf::RpcController* cntl,                         \
+            const pb::blockcache::name##Request* request,                  \
+            pb::blockcache::name##Response* response,                      \
+            google::protobuf::Closure* done) override {                    \
+    BridgeToShard(server_, impl_, &Impl::name,                             \
+                  static_cast<brpc::Controller*>(cntl), request, response, \
+                  done);                                                   \
+  }
+
+  DINGOFS_BRIDGE_METHOD(Put)
+  DINGOFS_BRIDGE_METHOD(Get)
+  DINGOFS_BRIDGE_METHOD(Prefetch)
+  DINGOFS_BRIDGE_METHOD(Delete)
+  DINGOFS_BRIDGE_METHOD(Ping)
+  DINGOFS_BRIDGE_METHOD(GetNodeInfo)
+
+#undef DINGOFS_BRIDGE_METHOD
+
+ private:
+  BrpcServer* server_;
+  Impl* impl_;
 };
 
 }  // namespace blockcache

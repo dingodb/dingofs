@@ -18,6 +18,7 @@
 #define DINGOFS_BLOCKCACHE_COMMON_STATUS_H_
 
 #include <glog/logging.h>
+#include <infiniband/verbs.h>
 
 #include <new>
 #include <utility>
@@ -97,6 +98,7 @@ class StatusOr {
 
 Status ToStatus(int sys_code, const char* what);
 Status ToStatus(pb::error::Errno errno_code);
+Status ToStatus(ibv_wc_status status, const char* what);
 pb::error::Errno ToErrno(const Status& status);
 
 }  // namespace blockcache

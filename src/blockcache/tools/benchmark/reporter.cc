@@ -52,22 +52,6 @@ void Reporter::TickTok() {
   executor_->Schedule([this]() { TickTok(); }, kReportIntervalSeconds * 1000);
 }
 
-uint64_t Reporter::ElapsedUs() const {
-  return std::chrono::duration_cast<std::chrono::microseconds>(
-             std::chrono::steady_clock::now() - start_)
-      .count();
-}
-
-double Reporter::Percent(const Stat* total) const {
-  double percent;
-  if (FLAGS_time_based) {
-    percent = ElapsedUs() * 100.0 / (FLAGS_runtime * 1e6);
-  } else {
-    percent = total->Count() * 100.0 / (FLAGS_threads * FLAGS_blocks);
-  }
-  return std::min(percent, 100.0);
-}
-
 void Reporter::OnStart(Stat* stat, Stat* total) {
   CHECK_EQ(stat->Count(), 0);
   CHECK_EQ(total->Count(), 0);
@@ -116,6 +100,22 @@ void Reporter::OnStop(Stat* stat, Stat* total) {
   std::cout << fmt::format(
       "  Avg({}):  {} op/s  {} MB/s  lat({:.6f} {:.6f} {:.6f})\n", FLAGS_op,
       iops, bandwidth, avglat, maxlat, minlat);
+}
+
+uint64_t Reporter::ElapsedUs() const {
+  return std::chrono::duration_cast<std::chrono::microseconds>(
+             std::chrono::steady_clock::now() - start_)
+      .count();
+}
+
+double Reporter::Percent(const Stat* total) const {
+  double percent;
+  if (FLAGS_time_based) {
+    percent = ElapsedUs() * 100.0 / (FLAGS_runtime * 1e6);
+  } else {
+    percent = total->Count() * 100.0 / (FLAGS_threads * FLAGS_blocks);
+  }
+  return std::min(percent, 100.0);
 }
 
 }  // namespace blockcache

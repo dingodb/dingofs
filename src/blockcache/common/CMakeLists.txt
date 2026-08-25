@@ -12,12 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-file(GLOB BLOCKCACHE_COMMON_SRCS "${CMAKE_CURRENT_SOURCE_DIR}/*.cc")
+file(GLOB BLOCKCACHE_COMMON_SRCS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cc")
 list(REMOVE_ITEM BLOCKCACHE_COMMON_SRCS "${CMAKE_CURRENT_SOURCE_DIR}/status.cc")
 
 add_library(blockcache_status status.cc)
 target_compile_features(blockcache_status PRIVATE cxx_std_20)
 target_link_libraries(blockcache_status
+    ibverbs::ibverbs
+
     dingofs_common
     glog::glog
 )

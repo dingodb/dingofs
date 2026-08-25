@@ -12,18 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# The transport-neutral layer: vocabulary headers only, nothing that knows a
-# wire. Each transport is a target of its own underneath -- net/rdma links
-# ibverbs, net/brpc links brpc -- so a user of this layer alone links
-# neither.
-add_library(blockcache_net INTERFACE)
+file(GLOB_RECURSE BLOCKCACHE_NET_SRCS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cc")
 
-target_link_libraries(blockcache_net INTERFACE
+add_library(blockcache_net ${BLOCKCACHE_NET_SRCS})
+target_compile_features(blockcache_net PRIVATE cxx_std_20)
+target_link_libraries(blockcache_net
     blockcache_core
+    brpc::brpc
+    protobuf::libprotobuf
+    PROTO_OBJS
 )
-
-add_subdirectory(infiniband)
-add_subdirectory(protocol)
-add_subdirectory(rdma)
-add_subdirectory(brpc)
-add_subdirectory(server)
+blockcache_tune(blockcache_net)

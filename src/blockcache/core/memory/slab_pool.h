@@ -20,10 +20,16 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <vector>
 
 namespace dingofs {
 namespace blockcache {
+
+struct SlabPoolOption {
+  size_t superblock_count = 64;  // 256 MiB
+  int numa_node = -1;
+};
 
 class SlabPool {
  public:
@@ -32,18 +38,13 @@ class SlabPool {
   static constexpr size_t kMinAllocSize = size_t{1} << kMinShift;
   static constexpr size_t kSuperblockSize = size_t{1} << kSuperShift;
 
-  struct Option {
-    size_t superblock_count = 64;  // 256 MiB
-    int numa_node = -1;
-  };
-
   struct Stats {
     uint64_t allocs = 0;
     uint64_t frees = 0;
     uint64_t failed_allocs = 0;
   };
 
-  explicit SlabPool(const Option& option);
+  explicit SlabPool(const SlabPoolOption& option);
   ~SlabPool();
 
   SlabPool(const SlabPool&) = delete;
@@ -60,15 +61,9 @@ class SlabPool {
     return ObjectSizeFor(ShiftFor(n));
   }
 
-  int SuperblockIndexOf(const char* p) const {
-    auto offset = static_cast<size_t>(p - base_);  // wraps when p < base_
-    return offset < total_ ? static_cast<int>(offset >> kSuperShift) : -1;
-  }
-
   char* base() const { return base_; }
   size_t total_bytes() const { return total_; }
   size_t superblock_count() const { return metas_.size(); }
-  const Stats& stats() const { return stats_; }
 
  private:
   static constexpr int kFreeTag = 0xFF;  // shift tag: superblock unassigned
@@ -156,6 +151,8 @@ class SlabPool {
   std::vector<SlabMeta> metas_;  // one entry per superblock
   Stats stats_;
 };
+
+using SlabPoolUPtr = std::unique_ptr<SlabPool>;
 
 }  // namespace blockcache
 }  // namespace dingofs

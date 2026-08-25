@@ -17,11 +17,13 @@
 #ifndef DINGOFS_BLOCKCACHE_COMMON_MDS_CLIENT_H_
 #define DINGOFS_BLOCKCACHE_COMMON_MDS_CLIENT_H_
 
+#include <glog/logging.h>
+
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
-#include "blockcache/net/brpc/brpc_headers.h"
 #include "client/vfs/metasystem/mds/mds_discovery.h"
 #include "client/vfs/metasystem/mds/rpc.h"
 #include "common/status.h"
@@ -72,6 +74,10 @@ using Members = std::vector<CacheGroupMember>;
 class MDSClient {
  public:
   virtual ~MDSClient() = default;
+  MDSClient() = default;
+
+  MDSClient(const MDSClient&) = delete;
+  MDSClient& operator=(const MDSClient&) = delete;
 
   virtual Status Start() = 0;
   virtual void Shutdown() = 0;
@@ -97,6 +103,8 @@ using MDSClientUPtr = std::unique_ptr<MDSClient>;
 class MDSClientImpl : public MDSClient {
  public:
   MDSClientImpl();
+  MDSClientImpl(const MDSClientImpl&) = delete;
+  MDSClientImpl& operator=(const MDSClientImpl&) = delete;
 
   Status Start() override;
   void Shutdown() override;
@@ -114,8 +122,6 @@ class MDSClientImpl : public MDSClient {
                      std::vector<CacheGroupMember>* members) override;
 
  private:
-  friend class MDSClientImplTest;
-
   CacheGroupMemberState ToMemberState(pb::mds::CacheGroupMemberState state);
 
   mds::MDSMeta GetRandomlyMDS(const mds::MDSMeta& old_mds);

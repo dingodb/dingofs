@@ -26,9 +26,9 @@
 #include "blockcache/common/mds_client.h"
 #include "blockcache/common/status.h"
 #include "blockcache/core/reactor/coroutine.h"
-#include "blockcache/net/server/channel.h"
+#include "blockcache/net/channel.h"
 #include "blockcache/net/types.h"
-#include "blockcache/node/stub.h"
+#include "blockcache/remote/stub.h"
 #include "blockcache/utils/sync.h"
 
 namespace dingofs {
@@ -46,8 +46,6 @@ class NodeProber {
   const auto& remote_shards() const { return remote_shard_range_; }
 
  private:
-  friend struct NodeProberTestAccess;
-
   struct RemoteShardRange {
     unsigned base = 0;
     unsigned count = 1;
@@ -93,17 +91,15 @@ class NodeConnection {
   Future<Status> Open();
   Future<> Close();
 
-  bool IsConnected() const { return stub_ != nullptr; }
+  bool IsConnected() const;
   CacheStub* stub() const { return stub_.get(); }
 
  private:
   Future<Status> Establish();
-  Future<Status> EstablishForBrpc();
-  Future<Status> EstablishForRdma();
 
   Option option_;
   SingleFlight opening_;
-  Channel channel_;
+  ChannelUPtr channel_;
   CacheStubUPtr stub_;
 };
 

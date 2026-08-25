@@ -35,6 +35,8 @@ namespace blockcache {
 class Benchmarker {
  public:
   Benchmarker();
+  Benchmarker(const Benchmarker&) = delete;
+  Benchmarker& operator=(const Benchmarker&) = delete;
 
   Status Start();
 

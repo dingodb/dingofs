@@ -24,7 +24,6 @@
 #include "blockcache/core/fs/io_ring.h"
 #include "blockcache/core/reactor/coroutine.h"
 #include "blockcache/utils/containers/admission_queue.h"
-#include "common/status.h"
 
 namespace dingofs {
 namespace blockcache {
@@ -50,7 +49,6 @@ struct FileStat {
   uint64_t size = 0;
   uint32_t nlink = 0;
   int64_t atime_sec = 0;
-  int64_t mtime_sec = 0;
 };
 
 struct OpenOption {
@@ -137,10 +135,7 @@ class File {
   Future<StatusOr<uint64_t>> Size() const;
 
   bool Valid() const { return fd_ >= 0; }
-  int fd() const { return fd_; }
   bool direct() const { return direct_; }
-  int32_t fixed_fd() const { return fixed_fd_; }
-  const AdmissionQueue<RwAwaiter>& admission() const { return queue_; }
 
  private:
   friend class RwAwaiter;

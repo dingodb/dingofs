@@ -19,28 +19,28 @@
 
 #include <cstdint>
 
+#include "blockcache/core/memory/slab_pool.h"
+
 namespace dingofs {
 namespace blockcache {
 
-// Shared client/server vocabulary: opcode, reply code.
-
-// The verb on the wire.
 using Opcode = uint16_t;
 
-// What the HANDLER decided; a Status says whether the framework carried it.
 using ReplyCode = uint16_t;
 
-// The framework produces only these; the rest of the space is a handler's.
 inline constexpr ReplyCode kReplyOk = 0;
 inline constexpr ReplyCode kReplyBadOpcode = 0xff01;
 inline constexpr ReplyCode kReplyHandlerError = 0xff02;
 inline constexpr ReplyCode kReplyTooLarge = 0xff03;
 inline constexpr ReplyCode kReplyBadRequest = 0xff04;
 
-// Framework-owned opcode: rdma handshake; the app opcode fold never yields 0.
-inline constexpr Opcode kOpRdmaHandshake = 0;
+inline constexpr Opcode kOpUnspecified = 0;
+
+inline constexpr uint32_t kMaxAttachmentBytes = 4u << 20;
+static_assert(kMaxAttachmentBytes == SlabPool::kSuperblockSize,
+              "one attachment == one superblock is a load-bearing identity");
 
 }  // namespace blockcache
 }  // namespace dingofs
 
-#endif  // DINGOFS_BLOCKCACHE_NET_TYPES_H_
+#endif

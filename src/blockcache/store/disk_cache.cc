@@ -47,19 +47,17 @@ std::vector<DiskOption> ParseDiskOptions(const std::string& value) {
   for (std::string& item : Split(value, ',')) {
     DiskOption option;
 
-    // capacity
-    option.capacity_bytes = static_cast<uint64_t>(FLAGS_cache_size_mb) << 20;
+    option.capacity_bytes = static_cast<uint64_t>(FLAGS_cache_size_mb) * kMiB;
     const size_t colon = item.find(':');
     if (colon != std::string::npos) {
       uint64_t size_mb = 0;
       std::string_view size_sv = std::string_view(item).substr(colon + 1);
       CHECK(SplitUint(&size_sv, '\0', &size_mb) && size_mb > 0)
           << "bad disk size in cache_dir item: " << item;
-      option.capacity_bytes = size_mb << 20;
+      option.capacity_bytes = size_mb * kMiB;
       item.resize(colon);
     }
 
-    // dir
     option.dir = std::move(item);
     if (!FLAGS_cache_dir_uuid.empty()) {
       option.dir += "/" + FLAGS_cache_dir_uuid;
@@ -104,7 +102,7 @@ Future<> DiskCache::Start(UploadFunc uploader) {
   LOG(INFO) << "Successfully start DiskCache: dir=" << option_.dir
             << " uuid=" << uuid_ << " shard=" << ThisShardId() << "/"
             << ShardCount()
-            << " capacity_mb=" << (option_.capacity_bytes >> 20);
+            << " capacity_mb=" << (option_.capacity_bytes / kMiB);
   co_return;
 }
 
@@ -249,6 +247,21 @@ Future<bool> DiskCache::Exists(BlockHandle handle) {
   co_return false;
 }
 
+Future<CacheStats> DiskCache::GetStats() {
+  CacheStats stats = manager_->GetStats();
+  stats.hits += hits_;
+  stats.misses += misses_;
+  stats.io_errors += health_->io_errors();
+  stats.disks.push_back(DiskStats{.uuid = uuid_,
+                                  .dir = layout_.RootDir(),
+                                  .capacity_bytes = stats.capacity_bytes,
+                                  .used_bytes = stats.used_bytes,
+                                  .health = health_->state(),
+                                  .stage_full = manager_->StageFull(),
+                                  .cache_full = manager_->CacheFull()});
+  return MakeReadyFuture<CacheStats>(std::move(stats));
+}
+
 Status DiskCache::CreateDirs() {
   std::error_code ec;
   for (const std::string& dir :
@@ -302,21 +315,6 @@ Status DiskCache::Check(uint8_t want) const {
     return Status::CacheFull("disk cache full");
   }
   return Status::OK();
-}
-
-Future<CacheStats> DiskCache::GetStats() {
-  CacheStats stats = manager_->GetStats();
-  stats.hits += hits_;
-  stats.misses += misses_;
-  stats.io_errors += health_->io_errors();
-  stats.disks.push_back(DiskStats{.uuid = uuid_,
-                                  .dir = layout_.RootDir(),
-                                  .capacity_bytes = stats.capacity_bytes,
-                                  .used_bytes = stats.used_bytes,
-                                  .health = health_->state(),
-                                  .stage_full = manager_->StageFull(),
-                                  .cache_full = manager_->CacheFull()});
-  return MakeReadyFuture<CacheStats>(std::move(stats));
 }
 
 }  // namespace blockcache

@@ -21,9 +21,7 @@
 #include <vector>
 
 #include "blockcache/common/flag_decls.h"
-#include "blockcache/core/memory/buffer.h"
-#include "blockcache/core/runtime/runtime.h"
-#include "blockcache/core/runtime/worker_pool.h"
+#include "blockcache/core/runtime/bootstrap.h"
 #include "blockcache/node/cli.h"
 #include "blockcache/node/node.h"
 #include "blockcache/utils/flags.h"
@@ -32,54 +30,16 @@
 
 using dingofs::Logger;
 using dingofs::Status;
-using dingofs::blockcache::BufferPool;
 using dingofs::blockcache::CacheNode;
 using dingofs::blockcache::FlagParser;
-using dingofs::blockcache::FLAGS_cpuset;
 using dingofs::blockcache::FLAGS_daemonize;
-using dingofs::blockcache::FLAGS_poll_mode;
-using dingofs::blockcache::FLAGS_shards;
-using dingofs::blockcache::kUsage;
-using dingofs::blockcache::Runtime;
-using dingofs::blockcache::RuntimeOption;
-using dingofs::blockcache::RuntimeUPtr;
-using dingofs::blockcache::WorkerPool;
-using dingofs::blockcache::WorkerPoolUPtr;
+using dingofs::blockcache::kNodeUsage;
+using dingofs::blockcache::StartProcessRuntime;
+using dingofs::blockcache::StopProcessRuntime;
 using dingofs::utils::DaemonizeExec;
 
-static RuntimeUPtr& GetGlobalRuntime() {
-  static RuntimeUPtr runtime;
-  return runtime;
-}
-
-static WorkerPoolUPtr& GetGlobalWorkerPool() {
-  static WorkerPoolUPtr workers;
-  return workers;
-}
-
-static void GlobalInitOrDie() {
-  RuntimeOption option;
-  option.shard_count = FLAGS_shards;
-  option.cpuset = FLAGS_cpuset;
-  option.reactor.poll_mode = FLAGS_poll_mode;
-  GetGlobalRuntime() = std::make_unique<Runtime>(option);
-  GetGlobalRuntime()->Start();
-
-  GetGlobalWorkerPool() = std::make_unique<WorkerPool>();
-  GetGlobalWorkerPool()->Start();
-}
-
-static void GlobalShutdown() {
-  GetGlobalWorkerPool()->Shutdown();
-
-  BufferPool::ShutdownOnAllShards();
-
-  GetGlobalRuntime()->Shutdown();
-  GetGlobalRuntime()->Join();
-}
-
 static bool ParseOptions(int argc, char** argv) {
-  return FlagParser::Parse(&argc, &argv, kUsage);
+  return FlagParser::Parse(&argc, &argv, kNodeUsage);
 }
 
 static bool Daemonize(const std::vector<std::string>& args) {
@@ -91,7 +51,7 @@ static bool Daemonize(const std::vector<std::string>& args) {
 
 static void InitLogger() {
   Logger::Init("dingo-cache");
-  LOG(INFO) << FlagParser::GenCurrentFlags(FlagParser::Collect(kUsage));
+  LOG(INFO) << FlagParser::GenCurrentFlags(FlagParser::Collect(kNodeUsage));
 }
 
 static bool RunNode() {
@@ -115,9 +75,9 @@ int main(int argc, char** argv) {
   }
 
   InitLogger();
-  GlobalInitOrDie();
+  StartProcessRuntime();
   bool succ = RunNode();
-  GlobalShutdown();
+  StopProcessRuntime();
 
   return succ ? 0 : -1;
 }

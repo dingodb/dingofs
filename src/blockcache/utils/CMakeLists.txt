@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-file(GLOB_RECURSE BLOCKCACHE_UTILS_SRCS "${CMAKE_CURRENT_SOURCE_DIR}/*.cc")
+file(GLOB_RECURSE BLOCKCACHE_UTILS_SRCS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cc")
 list(REMOVE_ITEM BLOCKCACHE_UTILS_SRCS "${CMAKE_CURRENT_SOURCE_DIR}/flags.cc")
 
 add_library(blockcache_utils ${BLOCKCACHE_UTILS_SRCS})
@@ -21,7 +21,7 @@ target_link_libraries(blockcache_utils
     blockcache_status
     dingofs_common
     glog::glog
-    ${NUMA_LIBRARY}
+    ${NUMA_SHARED_LIBRARY}
 )
 blockcache_tune(blockcache_utils)
 

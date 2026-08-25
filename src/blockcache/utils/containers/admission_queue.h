@@ -35,7 +35,6 @@ class AdmissionQueue {
       op->Submit();
     } else {
       parked_.Push(op);
-      ++total_parked_;
     }
   }
 
@@ -48,15 +47,9 @@ class AdmissionQueue {
     }
   }
 
-  uint32_t limit() const { return limit_; }
-  uint32_t inflight() const { return inflight_; }
-  uint32_t parked() const { return parked_.size(); }
-  uint64_t total_parked() const { return total_parked_; }
-
  private:
   uint32_t limit_;
   uint32_t inflight_ = 0;
-  uint64_t total_parked_ = 0;
   ParkQueue<Op> parked_;
 };
 

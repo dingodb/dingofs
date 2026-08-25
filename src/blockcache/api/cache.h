@@ -27,7 +27,7 @@
 #include "blockcache/common/block_handle.h"
 #include "blockcache/common/mds_client.h"
 #include "blockcache/core/memory/buffer_view.h"
-#include "blockcache/core/runtime/runtime.h"
+#include "blockcache/core/runtime/bootstrap.h"
 #include "blockcache/core/runtime/worker_pool.h"
 #include "blockcache/object/object.h"
 #include "blockcache/tier/sharded.h"
@@ -57,22 +57,16 @@ class BlockCacheImpl {
                    DeleteOption option = {});
   CacheStats GetStats();
 
-  Status RegisterBuffers(void* base, size_t bytes);
-
  private:
   struct InboxTask;
   template <typename Task>
   struct Context;
-
-  void StartRuntime();
-  void StopRuntime();
 
   Status StartTierCache();
   void StopTierCache();
 
   void DrainInflight();
 
-  // task
   bool Check(BlockHandle handle, unsigned* shard);
 
   template <typename Task, typename... Args>
@@ -87,8 +81,6 @@ class BlockCacheImpl {
   std::atomic<bool> running_{false};
   MDSClient* mds_client_;
   ObjectStorageUPtr storage_;
-  RuntimeUPtr runtime_;
-  WorkerPoolUPtr worker_pool_;
   ShardedTierCacheUPtr tier_cache_;
   InflightThrottleUPtr throttle_;
 };

@@ -16,16 +16,23 @@
 
 #include "blockcache/node/node.h"
 
+#include <brpc/controller.h>
 #include <butil/memory/scope_guard.h>
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
+#include <chrono>
+#include <csignal>
 #include <memory>
+#include <thread>
 #include <utility>
 
 #include "blockcache/common/flag_decls.h"
 #include "blockcache/core/runtime/smp.h"
-#include "blockcache/net/brpc/transport.h"
+
+namespace brpc {
+DECLARE_bool(graceful_quit_on_sigterm);
+}  // namespace brpc
 
 namespace dingofs {
 namespace blockcache {
@@ -49,9 +56,34 @@ CacheNode::CacheNode() : CacheNode(std::make_unique<MDSClientImpl>()) {}
 CacheNode::CacheNode(MDSClientUPtr mds_client)
     : mds_client_(std::move(mds_client)),
       block_cache_(std::make_unique<ShardedLocalCache>(mds_client_.get())),
+      cache_service_(block_cache_.get()),
       membership_(std::make_unique<GroupMembership>(mds_client_.get())),
       heartbeat_(std::make_unique<Heartbeat>(mds_client_.get())) {
   FLAGS_cache_dir_uuid = FLAGS_id;
+
+  // brpc server
+  {
+    BrpcServer::Option option;
+    option.listen_ip = FLAGS_bind_ip;
+    option.listen_port = static_cast<uint16_t>(FLAGS_listen_port);
+    brpc_server_ = std::make_unique<BrpcServer>(option);
+  }
+
+  // infiniband server
+  {
+    if (!FLAGS_rdma) {
+      return;
+    }
+    CHECK(FLAGS_rdma_idle_timeout_s >= 3 * FLAGS_rdma_heartbeat_interval_s)
+        << "--rdma_idle_timeout_s must be at least 3x "
+           "--rdma_heartbeat_interval_s";
+
+    infiniband::ServerOption server_option;
+    server_option.device_name = FLAGS_rdma_device;
+    server_option.brpc_server = brpc_server_.get();
+    infiniband_server_ =
+        std::make_unique<infiniband::Server>(std::move(server_option));
+  }
 }
 
 CacheNode::~CacheNode() { Shutdown(); }
@@ -75,7 +107,7 @@ Status CacheNode::Start() {
     return status;
   }
 
-  status = StartServer();
+  status = StartServers();
   if (!status.ok()) {
     return status;
   }
@@ -103,38 +135,62 @@ void CacheNode::Shutdown() {
 
   heartbeat_->Shutdown();
   membership_->Shutdown();
-  server_->Shutdown();
+  ShutdownServers();
   block_cache_->Shutdown();
 
   running_ = false;
   LOG(INFO) << "Successfully shutdown CacheNode";
 }
 
-Status CacheNode::StartServer() {
-  {
-    ServerOption option;
-    option.buffer_pool_bytes = FLAGS_buffer_pool_mb << 20;
-    option.rdma.enabled = FLAGS_rdma;
-    option.rdma.device = FLAGS_rdma_device;
-    server_ = std::make_unique<Server>(option);
-    server_->AddService<CacheService>(block_cache_.get());
+void CacheNode::RunUntilAskedToQuit() {
+  brpc::FLAGS_graceful_quit_on_sigterm = true;
+  while (!brpc::IsAskedToQuit()) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
   }
 
-  {
-    BrpcTransport::Option option;
-    option.listen_ip = FLAGS_bind_ip;
-    option.listen_port = static_cast<uint16_t>(FLAGS_listen_port);
-    server_->AddTransport(std::make_unique<BrpcTransport>(option));
-  }
+  (void)std::signal(SIGINT, SIG_DFL);
+  (void)std::signal(SIGTERM, SIG_DFL);
 
-  Status status = server_->Start();
+  LOG(INFO) << "Asked to quit, stopping the node";
+}
+
+Status CacheNode::StartServers() {
+  Status status = StartInfinibandServer();
   if (!status.ok()) {
-    LOG(ERROR) << "Fail to start server: " << status.ToString();
+    return status;
+  }
+  return StartBrpcServer();
+}
+
+void CacheNode::ShutdownServers() {
+  brpc_server_->Shutdown();
+  if (infiniband_server_ != nullptr) {
+    infiniband_server_->Shutdown();
+  }
+}
+
+Status CacheNode::StartInfinibandServer() {
+  if (infiniband_server_ == nullptr) {
+    return Status::OK();
+  }
+
+  infiniband_server_->AddService(&cache_service_);
+  Status status = infiniband_server_->Start();
+  if (!status.ok()) {
+    LOG(ERROR) << "Fail to start the infiniband server: " << status.ToString();
   }
   return status;
 }
 
-void CacheNode::RunUntilAskedToQuit() { server_->RunUntilAskedToQuit(); }
+Status CacheNode::StartBrpcServer() {
+  brpc_server_->AddService(
+      std::make_unique<RawCacheService>(brpc_server_.get(), &cache_service_));
+  Status status = brpc_server_->Start();
+  if (!status.ok()) {
+    LOG(ERROR) << "Fail to start the brpc server: " << status.ToString();
+  }
+  return status;
+}
 
 }  // namespace blockcache
 }  // namespace dingofs

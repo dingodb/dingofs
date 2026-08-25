@@ -48,7 +48,7 @@ class DiskCacheGroup final : public CacheStore {
   Future<CacheStats> GetStats() override;
 
  private:
-  DiskCache& GetStore(const BlockHandle& handle) {
+  DiskCache& GetStore(BlockHandle handle) {
     return *stores_[chash_.MemberOf(handle.id)];
   }
 

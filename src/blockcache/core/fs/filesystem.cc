@@ -33,6 +33,22 @@
 namespace dingofs {
 namespace blockcache {
 
+static bool IsOpSupported(int op) {
+  static io_uring_probe* probe = io_uring_get_probe();
+  return probe != nullptr && io_uring_opcode_supported(probe, op);
+}
+
+static Future<int> Mkdir(std::string path, uint32_t mode) {
+  if (IsOpSupported(IORING_OP_MKDIRAT)) {
+    co_return co_await UringOp([&path, mode](io_uring_sqe* sqe) {
+      io_uring_prep_mkdirat(sqe, AT_FDCWD, path.c_str(),
+                            static_cast<mode_t>(mode));
+    });
+  }
+  LOG_FIRST_N(WARNING, 1) << "io_uring lacks MKDIRAT, using sync fallback";
+  co_return ::mkdir(path.c_str(), static_cast<mode_t>(mode)) == 0 ? 0 : -errno;
+}
+
 static int ToOpenFlags(OpenFlags flags, bool direct) {
   int oflags = O_CLOEXEC | (direct ? O_DIRECT : 0);
   const bool r = HasFlag(flags, OpenFlags::kRead);
@@ -130,17 +146,10 @@ Future<Status> File::Close() {
   ReleaseSlot();
   int rc = co_await UringOp(
       [fd](io_uring_sqe* sqe) { io_uring_prep_close(sqe, fd); });
-  co_return rc < 0 ? ToStatus(-rc, "close file") : Status::OK();
-}
-
-void File::CloseSyncIfOpen() {
-  if (fd_ >= 0) {
-    LOG(WARNING) << "Fail to close file, fd=" << fd_
-                 << " destroyed without Close(); closing synchronously";
-    ReleaseSlot();
-    ::close(fd_);
-    fd_ = -1;
+  if (rc < 0) {
+    co_return ToStatus(-rc, "close file");
   }
+  co_return Status::OK();
 }
 
 RwAwaiter File::Read(uint64_t pos, void* buffer, uint32_t len) {
@@ -161,7 +170,10 @@ Future<Status> File::Sync() const {
   int rc = co_await UringOp([fd](io_uring_sqe* sqe) {
     io_uring_prep_fsync(sqe, fd, IORING_FSYNC_DATASYNC);
   });
-  co_return rc < 0 ? ToStatus(-rc, "sync file") : Status::OK();
+  if (rc < 0) {
+    co_return ToStatus(-rc, "sync file");
+  }
+  co_return Status::OK();
 }
 
 Future<Status> File::Allocate(uint64_t pos, uint64_t len) const {
@@ -169,7 +181,10 @@ Future<Status> File::Allocate(uint64_t pos, uint64_t len) const {
   int rc = co_await UringOp([fd, pos, len](io_uring_sqe* sqe) {
     io_uring_prep_fallocate(sqe, fd, 0, pos, len);
   });
-  co_return rc < 0 ? ToStatus(-rc, "allocate file space") : Status::OK();
+  if (rc < 0) {
+    co_return ToStatus(-rc, "allocate file space");
+  }
+  co_return Status::OK();
 }
 
 Future<StatusOr<uint64_t>> File::Size() const {
@@ -182,6 +197,16 @@ Future<StatusOr<uint64_t>> File::Size() const {
     co_return ToStatus(-rc, "stat file");
   }
   co_return static_cast<uint64_t>(sx.stx_size);
+}
+
+void File::CloseSyncIfOpen() {
+  if (fd_ >= 0) {
+    LOG(WARNING) << "Fail to close file, fd=" << fd_
+                 << " destroyed without Close(); closing synchronously";
+    ReleaseSlot();
+    ::close(fd_);
+    fd_ = -1;
+  }
 }
 
 void File::ReleaseSlot() {
@@ -221,11 +246,6 @@ Future<StatusOr<File>> FileSystem::Open(std::string path, OpenFlags flags,
   co_return file;
 }
 
-static bool IsOpSupported(int op) {
-  static io_uring_probe* probe = io_uring_get_probe();
-  return probe != nullptr && io_uring_opcode_supported(probe, op);
-}
-
 Future<Status> FileSystem::Unlink(std::string path) {
   int rc;
   if (IsOpSupported(IORING_OP_UNLINKAT)) {
@@ -236,7 +256,10 @@ Future<Status> FileSystem::Unlink(std::string path) {
     LOG_FIRST_N(WARNING, 1) << "io_uring lacks UNLINKAT, using sync fallback";
     rc = ::unlink(path.c_str()) == 0 ? 0 : -errno;
   }
-  co_return rc < 0 ? ToStatus(-rc, "unlink file") : Status::OK();
+  if (rc < 0) {
+    co_return ToStatus(-rc, "unlink file");
+  }
+  co_return Status::OK();
 }
 
 Future<Status> FileSystem::Link(std::string from, std::string to) {
@@ -250,7 +273,10 @@ Future<Status> FileSystem::Link(std::string from, std::string to) {
     LOG_FIRST_N(WARNING, 1) << "io_uring lacks LINKAT, using sync fallback";
     rc = ::link(from.c_str(), to.c_str()) == 0 ? 0 : -errno;
   }
-  co_return rc < 0 ? ToStatus(-rc, "link file") : Status::OK();
+  if (rc < 0) {
+    co_return ToStatus(-rc, "link file");
+  }
+  co_return Status::OK();
 }
 
 Future<Status> FileSystem::Rename(std::string from, std::string to) {
@@ -264,18 +290,10 @@ Future<Status> FileSystem::Rename(std::string from, std::string to) {
     LOG_FIRST_N(WARNING, 1) << "io_uring lacks RENAMEAT, using sync fallback";
     rc = ::rename(from.c_str(), to.c_str()) == 0 ? 0 : -errno;
   }
-  co_return rc < 0 ? ToStatus(-rc, "rename file") : Status::OK();
-}
-
-static Future<int> Mkdir(std::string path, uint32_t mode) {
-  if (IsOpSupported(IORING_OP_MKDIRAT)) {
-    co_return co_await UringOp([&path, mode](io_uring_sqe* sqe) {
-      io_uring_prep_mkdirat(sqe, AT_FDCWD, path.c_str(),
-                            static_cast<mode_t>(mode));
-    });
+  if (rc < 0) {
+    co_return ToStatus(-rc, "rename file");
   }
-  LOG_FIRST_N(WARNING, 1) << "io_uring lacks MKDIRAT, using sync fallback";
-  co_return ::mkdir(path.c_str(), static_cast<mode_t>(mode)) == 0 ? 0 : -errno;
+  co_return Status::OK();
 }
 
 Future<Status> FileSystem::MakeDirs(std::string path, uint32_t mode) {
@@ -319,8 +337,7 @@ Future<StatusOr<FileStat>> FileSystem::StatPath(std::string path) {
   }
   co_return FileStat{.size = sx.stx_size,
                      .nlink = sx.stx_nlink,
-                     .atime_sec = sx.stx_atime.tv_sec,
-                     .mtime_sec = sx.stx_mtime.tv_sec};
+                     .atime_sec = sx.stx_atime.tv_sec};
 }
 
 }  // namespace blockcache

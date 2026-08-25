@@ -38,13 +38,8 @@ void BecomeShardThread(unsigned shard, int cpu) {
   memory::ShardInit(shard, cpu >= 0 ? NumaNode(cpu) : -1);
 }
 
-Shard::Shard(unsigned id, const RuntimeOption& option, ShardInbox* inbox,
-             Poller* mesh_poller)
-    : id_(id),
-      inbox_(inbox),
-      mesh_poller_(mesh_poller),
-      reactor_(id, option.reactor),
-      io_ring_(option.io) {
+Shard::Shard(unsigned id, ShardInbox* inbox, Poller* mesh_poller)
+    : id_(id), inbox_(inbox), mesh_poller_(mesh_poller), reactor_(id) {
   Mesh::Instance().AttachReactor(id, &reactor_);
 }
 

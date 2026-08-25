@@ -65,9 +65,6 @@ class DiskCache final : public CacheStore {
   uint64_t capacity_bytes() const { return option_.capacity_bytes; }
 
  private:
-  friend class RecoveryTest;
-  friend class SingleStoreTest;
-
   enum WantType : uint8_t {
     kWantExec = 1,
     kWantStage = 2,
@@ -78,11 +75,11 @@ class DiskCache final : public CacheStore {
   Status GetOrCreateLockFile();
   Status Check(uint8_t want) const;
 
-  std::string GetStagePath(const BlockHandle& handle) const {
+  std::string GetStagePath(BlockHandle handle) const {
     return layout_.StagePath(handle);
   }
 
-  std::string GetCachePath(const BlockHandle& handle) const {
+  std::string GetCachePath(BlockHandle handle) const {
     return layout_.CachePath(handle);
   }
 

@@ -94,7 +94,7 @@ void CircuitBreaker::Trip() {
     open_ms_ =
         std::min<uint64_t>(open_ms_ * 2, FLAGS_remote_breaker_max_open_ms);
   }
-  open_until_ns_ = CachedTimestampNs() + (open_ms_ * 1000 * 1000);
+  open_until_ns_ = CachedTimestampNs() + (open_ms_ * kNsPerMs);
   failures_ = 0;
   probing_ = false;
 }

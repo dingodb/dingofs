@@ -113,7 +113,7 @@ Future<bool> LocalFileSystem::FileExists(std::string path) {
   co_return (co_await FileSystem::StatPath(std::move(path))).ok();
 }
 
-Status LocalFileSystem::CheckBlock(const BufferViews& block) {
+Status LocalFileSystem::CheckBlock(BufferViews block) {
   if (block.empty() || block.size() > kMaxBufferViews ||
       TotalBytes(block) == 0) {
     return Status::InvalidParam("a block is 1.." +

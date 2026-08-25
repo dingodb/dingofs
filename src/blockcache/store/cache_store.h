@@ -35,6 +35,10 @@ using UploadFunc = std::function<void(BlockHandle handle)>;
 class CacheStore {
  public:
   virtual ~CacheStore() = default;
+  CacheStore() = default;
+
+  CacheStore(const CacheStore&) = delete;
+  CacheStore& operator=(const CacheStore&) = delete;
 
   virtual Future<> Start(UploadFunc uploader) = 0;
   virtual Future<> Shutdown() = 0;

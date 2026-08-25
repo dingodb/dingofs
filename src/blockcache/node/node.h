@@ -17,9 +17,12 @@
 #ifndef DINGOFS_BLOCKCACHE_NODE_NODE_H_
 #define DINGOFS_BLOCKCACHE_NODE_NODE_H_
 
+#include <memory>
+
 #include "blockcache/block/sharded.h"
 #include "blockcache/common/mds_client.h"
-#include "blockcache/net/server/server.h"
+#include "blockcache/infiniband/server/server.h"
+#include "blockcache/net/brpc/brpc_server.h"
 #include "blockcache/node/heartbeat.h"
 #include "blockcache/node/membership.h"
 #include "blockcache/node/service.h"
@@ -40,15 +43,20 @@ class CacheNode {
   void RunUntilAskedToQuit();
 
  private:
-  friend class CacheNodeBuilder;
   explicit CacheNode(MDSClientUPtr mds_client);
 
-  Status StartServer();
+  Status StartServers();
+  void ShutdownServers();
+
+  Status StartInfinibandServer();
+  Status StartBrpcServer();
 
   bool running_ = false;
   MDSClientUPtr mds_client_;
   ShardedLocalCacheUPtr block_cache_;
-  ServerUPtr server_;
+  CacheService cache_service_;
+  std::unique_ptr<infiniband::Server> infiniband_server_;
+  std::unique_ptr<BrpcServer> brpc_server_;
   GroupMembershipUPtr membership_;
   HeartbeatUPtr heartbeat_;
 };

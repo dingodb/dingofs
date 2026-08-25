@@ -20,31 +20,40 @@
 #include <glog/logging.h>
 
 #include <algorithm>
+#include <memory>
 #include <ostream>
 #include <utility>
 
 #include "blockcache/common/flag_decls.h"
 #include "blockcache/common/route.h"
 #include "blockcache/core/runtime/smp.h"
-#include "blockcache/net/brpc/client.h"
-#include "blockcache/net/rdma/connection.h"
-#include "blockcache/net/server/client_domain.h"
-#include "blockcache/net/server/controller.h"
+#include "blockcache/infiniband/client/channel.h"
+#include "blockcache/net/brpc/brpc_channel.h"
+#include "blockcache/net/controller.h"
 
 namespace dingofs {
 namespace blockcache {
 
 thread_local unsigned tls_open_connections = 0;
 
-static BrpcClient::Option GenBrpcOption(const std::string& node_id,
-                                        const std::string& server) {
-  BrpcClient::Option option;
-  option.server = server;
-  option.timeout_ms = static_cast<int>(FLAGS_remote_rpc_timeout_ms);
-  option.connect_timeout_ms = static_cast<int>(FLAGS_remote_connect_timeout_ms);
-  option.connection_group =
-      "remote-" + std::to_string(ThisShardId()) + "-" + node_id;
-  return option;
+static ChannelOption GenChannelOption(const NodeConnection::Option& option) {
+  ChannelOption channel_option;
+  channel_option.server = option.server;
+  channel_option.tag =
+      "remote-" + std::to_string(ThisShardId()) + "-" + option.node_id;
+  if (option.use_rdma) {
+    channel_option.route_key =
+        HintForShard(option.remote_shard, option.remote_shard_count);
+    channel_option.expected_shard = option.remote_shard;
+  }
+  return channel_option;
+}
+
+static ChannelUPtr NewChannel(bool use_rdma) {
+  if (use_rdma) {
+    return std::make_unique<infiniband::Channel>();
+  }
+  return std::make_unique<BrpcChannel>(ThisShardId());
 }
 
 NodeProber::NodeProber(std::string node_id, std::string address)
@@ -72,35 +81,32 @@ Future<> NodeProber::Shutdown() {
 }
 
 Future<Status> NodeProber::GetNodeInfo() {
-  StatusOr<std::unique_ptr<BrpcClient>> c =
-      BrpcClient::Create(ThisShardId(), GenBrpcOption(node_id_, address_));
-  if (!c.ok()) {
-    co_return c.status();
+  ChannelUPtr channel = NewChannel(false);
+  Status status = co_await channel->Init(
+      GenChannelOption({.node_id = node_id_, .server = address_}));
+  if (!status.ok()) {
+    co_await channel->Shutdown();
+    co_return status;
   }
-  std::unique_ptr<BrpcClient> client = std::move(c).value();
 
-  Channel channel;
-  channel.Borrow(client.get());
-  CacheStub stub(&channel);
-
+  CacheStub stub(channel.get());
   Controller cntl;
-  pb::cache::v2::GetNodeInfoRequest request;
-  pb::cache::v2::GetNodeInfoResponse response;
-  Status status = co_await stub.GetNodeInfo(&cntl, &request, &response);
-  if (status.ok()) {
-    status = ToStatus(response.status());
+  pb::blockcache::GetNodeInfoRequest request;
+  pb::blockcache::GetNodeInfoResponse response;
+  status = co_await stub.GetNodeInfo(&cntl, &request, &response);
+  co_await channel->Shutdown();
+  if (!status.ok()) {
+    co_return status;
   }
-
-  co_await channel.Shutdown();
-  client->Shutdown();
-
+  status = ToStatus(response.status());
   if (!status.ok()) {
     co_return status;
   }
 
-  const unsigned shard = ThisShardId();
   remote_shard_count_ = std::max(1U, response.shards());
   use_rdma_ = FLAGS_remote_rdma && response.rdma_enabled();
+
+  const unsigned shard = ThisShardId();
   if (use_rdma_) {
     remote_shard_range_ =
         GetRemoteShardRange(shard, ShardCount(), remote_shard_count_);
@@ -115,15 +121,6 @@ Future<Status> NodeProber::GetNodeInfo() {
             << " owns remote shard(s) [" << remote_shard_range_.base << ","
             << remote_shard_range_.base + remote_shard_range_.count << ")";
   co_return Status::OK();
-}
-
-uint64_t NodeProber::FirstHintOf(unsigned shard, unsigned shards) {
-  if (shard == 0 || shards <= 1) {
-    return 0;
-  }
-  const __uint128_t scaled =
-      (static_cast<__uint128_t>(shard) << 64) + shards - 1;
-  return static_cast<uint64_t>(scaled / shards);
 }
 
 NodeProber::RemoteShardRange NodeProber::GetRemoteShardRange(
@@ -146,10 +143,19 @@ NodeProber::RemoteShardRange NodeProber::GetRemoteShardRange(
   return RemoteShardRange{.base = base, .count = highest - base + 1};
 }
 
+uint64_t NodeProber::FirstHintOf(unsigned shard, unsigned shards) {
+  if (shard == 0 || shards <= 1) {
+    return 0;
+  }
+  const __uint128_t scaled =
+      (static_cast<__uint128_t>(shard) << 64) + shards - 1;
+  return static_cast<uint64_t>(scaled / shards);
+}
+
 NodeConnection::NodeConnection(Option option) : option_(std::move(option)) {}
 
 Future<Status> NodeConnection::Open() {
-  if (stub_ != nullptr) {
+  if (IsConnected()) {
     co_return Status::OK();
   }
   co_return co_await opening_.Do([this] { return Establish(); });
@@ -160,64 +166,41 @@ Future<> NodeConnection::Close() {
     --tls_open_connections;
   }
   stub_.reset();
-  co_await channel_.Shutdown();
+  if (channel_ == nullptr) {
+    co_return;
+  }
+  const ChannelUPtr channel = std::move(channel_);
+  co_await channel->Shutdown();
+}
+
+bool NodeConnection::IsConnected() const {
+  return stub_ != nullptr && channel_ != nullptr && channel_->Alive();
 }
 
 Future<Status> NodeConnection::Establish() {
-  if (!option_.use_rdma) {
-    return EstablishForBrpc();
-  }
-  return EstablishForRdma();
-}
-
-Future<Status> NodeConnection::EstablishForBrpc() {
-  StatusOr<std::unique_ptr<BrpcClient>> client = BrpcClient::Create(
-      ThisShardId(), GenBrpcOption(option_.node_id, option_.server));
-  if (!client.ok()) {
-    co_return client.status();
-  }
-  channel_.Adopt(std::move(client).value());
-  stub_ = std::make_unique<CacheStub>(&channel_);
-  co_return Status::OK();
-}
-
-Future<Status> NodeConnection::EstablishForRdma() {
-  RdmaDomain* domain = ClientDomain::DomainOfThisShard();
-  if (domain == nullptr) {
-    co_return Status::Internal("no client rdma domain on this shard");
+  if (IsConnected()) {
+    co_return Status::OK();
+  } else if (stub_ != nullptr) {
+    co_await Close();
   }
 
-  StatusOr<std::unique_ptr<BrpcClient>> client = BrpcClient::Create(
-      ThisShardId(), GenBrpcOption(option_.node_id, option_.server));
-  if (!client.ok()) {
-    co_return client.status();
-  }
-  std::unique_ptr<BrpcClient> brpc_client = std::move(client).value();
-
-  const Status status = co_await channel_.Dial(
-      domain, brpc_client.get(),
-      HintForShard(option_.remote_shard, option_.remote_shard_count));
-  brpc_client->Shutdown();
+  ChannelUPtr channel = NewChannel(option_.use_rdma);
+  const Status status = co_await channel->Init(GenChannelOption(option_));
   if (!status.ok()) {
+    co_await channel->Shutdown();
     co_return status;
   }
+  channel_ = std::move(channel);
+  stub_ = std::make_unique<CacheStub>(channel_.get());
 
-  RdmaConnection* peer = channel_.connection();
-  if (peer != nullptr && peer->peer_shard() != option_.remote_shard) {
-    LOG_EVERY_N(WARNING, 100)
-        << "Cache node " << option_.node_id
-        << " answered the handshake from shard " << peer->peer_shard()
-        << ", not " << option_.remote_shard
-        << "; its shard count changed under us";
+  if (option_.use_rdma) {
+    LOG_IF(ERROR, ++tls_open_connections > FLAGS_rdma_max_connections)
+        << "Shard " << ThisShardId() << " now holds " << tls_open_connections
+        << " rdma connections but its registered pool is sized for "
+        << FLAGS_rdma_max_connections
+        << "; raise --rdma_max_connections or connections will fail to "
+           "carve a frame buffer";
   }
-  stub_ = std::make_unique<CacheStub>(&channel_);
-
-  LOG_IF(ERROR, ++tls_open_connections > FLAGS_remote_rdma_max_connections)
-      << "Shard " << ThisShardId() << " now holds " << tls_open_connections
-      << " rdma connections but its registered pool is sized for "
-      << FLAGS_remote_rdma_max_connections
-      << "; raise --remote_rdma_max_connections or connections will fail to "
-         "carve a frame buffer";
   co_return Status::OK();
 }
 

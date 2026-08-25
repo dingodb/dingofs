@@ -47,21 +47,6 @@ class SpscRing {
     tail_.store(tail + 1, std::memory_order_release);
     return true;
   }
-
-  bool Pop(T& out) {
-    uint32_t head = head_.load(std::memory_order_relaxed);
-    if (head == tail_cache_) {
-      tail_cache_ = tail_.load(std::memory_order_acquire);
-      if (head == tail_cache_) {
-        return false;
-      }
-    }
-
-    out = slots_[head & kMask];
-    head_.store(head + 1, std::memory_order_release);
-    return true;
-  }
-
   template <typename F>
   uint32_t ConsumeAll(F f) {
     uint32_t head = head_.load(std::memory_order_relaxed);

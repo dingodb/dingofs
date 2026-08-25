@@ -36,6 +36,10 @@ class Task {
 
  protected:
   ~Task() = default;
+  Task() = default;
+
+  Task(const Task&) = delete;
+  Task& operator=(const Task&) = delete;
 };
 
 template <typename P>

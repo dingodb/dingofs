@@ -25,6 +25,7 @@
 #include "blockcache/core/memory/shard_allocator.h"
 #include "blockcache/core/reactor/reactor.h"
 #include "blockcache/core/runtime/smp.h"
+#include "blockcache/utils/align.h"
 
 namespace dingofs {
 namespace blockcache {
@@ -34,37 +35,11 @@ DEFINE_uint64(buffer_pool_mb, 256, "buffer pool per shard in MiB");
 // One per shard, created on the shard thread so its pages are NUMA-local.
 thread_local std::unique_ptr<SlabPool> tls_pool;
 
-Buffer Buffer::Alloc(size_t n) {
-  SlabPool* pool = tls_pool.get();
-  if (pool == nullptr || n == 0) {
-    return {};
-  }
-  char* data = pool->Alloc(n);
-  if (data == nullptr) {
-    // No heap fallback on purpose: the device rejects unregistered memory.
-    return {};
-  }
-  return Buffer(data, n);
-}
-
-void Buffer::Reset() noexcept {
-  if (base_ != nullptr) {
-    SlabPool* pool = tls_pool.get();
-    DCHECK(pool != nullptr) << "a Buffer outlived its shard's pool";
-    if (pool != nullptr) {
-      pool->Free(base_);  // PopFront moved data_; the pool knows only this one
-    }
-    base_ = nullptr;
-    data_ = nullptr;
-    size_ = 0;
-  }
-}
-
 static Future<Status> OpenPoolOnThisShard(size_t superblocks) {
   if (tls_pool != nullptr) {
     co_return Status::OK();  // idempotent
   }
-  SlabPool::Option option;
+  SlabPoolOption option;
   option.superblock_count = superblocks;
   option.numa_node = memory::LocalNumaNode();
   auto pool = std::make_unique<SlabPool>(option);
@@ -93,7 +68,34 @@ static Future<> ClosePoolOnThisShard() {
   co_return;
 }
 
-Status BufferPool::InitOnAllShards(size_t bytes_per_shard) {
+Buffer Buffer::Alloc(size_t n) {
+  SlabPool* pool = tls_pool.get();
+  if (pool == nullptr || n == 0) {
+    return {};
+  }
+  char* data = pool->Alloc(n);
+  if (data == nullptr) {
+    // No heap fallback on purpose: the device rejects unregistered memory.
+    return {};
+  }
+  return Buffer(data, n);
+}
+
+void Buffer::Reset() noexcept {
+  if (base_ != nullptr) {
+    SlabPool* pool = tls_pool.get();
+    DCHECK(pool != nullptr) << "a Buffer outlived its shard's pool";
+    if (pool != nullptr) {
+      pool->Free(base_);  // PopFront moved data_; the pool knows only this one
+    }
+    base_ = nullptr;
+    data_ = nullptr;
+    size_ = 0;
+  }
+}
+
+Status BufferPool::InitOnAllShards() {
+  const size_t bytes_per_shard = size_t{FLAGS_buffer_pool_mb} * kMiB;
   const size_t superblocks = (bytes_per_shard + SlabPool::kSuperblockSize - 1) /
                              SlabPool::kSuperblockSize;
   if (superblocks == 0) {
