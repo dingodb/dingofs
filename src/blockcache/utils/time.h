@@ -23,6 +23,11 @@
 namespace dingofs {
 namespace blockcache {
 
+inline constexpr uint64_t kNsPerUs = 1000;
+inline constexpr uint64_t kNsPerMs = 1000 * kNsPerUs;
+inline constexpr uint64_t kNsPerSec = 1000 * kNsPerMs;
+inline constexpr uint64_t kUsPerSec = 1000 * 1000;
+
 inline uint64_t TimestampNs() {
   return std::chrono::duration_cast<std::chrono::nanoseconds>(
              std::chrono::steady_clock::now().time_since_epoch())
@@ -30,7 +35,7 @@ inline uint64_t TimestampNs() {
 }
 
 inline uint32_t TimestampSec() {
-  return static_cast<uint32_t>(TimestampNs() / 1000000000ULL);
+  return static_cast<uint32_t>(TimestampNs() / kNsPerSec);
 }
 
 inline thread_local uint64_t tls_cached_timestamp = 0;

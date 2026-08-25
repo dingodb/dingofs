@@ -16,18 +16,26 @@
 
 #include "blockcache/core/reactor/reactor.h"
 
+#include <gflags/gflags.h>
 #include <glog/logging.h>
 
+#include "blockcache/common/flag_decls.h"
 #include "blockcache/core/memory/shard_allocator.h"
 
 namespace dingofs {
 namespace blockcache {
 
-Reactor::Reactor(unsigned shard_id, const ReactorOption& option)
+static bool Positive(const char* /*name*/, uint32_t value) { return value > 0; }
+
+DEFINE_uint32(idle_poll_us, 200,
+              "microseconds a reactor spins on an empty queue before it sleeps;"
+              " ignored under --poll_mode, which never sleeps");
+DEFINE_validator(idle_poll_us, Positive);
+
+Reactor::Reactor(unsigned shard_id)
     : shard_id_(shard_id),
-      dispatcher_(option.dispatcher),
       timers_(dispatcher_),
-      idle_(option.poll_mode) {
+      idle_(FLAGS_poll_mode, uint64_t{FLAGS_idle_poll_us} * 1000) {
   CHECK(tls_reactor == nullptr) << "one reactor per thread";
   tls_reactor = this;
 }

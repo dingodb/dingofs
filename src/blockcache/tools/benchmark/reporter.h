@@ -29,12 +29,14 @@ namespace blockcache {
 class Reporter {
  public:
   explicit Reporter(CollectorSPtr collector);
+  Reporter(const Reporter&) = delete;
+  Reporter& operator=(const Reporter&) = delete;
 
   Status Start();
   void Shutdown();
 
  private:
-  constexpr static uint64_t kReportIntervalSeconds = 3;
+  static constexpr uint64_t kReportIntervalSeconds = 3;
 
   void TickTok();
 

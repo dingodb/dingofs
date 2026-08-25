@@ -31,8 +31,7 @@ void BecomeShardThread(unsigned shard, int cpu);
 // Everything one shard thread owns, built and torn down on that thread.
 class Shard {
  public:
-  Shard(unsigned id, const RuntimeOption& option, ShardInbox* inbox,
-        Poller* mesh_poller);
+  Shard(unsigned id, ShardInbox* inbox, Poller* mesh_poller);
 
   Shard(const Shard&) = delete;
   Shard& operator=(const Shard&) = delete;

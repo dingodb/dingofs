@@ -52,6 +52,10 @@ class Doorbell {
 // One waiter. Wake() is safe from any thread.
 class Parker {
  public:
+  Parker() = default;
+
+  Parker(const Parker&) = delete;
+  Parker& operator=(const Parker&) = delete;
   // Relative on purpose: an absolute deadline would have to agree with the
   // caller's clock domain, and TimestampNs() is steady rather than epoch.
   // Returns false when the timeout ran out with no wakeup. `ready` is checked

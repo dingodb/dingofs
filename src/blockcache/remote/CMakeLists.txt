@@ -12,14 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-file(GLOB BLOCKCACHE_REMOTE_SRCS "${CMAKE_CURRENT_SOURCE_DIR}/*.cc")
+file(GLOB BLOCKCACHE_REMOTE_SRCS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cc")
 
 add_library(blockcache_remote ${BLOCKCACHE_REMOTE_SRCS})
 target_compile_features(blockcache_remote PRIVATE cxx_std_20)
 target_link_libraries(blockcache_remote
     blockcache_common
-    blockcache_server
-    blockcache_brpc
+    blockcache_net
+    blockcache_infiniband
+    brpc::brpc
+    PROTO_OBJS
     blockcache_store
     blockcache_core
     gflags::gflags

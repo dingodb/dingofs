@@ -20,6 +20,7 @@
 #include <glog/logging.h>
 
 #include <cstdint>
+#include <vector>
 
 #include "blockcache/core/reactor/dispatcher.h"
 #include "blockcache/core/reactor/doorbell.h"
@@ -66,6 +67,10 @@ class TaskQueue {
 
 class PollerSet {
  public:
+  PollerSet() = default;
+
+  PollerSet(const PollerSet&) = delete;
+  PollerSet& operator=(const PollerSet&) = delete;
   void Add(Poller* p) { pollers_.push_back(p); }
   void Remove(Poller* p) { std::erase(pollers_, p); }
 
@@ -119,14 +124,9 @@ struct ReactorStats {
   uint64_t idle_ns = 0;
 };
 
-struct ReactorOption {
-  DispatcherOption dispatcher;
-  bool poll_mode = false;  // never block in the kernel
-};
-
 class Reactor {
  public:
-  explicit Reactor(unsigned shard_id, const ReactorOption& option = {});
+  explicit Reactor(unsigned shard_id);
   ~Reactor();
 
   Reactor(const Reactor&) = delete;

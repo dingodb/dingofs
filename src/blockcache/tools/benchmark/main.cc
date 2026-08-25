@@ -25,15 +25,15 @@
 using dingofs::Logger;
 using dingofs::blockcache::Benchmarker;
 using dingofs::blockcache::FlagParser;
-using dingofs::blockcache::kUsage;
+using dingofs::blockcache::kBenchUsage;
 
 int main(int argc, char** argv) {
-  if (!FlagParser::Parse(&argc, &argv, kUsage)) {
+  if (!FlagParser::Parse(&argc, &argv, kBenchUsage)) {
     return 0;
   }
 
   Logger::Init("cb");
-  LOG(INFO) << FlagParser::GenCurrentFlags(FlagParser::Collect(kUsage));
+  LOG(INFO) << FlagParser::GenCurrentFlags(FlagParser::Collect(kBenchUsage));
 
   Benchmarker benchmarker;
   auto status = benchmarker.Start();

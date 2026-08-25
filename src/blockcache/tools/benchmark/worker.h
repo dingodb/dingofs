@@ -35,12 +35,14 @@ class Worker {
  public:
   Worker(uint64_t idx, char* buffer, TaskFactorySPtr factory,
          CollectorSPtr collector);
+  Worker(const Worker&) = delete;
+  Worker& operator=(const Worker&) = delete;
 
   void Start();
   void Shutdown();
 
  private:
-  void SubmitOne(const BlockHandle& key, uint64_t offset, uint64_t length);
+  void SubmitOne(BlockHandle key, uint64_t offset, uint64_t length);
   void OnComplete(Slot* slot, Status status);
   Slot* PopSlot();
   void PushSlot(Slot* slot);

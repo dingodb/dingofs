@@ -21,6 +21,7 @@
 #include <cstdlib>
 #include <functional>
 
+#include "blockcache/api/memory.h"
 #include "blockcache/object/object.h"
 #include "blockcache/tools/benchmark/option.h"
 
@@ -40,6 +41,11 @@ Benchmarker::Benchmarker()
 }
 
 Status Benchmarker::Start() { return InitAll(); }
+
+void Benchmarker::RunUntilFinish() {
+  StartAll();
+  StopAll();
+}
 
 Status Benchmarker::InitAll() {
   auto initers = std::vector<std::function<Status()>>{
@@ -65,23 +71,6 @@ Status Benchmarker::InitAll() {
   }
 
   return Status::OK();
-}
-
-void Benchmarker::RunUntilFinish() {
-  StartAll();
-  StopAll();
-}
-
-void Benchmarker::StartAll() {
-  StartReporter();
-  StartWorkers();
-}
-
-void Benchmarker::StopAll() {
-  StopWorkers();
-  StopReporter();
-  StopCollector();
-  StopBlockCache();
 }
 
 Status Benchmarker::InitMdsClient() {
@@ -118,7 +107,7 @@ Status Benchmarker::InitBuffers() {
   if (buffers_ == nullptr) {
     return Status::Internal("allocate benchmark buffers failed");
   }
-  return block_cache_->RegisterBuffers(buffers_, bytes);
+  return RegisterMemoryForRDMA(buffers_, bytes);
 }
 
 Status Benchmarker::InitCollector() {
@@ -143,6 +132,11 @@ void Benchmarker::InitWorkers() {
   }
 }
 
+void Benchmarker::StartAll() {
+  StartReporter();
+  StartWorkers();
+}
+
 void Benchmarker::StartReporter() {
   auto status = reporter_->Start();
   CHECK(status.ok()) << "Start reporter failed: " << status.ToString();
@@ -152,6 +146,13 @@ void Benchmarker::StartWorkers() {
   for (auto& worker : workers_) {
     thread_pool_->Enqueue([&worker]() { worker->Start(); });
   }
+}
+
+void Benchmarker::StopAll() {
+  StopWorkers();
+  StopReporter();
+  StopCollector();
+  StopBlockCache();
 }
 
 void Benchmarker::StopWorkers() {

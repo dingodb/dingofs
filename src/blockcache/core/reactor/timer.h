@@ -22,10 +22,12 @@
 #include <chrono>
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <utility>
 
 #include "blockcache/core/reactor/dispatcher.h"
 #include "blockcache/utils/time.h"
+#include "utils/executor/timer/timer.h"
 
 namespace dingofs {
 namespace blockcache {
@@ -63,6 +65,8 @@ class Timer {
   bool queued_ = false;   // linked in the active set or the expired list
   bool expired_ = false;  // sitting in the expired list mid-service
 };
+
+using TimerUPtr = std::unique_ptr<Timer>;
 
 class TimerList {
  public:

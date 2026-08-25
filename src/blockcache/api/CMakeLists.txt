@@ -12,12 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-file(GLOB BLOCKCACHE_API_SRCS "${CMAKE_CURRENT_SOURCE_DIR}/*.cc")
+file(GLOB BLOCKCACHE_API_SRCS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cc")
 
 add_library(blockcache_api ${BLOCKCACHE_API_SRCS})
 target_compile_features(blockcache_api PRIVATE cxx_std_20)
 target_link_libraries(blockcache_api
     blockcache_tier
+    blockcache_infiniband
     blockcache_block
     blockcache_common
     blockcache_core

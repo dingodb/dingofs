@@ -35,7 +35,6 @@ void ConsistentHash::Add(uint32_t member, std::string_view id,
     ring_.emplace_back(static_cast<uint32_t>(h), member);
     ring_.emplace_back(static_cast<uint32_t>(h >> 32), member);
   }
-  member_count_++;
 }
 
 void ConsistentHash::Finalize() {

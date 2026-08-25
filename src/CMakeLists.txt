@@ -15,7 +15,7 @@
 
 add_subdirectory(utils)
 add_subdirectory(common)
-add_subdirectory(blockcache)
+#add_subdirectory(blockcache)
 add_subdirectory(cache)
 add_subdirectory(client)
 add_subdirectory(mds)

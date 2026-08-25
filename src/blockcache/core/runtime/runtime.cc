@@ -28,30 +28,29 @@
 namespace dingofs {
 namespace blockcache {
 
-DEFINE_uint32(shards, 0, "reactor shards, 0 means one per core");
+DEFINE_uint32(shards, 8, "reactor shards, 0 means one per core");
 DEFINE_string(cpuset, "", "cores the shards run on, e.g. 0-31");
 DEFINE_bool(pin_cpu, false, "pin each shard to its core");
 DEFINE_bool(poll_mode, false, "busy-poll the reactors");
 
-ShardLayout ShardLayout::Plan(const RuntimeOption& option) {
+ShardLayout ShardLayout::Plan() {
   std::vector<int> cpus = GetAllCpus();
-  if (!option.cpuset.empty()) {
-    auto parsed = ParseCpuSet(option.cpuset);
+  if (!FLAGS_cpuset.empty()) {
+    auto parsed = ParseCpuSet(FLAGS_cpuset);
     CHECK(parsed.ok()) << "Fail to start runtime: "
                        << parsed.status().ToString();
     cpus = std::move(parsed).value();
   }
 
   const std::vector<int> cores = GetPhyCores(cpus);
-  unsigned shard_count = option.shard_count != 0
-                             ? option.shard_count
-                             : static_cast<unsigned>(cores.size());
+  unsigned shard_count =
+      FLAGS_shards != 0 ? FLAGS_shards : static_cast<unsigned>(cores.size());
   if (shard_count == 0) {
     shard_count = 1;
   }
 
   std::vector<int> cpu_of_shard(shard_count, -1);  // -1 == unpinned
-  if (option.pin_to_cpu) {
+  if (FLAGS_pin_cpu) {
     const std::vector<int>& cpu_pool =
         (shard_count <= cores.size()) ? cores : cpus;
     for (unsigned i = 0; i < shard_count && i < cpu_pool.size(); ++i) {
@@ -69,9 +68,8 @@ struct Runtime::StopWork : InboxWork {
   }
 };
 
-Runtime::Runtime(RuntimeOption option)
-    : option_(std::move(option)),
-      layout_(ShardLayout::Plan(option_)),
+Runtime::Runtime()
+    : layout_(ShardLayout::Plan()),
       gate_(layout_.shard_count()),
       stops_(std::make_unique<StopWork[]>(layout_.shard_count())) {}
 
@@ -96,7 +94,7 @@ void Runtime::Start() {
     threads_.emplace_back([this, s] {
       BecomeShardThread(s, layout_.CpuOf(s));
       Mesh& mesh = Mesh::Instance();
-      Shard shard(s, option_, &mesh.InboxFor(s), mesh.PollerFor(s));
+      Shard shard(s, &mesh.InboxFor(s), mesh.PollerFor(s));
       shard.Run(gate_);
     });
   }

@@ -26,7 +26,7 @@
 
 #include "blockcache/common/route.h"
 #include "blockcache/core/runtime/smp.h"
-#include "blockcache/net/server/controller.h"
+#include "blockcache/net/controller.h"
 
 namespace dingofs {
 namespace blockcache {
@@ -80,7 +80,7 @@ Future<> RemoteNode::Shutdown() {
 
 Future<Status> RemoteNode::Put(BlockHandle handle, BufferViews block,
                                bool stage) {
-  pb::cache::v2::PutRequest request;
+  pb::blockcache::PutRequest request;
   handle.ToPb(request.mutable_handle());
   request.set_stage(stage);
   return SendRequest(&CacheStub::Put, RouteHintOf(handle), std::move(request),
@@ -89,7 +89,7 @@ Future<Status> RemoteNode::Put(BlockHandle handle, BufferViews block,
 
 Future<Status> RemoteNode::Get(BlockHandle handle, uint64_t offset,
                                uint32_t length, char* buffer) {
-  pb::cache::v2::GetRequest request;
+  pb::blockcache::GetRequest request;
   handle.ToPb(request.mutable_handle());
   request.set_offset(offset);
   request.set_length(length);
@@ -98,14 +98,14 @@ Future<Status> RemoteNode::Get(BlockHandle handle, uint64_t offset,
 }
 
 Future<Status> RemoteNode::Prefetch(BlockHandle handle) {
-  pb::cache::v2::PrefetchRequest request;
+  pb::blockcache::PrefetchRequest request;
   handle.ToPb(request.mutable_handle());
   return SendRequest(&CacheStub::Prefetch, RouteHintOf(handle),
                      std::move(request), Attachment{});
 }
 
 Future<Status> RemoteNode::Delete(BlockHandle handle) {
-  pb::cache::v2::DeleteRequest request;
+  pb::blockcache::DeleteRequest request;
   handle.ToPb(request.mutable_handle());
   return SendRequest(&CacheStub::Delete, RouteHintOf(handle),
                      std::move(request), Attachment{});
@@ -133,12 +133,15 @@ Future<Status> RemoteNode::SendRequest(Method method, uint64_t key,
     co_return status;
   }
 
+  if constexpr (requires { request.set_route_key(key); }) {
+    request.set_route_key(key);
+  }
+
   Controller cntl;
-  cntl.set_route_hint(key);
   if (!attachment.send.empty()) {
-    cntl.set_borrowed_request(attachment.send);
+    cntl.set_borrowed_request_attachment(attachment.send);
   } else if (attachment.receive.data != nullptr) {
-    cntl.set_borrowed_response(attachment.receive);
+    cntl.set_borrowed_response_attachment(attachment.receive);
   }
 
   typename RpcTraits<Method>::ResponseType response;

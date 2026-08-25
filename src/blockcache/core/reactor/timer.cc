@@ -24,6 +24,8 @@
 #include <cerrno>
 #include <cstring>
 
+#include "blockcache/utils/time.h"
+
 namespace dingofs {
 namespace blockcache {
 
@@ -279,19 +281,19 @@ TimerService::~TimerService() {
   ::close(timerfd_);
 }
 
-void TimerService::ArmTimerfd(uint64_t abs_ns) const {
-  itimerspec its{};
-  its.it_value.tv_sec = static_cast<time_t>(abs_ns / 1'000'000'000);
-  its.it_value.tv_nsec = static_cast<long>(abs_ns % 1'000'000'000);
-  if (::timerfd_settime(timerfd_, TFD_TIMER_ABSTIME, &its, nullptr) < 0) {
-    PLOG(FATAL) << "Fail to arm timerfd";
-  }
-}
-
 void TimerService::OnReady() noexcept {
   queue_.RunExpired(TimestampNs());
   if (!queue_.empty()) {
     ArmTimerfd(queue_.NextTimeout());
+  }
+}
+
+void TimerService::ArmTimerfd(uint64_t abs_ns) const {
+  itimerspec its{};
+  its.it_value.tv_sec = static_cast<time_t>(abs_ns / kNsPerSec);
+  its.it_value.tv_nsec = static_cast<long>(abs_ns % kNsPerSec);
+  if (::timerfd_settime(timerfd_, TFD_TIMER_ABSTIME, &its, nullptr) < 0) {
+    PLOG(FATAL) << "Fail to arm timerfd";
   }
 }
 

@@ -22,34 +22,22 @@
 #include <cstdint>
 #include <latch>
 #include <memory>
-#include <string>
 #include <thread>
 #include <utility>
 #include <vector>
 
-#include "blockcache/core/fs/io_ring.h"
-#include "blockcache/core/reactor/reactor.h"
-
 namespace dingofs {
 namespace blockcache {
 
-struct RuntimeOption {
-  unsigned shard_count = 0;  // 0 => one shard per physical core in cpuset
-  std::string cpuset;        // "0-31,64-95"; empty => all online CPUs
-  bool pin_to_cpu = true;
-  ReactorOption reactor;
-  IoRingOption io;
-};
-
 class ShardLayout {
  public:
-  static ShardLayout Plan(const RuntimeOption& option);
+  // Reads --shards / --cpuset / --pin_cpu.
+  static ShardLayout Plan();
 
+  int CpuOf(unsigned shard) const { return cpu_of_shard_[shard]; }
   unsigned shard_count() const {
     return static_cast<unsigned>(cpu_of_shard_.size());
   }
-
-  int CpuOf(unsigned shard) const { return cpu_of_shard_[shard]; }
 
  private:
   explicit ShardLayout(std::vector<int> cpu_of_shard)
@@ -87,7 +75,7 @@ class LifecycleBarrier {
 // and no component takes one at construction.
 class Runtime {
  public:
-  explicit Runtime(RuntimeOption option);
+  Runtime();
   ~Runtime();
 
   Runtime(const Runtime&) = delete;
@@ -104,7 +92,6 @@ class Runtime {
 
   struct StopWork;  // defined in runtime.cc; one per shard, posted once
 
-  RuntimeOption option_;
   ShardLayout layout_;
   LifecycleBarrier gate_;
   std::atomic<State> state_{State::kIdle};

@@ -12,14 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-file(GLOB BLOCKCACHE_NODE_SRCS "${CMAKE_CURRENT_SOURCE_DIR}/*.cc")
+file(GLOB BLOCKCACHE_NODE_SRCS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cc")
 list(REMOVE_ITEM BLOCKCACHE_NODE_SRCS "${CMAKE_CURRENT_SOURCE_DIR}/main.cc")
 
 add_library(blockcache_node ${BLOCKCACHE_NODE_SRCS})
 target_compile_features(blockcache_node PRIVATE cxx_std_20)
 target_link_libraries(blockcache_node
-    blockcache_server
-    blockcache_brpc
+    blockcache_net
+    brpc::brpc
+    blockcache_infiniband
     blockcache_block
     blockcache_common
     blockcache_object

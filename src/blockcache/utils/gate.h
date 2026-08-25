@@ -40,6 +40,10 @@ Future<> SleepWhile(Pred pred, uint64_t ms) {
 // Tracks in-flight background work so shutdown can wait for it.
 class Gate {
  public:
+  Gate() = default;
+
+  Gate(const Gate&) = delete;
+  Gate& operator=(const Gate&) = delete;
   class Holder {
    public:
     explicit Holder(Gate& g) : gate_(g.TryEnter() ? &g : nullptr) {}

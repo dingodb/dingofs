@@ -24,8 +24,7 @@
 
 #include "blockcache/common/status.h"
 #include "blockcache/core/runtime/smp.h"
-#include "blockcache/net/rdma/option.h"
-#include "blockcache/net/server/client_domain.h"
+#include "blockcache/infiniband/client/context.h"
 #include "blockcache/utils/gate.h"
 
 namespace dingofs {
@@ -35,8 +34,6 @@ DEFINE_string(cache_group, "", "cache group; empty disables it");
 
 DEFINE_bool(remote_rdma, false, "use rdma");
 DEFINE_string(remote_rdma_device, "", "rdma device; empty picks the first");
-DEFINE_uint32(remote_rdma_port_num, 1, "rdma port number");
-DEFINE_uint32(remote_rdma_max_connections, 64, "max connections per shard");
 
 DEFINE_uint32(remote_rpc_timeout_ms, 30000, "rpc timeout");
 DEFINE_validator(remote_rpc_timeout_ms, brpc::PassValidate);
@@ -59,7 +56,7 @@ Future<> RemoteCache::Start() {
 
   LOG(INFO) << "RemoteCache{shard=" << ThisShardId() << "} is starting...";
 
-  co_await InitRdma();
+  InitInfiniband();
   co_await nodes_->Start();
 
   running_ = true;
@@ -81,33 +78,29 @@ Future<> RemoteCache::Shutdown() {
 
   ShutdownSyncer();
   co_await nodes_->Shutdown();
-  co_await ShutdownRdma();
+  co_await ShutdownInfiniband();
 
   LOG(INFO) << "Successfully shutdown RemoteCache{shard=" << ThisShardId()
             << "}";
 }
 
-Future<> RemoteCache::InitRdma() {
+void RemoteCache::InitInfiniband() {
   if (!FLAGS_remote_rdma) {
-    co_return;
+    return;
   }
-
-  RdmaOption option;
-  option.device = FLAGS_remote_rdma_device;
-  option.port_num = static_cast<uint8_t>(FLAGS_remote_rdma_port_num);
-  option.max_connections = FLAGS_remote_rdma_max_connections;
-
-  const Status status = co_await ClientDomain::InitOnThisShard(option);
-  LOG_IF(FATAL, !status.ok())
-      << "Fail to open the rdma dialling domain on shard " << ThisShardId()
-      << ": " << status.ToString();
+  const Status status =
+      infiniband::InfinibandContext::Create(FLAGS_remote_rdma_device);
+  LOG_IF(FATAL, !status.ok()) << "Fail to open the rdma context on shard "
+                              << ThisShardId() << ": " << status.ToString();
 }
 
-Future<> RemoteCache::ShutdownRdma() {
-  if (!FLAGS_remote_rdma) {
+Future<> RemoteCache::ShutdownInfiniband() {
+  infiniband::InfinibandContext* context = infiniband::ThisInfinibandContext();
+  if (context == nullptr) {
     co_return;
   }
-  co_await ClientDomain::ShutdownOnThisShard();
+  co_await context->poller->Disarm();
+  infiniband::tls_infiniband_context.reset();
 }
 
 void RemoteCache::StartSyncer() {
@@ -185,18 +178,6 @@ Future<Status> RemoteCache::Delete(BlockHandle handle, DeleteOption) {
 Future<CacheStats> RemoteCache::GetStats() {
   return MakeReadyFuture<CacheStats>(
       CacheStats{.hits = hits_, .misses = misses_});
-}
-
-Members RemoteCache::GetMembers() {
-  if (ShardCount() == 0) {
-    return {};
-  }
-
-  return RunOnAndWait(0, []() -> Future<Members> {
-    RemoteNodeGroup* node_group = ThisNodeGroup();
-    return MakeReadyFuture<Members>(
-        node_group == nullptr ? Members{} : node_group->members());
-  });
 }
 
 }  // namespace blockcache

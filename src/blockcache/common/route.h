@@ -27,9 +27,9 @@
 namespace dingofs {
 namespace blockcache {
 
-inline unsigned ShardOf(uint64_t route_hint, unsigned shards) {
+inline unsigned ShardOf(uint64_t route_key, unsigned shards) {
   return static_cast<unsigned>(
-      (static_cast<__uint128_t>(route_hint) * shards) >> 64);
+      (static_cast<__uint128_t>(route_key) * shards) >> 64);
 }
 
 inline uint64_t HintForShard(unsigned shard, unsigned shards) {
@@ -41,20 +41,18 @@ inline uint64_t HintForShard(unsigned shard, unsigned shards) {
          1;
 }
 
-inline uint64_t RouteHintOf(const BlockHandle& handle) {
-  return Mix64(handle.id);
-}
+inline uint64_t RouteHintOf(BlockHandle handle) { return Mix64(handle.id); }
 
-inline uint32_t OwnerIndex(const BlockHandle& handle, uint32_t n) {
+inline uint32_t OwnerIndex(BlockHandle handle, uint32_t n) {
   return ShardOf(RouteHintOf(handle), n);
 }
 
-inline unsigned OwnerShard(const BlockHandle& handle) {
+inline unsigned OwnerShard(BlockHandle handle) {
   return OwnerIndex(handle, ShardCount());
 }
 
 template <typename Fn>
-auto OnOwner(const BlockHandle& handle, Fn fn) {
+auto OnOwner(BlockHandle handle, Fn fn) {
   return SubmitTo(OwnerShard(handle), std::move(fn));
 }
 

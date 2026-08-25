@@ -47,7 +47,7 @@ namespace blockcache {
   LOG(FATAL) << "double free: superblock " << sb << " object " << ordinal;
 }
 
-SlabPool::SlabPool(const Option& option) : metas_(option.superblock_count) {
+SlabPool::SlabPool(const SlabPoolOption& option) : metas_(option.superblock_count) {
   CHECK_GT(option.superblock_count, 0u);
   CHECK_LT(option.superblock_count, size_t{kNilIndex});
 

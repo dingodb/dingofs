@@ -31,8 +31,6 @@ class CircuitBreaker {
   void OnCallEnd(const Status& status);
 
  private:
-  friend class CircuitBreakerTest;
-
   enum class State : uint8_t { kClosed, kOpen, kHalfOpen };
 
   void Trip();

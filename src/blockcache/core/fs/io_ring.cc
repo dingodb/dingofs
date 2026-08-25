@@ -16,6 +16,7 @@
 
 #include "blockcache/core/fs/io_ring.h"
 
+#include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <sys/uio.h>
 
@@ -26,6 +27,11 @@
 
 namespace dingofs {
 namespace blockcache {
+
+static bool Positive(const char* /*name*/, uint32_t value) { return value > 0; }
+
+DEFINE_uint32(io_queue_depth, 512, "submission queue entries per shard's ring");
+DEFINE_validator(io_queue_depth, Positive);
 
 struct UringOpcode {
   int op;
@@ -167,8 +173,8 @@ void FixedFiles::Unregister() {
   free_slots_.clear();
 }
 
-IoRing::IoRing(const IoRingOption& option) {
-  Init(option.queue_len);
+IoRing::IoRing() {
+  Init(FLAGS_io_queue_depth);
   CheckOpCodes(&ring_);
   CHECK(tls_io_ring == nullptr) << "one io ring per shard";
   tls_io_ring = this;

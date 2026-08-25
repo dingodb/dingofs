@@ -20,7 +20,7 @@
 # Deliberately has no ibverbs and no brpc on its link line, so "the runtime
 # builds and tests without a network" stays checkable.
 
-file(GLOB_RECURSE BLOCKCACHE_CORE_SRCS
+file(GLOB_RECURSE BLOCKCACHE_CORE_SRCS CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/reactor/*.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/fs/*.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/runtime/*.cc"

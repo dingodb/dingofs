@@ -29,6 +29,8 @@ namespace blockcache {
 class InflightThrottle {
  public:
   InflightThrottle(unsigned shards, uint32_t max_inflight);
+  InflightThrottle(const InflightThrottle&) = delete;
+  InflightThrottle& operator=(const InflightThrottle&) = delete;
 
   bool Acquire(unsigned shard);
   void Release(unsigned shard);

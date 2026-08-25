@@ -52,15 +52,14 @@ using BlockIndex = absl::node_hash_map<BlockHandle, CacheEntry, BlockHandleHash,
 class EntryList {
  public:
   EntryList() { head_.next = head_.prev = &head_; }
+
   EntryList(const EntryList&) = delete;
   EntryList& operator=(const EntryList&) = delete;
 
-  bool empty() const { return head_.next == &head_; }
   CacheEntry* Oldest() const { return empty() ? nullptr : head_.next; }
   CacheEntry* Next(const CacheEntry* e) const {
     return e->next == &head_ ? nullptr : e->next;
   }
-
   void PushBack(CacheEntry* e) {
     e->next = &head_;
     e->prev = head_.prev;
@@ -79,6 +78,8 @@ class EntryList {
     PushBack(e);
   }
 
+  bool empty() const { return head_.next == &head_; }
+
  private:
   CacheEntry head_;
 };
@@ -86,6 +87,11 @@ class EntryList {
 class EvictionPolicy {
  public:
   virtual ~EvictionPolicy() = default;
+  EvictionPolicy() = default;
+
+  EvictionPolicy(const EvictionPolicy&) = delete;
+  EvictionPolicy& operator=(const EvictionPolicy&) = delete;
+
   virtual void OnInsert(CacheEntry* entry) = 0;
   virtual void OnAccess(CacheEntry* entry) = 0;
   virtual void OnErase(CacheEntry* entry) = 0;
@@ -113,6 +119,10 @@ class LruPolicy final : public EvictionPolicy {
 
 class TwoRandomPolicy final : public EvictionPolicy {
  public:
+  TwoRandomPolicy() = default;
+
+  TwoRandomPolicy(const TwoRandomPolicy&) = delete;
+  TwoRandomPolicy& operator=(const TwoRandomPolicy&) = delete;
   void OnInsert(CacheEntry* entry) override;
   void OnAccess(CacheEntry*) override {}
   void OnErase(CacheEntry* entry) override;
@@ -148,9 +158,9 @@ class S3FifoPolicy final : public EvictionPolicy {
   CacheEntry* EvictSmallOne();
   CacheEntry* EvictMainOne();
   void RemoveFromQueue(CacheEntry* entry);
-  bool GhostContains(const BlockHandle& handle) const;
-  void GhostAdd(const BlockHandle& handle);
-  void GhostRemove(const BlockHandle& handle);
+  bool GhostContains(BlockHandle handle) const;
+  void GhostAdd(BlockHandle handle);
+  void GhostRemove(BlockHandle handle);
 
   EntryList small_;
   EntryList main_;

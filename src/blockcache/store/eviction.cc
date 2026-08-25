@@ -27,6 +27,11 @@
 namespace dingofs {
 namespace blockcache {
 
+static uint64_t NextRandom() {
+  static thread_local std::mt19937_64 rng{std::random_device{}()};
+  return rng();
+}
+
 DEFINE_string(cache_eviction, "lru",
               "eviction: lru | 2random | s3fifo | sieve | none");
 
@@ -95,11 +100,6 @@ void LruPolicy::EvictExpired(uint32_t now_sec, uint32_t expire_sec,
   uint64_t checked = 0;
   ScanExpiredList(list_, now_sec, expire_sec, budget, &checked, to_del,
                   [](CacheEntry* e) { EntryList::Remove(e); });
-}
-
-static uint64_t NextRandom() {
-  static thread_local std::mt19937_64 rng{std::random_device{}()};
-  return rng();
 }
 
 void TwoRandomPolicy::OnInsert(CacheEntry* entry) {
@@ -184,22 +184,6 @@ void S3FifoPolicy::OnAccess(CacheEntry* entry) {
 
 void S3FifoPolicy::OnErase(CacheEntry* entry) { RemoveFromQueue(entry); }
 
-CacheEntry* S3FifoPolicy::EvictSmallOne() {
-  CacheEntry* oldest = small_.Oldest();
-  EntryList::Remove(oldest);
-  small_bytes_ -= oldest->size;
-  small_count_--;
-  if (Freq(oldest) >= 1) {
-    oldest->flags |= kInMain;
-    main_.PushBack(oldest);
-    main_bytes_ += oldest->size;
-    main_count_++;
-    return nullptr;
-  }
-  GhostAdd(*oldest->key);
-  return oldest;
-}
-
 void S3FifoPolicy::Evict(uint64_t want_bytes, uint64_t want_files,
                          Evicted* to_del) {
   uint64_t freed_bytes = 0;
@@ -239,6 +223,22 @@ CacheEntry* S3FifoPolicy::EvictStep() {
   return nullptr;
 }
 
+CacheEntry* S3FifoPolicy::EvictSmallOne() {
+  CacheEntry* oldest = small_.Oldest();
+  EntryList::Remove(oldest);
+  small_bytes_ -= oldest->size;
+  small_count_--;
+  if (Freq(oldest) >= 1) {
+    oldest->flags |= kInMain;
+    main_.PushBack(oldest);
+    main_bytes_ += oldest->size;
+    main_count_++;
+    return nullptr;
+  }
+  GhostAdd(*oldest->key);
+  return oldest;
+}
+
 CacheEntry* S3FifoPolicy::EvictMainOne() {
   CacheEntry* oldest = main_.Oldest();
   const uint8_t freq = Freq(oldest);
@@ -264,11 +264,11 @@ void S3FifoPolicy::RemoveFromQueue(CacheEntry* entry) {
   }
 }
 
-bool S3FifoPolicy::GhostContains(const BlockHandle& handle) const {
+bool S3FifoPolicy::GhostContains(BlockHandle handle) const {
   return ghost_pos_.find(handle) != ghost_pos_.end();
 }
 
-void S3FifoPolicy::GhostAdd(const BlockHandle& handle) {
+void S3FifoPolicy::GhostAdd(BlockHandle handle) {
   if (ghost_pos_.find(handle) != ghost_pos_.end()) {
     return;
   }
@@ -281,7 +281,7 @@ void S3FifoPolicy::GhostAdd(const BlockHandle& handle) {
   }
 }
 
-void S3FifoPolicy::GhostRemove(const BlockHandle& handle) {
+void S3FifoPolicy::GhostRemove(BlockHandle handle) {
   auto it = ghost_pos_.find(handle);
   if (it != ghost_pos_.end()) {
     ghost_fifo_.erase(it->second);

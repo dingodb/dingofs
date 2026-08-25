@@ -21,11 +21,11 @@
 #include <memory>
 #include <string>
 
+#include "blockcache/common/status.h"
 #include "blockcache/core/fs/filesystem.h"
 #include "blockcache/core/memory/buffer_view.h"
 #include "blockcache/core/reactor/coroutine.h"
 #include "blockcache/utils/align.h"
-#include "common/status.h"
 
 namespace dingofs {
 namespace blockcache {
@@ -53,7 +53,7 @@ class LocalFileSystem {
   }
 
  private:
-  static Status CheckBlock(const BufferViews& block);
+  static Status CheckBlock(BufferViews block);
   static Future<StatusOr<File>> OpenFile(std::string path, OpenFlags flags,
                                          bool direct);
   static Future<Status> WriteFile(File* file, BufferViews block, bool direct);

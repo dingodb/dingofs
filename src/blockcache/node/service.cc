@@ -21,7 +21,7 @@
 #include "blockcache/core/memory/buffer.h"
 #include "blockcache/core/memory/buffer_view.h"
 #include "blockcache/core/runtime/smp.h"
-#include "blockcache/net/body.h"
+#include "blockcache/net/types.h"
 #include "blockcache/store/local_filesystem.h"
 #include "blockcache/utils/align.h"
 
@@ -29,7 +29,7 @@ namespace dingofs {
 namespace blockcache {
 
 CacheService::CacheService(ShardedLocalCache* block_cache)
-    : ProtoService(pb::cache::v2::CacheService::descriptor()),
+    : ProtoService(pb::blockcache::CacheService::descriptor()),
       block_cache_(block_cache) {
   AddMethod("Put", &CacheService::Put);
   AddMethod("Get", &CacheService::Get);
@@ -40,10 +40,11 @@ CacheService::CacheService(ShardedLocalCache* block_cache)
 }
 
 Future<> CacheService::Put(Controller* cntl,
-                           const pb::cache::v2::PutRequest* request,
-                           pb::cache::v2::PutResponse* response) {
+                           const pb::blockcache::PutRequest* request,
+                           pb::blockcache::PutResponse* response) {
   Status status =
-      CheckAttachment(request->handle(), cntl->request_attachment_size());
+      CheckAttachment(request->handle(),
+                      static_cast<uint32_t>(cntl->request_attachment().size()));
   if (!status.ok()) {
     response->set_status(ToErrno(status));
     co_return;
@@ -60,8 +61,8 @@ Future<> CacheService::Put(Controller* cntl,
 }
 
 Future<> CacheService::Get(Controller* cntl,
-                           const pb::cache::v2::GetRequest* request,
-                           pb::cache::v2::GetResponse* response) {
+                           const pb::blockcache::GetRequest* request,
+                           pb::blockcache::GetResponse* response) {
   const uint64_t offset = request->offset();
   const uint32_t length = request->length();
   Status status = CheckRange(request->handle(), offset, length);
@@ -97,8 +98,8 @@ Future<> CacheService::Get(Controller* cntl,
 }
 
 Future<> CacheService::Prefetch(Controller* /*cntl*/,
-                                const pb::cache::v2::PrefetchRequest* request,
-                                pb::cache::v2::PrefetchResponse* response) {
+                                const pb::blockcache::PrefetchRequest* request,
+                                pb::blockcache::PrefetchResponse* response) {
   Status status = CheckHandle(request->handle());
   if (!status.ok()) {
     response->set_status(ToErrno(status));
@@ -113,8 +114,8 @@ Future<> CacheService::Prefetch(Controller* /*cntl*/,
 }
 
 Future<> CacheService::Delete(Controller* /*cntl*/,
-                              const pb::cache::v2::DeleteRequest* request,
-                              pb::cache::v2::DeleteResponse* response) {
+                              const pb::blockcache::DeleteRequest* request,
+                              pb::blockcache::DeleteResponse* response) {
   Status status = CheckHandle(request->handle());
   if (!status.ok()) {
     response->set_status(ToErrno(status));
@@ -129,14 +130,14 @@ Future<> CacheService::Delete(Controller* /*cntl*/,
 }
 
 Future<> CacheService::Ping(Controller* /*cntl*/,
-                            const pb::cache::v2::PingRequest*,
-                            pb::cache::v2::PingResponse*) {
+                            const pb::blockcache::PingRequest*,
+                            pb::blockcache::PingResponse*) {
   return MakeReadyFuture<>();
 }
 
 Future<> CacheService::GetNodeInfo(
-    Controller* /*cntl*/, const pb::cache::v2::GetNodeInfoRequest*,
-    pb::cache::v2::GetNodeInfoResponse* response) {
+    Controller* /*cntl*/, const pb::blockcache::GetNodeInfoRequest*,
+    pb::blockcache::GetNodeInfoResponse* response) {
   response->set_status(pb::error::OK);
   response->set_id(FLAGS_id);
   response->set_shards(ShardCount());
@@ -152,14 +153,14 @@ CacheService::AlignedRange CacheService::AlignRequest(uint64_t offset,
               AlignUp<uint64_t>(offset - start + length, kBlockAlign))};
 }
 
-Status CacheService::CheckHandle(const pb::cache::v2::BlockHandle& handle) {
-  if (handle.size() == 0 || handle.size() > kMaxBodyBytes) {
+Status CacheService::CheckHandle(const pb::blockcache::BlockHandle& handle) {
+  if (handle.size() == 0 || handle.size() > kMaxAttachmentBytes) {
     return Status::InvalidParam("block size out of range");
   }
   return Status::OK();
 }
 
-Status CacheService::CheckAttachment(const pb::cache::v2::BlockHandle& handle,
+Status CacheService::CheckAttachment(const pb::blockcache::BlockHandle& handle,
                                      uint32_t attachment_size) {
   Status status = CheckHandle(handle);
   if (!status.ok()) {
@@ -170,7 +171,7 @@ Status CacheService::CheckAttachment(const pb::cache::v2::BlockHandle& handle,
   return Status::OK();
 }
 
-Status CacheService::CheckRange(const pb::cache::v2::BlockHandle& handle,
+Status CacheService::CheckRange(const pb::blockcache::BlockHandle& handle,
                                 uint64_t offset, uint32_t length) {
   Status status = CheckHandle(handle);
   if (!status.ok()) {

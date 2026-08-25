@@ -70,8 +70,7 @@ void Worker::Start() {
 
 void Worker::Shutdown() { done_.wait(); }
 
-void Worker::SubmitOne(const BlockHandle& key, uint64_t offset,
-                       uint64_t length) {
+void Worker::SubmitOne(BlockHandle key, uint64_t offset, uint64_t length) {
   window_.acquire();
   Slot* slot = PopSlot();
   slot->key = key;

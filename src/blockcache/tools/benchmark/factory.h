@@ -63,6 +63,10 @@ struct Slot {
 class TaskFactory {
  public:
   virtual ~TaskFactory() = default;
+  TaskFactory() = default;
+
+  TaskFactory(const TaskFactory&) = delete;
+  TaskFactory& operator=(const TaskFactory&) = delete;
 
   virtual bool SubmitTask(Slot* slot, AsyncCallback cb) = 0;
   virtual uint64_t BytesPerOp(const Slot* slot) const = 0;

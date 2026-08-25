@@ -27,9 +27,13 @@ namespace blockcache {
 class Poller {
  public:
   virtual ~Poller() = default;
+  Poller() = default;
+
+  Poller(const Poller&) = delete;
+  Poller& operator=(const Poller&) = delete;
 
   virtual bool Poll() = 0;  // do pending work; true if any was done
-  virtual bool PurePoll() { return Poll(); }  // detection only, while spinning
+  virtual bool PurePoll() = 0;
 
   virtual bool TryEnterInterruptMode() { return true; }  // false vetoes sleep
   virtual void ExitInterruptMode() {}

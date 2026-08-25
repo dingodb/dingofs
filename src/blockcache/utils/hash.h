@@ -18,14 +18,13 @@
 #define DINGOFS_BLOCKCACHE_UTILS_HASH_H_
 
 #include <cstdint>
+#include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
 
 namespace dingofs {
 namespace blockcache {
-
-inline constexpr uint64_t kGolden64 = 0x9e3779b97f4a7c15ULL;
 
 inline uint64_t Mix64(uint64_t x) {
   x ^= x >> 30;
@@ -46,17 +45,17 @@ inline uint64_t Fnv1a(std::string_view s) {
 
 class ConsistentHash {
  public:
+  ConsistentHash() = default;
+
+  ConsistentHash(const ConsistentHash&) = delete;
+  ConsistentHash& operator=(const ConsistentHash&) = delete;
   void Add(uint32_t member, std::string_view id, uint32_t weight);
   void Finalize();
   uint32_t MemberOf(uint64_t key) const;
 
-  size_t member_count() const { return member_count_; }
-  bool empty() const { return ring_.empty(); }
-
  private:
   static constexpr uint32_t kPointsPerWeight = 160;
 
-  size_t member_count_ = 0;
   bool final_ = false;
   std::vector<std::pair<uint32_t, uint32_t>> ring_;  // point -> member
 };

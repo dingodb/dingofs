@@ -48,11 +48,9 @@ class RemoteCache final : public BlockCache {
   Future<Status> Delete(BlockHandle handle, DeleteOption option = {}) override;
   Future<CacheStats> GetStats() override;
 
-  static Members GetMembers();
-
  private:
-  Future<> InitRdma();
-  Future<> ShutdownRdma();
+  void InitInfiniband();
+  Future<> ShutdownInfiniband();
   void StartSyncer();
   void ShutdownSyncer();
   Future<> WaitForMembersSynced();

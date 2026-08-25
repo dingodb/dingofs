@@ -232,14 +232,6 @@ class Mesh {
   bool Flush(unsigned shard);
   bool Drain(unsigned shard);
 
-  // False before Init and after Destroy, i.e. whenever no runtime is up.
-  bool built() const { return shard_count_ != 0; }
-
-  unsigned shard_count() const {
-    DCHECK(shard_count_ != 0) << "mesh not built";
-    return shard_count_;
-  }
-
   MeshLink& LinkOf(unsigned owner, unsigned peer) {
     return links_[(owner * shard_count_) + peer];
   }
@@ -249,6 +241,14 @@ class Mesh {
   }
 
   ShardInbox& InboxFor(unsigned shard) { return inboxes_[shard]; }
+
+  // False before Init and after Destroy, i.e. whenever no runtime is up.
+  bool built() const { return shard_count_ != 0; }
+
+  unsigned shard_count() const {
+    DCHECK(shard_count_ != 0) << "mesh not built";
+    return shard_count_;
+  }
 
  private:
   static constexpr unsigned kBitsPerWord = 64;

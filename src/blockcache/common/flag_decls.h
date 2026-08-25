@@ -31,14 +31,51 @@ DECLARE_bool(rdma);
 DECLARE_string(rdma_device);
 DECLARE_bool(daemonize);
 
+// infiniband/base/device.cc -- defined inside namespace infiniband, so the
+// DECLAREs must sit there too for the fLU:: symbols to match.
+namespace infiniband {
+DECLARE_uint32(rdma_port_num);
+DECLARE_int32(rdma_gid_index);
+}  // namespace infiniband
+
+// infiniband/connection/connection.cc -- wire geometry and liveness, shared
+// by both roles
+DECLARE_uint32(rdma_max_inflight_rpcs);
+DECLARE_uint32(rdma_message_bytes);
+DECLARE_uint32(rdma_max_connections);
+DECLARE_uint32(rdma_heartbeat_interval_s);
+DECLARE_uint32(rdma_idle_timeout_s);
+
+// infiniband/connection/queue_pairs.cc
+DECLARE_uint32(rdma_max_inline_data);
+DECLARE_uint32(rdma_bulk_send_wr);
+DECLARE_uint32(rdma_bulk_qps);
+
+// infiniband/base/completion_queue.cc
+DECLARE_uint32(rdma_cq_entries);
+
 // core/runtime/runtime.cc
 DECLARE_uint32(shards);
 DECLARE_string(cpuset);
 DECLARE_bool(pin_cpu);
 DECLARE_bool(poll_mode);
 
+// core/reactor/reactor.cc
+DECLARE_uint32(idle_poll_us);
+
+// core/reactor/dispatcher.cc
+DECLARE_uint32(task_quota_us);
+
+// core/fs/io_ring.cc
+DECLARE_uint32(io_queue_depth);
+
 // core/memory/buffer.cc
 DECLARE_uint64(buffer_pool_mb);
+
+// net/brpc_server.cc
+DECLARE_int32(brpc_idle_timeout_s);
+DECLARE_int32(brpc_max_concurrency);
+DECLARE_bool(brpc_reply_on_bthread);
 
 // node/membership.cc
 DECLARE_string(group_name);
@@ -56,9 +93,10 @@ DECLARE_uint32(cache_mds_request_retry_times);
 // core/runtime/worker_pool.cc
 DECLARE_uint32(offload_threads);
 DECLARE_uint32(offload_queue_capacity);
+DECLARE_uint32(offload_cpu_min_bytes);
 DECLARE_uint32(offload_cpu_spin_us);
 
-// object/client.cc
+// object/object.cc
 DECLARE_uint32(storage_put_tries);
 DECLARE_uint32(storage_get_tries);
 DECLARE_uint32(storage_get_notfound_tries);
@@ -85,10 +123,11 @@ DECLARE_uint32(queue_depth);
 DECLARE_string(cache_group);
 DECLARE_bool(remote_rdma);
 DECLARE_string(remote_rdma_device);
-DECLARE_uint32(remote_rdma_port_num);
-DECLARE_uint32(remote_rdma_max_connections);
 DECLARE_uint32(remote_rpc_timeout_ms);
 DECLARE_uint32(remote_connect_timeout_ms);
+
+// net/brpc/brpc_channel.cc
+DECLARE_int32(remote_rpc_max_retry);
 
 // remote/members.cc
 DECLARE_uint32(periodic_sync_members_ms);

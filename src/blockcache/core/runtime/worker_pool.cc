@@ -40,8 +40,6 @@ DEFINE_uint32(offload_cpu_min_bytes, 32768,
 DEFINE_uint32(offload_cpu_spin_us, 0,
               "cpu workers spin this long for more work before parking");
 
-// -- CpuWorker ---------------------------------------------------------------
-
 constexpr uint64_t kParkTimeoutNs = 100'000'000;
 
 CpuWorker::~CpuWorker() { Shutdown(); }
@@ -104,20 +102,14 @@ bool CpuWorker::SpinForWork(uint64_t spin_ns) {
   return !queue_.empty();
 }
 
-// -- WorkerPool ---------------------------------------------------------------
-
 // Set by Start(), cleared by Shutdown(); both run on the external thread.
 static WorkerPool* g_workers = nullptr;
 
 WorkerPool* GetGlobalWorkers() { return g_workers; }
 
-WorkerPool::WorkerPool() : WorkerPool(Option{}) {}
-
-WorkerPool::WorkerPool(Option option)
-    : thread_count_(option.threads != 0 ? option.threads
-                                        : FLAGS_offload_threads),
-      capacity_(option.queue_capacity != 0 ? option.queue_capacity
-                                           : FLAGS_offload_queue_capacity) {}
+WorkerPool::WorkerPool()
+    : thread_count_(FLAGS_offload_threads),
+      capacity_(FLAGS_offload_queue_capacity) {}
 
 WorkerPool::~WorkerPool() { Shutdown(); }
 

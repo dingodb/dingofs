@@ -68,20 +68,6 @@ Status ToStatus(int sys_code, const char* what) {
   }
 }
 
-pb::error::Errno ToErrno(const Status& status) {
-  if (status.ok()) return pb::error::OK;
-  if (status.IsNotFound() || status.IsNotExist()) return pb::error::ENOT_FOUND;
-  if (status.IsInvalidParam()) return pb::error::EILLEGAL_PARAMTETER;
-  if (status.IsNotSupport()) return pb::error::ENOT_SUPPORT;
-  if (status.IsOutOfRange()) return pb::error::EOUT_OF_RANGE;
-  if (status.IsCacheFull()) return pb::error::ECACHE_FULL;
-  if (status.IsCacheDown() || status.IsStop()) return pb::error::ECACHE_DOWN;
-  if (status.IsCacheUnhealthy()) return pb::error::ECACHE_UNHEALTHY;
-  if (status.IsIoError()) return pb::error::ECACHE_IO_ERROR;
-  if (status.IsOutOfMemory()) return pb::error::ECACHE_BUSY;
-  return pb::error::EINTERNAL;
-}
-
 Status ToStatus(pb::error::Errno errno_code) {
   switch (errno_code) {
     case pb::error::OK:
@@ -107,6 +93,29 @@ Status ToStatus(pb::error::Errno errno_code) {
     default:
       return Status::Internal("errno " + std::to_string(errno_code));
   }
+}
+
+Status ToStatus(ibv_wc_status status, const char* what) {
+  if (status == IBV_WC_SUCCESS) {
+    return Status::OK();
+  }
+  const std::string message =
+      std::string("Fail to ") + what + ": " + ibv_wc_status_str(status);
+  return Status::IoError(static_cast<int32_t>(status), message);
+}
+
+pb::error::Errno ToErrno(const Status& status) {
+  if (status.ok()) return pb::error::OK;
+  if (status.IsNotFound() || status.IsNotExist()) return pb::error::ENOT_FOUND;
+  if (status.IsInvalidParam()) return pb::error::EILLEGAL_PARAMTETER;
+  if (status.IsNotSupport()) return pb::error::ENOT_SUPPORT;
+  if (status.IsOutOfRange()) return pb::error::EOUT_OF_RANGE;
+  if (status.IsCacheFull()) return pb::error::ECACHE_FULL;
+  if (status.IsCacheDown() || status.IsStop()) return pb::error::ECACHE_DOWN;
+  if (status.IsCacheUnhealthy()) return pb::error::ECACHE_UNHEALTHY;
+  if (status.IsIoError()) return pb::error::ECACHE_IO_ERROR;
+  if (status.IsOutOfMemory()) return pb::error::ECACHE_BUSY;
+  return pb::error::EINTERNAL;
 }
 
 }  // namespace blockcache

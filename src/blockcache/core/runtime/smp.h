@@ -144,8 +144,6 @@ auto SubmitTo(unsigned shard, Func&& func) -> Future<
   return future;
 }
 
-// -- outside -> shard --------------------------------------------------------
-
 // Hands `work` to the shard through its inbox; false when that shard is not
 // running, including when no runtime is up at all. On false the caller still
 // owns `work`. On true it runs on the shard and owns itself from there.

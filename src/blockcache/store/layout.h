@@ -60,11 +60,11 @@ class DiskCacheLayout {
   std::string ProbeDir() const { return root_ + "/probe"; }
   std::string LockPath() const { return root_ + "/.lock"; }
 
-  std::string CachePath(const BlockHandle& h) const {
+  std::string CachePath(BlockHandle h) const {
     return CacheDir() + "/" + h.StoreKey();
   }
 
-  std::string StagePath(const BlockHandle& h) const {
+  std::string StagePath(BlockHandle h) const {
     return StageDir() + "/" + std::to_string(h.fs_id) + "/" + h.StoreKey();
   }
 

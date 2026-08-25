@@ -21,6 +21,7 @@
 #include <pthread.h>
 
 #include <cstdio>
+#include <string>
 #include <string_view>
 
 namespace dingofs {

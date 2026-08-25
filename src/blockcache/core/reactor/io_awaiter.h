@@ -15,7 +15,7 @@
  */
 
 // Transport-neutral: how a coroutine waits for one completion. io_uring
-// (core/fs) and verbs (core/net/rdma) both derive from it.
+// (core/fs) and verbs (infiniband/base) both derive from it.
 
 #ifndef DINGOFS_BLOCKCACHE_CORE_REACTOR_IO_AWAITER_H_
 #define DINGOFS_BLOCKCACHE_CORE_REACTOR_IO_AWAITER_H_
@@ -49,6 +49,10 @@ class IoAwaiter {
 
  protected:
   ~IoAwaiter() = default;
+  IoAwaiter() = default;
+
+  IoAwaiter(const IoAwaiter&) = delete;
+  IoAwaiter& operator=(const IoAwaiter&) = delete;
 
   void ResumeLater(int32_t result) noexcept {
     result_ = result;

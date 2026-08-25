@@ -30,11 +30,11 @@
 #include <utility>
 #include <vector>
 
+#include "blockcache/common/status.h"
 #include "blockcache/core/reactor/doorbell.h"
 #include "blockcache/core/runtime/shard_inbox.h"
 #include "blockcache/core/runtime/smp.h"
 #include "blockcache/utils/containers/mpsc_queue.h"
-#include "common/status.h"
 
 namespace dingofs {
 namespace blockcache {
@@ -83,13 +83,7 @@ class CpuWorker {
 
 class WorkerPool {
  public:
-  struct Option {
-    unsigned threads = 0;       // 0 => FLAGS_offload_threads
-    size_t queue_capacity = 0;  // 0 => FLAGS_offload_queue_capacity
-  };
-
   WorkerPool();
-  explicit WorkerPool(Option option);
   ~WorkerPool();
 
   WorkerPool(const WorkerPool&) = delete;
@@ -142,7 +136,6 @@ class WorkerPool {
   uint64_t cpu_copied_bytes() const {
     return cpu_copied_bytes_.load(std::memory_order_relaxed);
   }
-  size_t inflight() const { return inflight_.load(std::memory_order_acquire); }
 
  private:
   struct OffloadWorkBase : InboxWork {
