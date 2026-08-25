@@ -278,12 +278,14 @@ class MdsDirectClient {
     uint64_t off = 0;
     for (;;) {
       ContextSPtr ctx = NewCtx();
-      std::vector<DirEntry> entries;
+      std::vector<MDSClient::ReadDirEntry> entries;
       Status s = mds_client_->ReadDir(ctx, ino, fh, last_name, kBatch,
                                       with_attr, entries);
       if (!s.ok()) return s;
       for (const auto& entry : entries) {
-        if (!handler(entry, off++)) return Status::OK();
+        DirEntry dir_entry{entry.ino, entry.name,
+                           Helper::ToAttr(entry.attr_entry)};
+        if (!handler(dir_entry, off++)) return Status::OK();
       }
       if (entries.size() < kBatch) break;
       last_name = entries.back().name;

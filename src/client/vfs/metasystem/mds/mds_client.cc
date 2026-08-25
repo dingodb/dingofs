@@ -1433,6 +1433,18 @@ Status MDSClient::NewSliceId(ContextSPtr& ctx, uint32_t num, uint64_t* id) {
   return Status::OK();
 }
 
+Status MDSClient::ReadSlice(ContextSPtr& ctx, Ino ino,
+                            const ChunkDescriptor& chunk_descriptor,
+                            mds::ChunkEntry& chunk) {
+  std::vector<mds::ChunkEntry> chunks;
+  Status status = ReadSlice(ctx, ino, {chunk_descriptor}, chunks);
+  if (!status.ok()) return status;
+
+  if (!chunks.empty()) chunk = std::move(chunks.front());
+
+  return Status::OK();
+}
+
 Status MDSClient::ReadSlice(
     ContextSPtr& ctx, Ino ino,
     const std::vector<ChunkDescriptor>& chunk_descriptors,
@@ -1466,7 +1478,56 @@ Status MDSClient::ReadSlice(
     return status;
   }
 
+  if (response.chunks().empty()) return Status::NotFound("not found chunk");
+
   chunks = ::dingofs::Helper::PbRepeatedToVector(*response.mutable_chunks());
+
+  return Status::OK();
+}
+
+Status MDSClient::ReadSlice(ContextSPtr& ctx,
+                            const std::vector<ReadSliceInEntry>& in_entries,
+                            std::vector<ReadSliceOutEntry>& out_entries) {
+  CHECK(!in_entries.empty()) << "in_entries is empty.";
+  CHECK(fs_id_ != 0) << "fs_id is invalid.";
+  const Ino ino = in_entries.front().ino;
+  CHECK(ino != 0) << "ino is zero.";
+
+  auto get_mds_fn = [this, ino](bool& is_primary_mds) -> MDSMeta {
+    return GetMds(ino, is_primary_mds);
+  };
+
+  auto span = trace_manager_.StartChildSpan("MDSClient::ReadSlice",
+                                            ctx->GetTraceSpan());
+
+  pb::mds::BatchReadSliceRequest request;
+  pb::mds::BatchReadSliceResponse response;
+
+  auto* mut_ctx = request.mutable_context();
+  mut_ctx->set_inode_version(GetInodeVersion(ino));
+
+  request.set_fs_id(fs_id_);
+
+  for (const auto& entry : in_entries) {
+    auto* mut_entry = request.add_entries();
+    mut_entry->set_ino(entry.ino);
+    mut_entry->set_index(entry.index);
+    mut_entry->set_version(entry.version);
+  }
+
+  auto status = SendRequest(SpanScope::GetContext(span, ctx), span, get_mds_fn,
+                            "MDSService", "BatchReadSlice", request, response);
+  if (!status.ok()) {
+    SpanScope::SetStatus(span, status);
+    return status;
+  }
+
+  for (const auto& entry : response.entries()) {
+    ReadSliceOutEntry out_entry;
+    out_entry.ino = entry.ino();
+    out_entry.chunk = entry.chunk();
+    out_entries.push_back(std::move(out_entry));
+  }
 
   return Status::OK();
 }

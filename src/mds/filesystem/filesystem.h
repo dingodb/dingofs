@@ -289,6 +289,9 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   Status ReadSlice(Context& ctx, Ino ino, const std::vector<ChunkDescriptor>& chunk_descriptors,
                    std::vector<ChunkEntry>& chunks);
 
+  Status BatchReadSlice(Context& ctx, const std::vector<BatchReadSliceReqEntry>& in_entries,
+                        std::vector<BatchReadSliceResEntry>& out_entries);
+
   // copy_file_range — reflink-style: shares slices via SliceReferrer.
   struct CopyFileRangeParam {
     Ino src_ino;

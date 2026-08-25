@@ -104,9 +104,10 @@ class Operation {
     kCompactChunk = 45,
     kUpsertChunk = 46,
     kGetChunk = 47,
-    kBatchGetFirstChunk = 48,
-    kScanChunk = 49,
-    kCleanChunk = 50,
+    kBatchGetChunk = 48,
+    kBatchGetFirstChunk = 49,
+    kScanChunk = 50,
+    kCleanChunk = 51,
 
     kGetSliceRef = 55,
     kDecSliceRef = 56,
@@ -1042,6 +1043,40 @@ class BatchGetFirstChunkOperation : public Operation {
  private:
   uint32_t fs_id_;
   std::vector<Ino> inoes_;
+
+  Result result_;
+};
+
+class BatchGetChunkOperation : public Operation {
+ public:
+  struct Entry {
+    Ino ino;
+    uint32_t chunk_index;
+  };
+  BatchGetChunkOperation(Trace& trace, uint32_t fs_id, const std::vector<Entry>& entries)
+      : Operation(trace), fs_id_(fs_id), entries_(entries) {};
+  ~BatchGetChunkOperation() override = default;
+
+  struct Result {
+    struct Entry {
+      Ino ino;
+      ChunkEntry chunk;
+    };
+    std::vector<Entry> entries;
+  };
+
+  OpType GetOpType() const override { return OpType::kBatchGetChunk; }
+
+  uint32_t GetFsId() const override { return fs_id_; }
+  Ino GetIno() const override { return entries_.front().ino; }
+
+  Status Run(TxnUPtr& txn) override;
+
+  Result& GetResult() { return result_; }
+
+ private:
+  uint32_t fs_id_;
+  std::vector<Entry> entries_;
 
   Result result_;
 };

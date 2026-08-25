@@ -164,6 +164,10 @@ class MDSServiceImpl : public pb::mds::MDSService {
 
   void ReadSlice(google::protobuf::RpcController* controller, const pb::mds::ReadSliceRequest* request,
                  pb::mds::ReadSliceResponse* response, google::protobuf::Closure* done) override;
+  void BatchReadSlice(google::protobuf::RpcController* controller,
+                      const pb::mds::BatchReadSliceRequest* request,
+                      pb::mds::BatchReadSliceResponse* response,
+                      google::protobuf::Closure* done) override;
 
   void CopyFileRange(google::protobuf::RpcController* controller, const pb::mds::CopyFileRangeRequest* request,
                      pb::mds::CopyFileRangeResponse* response, google::protobuf::Closure* done) override;
@@ -368,6 +372,10 @@ class MDSServiceImpl : public pb::mds::MDSService {
                     pb::mds::WriteSliceResponse* response, TraceClosure* done);
   void DoReadSlice(google::protobuf::RpcController* controller, const pb::mds::ReadSliceRequest* request,
                    pb::mds::ReadSliceResponse* response, TraceClosure* done);
+  void DoBatchReadSlice(google::protobuf::RpcController* controller,
+                        const pb::mds::BatchReadSliceRequest* request,
+                        pb::mds::BatchReadSliceResponse* response,
+                        TraceClosure* done);
 
   void DoCopyFileRange(google::protobuf::RpcController* controller, const pb::mds::CopyFileRangeRequest* request,
                        pb::mds::CopyFileRangeResponse* response, TraceClosure* done);

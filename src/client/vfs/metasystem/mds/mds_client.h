@@ -202,8 +202,26 @@ class MDSClient {
   Status NewSliceId(ContextSPtr& ctx, uint32_t num, uint64_t* id);
 
   Status ReadSlice(ContextSPtr& ctx, Ino ino,
+                   const ChunkDescriptor& chunk_descriptor,
+                   mds::ChunkEntry& chunk);
+
+  Status ReadSlice(ContextSPtr& ctx, Ino ino,
                    const std::vector<ChunkDescriptor>& chunk_descriptors,
                    std::vector<mds::ChunkEntry>& chunks);
+
+  struct ReadSliceInEntry {
+    Ino ino{0};
+    uint32_t index{0};
+    uint64_t version{0};
+  };
+  struct ReadSliceOutEntry {
+    Ino ino{0};
+    mds::ChunkEntry chunk;
+  };
+  // must the same parent directory's files
+  Status ReadSlice(ContextSPtr& ctx,
+                   const std::vector<ReadSliceInEntry>& in_entries,
+                   std::vector<ReadSliceOutEntry>& out_entries);
 
   struct WriteSliceResult {
     AttrEntry attr;

@@ -2721,6 +2721,72 @@ Status FileSystem::ReadSlice(Context& ctx, Ino ino, const std::vector<ChunkDescr
   return Status::OK();
 }
 
+Status FileSystem::BatchReadSlice(Context& ctx, const std::vector<BatchReadSliceReqEntry>& in_entries,
+                                  std::vector<BatchReadSliceResEntry>& out_entries) {
+  if (in_entries.empty()) {
+    return Status(pb::error::EILLEGAL_PARAMTETER, "entries is empty");
+  }
+  if (!CanServe(ctx)) {
+    return Status(pb::error::ENOT_SERVE, "can not serve");
+  }
+
+  auto& trace = ctx.GetTrace();
+  const bool bypass_cache = ctx.IsBypassCache();
+
+  utils::Duration duration;
+
+  std::vector<BatchGetChunkOperation::Entry> miss_entries;
+  for (const auto& entry : in_entries) {
+    if (!bypass_cache) {
+      auto chunk = chunk_cache_.Get(entry.ino(), entry.index());
+      if (chunk != nullptr && chunk->version() >= entry.version()) {
+        BatchReadSliceResEntry res_entry;
+        res_entry.set_ino(entry.ino());
+        res_entry.mutable_chunk()->CopyFrom(*chunk);
+
+        out_entries.push_back(res_entry);
+        continue;
+      }
+    }
+
+    miss_entries.push_back({.ino = entry.ino(), .chunk_index = entry.index()});
+  }
+
+  if (miss_entries.empty()) {
+    trace.SetHitChunk();
+    return Status::OK();
+  }
+
+  // get chunk from backend store
+  BatchGetChunkOperation operation(trace, fs_id_, miss_entries);
+
+  trace.RecordElapsedTime("prepare");
+
+  auto status = RunOperation(&operation);
+
+  for (const auto& entry : miss_entries) {
+    LOG_DEBUG << fmt::format("[fs.{}.{}.{}][{}us] batchreadslice {}/{} finish, status({}).", fs_id_, ctx.RequestId(),
+                             trace.GetReqTypeInt(), duration.ElapsedUs(), entry.ino, entry.chunk_index,
+                             status.error_str());
+  }
+
+  trace.RecordElapsedTime("resume");
+
+  if (!status.ok() && status.error_code() != pb::error::ENOT_FOUND) {
+    return status;
+  }
+
+  auto& result = operation.GetResult();
+  for (auto& entry : result.entries) {
+    BatchReadSliceResEntry res_entry;
+    res_entry.set_ino(entry.ino);
+    res_entry.mutable_chunk()->CopyFrom(entry.chunk);
+    out_entries.push_back(res_entry);
+  }
+
+  return Status::OK();
+}
+
 Status FileSystem::CopyFileRange(Context& ctx, const CopyFileRangeParam& param, EntryWithChunkOut& entry_out) {
   if (!CanServe(ctx)) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
