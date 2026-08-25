@@ -36,7 +36,7 @@ static const uint32_t kChunkCommitIntervalMs = 1000;  // milliseconds
 
 static std::atomic<uint64_t> task_id_generator{10000};
 
-DEFINE_uint32(vfs_meta_chunk_fresh_time_s, 20,
+DEFINE_uint32(vfs_meta_chunk_fresh_time_s, 10,
               "chunk cache fresh time seconds");
 
 bool Chunk::Put(const ChunkEntry& chunk, const char* reason) {

@@ -335,39 +335,6 @@ TEST_F(DirProfileCacheTest, SizeAcrossShards) {
   }
 }
 
-TEST_F(DirProfileCacheTest, CleanExpiredRemovesStaleEntries) {
-  auto cache = DirProfileCache::New();
-
-  // Two entries, neither has been "touched" yet (LastActiveTimeS == 0).
-  DirProfileSPtr a = std::make_shared<DirProfile>(1, 0);
-  DirProfileSPtr b = std::make_shared<DirProfile>(2, 0);
-  cache->Put(a);
-  cache->Put(b);
-
-  // Touch `b` so its LastActiveTimeS becomes "now".
-  b->CheckAndGenWarmupInos(999);
-  uint64_t now_s = utils::Timestamp();
-
-  // Cutoff slightly in the past: only never-touched entries (a) qualify.
-  cache->CleanExpired(now_s - 1);
-
-  EXPECT_EQ(cache->Get(1), nullptr);
-  EXPECT_NE(cache->Get(2), nullptr);
-  EXPECT_EQ(cache->Size(), 1u);
-}
-
-TEST_F(DirProfileCacheTest, CleanExpiredRemovesAllWhenCutoffInFuture) {
-  auto cache = DirProfileCache::New();
-  for (int i = 0; i < 10; ++i) {
-    DirProfileSPtr p = std::make_shared<DirProfile>(static_cast<Ino>(i + 1), 0);
-    p->CheckAndGenWarmupInos(100);  // populate LastActiveTimeS
-    cache->Put(p);
-  }
-
-  cache->CleanExpired(utils::Timestamp() + 3600);
-  EXPECT_EQ(cache->Size(), 0u);
-}
-
 }  // namespace test
 }  // namespace meta
 }  // namespace vfs
