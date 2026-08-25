@@ -204,7 +204,7 @@ TEST_F(CompactorTest, ForceCompact_AfterStop_ReturnsStopError) {
 }
 
 // 8. BlockStore RangeAsync failure propagates as a Compact error.
-//    We use a non-zero slice so that ChunkReqReader actually issues a
+//    We use a non-zero slice so that ChunkReadOp actually issues a
 //    RangeAsync call. A single non-zero data slice whose length is large
 //    enough to pass the Skip() threshold forces DoCompact to be called,
 //    and if RangeAsync returns an error the Compact call must return an error.

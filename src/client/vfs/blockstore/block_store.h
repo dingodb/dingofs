@@ -58,6 +58,9 @@ class BlockStore {
   virtual Status Start() = 0;
   virtual void Shutdown() = 0;
 
+  // During normal running operation, RangeAsync invokes callback exactly
+  // once. Completion may run inline before this method returns. Shutdown
+  // admission/drain semantics are outside this interface contract.
   virtual void RangeAsync(ContextSPtr ctx, RangeReq req,
                           StatusCallback callback) = 0;
 
@@ -67,6 +70,8 @@ class BlockStore {
   virtual void PutAsync(ContextSPtr ctx, PutReq req,
                         StatusCallback callback) = 0;
 
+  // Same normal-running exactly-once and inline-completion contract as
+  // RangeAsync; no shutdown admission/drain guarantee is made here.
   virtual void PrefetchAsync(ContextSPtr ctx, PrefetchReq req,
                              StatusCallback callback) = 0;
   // utility

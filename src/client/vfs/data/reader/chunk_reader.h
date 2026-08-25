@@ -17,12 +17,10 @@
 #ifndef DINGOFS_CLIENT_VFS_DATA_READER_CHUNK_READER_H_
 #define DINGOFS_CLIENT_VFS_DATA_READER_CHUNK_READER_H_
 
-#include <cstdint>
-#include <memory>
-
+#include "client/vfs/common/read_buf_view.h"
 #include "client/vfs/data/reader/chunk_req.h"
-#include "client/vfs/data/reader/chunk_req_reader.h"
 #include "common/callback.h"
+#include "common/status.h"
 #include "common/trace/context.h"
 
 namespace dingofs {
@@ -36,22 +34,25 @@ struct ChunkSlices {
   std::vector<Slice> slices;
 };
 
+// Synchronous slice-lookup plus chunk-read-operation factory. Owns no async
+// state: after ReadAsync() submits the operation the object can be destroyed
+// at any time -- the operation (ChunkReadOp) carries its own lifetime.
+// Suitable as a stack object.
 class ChunkReader {
  public:
   ChunkReader(VFSHub* hub, uint64_t fh, const ChunkReq& req);
 
   ~ChunkReader() = default;
 
+  // Reads req_.frange into dst, invoking cb exactly once (possibly inline).
   void ReadAsync(ContextSPtr ctx, ReadBufView dst, StatusCallback cb);
 
  private:
   Status GetSlices(ContextSPtr ctx, ChunkSlices* chunk_slices);
 
-  std::string UUID() const { return reader_->UUID(); }
-
   VFSHub* hub_;
   const uint64_t fh_;
-  std::unique_ptr<ChunkReqReader> reader_;
+  const ChunkReq req_;
 };
 
 }  // namespace vfs

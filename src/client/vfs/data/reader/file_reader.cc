@@ -466,16 +466,22 @@ void FileReader::DoReadRequst(ReadRequestSptr req) {
   auto span =
       vfs_hub_->GetTraceManager()->StartSpan("FileReader::DoReadRequst");
 
-  AcquireRef();
+  // The callback owns the FileReader through the intrusive reference: it may
+  // fire on any worker long after this stack frame is gone. The stack
+  // ChunkReader carries no async state (ChunkReadOp owns its own lifetime),
+  // so it can die as soon as ReadAsync returns.
+  boost::intrusive_ptr<FileReader> self(this);
+  ChunkReader reader(vfs_hub_, fh_, req->req);
+  const ReadBufView dst = req->dst;
+  ContextSPtr span_ctx = SpanScope::GetContext(span);
 
-  auto* reader = new ChunkReader(vfs_hub_, fh_, req->req);
-  reader->ReadAsync(SpanScope::GetContext(span), req->dst,
-                    [this, reader, req, span](Status s) {
-                      SpanScope::AddEvent(span, "Complete ReadAsync callback");
-                      this->OnReadRequestComplete(req, s);
-                      delete reader;
-                      ReleaseRef();
-                    });
+  reader.ReadAsync(std::move(span_ctx), dst,
+                   [self = std::move(self), req = std::move(req),
+                    span = std::move(span)](Status status) mutable {
+                     SpanScope::AddEvent(span, "Complete ReadAsync callback");
+                     self->OnReadRequestComplete(std::move(req),
+                                                 std::move(status));
+                   });
 }
 
 int64_t FileReader::TotalMem() const {
