@@ -206,6 +206,7 @@ class MDSMetaSystem : public vfs::MetaSystem {
   void CleanExpiredInodeCache();
   void CleanExpiredDirProfileCache();
   void CleanExpiredCompactMemo();
+  void CleanExpiredReadChunkCache();
 
   bool InitCrontab();
 
@@ -217,7 +218,7 @@ class MDSMetaSystem : public vfs::MetaSystem {
   InodeSPtr GetInode(FileSessionSPtr& file_session, const std::string& reason);
   Status GetInode(Ino ino, const std::string& reason, InodeSPtr& inode);
 
-  // chunk cache
+  // file
   Status DoFlushFile(ContextSPtr ctx, InodeSPtr inode, ChunkSetSPtr& chunk_set);
   void LaunchWriteSlice(ContextSPtr& ctx, ChunkSetSPtr chunk_set,
                         CommitTaskSPtr task);
@@ -229,6 +230,9 @@ class MDSMetaSystem : public vfs::MetaSystem {
   Status FlushSliceAndFile(ContextSPtr ctx, Ino ino);
   // flush slices of all files (called internally by Stop)
   void FlushAllFile();
+
+  bool GetChunkFromReadCache(Ino ino, uint32_t chunk_index,
+                             std::vector<Slice>* slices, uint64_t& version);
 
   Status CorrectAttr(ContextSPtr ctx, uint64_t time_ns, Attr& attr,
                      bool& is_amend, const std::string& caller);
@@ -248,6 +252,7 @@ class MDSMetaSystem : public vfs::MetaSystem {
 
   DirProfileSPtr GetDirProfile(Ino ino);
   void WarmupSmallFiles(const std::vector<Ino>& inoes);
+  void WarmupSmallFileChunk(const std::vector<Ino>& inoes);
 
   // batch operation
   Status RunOperation(OperationSPtr operation);
@@ -295,6 +300,8 @@ class MDSMetaSystem : public vfs::MetaSystem {
   CompactProcessor compact_processor_;
 
   BlockCacheCleaner block_cache_cleaner_;
+
+  ReadChunkCache read_chunk_cache_;
 
   std::atomic<bool> stopped_{false};
 };

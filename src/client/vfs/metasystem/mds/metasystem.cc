@@ -23,6 +23,7 @@
 #include <string>
 #include <vector>
 
+#include "chunk.h"
 #include "client/vfs/common/client_id.h"
 #include "client/vfs/components/context.h"
 #include "client/vfs/components/warmup_manager.h"
@@ -507,6 +508,13 @@ void MDSMetaSystem::CleanExpiredCompactMemo() {
   compact_processor_.CleanExpired(expired_time_s);
 }
 
+void MDSMetaSystem::CleanExpiredReadChunkCache() {
+  uint64_t expired_time_s =
+      utils::Timestamp() - FLAGS_vfs_meta_read_chunk_cache_expired_s;
+
+  read_chunk_cache_.CleanExpired(expired_time_s);
+}
+
 bool MDSMetaSystem::InitCrontab() {
   // add heartbeat crontab
   crontab_configs_.push_back({
@@ -527,6 +535,7 @@ bool MDSMetaSystem::InitCrontab() {
         this->CleanExpiredInodeCache();
         this->CleanExpiredDirProfileCache();
         this->CleanExpiredCompactMemo();
+        this->CleanExpiredReadChunkCache();
       },
   });
 
@@ -863,7 +872,77 @@ void MDSMetaSystem::WarmupSmallFiles(const std::vector<Ino>& inoes) {
 
   LOG_DEBUG << fmt::format("[meta.fs] submit warmup task, ino({}).", inoes);
 
+  // warmup small file data
   warmup_manager_->SubmitTask(WarmupTaskContext(inoes));
+
+  // warmup small file chunk
+  WarmupSmallFileChunk(inoes);
+}
+
+class WarmupChunkTask final : public mds::TaskRunnable {
+ public:
+  WarmupChunkTask(uint32_t fs_id, const std::vector<Ino>& inoes,
+                  ChunkMemo& chunk_memo, MDSClient& mds_client,
+                  ReadChunkCache& read_chunk_cache)
+      : fs_id_(fs_id),
+        inoes_(inoes),
+        chunk_memo_(chunk_memo),
+        mds_client_(mds_client),
+        read_chunk_cache_(read_chunk_cache) {}
+
+  std::string Type() override { return "WARMUP_CHUNK"; }
+  std::string Key() override { return std::to_string(inoes_.front()); }
+
+  void Run() override {
+    Status status = DoWarmup();
+    if (!status.ok()) {
+      LOG(ERROR) << fmt::format("[meta.fs.{}] warmup chunk fail, error({}).",
+                                fs_id_, status.ToString());
+    }
+  }
+
+ private:
+  Status DoWarmup() {
+    std::vector<MDSClient::ReadSliceInEntry> in_entries;
+    in_entries.reserve(inoes_.size());
+    for (const auto& ino : inoes_) {
+      MDSClient::ReadSliceInEntry in_entry;
+      in_entry.ino = ino;
+      in_entry.index = 0;
+      in_entry.version = chunk_memo_.GetVersion(ino, in_entry.index);
+      in_entries.push_back(in_entry);
+    }
+
+    auto ctx = std::make_shared<Context>("");
+    std::vector<MDSClient::ReadSliceOutEntry> out_entries;
+    Status status = mds_client_.ReadSlice(ctx, in_entries, out_entries);
+    if (!status.ok() && !status.IsNotFound()) return status;
+
+    for (const auto& entry : out_entries) {
+      read_chunk_cache_.Put(entry.ino, entry.chunk);
+    }
+
+    return Status::OK();
+  }
+
+  const uint32_t fs_id_;
+  const std::vector<Ino> inoes_;
+
+  ChunkMemo& chunk_memo_;
+  MDSClient& mds_client_;
+  ReadChunkCache& read_chunk_cache_;
+};
+
+void MDSMetaSystem::WarmupSmallFileChunk(const std::vector<Ino>& inoes) {
+  if (inoes.empty()) return;
+
+  auto task = std::make_shared<WarmupChunkTask>(
+      fs_info_.GetFsId(), inoes, chunk_memo_, mds_client_, read_chunk_cache_);
+
+  if (!executor_.ExecuteByHash(inoes.front(), task)) {
+    LOG(ERROR) << fmt::format(
+        "[meta.fs] submit warmup chunk task fail, ino({}).", inoes.front());
+  }
 }
 
 Status MDSMetaSystem::Flush(ContextSPtr ctx, Ino ino, uint64_t fh) {
@@ -1020,31 +1099,20 @@ Status MDSMetaSystem::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
     chunk_descriptor.set_version(
         chunk_memo_.GetVersion(ino, static_cast<uint32_t>(index)));
 
-    std::vector<mds::ChunkEntry> chunks;
-    auto status = mds_client_.ReadSlice(ctx, ino, {chunk_descriptor}, chunks);
-    if (!status.ok()) {
+    mds::ChunkEntry chunk_entry;
+    auto status =
+        mds_client_.ReadSlice(ctx, ino, chunk_descriptor, chunk_entry);
+    if (!status.ok() && !status.IsNotFound()) {
       LOG(ERROR) << fmt::format(
           "[meta.fs.{}.{}.{}] reeadslice fail, error({}).", ino, fh, index,
           status.ToString());
       return status;
     }
 
-    if (!chunks.empty()) {
-      auto& chunk = chunks.front();
-      for (const auto& slice : chunk.slices()) {
-        slices->push_back(Helper::ToSlice(slice));
-      }
-      version = chunk.version();
-
-      LOG_DEBUG << fmt::format(
-          "[meta.fs.{}.{}.{}] readslice, version({}) slices({}).", ino, fh,
-          index, version, Helper::ToString(*slices));
-
-    } else {
-      LOG(WARNING) << fmt::format(
-          "[meta.fs.{}.{}.{}] readslice not found, return empty slice.", ino,
-          fh, index);
+    for (const auto& slice : chunk_entry.slices()) {
+      slices->push_back(Helper::ToSlice(slice));
     }
+    version = chunk_entry.version();
 
     return Status::OK();
   }
@@ -1057,8 +1125,18 @@ Status MDSMetaSystem::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
       *slices = chunk->GetAllSlice(version);
 
       LOG_DEBUG << fmt::format(
-          "[meta.fs.{}.{}.{}] readslice, version({}) slices({}).", ino, fh,
-          index, version, Helper::ToString(*slices));
+          "[meta.fs.{}.{}.{}] readslice from cache, version({}) slices({}).",
+          ino, fh, index, version, Helper::ToString(*slices));
+      return Status::OK();
+    }
+
+    // check read cache for readonly
+    if (!file_session->HasWriter() &&
+        GetChunkFromReadCache(ino, index, slices, version)) {
+      LOG_DEBUG << fmt::format(
+          "[meta.fs.{}.{}.{}] readslice from read-cache, version({}) "
+          "slices({}).",
+          ino, fh, index, version, Helper::ToString(*slices));
       return Status::OK();
     }
 
@@ -1068,9 +1146,10 @@ Status MDSMetaSystem::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
     chunk_descriptor.set_version(
         chunk_memo_.GetVersion(ino, static_cast<uint32_t>(index)));
 
-    std::vector<mds::ChunkEntry> chunks;
-    auto status = mds_client_.ReadSlice(ctx, ino, {chunk_descriptor}, chunks);
-    if (!status.ok()) {
+    mds::ChunkEntry chunk_entry;
+    auto status =
+        mds_client_.ReadSlice(ctx, ino, chunk_descriptor, chunk_entry);
+    if (!status.ok() && !status.IsNotFound()) {
       LOG(ERROR) << fmt::format(
           "[meta.fs.{}.{}.{}] reeadslice fail, error({}).", ino, fh, index,
           status.ToString());
@@ -1078,24 +1157,21 @@ Status MDSMetaSystem::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
     }
 
     // not found chunk, return empty slice
-    if (chunks.empty()) {
-      mds::ChunkEntry chunk_entry;
+    if (status.IsNotFound()) {
       chunk_entry.set_index(index);
       chunk_entry.set_chunk_size(fs_info_.GetChunkSize());
       chunk_entry.set_block_size(fs_info_.GetBlockSize());
       chunk_entry.set_version(0);
-      chunks.push_back(chunk_entry);
     }
 
     // update cache
-    chunk_set->Put(chunks, "readslice");
+    chunk_set->Put(chunk_entry, "readslice");
     // update chunk memo
-    for (const auto& chunk : chunks) {
-      chunk_memo_.Remember(ino, chunk.index(), chunk.version());
 
-      LOG_DEBUG << fmt::format("[meta.fs.{}.{}.{}] fetch slice, version({}).",
-                               ino, fh, index, chunk.version());
-    }
+    chunk_memo_.Remember(ino, chunk_entry.index(), chunk_entry.version());
+
+    LOG_DEBUG << fmt::format("[meta.fs.{}.{}.{}] fetch slice, version({}).",
+                             ino, fh, index, chunk_entry.version());
 
   } while (true);
 
@@ -1932,6 +2008,25 @@ void MDSMetaSystem::FlushAllFile() {
   }
 }
 
+bool MDSMetaSystem::GetChunkFromReadCache(Ino ino, uint32_t chunk_index,
+                                          std::vector<Slice>* slices,
+                                          uint64_t& version) {
+  ChunkEntry chunk_entry;
+
+  if (!read_chunk_cache_.Get(ino, chunk_index, chunk_entry)) {
+    return false;
+  }
+
+  slices->clear();
+  for (const auto& slice : chunk_entry.slices()) {
+    slices->push_back(Helper::ToSlice(slice));
+  }
+
+  version = chunk_entry.version();
+
+  return true;
+}
+
 Status MDSMetaSystem::CorrectAttr(ContextSPtr ctx, uint64_t time_ns, Attr& attr,
                                   bool& is_amend, const std::string& caller) {
   if (modify_time_memo_.ModifiedSince(attr.ino, time_ns)) {
@@ -1999,23 +2094,20 @@ Status MDSMetaSystem::Compact(ContextSPtr ctx, Ino ino, uint32_t chunk_index,
   chunk_descriptor.set_index(chunk_index);
   chunk_descriptor.set_version(chunk_memo_.GetVersion(ino, chunk_index));
 
-  std::vector<mds::ChunkEntry> chunks;
-  auto status = mds_client_.ReadSlice(ctx, ino, {chunk_descriptor}, chunks);
-  if (!status.ok()) {
+  mds::ChunkEntry chunk_entry;
+  Status status =
+      mds_client_.ReadSlice(ctx, ino, chunk_descriptor, chunk_entry);
+  if (!status.ok() && !status.IsNotFound()) {
     LOG(ERROR) << fmt::format("[meta.fs.{}.{}] reeadslice fail, error({}).",
                               ino, chunk_index, status.ToString());
     return status;
   }
-  if (chunks.empty()) {
-    return Status::NoData("not found chunk");
-  }
+  if (status.IsNotFound()) return Status::NoData("not found chunk");
 
-  for (auto& chunk : chunks) {
-    auto chunk_ptr = Chunk::New(ino, chunk, "manual_compact");
-    auto status = compact_processor_.Execute(ino, GetInodeFromCache(ino),
-                                             chunk_ptr, is_async);
-    if (!status.ok()) return status;
-  }
+  auto chunk_ptr = Chunk::New(ino, chunk_entry, "manual_compact");
+  status = compact_processor_.Execute(ino, GetInodeFromCache(ino), chunk_ptr,
+                                      is_async);
+  if (!status.ok()) return status;
 
   return Status::OK();
 }

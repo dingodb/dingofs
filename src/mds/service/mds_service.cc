@@ -2403,6 +2403,71 @@ void MDSServiceImpl::ReadSlice(google::protobuf::RpcController* controller, cons
   RunInQueue(ReadSlice, controller, request, response, svr_done, read_worker_set_);
 }
 
+void MDSServiceImpl::DoBatchReadSlice(google::protobuf::RpcController*, const pb::mds::BatchReadSliceRequest* request,
+                                      pb::mds::BatchReadSliceResponse* response, TraceClosure* done) {
+  brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
+
+  auto span = StartSpan("MDSServiceImpl::DoBatchReadSlice", request->info());
+
+  auto file_system = GetFileSystem(request->fs_id());
+  auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    SpanScope::SetStatus(span, status);
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
+  Context ctx(request->context(), request->info().request_id(), __func__, CalReqType(request));
+
+  std::vector<pb::mds::BatchReadSliceRequest::Entry> in_entries(request->entries().begin(), request->entries().end());
+  std::vector<pb::mds::BatchReadSliceResponse::Entry> out_entries;
+  status = file_system->BatchReadSlice(ctx, in_entries, out_entries);
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    SpanScope::SetStatus(span, status);
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
+  for (auto& entry : out_entries) {
+    response->add_entries()->Swap(&entry);
+  }
+}
+
+void MDSServiceImpl::BatchReadSlice(google::protobuf::RpcController* controller,
+                                    const pb::mds::BatchReadSliceRequest* request,
+                                    pb::mds::BatchReadSliceResponse* response, google::protobuf::Closure* done) {
+  auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  // validate request
+  auto validate_fn = [&]() -> Status {
+    if (request->fs_id() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "fs_id is 0");
+    }
+    if (request->entries().empty()) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "entries is empty");
+    }
+    for (const auto& entry : request->entries()) {
+      if (entry.ino() == 0) {
+        return Status(pb::error::EILLEGAL_PARAMTETER, "ino is 0");
+      }
+    }
+
+    return Status::OK();
+  };
+
+  auto status = validate_fn();
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    brpc::ClosureGuard done_guard(svr_done);
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
+  // run in place.
+  RunInPlace(BatchReadSlice, controller, request, response, svr_done);
+
+  // run in queue.
+  RunInQueue(BatchReadSlice, controller, request, response, svr_done, read_worker_set_);
+}
+
 void MDSServiceImpl::DoCopyFileRange(google::protobuf::RpcController*, const pb::mds::CopyFileRangeRequest* request,
                                      pb::mds::CopyFileRangeResponse* response, TraceClosure* done) {
   brpc::ClosureGuard done_guard(done);

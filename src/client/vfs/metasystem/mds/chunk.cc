@@ -36,6 +36,9 @@ static const uint32_t kChunkCommitIntervalMs = 1000;  // milliseconds
 
 static std::atomic<uint64_t> task_id_generator{10000};
 
+DEFINE_uint32(vfs_meta_chunk_fresh_time_s, 10,
+              "chunk cache fresh time seconds");
+
 bool Chunk::Put(const ChunkEntry& chunk, const char* reason) {
   CHECK(chunk.index() == index_)
       << fmt::format("[meta.chunk.{}.{}] mismatch chunk index({}|{}).", ino_,
@@ -412,6 +415,16 @@ void ChunkSet::Append(uint32_t index, const std::vector<Slice>& slices) {
   }
 }
 
+void ChunkSet::Put(const ChunkEntry& chunk, const char* reason) {
+  auto it = chunk_map_.find(chunk.index());
+  if (it != chunk_map_.end()) {
+    it->second->Put(chunk, reason);
+
+  } else {
+    chunk_map_.emplace(chunk.index(), Chunk::New(ino_, chunk, reason));
+  }
+}
+
 void ChunkSet::Put(const std::vector<ChunkEntry>& chunks, const char* reason) {
   utils::WriteLockGuard guard(lock_);
 
@@ -747,6 +760,75 @@ bool ChunkSet::Load(const Json::Value& value) {
   last_commit_ms_.store(value["last_commit_time_ms"].asUInt64());
 
   return true;
+}
+
+void ReadChunkCache::Put(Ino ino, const ChunkEntry& chunk) {
+  shard_map_.withWLock([&](Map& map) {
+    Key key{ino, chunk.index()};
+    auto [it, inserted] = map.try_emplace(key, Value(chunk));
+    if (!inserted) {
+      it->second.chunk = chunk;
+      it->second.last_fresh_s = utils::Timestamp();
+    }
+  });
+
+  total_count_ << 1;
+}
+
+void ReadChunkCache::Delete(Ino ino, uint32_t chunk_index) {
+  shard_map_.withWLock([&](Map& map) {
+    Key key{ino, chunk_index};
+    map.erase(key);
+  });
+}
+
+bool ReadChunkCache::Get(Ino ino, uint32_t chunk_index, ChunkEntry& chunk) {
+  bool found = false;
+  shard_map_.withRLock([&](const Map& map) {
+    Key key{ino, chunk_index};
+    auto it = map.find(key);
+    if (it != map.end() &&
+        it->second.last_fresh_s + FLAGS_vfs_meta_chunk_fresh_time_s >=
+            utils::Timestamp()) {
+      chunk = it->second.chunk;
+      found = true;
+    }
+  });
+
+  return found;
+}
+
+void ReadChunkCache::CleanExpired(uint64_t expire_s) {
+  shard_map_.withWLock([&](Map& map) {
+    for (auto it = map.begin(); it != map.end();) {
+      if (it->second.last_fresh_s < expire_s) {
+        auto temp = it++;
+        map.erase(temp);
+        clean_count_ << 1;
+
+      } else {
+        ++it;
+      }
+    }
+  });
+}
+
+size_t ReadChunkCache::Size() {
+  size_t size = 0;
+  shard_map_.iterate([&size](Map& map) { size += map.size(); });
+  return size;
+}
+
+size_t ReadChunkCache::Bytes() {
+  return Size() * (sizeof(Key) + sizeof(Value));
+}
+
+void ReadChunkCache::Summary(Json::Value& value) {
+  value["name"] = "readchunkcache";
+  value["count"] = Size();
+  value["bytes"] = Bytes();
+  value["total_count"] = total_count_.get_value();
+  value["clean_count"] = clean_count_.get_value();
 }
 
 }  // namespace meta

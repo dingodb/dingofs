@@ -33,6 +33,7 @@
 #include "mds/common/synchronization.h"
 #include "mds/common/type.h"
 #include "utils/concurrent/concurrent.h"
+#include "utils/shards.h"
 #include "utils/time.h"
 
 namespace dingofs {
@@ -329,6 +330,7 @@ class ChunkSet {
 
   // chunk operations
   void Append(uint32_t index, const std::vector<Slice>& slices);
+  void Put(const ChunkEntry& chunk, const char* reason);
   void Put(const std::vector<ChunkEntry>& chunks, const char* reason);
 
   void InvalidateReadCache();
@@ -401,6 +403,58 @@ class ChunkSet {
   absl::flat_hash_set<uint32_t> committing_chunk_index_set_;
 
   std::atomic<uint64_t> last_commit_ms_{0};
+};
+
+class ReadChunkCache {
+ public:
+  ReadChunkCache() = default;
+  ~ReadChunkCache() = default;
+
+  void Put(Ino ino, const ChunkEntry& chunk);
+  void Delete(Ino ino, uint32_t chunk_index);
+
+  bool Get(Ino ino, uint32_t chunk_index, ChunkEntry& chunk);
+
+  void CleanExpired(uint64_t expire_s);
+
+  size_t Size();
+  size_t Bytes();
+
+  void Summary(Json::Value& value);
+
+ private:
+  struct Key {
+    Ino ino{0};
+    uint32_t chunk_index{0};
+  };
+
+  struct KeyHash {
+    size_t operator()(const Key& key) const {
+      return std::hash<Ino>()(key.ino) ^ std::hash<uint32_t>()(key.chunk_index);
+    }
+  };
+
+  struct KeyEqual {
+    bool operator()(const Key& lhs, const Key& rhs) const {
+      return lhs.ino == rhs.ino && lhs.chunk_index == rhs.chunk_index;
+    }
+  };
+
+  struct Value {
+    ChunkEntry chunk;
+    uint64_t last_fresh_s{0};
+
+    Value(const ChunkEntry& c) : chunk(c), last_fresh_s(utils::Timestamp()) {}
+  };
+
+  using Map = absl::flat_hash_map<Key, Value, KeyHash, KeyEqual>;
+
+  constexpr static size_t kShardNum = 64;
+  utils::Shards<Map, kShardNum> shard_map_;
+
+  // metric
+  bvar::Adder<uint64_t> total_count_{"meta_read_chunk_cache_total_count"};
+  bvar::Adder<uint64_t> clean_count_{"meta_read_chunk_cache_clean_count"};
 };
 
 }  // namespace meta

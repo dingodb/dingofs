@@ -328,6 +328,9 @@ const char* Operation::OpName() const {
     case OpType::kGetChunk:
       return "GetChunk";
 
+    case OpType::kBatchGetChunk:
+      return "BatchGetChunk";
+
     case OpType::kBatchGetFirstChunk:
       return "BatchGetFirstChunk";
 
@@ -1551,6 +1554,33 @@ Status BatchGetFirstChunkOperation::Run(TxnUPtr& txn) {
     result_.inoes.push_back(ino);
 
     result_.chunks.push_back(MetaCodec::DecodeChunkValue(kv.value));
+  }
+
+  return Status::OK();
+}
+
+Status BatchGetChunkOperation::Run(TxnUPtr& txn) {
+  std::vector<std::string> keys;
+  keys.reserve(entries_.size());
+  for (const auto& entry : entries_) {
+    keys.push_back(MetaCodec::EncodeChunkKey(fs_id_, entry.ino, entry.chunk_index));
+  }
+
+  std::vector<KeyValue> kvs;
+  auto status = txn->BatchGet(keys, kvs);
+  if (!status.ok()) return status;
+
+  result_.entries.clear();
+  for (const auto& kv : kvs) {
+    uint32_t fs_id;
+    Ino ino{0};
+    uint64_t chunk_index;
+    MetaCodec::DecodeChunkKey(kv.key, fs_id, ino, chunk_index);
+
+    Result::Entry entry;
+    entry.ino = ino;
+    entry.chunk = MetaCodec::DecodeChunkValue(kv.value);
+    result_.entries.push_back(std::move(entry));
   }
 
   return Status::OK();
