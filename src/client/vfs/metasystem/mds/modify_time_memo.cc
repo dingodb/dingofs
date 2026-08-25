@@ -15,6 +15,7 @@
 #include "client/vfs/metasystem/mds/modify_time_memo.h"
 
 #include "common/logging.h"
+#include "common/options/client.h"
 #include "fmt/format.h"
 #include "utils/time.h"
 
@@ -45,6 +46,8 @@ void ModifyTimeMemo::DeleteIf(Ino ino, uint64_t expire_time_ns) {
 }
 
 void ModifyTimeMemo::CleanExpired(uint64_t expire_time_s) {
+  if (Size() < FLAGS_vfs_meta_cache_entry_max_count) return;
+
   uint64_t expire_time_ns = expire_time_s * 1000 * 1000 * 1000;
   std::vector<Ino> expired_inos;
   shard_map_.iterate([this, expire_time_ns, &expired_inos](Map& map) {

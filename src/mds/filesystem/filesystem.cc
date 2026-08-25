@@ -2782,6 +2782,8 @@ Status FileSystem::BatchReadSlice(Context& ctx, const std::vector<BatchReadSlice
     res_entry.set_ino(entry.ino);
     res_entry.mutable_chunk()->CopyFrom(entry.chunk);
     out_entries.push_back(res_entry);
+
+    chunk_cache_.PutIf(entry.ino, std::move(entry.chunk));
   }
 
   return Status::OK();

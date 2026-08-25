@@ -210,6 +210,8 @@ std::vector<InodeSPtr> InodeCache::Get(const std::vector<uint64_t>& inoes) {
 }
 
 void InodeCache::CleanExpired(uint64_t expire_s) {
+  if (Size() < FLAGS_vfs_meta_cache_entry_max_count) return;
+
   std::vector<InodeSPtr> inodes;
   shard_map_.iterate([&](const Map& map) {
     for (const auto& [_, inode] : map) {

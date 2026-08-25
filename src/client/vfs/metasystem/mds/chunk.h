@@ -430,7 +430,7 @@ class ReadChunkCache {
 
   struct KeyHash {
     size_t operator()(const Key& key) const {
-      return std::hash<Ino>()(key.ino) ^ std::hash<uint32_t>()(key.chunk_index);
+      return absl::HashOf(key.ino, key.chunk_index);
     }
   };
 

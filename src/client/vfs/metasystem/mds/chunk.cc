@@ -36,7 +36,7 @@ static const uint32_t kChunkCommitIntervalMs = 1000;  // milliseconds
 
 static std::atomic<uint64_t> task_id_generator{10000};
 
-DEFINE_uint32(vfs_meta_chunk_fresh_time_s, 10,
+DEFINE_uint32(vfs_meta_chunk_fresh_time_s, 20,
               "chunk cache fresh time seconds");
 
 bool Chunk::Put(const ChunkEntry& chunk, const char* reason) {
@@ -764,43 +764,51 @@ bool ChunkSet::Load(const Json::Value& value) {
 }
 
 void ReadChunkCache::Put(Ino ino, const ChunkEntry& chunk) {
-  shard_map_.withWLock([&](Map& map) {
-    Key key{ino, chunk.index()};
-    auto [it, inserted] = map.try_emplace(key, Value(chunk));
-    if (!inserted) {
-      it->second.chunk = chunk;
-      it->second.last_fresh_s = utils::Timestamp();
-    }
-  });
+  Key key{ino, chunk.index()};
+
+  shard_map_.withWLock(
+      [&](Map& map) {
+        auto [it, inserted] = map.try_emplace(key, Value(chunk));
+        if (!inserted) {
+          it->second.chunk = chunk;
+          it->second.last_fresh_s = utils::Timestamp();
+        }
+      },
+      ino);
 
   total_count_ << 1;
 }
 
 void ReadChunkCache::Delete(Ino ino, uint32_t chunk_index) {
-  shard_map_.withWLock([&](Map& map) {
-    Key key{ino, chunk_index};
-    map.erase(key);
-  });
+  Key key{ino, chunk_index};
+
+  shard_map_.withWLock([&](Map& map) { map.erase(key); }, ino);
 }
 
 bool ReadChunkCache::Get(Ino ino, uint32_t chunk_index, ChunkEntry& chunk) {
+  uint64_t now_s = utils::Timestamp();
+  Key key{ino, chunk_index};
+
   bool found = false;
-  shard_map_.withRLock([&](const Map& map) {
-    Key key{ino, chunk_index};
-    auto it = map.find(key);
-    if (it != map.end() &&
-        it->second.last_fresh_s + FLAGS_vfs_meta_chunk_fresh_time_s >=
-            utils::Timestamp()) {
-      chunk = it->second.chunk;
-      found = true;
-    }
-  });
+  shard_map_.withRLock(
+      [&](const Map& map) {
+        auto it = map.find(key);
+        if (it != map.end() &&
+            it->second.last_fresh_s + FLAGS_vfs_meta_chunk_fresh_time_s >=
+                now_s) {
+          chunk = it->second.chunk;
+          found = true;
+        }
+      },
+      ino);
 
   return found;
 }
 
 void ReadChunkCache::CleanExpired(uint64_t expire_s) {
-  shard_map_.withWLock([&](Map& map) {
+  if (Size() < FLAGS_vfs_meta_cache_entry_max_count) return;
+
+  shard_map_.iterateWLock([&](Map& map) {
     for (auto it = map.begin(); it != map.end();) {
       if (it->second.last_fresh_s < expire_s) {
         auto temp = it++;
