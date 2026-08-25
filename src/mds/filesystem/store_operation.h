@@ -976,6 +976,7 @@ class UpsertChunkOperation : public Operation {
 
   void PrefetchKey(std::vector<std::string>& keys) override;
 
+  Status PreProcess(TxnUPtr& txn, BatchSharedParam&) override;
   void PostProcess(BatchSharedParam& shared_param) override;
 
   Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;

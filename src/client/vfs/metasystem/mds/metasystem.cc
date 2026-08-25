@@ -1114,19 +1114,25 @@ Status MDSMetaSystem::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
     }
     version = chunk_entry.version();
 
+    LOG_DEBUG << fmt::format(
+        "[meta.fs.{}.{}.{}] readslice from remote, version({}) slices({}).",
+        ino, fh, index, version, Helper::ToString(*slices));
+
     return Status::OK();
   }
 
   auto chunk_set = file_session->GetChunkSet();
 
+  bool is_fetch = false;
   do {
     auto chunk = chunk_set->Get(index);
     if (chunk != nullptr && chunk->IsCompleted()) {
       *slices = chunk->GetAllSlice(version);
 
       LOG_DEBUG << fmt::format(
-          "[meta.fs.{}.{}.{}] readslice from cache, version({}) slices({}).",
-          ino, fh, index, version, Helper::ToString(*slices));
+          "[meta.fs.{}.{}.{}] readslice from {}, version({}) slices({}).", ino,
+          fh, index, is_fetch ? "remote" : "cache", version,
+          Helper::ToString(*slices));
       return Status::OK();
     }
 
@@ -1169,6 +1175,8 @@ Status MDSMetaSystem::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
     // update chunk memo
 
     chunk_memo_.Remember(ino, chunk_entry.index(), chunk_entry.version());
+
+    is_fetch = true;
 
     LOG_DEBUG << fmt::format("[meta.fs.{}.{}.{}] fetch slice, version({}).",
                              ino, fh, index, chunk_entry.version());
