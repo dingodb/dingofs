@@ -1399,6 +1399,25 @@ void UpsertChunkOperation::PrefetchKey(std::vector<std::string>& keys) {
   }
 }
 
+Status UpsertChunkOperation::PreProcess(TxnUPtr&, BatchSharedParam& shared_param) {
+  const uint32_t fs_id = fs_info_.fs_id();
+  const auto& prefetch_index = shared_param.prefetch_index;
+  auto& chunk_map = shared_param.chunk_map;
+
+  for (const auto& delta_slices : delta_slices_) {
+    const uint64_t chunk_index = delta_slices.chunk_index();
+
+    const std::string key = MetaCodec::EncodeChunkKey(fs_id, ino_, chunk_index);
+    std::string value = FindValue(prefetch_index, key);
+    if (!value.empty()) {
+      ChunkEntry chunk = MetaCodec::DecodeChunkValue(value);
+      chunk_map.try_emplace(chunk_index, chunk);
+    }
+  }
+
+  return Status::OK();
+}
+
 void UpsertChunkOperation::PostProcess(BatchSharedParam& shared_param) {
   if (shared_param.changed_chunk_indexes.empty()) return;
 
@@ -1410,12 +1429,12 @@ void UpsertChunkOperation::PostProcess(BatchSharedParam& shared_param) {
   }
 }
 
-Status UpsertChunkOperation::RunInBatch(TxnUPtr& /*txn*/, BatchSharedParam& shared_param) {
+Status UpsertChunkOperation::RunInBatch(TxnUPtr&, BatchSharedParam& shared_param) {
   const uint32_t fs_id = fs_info_.fs_id();
   const uint64_t now_ms = utils::TimestampMs();
 
   auto& attr = shared_param.attr;
-  const auto& prefetch_index = shared_param.prefetch_index;
+  auto& chunk_map = shared_param.chunk_map;
   if (attr.ino() != ino_) {
     return Status(pb::error::ENOT_FOUND, fmt::format("not found inode({})", ino_));
   }
@@ -1427,13 +1446,11 @@ Status UpsertChunkOperation::RunInBatch(TxnUPtr& /*txn*/, BatchSharedParam& shar
   for (const auto& delta_slices : delta_slices_) {
     ChunkEntry chunk;
     const uint64_t chunk_index = delta_slices.chunk_index();
+    auto it = chunk_map.find(chunk_index);
+    if (it != chunk_map.end()) chunk = it->second;
 
-    const std::string key = MetaCodec::EncodeChunkKey(fs_id, ino_, chunk_index);
-    std::string value = FindValue(prefetch_index, key);
-    if (!value.empty()) chunk = MetaCodec::DecodeChunkValue(value);
-
-    LOG_DEBUG << fmt::format("[operation.{}.{}] upsert chunk, chunk_index({}) value({}) old_chunk({}).", fs_id, ino_,
-                             chunk_index, value.size(), chunk.ShortDebugString());
+    LOG_DEBUG << fmt::format("[operation.{}.{}] upsert chunk, chunk_index({}) old_chunk({}).", fs_id, ino_, chunk_index,
+                             chunk.ShortDebugString());
 
     bool has_update = false;
     // not exist chunk, create a new one
@@ -1495,10 +1512,13 @@ Status UpsertChunkOperation::RunInBatch(TxnUPtr& /*txn*/, BatchSharedParam& shar
                                chunk.ShortDebugString());
 
       shared_param.changed_chunk_indexes.insert(chunk.index());
-      shared_param.chunk_map[chunk.index()] = chunk;
-
       has_update_chunk = true;
+
+    } else {
+      result_.effected_chunks.push_back(chunk);
     }
+
+    shared_param.chunk_map[chunk.index()] = chunk;
   }
 
   // update inode length if needed
@@ -1560,6 +1580,8 @@ Status BatchGetFirstChunkOperation::Run(TxnUPtr& txn) {
 }
 
 Status BatchGetChunkOperation::Run(TxnUPtr& txn) {
+  CHECK(!entries_.empty()) << "entries is empty.";
+
   std::vector<std::string> keys;
   keys.reserve(entries_.size());
   for (const auto& entry : entries_) {

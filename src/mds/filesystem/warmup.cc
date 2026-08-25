@@ -25,8 +25,8 @@ namespace mds {
 
 static const std::string kWarmupWorkerSetName = "warmup_worker_set";
 
-DEFINE_uint32(mds_warmup_worker_num, 4096, "number of warmup workers");
-DEFINE_uint32(mds_warmup_worker_max_pending_num, 259072, "warmup worker max pending num");
+DEFINE_uint32(mds_warmup_worker_num, 8, "number of warmup workers");
+DEFINE_uint32(mds_warmup_worker_max_pending_num, 2048, "warmup worker max pending num");
 DEFINE_bool(mds_warmup_worker_use_pthread, true, "warmup worker use pthread");
 
 DEFINE_uint32(mds_warmup_batch_size, 64, "warmup batch size");

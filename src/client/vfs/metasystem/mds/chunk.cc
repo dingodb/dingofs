@@ -590,6 +590,7 @@ Status ChunkSet::FinishCommitTask(CommitTaskSPtr& commit_task,
                                   const std::vector<ChunkEntry>& chunks) {
   const uint64_t task_id = commit_task->TaskID();
   const uint64_t task_epoch = commit_task->Epoch();
+  CHECK(!chunks.empty()) << "chunks is empty.";
 
   utils::WriteLockGuard guard(lock_);
 
