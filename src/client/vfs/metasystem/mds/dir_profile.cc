@@ -161,6 +161,8 @@ void DirProfileCache::Erase(Ino ino) {
 }
 
 void DirProfileCache::CleanExpired(uint64_t expire_s) {
+  if (Size() < FLAGS_vfs_meta_cache_entry_max_count) return;
+
   std::vector<Ino> dir_profiles;
   shard_map_.iterate([&](const Map& map) {
     for (const auto& [ino, profile] : map) {

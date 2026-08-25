@@ -64,14 +64,14 @@ const std::string kSliceIdCacheName = "slice";
 
 const std::string kExecutorWorkerSetName = "meta_executor";
 
-DEFINE_uint32(vfs_meta_executor_worker_num, 128, "number of meta workers");
+DEFINE_uint32(vfs_meta_executor_worker_num, 64, "number of meta workers");
 DEFINE_uint32(vfs_meta_executor_max_pending_num, 1048576,
               "meta worker max pending num");
 
 const std::string kBgExecutorWorkerSetName = "meta_bg_executor";
 
-DEFINE_uint32(vfs_meta_bg_executor_worker_num, 8, "number of compact workers");
-DEFINE_uint32(vfs_meta_bg_executor_max_pending_num, 1024,
+DEFINE_uint32(vfs_meta_bg_executor_worker_num, 16, "number of compact workers");
+DEFINE_uint32(vfs_meta_bg_executor_max_pending_num, 4096,
               "compact worker max pending num");
 DEFINE_bool(vfs_meta_bg_executor_use_pthread, true,
             "compact worker use pthread");
@@ -939,7 +939,7 @@ void MDSMetaSystem::WarmupSmallFileChunk(const std::vector<Ino>& inoes) {
   auto task = std::make_shared<WarmupChunkTask>(
       fs_info_.GetFsId(), inoes, chunk_memo_, mds_client_, read_chunk_cache_);
 
-  if (!executor_.ExecuteByHash(inoes.front(), task)) {
+  if (!bg_executor_.ExecuteByHash(inoes.front(), task)) {
     LOG(ERROR) << fmt::format(
         "[meta.fs] submit warmup chunk task fail, ino({}).", inoes.front());
   }
@@ -2020,8 +2020,9 @@ bool MDSMetaSystem::GetChunkFromReadCache(Ino ino, uint32_t chunk_index,
                                           std::vector<Slice>* slices,
                                           uint64_t& version) {
   ChunkEntry chunk_entry;
-
   if (!read_chunk_cache_.Get(ino, chunk_index, chunk_entry)) {
+    LOG_DEBUG << fmt::format("[meta.fs.{}.{}] miss chunk from read cache.", ino,
+                             chunk_index);
     return false;
   }
 

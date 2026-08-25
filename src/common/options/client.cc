@@ -64,6 +64,9 @@ DEFINE_validator(vfs_meta_access_logging, brpc::PassValidate);
 DEFINE_int64(vfs_meta_access_log_threshold_us, 0, "access log threshold");
 DEFINE_validator(vfs_meta_access_log_threshold_us, brpc::PassValidate);
 
+DEFINE_uint32(vfs_meta_cache_entry_max_count, 100000, "cache entry max count");
+DEFINE_validator(vfs_meta_cache_entry_max_count, brpc::PassValidate);
+
 DEFINE_uint64(vfs_meta_memo_expired_s, 3600, "modify time memo expired time");
 DEFINE_validator(vfs_meta_memo_expired_s, brpc::PassValidate);
 
