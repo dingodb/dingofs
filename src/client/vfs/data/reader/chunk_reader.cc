@@ -19,14 +19,12 @@
 #include <fmt/format.h>
 #include <glog/logging.h>
 
-#include <cstddef>
-#include <cstdint>
-#include <functional>
+#include <sstream>
 #include <utility>
 #include <vector>
 
 #include "client/vfs/common/helper.h"
-#include "client/vfs/data/reader/chunk_req.h"
+#include "client/vfs/data/reader/chunk_read_op.h"
 #include "client/vfs/hub/vfs_hub.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/status.h"
@@ -52,10 +50,10 @@ std::string SlicesToString(const std::vector<Slice>& slices) {
   return oss.str();
 }
 
-};  // namespace
+}  // namespace
 
 ChunkReader::ChunkReader(VFSHub* hub, uint64_t fh, const ChunkReq& req)
-    : hub_(hub), fh_(fh), reader_(new ChunkReqReader(hub, req)) {}
+    : hub_(hub), fh_(fh), req_(req) {}
 
 Status ChunkReader::GetSlices(ContextSPtr ctx, ChunkSlices* chunk_slices) {
   auto span = hub_->GetTraceManager()->StartChildSpan("ChunkReader::GetSlices",
@@ -64,13 +62,13 @@ Status ChunkReader::GetSlices(ContextSPtr ctx, ChunkSlices* chunk_slices) {
   std::vector<Slice> slices;
   uint64_t chunk_version = 0;
   DINGOFS_RETURN_NOT_OK(hub_->GetMetaSystem()->ReadSlice(
-      SpanScope::GetContext(span), reader_->chunk_.ino, reader_->chunk_.index,
-      fh_, &slices, chunk_version));
+      SpanScope::GetContext(span), req_.ino, req_.index, fh_, &slices,
+      chunk_version));
 
   chunk_slices->version = chunk_version;
   chunk_slices->slices = std::move(slices);
   VLOG(9) << fmt::format("{} GetSlices, version: {}, slice_num: {}, slices: {}",
-                         UUID(), chunk_slices->version,
+                         req_.UUID(), chunk_slices->version,
                          chunk_slices->slices.size(),
                          SlicesToString(chunk_slices->slices));
 
@@ -85,18 +83,22 @@ void ChunkReader::ReadAsync(ContextSPtr ctx, ReadBufView dst,
   ChunkSlices chunk_slices;
   Status s = GetSlices(SpanScope::GetContext(span), &chunk_slices);
   if (!s.ok()) {
-    LOG(WARNING) << fmt::format("{} Failed GetSlices, status: {}", UUID(),
+    LOG(WARNING) << fmt::format("{} Failed GetSlices, status: {}", req_.UUID(),
                                 s.ToString());
-    cb(s);
+    cb(std::move(s));
     return;
   }
 
-  reader_->ReadAsync(SpanScope::GetContext(span), chunk_slices.slices, dst,
-                     std::move(cb));
+  // The hidden operation owns its whole async lifetime: every in-flight block
+  // callback holds a reference to it. This reader can be destroyed as soon as
+  // StartChunkRead returns.
+  // Trace granularity intentionally stays at the ChunkReader and BlockStore
+  // layers; this ownership refactor does not retain the former
+  // ChunkReqReader operation/per-block/lock-wait spans.
+  StartChunkRead(SpanScope::GetContext(span), hub_, req_, chunk_slices.slices,
+                 dst, std::move(cb));
 }
 
 }  // namespace vfs
-
 }  // namespace client
-
 }  // namespace dingofs

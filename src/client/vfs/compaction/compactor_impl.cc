@@ -26,7 +26,7 @@
 #include "client/vfs/common/basync_util.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/compaction/compact_utils.h"
-#include "client/vfs/data/reader/chunk_req_reader.h"
+#include "client/vfs/data/reader/chunk_read_op.h"
 #include "client/vfs/data/slice/common.h"
 #include "client/vfs/data/slice/slice_writer.h"
 #include "client/vfs/hub/vfs_hub.h"
@@ -131,14 +131,12 @@ Status CompactorImpl::DoCompact(ContextSPtr ctx, Ino ino, int64_t chunk_index,
     // read-reply / RDMA path, so a plain buffer is the fill target here).
     to_write.resize(static_cast<size_t>(file_range.len));
 
-    ChunkReqReader reader(vfs_hub_, req);
-
     Status s;
     BSynchronizer sync;
     ReadBufView dst{reinterpret_cast<uint8_t*>(to_write.data()), 0,
                     to_write.size()};
-    reader.ReadAsync(SpanScope::GetContext(span), slices, dst,
-                     sync.AsStatusCallBack(s));
+    StartChunkRead(SpanScope::GetContext(span), vfs_hub_, req, slices, dst,
+                   sync.AsStatusCallBack(s));
     sync.Wait();
 
     if (!s.ok()) {

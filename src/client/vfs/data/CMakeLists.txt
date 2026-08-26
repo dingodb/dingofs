@@ -20,7 +20,7 @@ add_library(vfs_data
     flat/flat_chunk.cc
     flat/flat_file.cc
     reader/chunk_reader.cc
-    reader/chunk_req_reader.cc
+    reader/chunk_read_op.cc
     reader/chunk_req.cc
     reader/file_reader.cc
     reader/reader_registry.cc
