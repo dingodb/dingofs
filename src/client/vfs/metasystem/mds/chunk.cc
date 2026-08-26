@@ -416,6 +416,8 @@ void ChunkSet::Append(uint32_t index, const std::vector<Slice>& slices) {
 }
 
 void ChunkSet::Put(const ChunkEntry& chunk, const char* reason) {
+  utils::WriteLockGuard guard(lock_);
+
   auto it = chunk_map_.find(chunk.index());
   if (it != chunk_map_.end()) {
     it->second->Put(chunk, reason);
