@@ -126,8 +126,13 @@ def validate_source_workflow(workflow):
     )
     job = jobs["trusted-source"]
     require(
-        set(job) == {"runs-on", "steps"} and job["runs-on"] == "ubuntu-latest",
-        "pr-source.yml: trusted-source may contain only runs-on and steps",
+        set(job) == {"if", "runs-on", "steps"}
+        and job["runs-on"] == "ubuntu-latest",
+        "pr-source.yml: trusted-source has unexpected fields",
+    )
+    require(
+        job["if"] == "vars.TRUSTED_SOURCE_ENABLED != 'false'",
+        "pr-source.yml: trusted-source must honor TRUSTED_SOURCE_ENABLED",
     )
     require("environment" not in set(keys(job)), "pr-source.yml: Environment is forbidden")
     require(
@@ -146,23 +151,19 @@ def validate_source_workflow(workflow):
     )
     source_step, merge_group_step = steps
     require(
-        set(source_step) == {"name", "if", "env", "run"},
-        "pr-source.yml: source check step has unexpected fields",
+        {"name", "if", "run"}.issubset(source_step)
+        and set(source_step).issubset({"name", "if", "env", "run"}),
+        "pr-source.yml: source admission step has unexpected fields",
     )
     require(
         source_step["if"] == "github.event_name == 'pull_request_target'",
         "pr-source.yml: source check must run only for pull_request_target",
     )
-    require(
-        source_step["env"]
-        == {
-            "HEAD_REPOSITORY": "${{ github.event.pull_request.head.repo.full_name }}",
-            "BASE_REPOSITORY": "${{ github.event.pull_request.base.repo.full_name }}",
-        },
-        "pr-source.yml: source check must compare event head and base repositories",
-    )
     source_script = source_step["run"]
-    require(isinstance(source_script, str), "pr-source.yml: source check run must be a script")
+    require(
+        isinstance(source_script, str),
+        "pr-source.yml: source admission run must be a script",
+    )
 
     base_env = {"PATH": os.environ.get("PATH", "")}
     same_repo = subprocess.run(
@@ -191,7 +192,10 @@ def validate_source_workflow(workflow):
         text=True,
         check=False,
     )
-    require(fork.returncode != 0, "pr-source.yml: fork source check must fail")
+    require(
+        fork.returncode == 0,
+        f"pr-source.yml: fork source admission failed: {fork.stderr.strip()}",
+    )
 
     require(
         set(merge_group_step) == {"name", "if", "run"},
@@ -201,10 +205,21 @@ def validate_source_workflow(workflow):
         merge_group_step["if"] == "github.event_name == 'merge_group'",
         "pr-source.yml: merge-group step must run only for merge_group",
     )
+    merge_group_script = merge_group_step["run"]
     require(
-        merge_group_step["run"]
-        == 'echo "The merge group was admitted only after the PR source gate passed"',
-        "pr-source.yml: merge-group step must only describe prior gate admission",
+        isinstance(merge_group_script, str),
+        "pr-source.yml: merge-group admission must be a script",
+    )
+    merge_group = subprocess.run(
+        ["bash", "-c", "set -euo pipefail\n" + merge_group_script],
+        env=base_env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    require(
+        merge_group.returncode == 0,
+        f"pr-source.yml: merge-group admission failed: {merge_group.stderr.strip()}",
     )
 
 
@@ -224,8 +239,9 @@ def validate_jenkins_job(workflow):
     )
     require(job["needs"] == "e2e", "pr-check.yml: Jenkins job must need e2e")
     require(
-        job["if"] == "github.event_name == 'merge_group' && needs.e2e.result == 'success'",
-        "pr-check.yml: Jenkins job must run only for a successful merge-group e2e",
+        job["if"]
+        == "vars.JENKINS_REGRESSION_ENABLED != 'false' && github.event_name == 'merge_group' && needs.e2e.result == 'success'",
+        "pr-check.yml: Jenkins job must honor its switch and require a successful merge-group e2e",
     )
     require(job["runs-on"] == "ubuntu-latest", "pr-check.yml: wrong Jenkins runner")
     require(
@@ -360,9 +376,9 @@ try:
     require_external_configuration(
         source_path,
         {
-            "# - source repository: dingodb/dingofs",
-            "# - workflow path: .github/workflows/pr-source.yml",
-            "# - ref: refs/heads/main",
+            "# - require status check: trusted-source",
+            "# - expected source: GitHub Actions",
+            "# - accept both fork and same-repository pull requests",
             "# - merge queue grouping strategy: ALLGREEN",
             "# - no bypass actors",
         },

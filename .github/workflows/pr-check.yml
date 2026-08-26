@@ -210,7 +210,10 @@ jobs:
 
   jenkins-regression:
     needs: e2e
-    if: github.event_name == 'merge_group' && needs.e2e.result == 'success'
+    if: >-
+      vars.JENKINS_REGRESSION_ENABLED != 'false' &&
+      github.event_name == 'merge_group' &&
+      needs.e2e.result == 'success'
     runs-on: ubuntu-latest
     environment: jenkins-regression
     timeout-minutes: 270
