@@ -159,16 +159,6 @@ Status DirIterator::Fetch(ContextSPtr& ctx) {
     last_name_ = entries_.back().name;
   }
 
-  // set dir profile
-  if (dir_profile_ != nullptr && with_attr_) {
-    for (auto& dentry : dentries) {
-      auto& attr_entry = dentry.attr_entry;
-      dir_profile_->Accumulate(attr_entry.ino(),
-                               Helper::ToFileType(attr_entry.type()),
-                               attr_entry.length());
-    }
-  }
-
   return Status::OK();
 }
 

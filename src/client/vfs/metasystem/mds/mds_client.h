@@ -77,6 +77,8 @@ class MDSClient {
 
   RPC& GetRpc();
 
+  Ino QueryParentIno(Ino ino);
+
   // Out param `last_fs_version` receives the FsInfo.version echoed by MDS
   // in HeartbeatResponse.client.last_fs_version (zero when the response did
   // not carry a client reply, e.g. heartbeat for a non-client role or

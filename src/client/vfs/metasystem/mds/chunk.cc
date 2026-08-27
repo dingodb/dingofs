@@ -808,7 +808,7 @@ bool ReadChunkCache::Get(Ino ino, uint32_t chunk_index, ChunkEntry& chunk) {
 }
 
 void ReadChunkCache::CleanExpired(uint64_t expire_s) {
-  if (Size() < FLAGS_vfs_meta_cache_entry_max_count) return;
+  if (Size() < FLAGS_vfs_meta_clean_threshold_count) return;
 
   shard_map_.iterateWLock([&](Map& map) {
     for (auto it = map.begin(); it != map.end();) {

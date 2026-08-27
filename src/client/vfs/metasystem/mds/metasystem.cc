@@ -25,8 +25,6 @@
 
 #include "chunk.h"
 #include "client/vfs/common/client_id.h"
-#include "client/vfs/components/context.h"
-#include "client/vfs/components/warmup_manager.h"
 #include "client/vfs/metasystem/mds/helper.h"
 #include "client/vfs/metasystem/mds/mds_client.h"
 #include "client/vfs/vfs_meta.h"
@@ -127,12 +125,14 @@ MDSMetaSystem::MDSMetaSystem(mds::FsInfoEntry fs_info_entry,
       inode_cache_(fs_info_.GetFsId()),
       id_cache_(kSliceIdCacheName, mds_client_),
       file_session_map_(inode_cache_, fs_info_.GetChunkSize()),
-      dir_profile_cache_(DirProfileCache::New()),
       batch_processor_(mds_client_),
       compactor_(compactor),
       compact_processor_(mds_client_, compactor_, bg_executor_),
       block_cache_cleaner_(fs_info_.GetFsId(), fs_info_.GetChunkSize(),
-                           bg_executor_, mds_client_) {}
+                           bg_executor_, mds_client_),
+      warmup_processor_(fs_info_.GetFsId(), bg_executor_, chunk_memo_,
+                        mds_client_, inode_cache_, dentry_cache_,
+                        read_chunk_cache_, access_stats_map_) {}
 
 MDSMetaSystem::~MDSMetaSystem() {}  // NOLINT
 
@@ -151,6 +151,10 @@ Status MDSMetaSystem::Init(bool skip_mount) {
 
   if (!bg_executor_.Init()) {
     return Status::Internal("init bg_executor fail");
+  }
+
+  if (!warmup_processor_.Init()) {
+    return Status::Internal("init warmup_processor fail");
   }
 
   // mount fs — skipped when this is a new process inheriting an existing
@@ -478,41 +482,16 @@ void MDSMetaSystem::RefreshCachedFsInfo() {
   fs_info_.Update(new_fs_info);
 }
 
-void MDSMetaSystem::CleanExpiredModifyTimeMemo() {
-  uint64_t expired_time_s = utils::Timestamp() - FLAGS_vfs_meta_memo_expired_s;
+void MDSMetaSystem::CleanExpired() {
+  uint64_t expired_time_s = utils::Timestamp() - FLAGS_vfs_meta_clean_expired_s;
 
   modify_time_memo_.CleanExpired(expired_time_s);
-}
-
-void MDSMetaSystem::CleanExpiredChunkMemo() {
-  uint64_t expired_time_s = utils::Timestamp() - FLAGS_vfs_meta_memo_expired_s;
-
   chunk_memo_.CleanExpired(expired_time_s);
-}
-
-void MDSMetaSystem::CleanExpiredInodeCache() {
-  uint64_t expired_time_s =
-      utils::Timestamp() - FLAGS_vfs_meta_inode_cache_expired_s;
-
   inode_cache_.CleanExpired(expired_time_s);
-}
-
-void MDSMetaSystem::CleanExpiredDirProfileCache() {
-  if (!FLAGS_vfs_meta_warmup_small_file_enable) return;
-  dir_profile_cache_->CleanExpired(utils::Timestamp());
-}
-
-void MDSMetaSystem::CleanExpiredCompactMemo() {
-  uint64_t expired_time_s = utils::Timestamp() - FLAGS_vfs_meta_memo_expired_s;
-
   compact_processor_.CleanExpired(expired_time_s);
-}
-
-void MDSMetaSystem::CleanExpiredReadChunkCache() {
-  uint64_t expired_time_s =
-      utils::Timestamp() - FLAGS_vfs_meta_read_chunk_cache_expired_s;
-
   read_chunk_cache_.CleanExpired(expired_time_s);
+  access_stats_map_.CleanExpired(expired_time_s);
+  warmup_processor_.CleanExpired(expired_time_s);
 }
 
 bool MDSMetaSystem::InitCrontab() {
@@ -529,14 +508,7 @@ bool MDSMetaSystem::InitCrontab() {
       "CLEAN_EXPIRED",
       kCleanExpiredModifyTimeMemoIntervalS * 1000,
       true,
-      [this](void*) {
-        this->CleanExpiredModifyTimeMemo();
-        this->CleanExpiredChunkMemo();
-        this->CleanExpiredInodeCache();
-        this->CleanExpiredDirProfileCache();
-        this->CleanExpiredCompactMemo();
-        this->CleanExpiredReadChunkCache();
-      },
+      [this](void*) { this->CleanExpired(); },
   });
 
   // Note: the cached fs_info refreshes via the 5s heartbeat path — MDS echoes
@@ -574,20 +546,31 @@ Status MDSMetaSystem::Lookup(ContextSPtr ctx, Ino parent,
                              const std::string& name, Attr* attr) {
   AssertStop();
 
-  AttrEntry attr_entry;
-  auto status = mds_client_.Lookup(ctx, parent, name, attr_entry);
-  if (!status.ok()) {
-    if (status.Errno() == pb::error::ENOT_FOUND) {
-      return Status::NotExist("not found dentry");
+  InodeSPtr inode;
+
+  // check dentry cache
+  Ino ino = GetDentryFromCache(parent, name);
+  if (ino != 0) inode = GetInodeFromCache(ino);
+
+  // not found in dentry cache
+  if (inode == nullptr || !inode->IsAttrFresh()) {
+    AttrEntry attr_entry;
+    Status status = mds_client_.Lookup(ctx, parent, name, attr_entry);
+    if (!status.ok()) {
+      if (status.Errno() == pb::error::ENOT_FOUND) {
+        return Status::NotExist("not found dentry");
+      }
+      return status;
     }
-    return status;
+
+    inode = PutInodeToCache(attr_entry);
   }
 
-  auto inode = PutInodeToCache(attr_entry);
   *attr = inode->ToAttr();
 
   bool is_amend = false;
-  status = CorrectAttr(ctx, ctx->start_time_ns, *attr, is_amend, "lookup");
+  Status status =
+      CorrectAttr(ctx, ctx->start_time_ns, *attr, is_amend, "lookup");
   if (!status.ok()) return status;
 
   if (attr->nlink == 0) return Status::NotExist("inode is deleted");
@@ -595,6 +578,9 @@ Status MDSMetaSystem::Lookup(ContextSPtr ctx, Ino parent,
   if (!ctx->inner_req) {
     modify_time_memo_.UpdateKernelMtime(attr->ino, attr->mtime);
   }
+
+  // dir stats
+  IncLookupCount(parent, attr->ino);
 
   return Status::OK();
 }
@@ -795,13 +781,10 @@ Status MDSMetaSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
     return Status::NoPermission("O_TRUNC without O_WRONLY or O_RDWR");
   }
 
-  // for warmup small file
-  if ((flags & O_ACCMODE) == O_RDONLY) {
-    auto dir_profile = GetDirProfile(ino);
-    if (dir_profile != nullptr) {
-      WarmupSmallFiles(dir_profile->CheckAndGenWarmupInos(ino));
-    }
-  }
+  const bool is_readonly = (flags & O_ACCMODE) == O_RDONLY;
+
+  // dir stats
+  IncOpenCount(ino, is_readonly);
 
   const std::string session_id = utils::GenerateUUID();
   auto file_session = file_session_map_.Put(ino, fh, session_id, flags);
@@ -851,98 +834,6 @@ Status MDSMetaSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
   }
 
   return status;
-}
-
-DirProfileSPtr MDSMetaSystem::GetDirProfile(Ino ino) {
-  auto inode = GetInodeFromCache(ino);
-  if (inode == nullptr) return nullptr;
-  auto parents = inode->Parents();
-  if (parents.empty()) return nullptr;
-  Ino parent = parents.front();
-
-  LOG_DEBUG << fmt::format("[meta.fs.{}] get dir profile, parent({}).", ino,
-                           parent);
-
-  return dir_profile_cache_->Get(parent);
-}
-
-void MDSMetaSystem::WarmupSmallFiles(const std::vector<Ino>& inoes) {
-  if (inoes.empty()) return;
-  if (warmup_manager_ == nullptr) return;
-
-  LOG_DEBUG << fmt::format("[meta.fs] submit warmup task, ino({}).", inoes);
-
-  // warmup small file data
-  warmup_manager_->SubmitTask(WarmupTaskContext(inoes));
-
-  // warmup small file chunk
-  WarmupSmallFileChunk(inoes);
-}
-
-class WarmupChunkTask final : public mds::TaskRunnable {
- public:
-  WarmupChunkTask(uint32_t fs_id, const std::vector<Ino>& inoes,
-                  ChunkMemo& chunk_memo, MDSClient& mds_client,
-                  ReadChunkCache& read_chunk_cache)
-      : fs_id_(fs_id),
-        inoes_(inoes),
-        chunk_memo_(chunk_memo),
-        mds_client_(mds_client),
-        read_chunk_cache_(read_chunk_cache) {}
-
-  std::string Type() override { return "WARMUP_CHUNK"; }
-  std::string Key() override { return std::to_string(inoes_.front()); }
-
-  void Run() override {
-    Status status = DoWarmup();
-    if (!status.ok()) {
-      LOG(ERROR) << fmt::format("[meta.fs.{}] warmup chunk fail, error({}).",
-                                fs_id_, status.ToString());
-    }
-  }
-
- private:
-  Status DoWarmup() {
-    std::vector<MDSClient::ReadSliceInEntry> in_entries;
-    in_entries.reserve(inoes_.size());
-    for (const auto& ino : inoes_) {
-      MDSClient::ReadSliceInEntry in_entry;
-      in_entry.ino = ino;
-      in_entry.index = 0;
-      in_entry.version = chunk_memo_.GetVersion(ino, in_entry.index);
-      in_entries.push_back(in_entry);
-    }
-
-    auto ctx = std::make_shared<Context>("");
-    std::vector<MDSClient::ReadSliceOutEntry> out_entries;
-    Status status = mds_client_.ReadSlice(ctx, in_entries, out_entries);
-    if (!status.ok() && !status.IsNotFound()) return status;
-
-    for (const auto& entry : out_entries) {
-      read_chunk_cache_.Put(entry.ino, entry.chunk);
-    }
-
-    return Status::OK();
-  }
-
-  const uint32_t fs_id_;
-  const std::vector<Ino> inoes_;
-
-  ChunkMemo& chunk_memo_;
-  MDSClient& mds_client_;
-  ReadChunkCache& read_chunk_cache_;
-};
-
-void MDSMetaSystem::WarmupSmallFileChunk(const std::vector<Ino>& inoes) {
-  if (inoes.empty()) return;
-
-  auto task = std::make_shared<WarmupChunkTask>(
-      fs_info_.GetFsId(), inoes, chunk_memo_, mds_client_, read_chunk_cache_);
-
-  if (!bg_executor_.ExecuteByHash(inoes.front(), task)) {
-    LOG(ERROR) << fmt::format(
-        "[meta.fs] submit warmup chunk task fail, ino({}).", inoes.front());
-  }
 }
 
 Status MDSMetaSystem::Flush(ContextSPtr ctx, Ino ino, uint64_t fh) {
@@ -1273,6 +1164,7 @@ Status MDSMetaSystem::RmDir(ContextSPtr ctx, Ino parent,
   DeleteInodeFromCache(ino);
   PutInodeToCache(parent_attr_entry);
 
+  dentry_cache_.Delete(parent, name);
   dir_iterator_manager_.DeleteEntry(parent, name);
 
   return Status::OK();
@@ -1292,6 +1184,9 @@ Status MDSMetaSystem::OpenDir(ContextSPtr, Ino ino, uint64_t fh,
           need_cache = true;
         }
       });
+
+  // dir stats
+  IncOpenDirCount(ino);
 
   return Status::OK();
 }
@@ -1340,6 +1235,11 @@ Status MDSMetaSystem::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh,
       break;
     }
 
+    // cache the dentry for future lookup
+    if (dingofs::Helper::IsSmallFile(entry.attr.length)) {
+      PutDentryToCache(ino, entry.name, entry.ino);
+    }
+
     dir_iterator->MarkEmitted(offset);
     modify_time_memo_.UpdateKernelMtime(entry.attr.ino, entry.attr.mtime);
     ++count;
@@ -1350,15 +1250,6 @@ Status MDSMetaSystem::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh,
 
 Status MDSMetaSystem::ReleaseDir(ContextSPtr, Ino ino, uint64_t fh) {
   AssertStop();
-
-  auto dir_iterator = dir_iterator_manager_.Get(ino, fh);
-  if (dir_iterator != nullptr) {
-    auto dir_profile = dir_iterator->GetDirProfile();
-    if (dir_profile != nullptr) {
-      dir_profile->Finalize();
-      if (dir_profile->IsSmallFileDir()) dir_profile_cache_->Put(dir_profile);
-    }
-  }
 
   dir_iterator_manager_.Delete(ino, fh);
 
@@ -1409,6 +1300,7 @@ Status MDSMetaSystem::Unlink(ContextSPtr ctx, Ino parent,
     PutInodeToCache(attr_entry);
   }
 
+  dentry_cache_.Delete(parent, name);
   dir_iterator_manager_.DeleteEntry(parent, name);
 
   if (attr_entry.type() == pb::mds::FileType::FILE &&
@@ -1776,6 +1668,7 @@ Status MDSMetaSystem::Rename(ContextSPtr ctx, Ino old_parent,
   PutInodeToCache(result.child_attr);
   PutInodeToCache(result.deleted_attr);
 
+  dentry_cache_.Delete(old_parent, old_name);
   // in-flight readdir snapshots still hold the old binding, drop it before
   // readdirplus feeds a stale dentry back to the kernel
   dir_iterator_manager_.DeleteEntry(old_parent, old_name);
@@ -2094,6 +1987,25 @@ void MDSMetaSystem::ResetFileChunkSet(Ino ino, const std::string& reason) {
 void MDSMetaSystem::InvalidateFileSessionReadCache(Ino ino) {
   auto file_session = file_session_map_.GetSession(ino);
   if (file_session != nullptr) file_session->InvalidateReadCache(true);
+}
+
+void MDSMetaSystem::IncLookupCount(Ino ino, Ino child_ino) {
+  GetAccessStats(ino)->IncCount(IsDir(child_ino)
+                                    ? DirAccessEvent::kLookupSubdir
+                                    : DirAccessEvent::kLookupSubfile);
+}
+
+void MDSMetaSystem::IncOpenDirCount(Ino ino) {
+  GetAccessStats(ino)->IncCount(DirAccessEvent::kOpenDir);
+}
+
+void MDSMetaSystem::IncOpenCount(Ino ino, bool is_readonly) {
+  Ino parent = mds_client_.QueryParentIno(ino);
+  if (parent == 0) return;
+
+  GetAccessStats(parent)->IncCount(is_readonly
+                                       ? DirAccessEvent::kOpenSubfileRead
+                                       : DirAccessEvent::kOpenSubfileWrite);
 }
 
 Status MDSMetaSystem::Compact(ContextSPtr ctx, Ino ino, uint32_t chunk_index,

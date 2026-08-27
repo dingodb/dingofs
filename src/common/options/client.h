@@ -71,12 +71,12 @@ DECLARE_uint32(fuse_fd_get_retry_interval_ms);
 // vfs meta system log
 DECLARE_bool(vfs_meta_access_logging);
 DECLARE_int64(vfs_meta_access_log_threshold_us);
-DECLARE_uint32(vfs_meta_cache_entry_max_count);
-DECLARE_uint64(vfs_meta_memo_expired_s);
-DECLARE_uint64(vfs_meta_chunk_cache_expired_s);
-DECLARE_uint64(vfs_meta_inode_cache_expired_s);
+
+DECLARE_uint32(vfs_meta_clean_threshold_count);
+DECLARE_uint64(vfs_meta_clean_expired_s);
+
 DECLARE_uint32(vfs_meta_inode_attr_ttl_s);
-DECLARE_uint32(vfs_meta_read_chunk_cache_expired_s);
+DECLARE_uint32(vfs_meta_dentry_cache_ttl_s);
 
 // vfs read
 DECLARE_int32(vfs_read_executor_thread);
@@ -107,10 +107,8 @@ DECLARE_bool(vfs_intime_warmup_enable);
 DECLARE_int64(vfs_warmup_mtime_restart_interval_secs);
 DECLARE_int64(vfs_warmup_trigger_restart_interval_secs);
 
-// vfs meta dir-warmup (small-file cold-read warmup driven by DirProfile)
+// vfs warmup small file
 DECLARE_bool(vfs_meta_warmup_small_file_enable);
-DECLARE_uint32(vfs_meta_warmup_small_file_batch_size);
-DECLARE_uint32(vfs_meta_warmup_small_file_ttl_s);
 
 // vfs handle
 DECLARE_int32(vfs_read_cleanup_executor_thread);

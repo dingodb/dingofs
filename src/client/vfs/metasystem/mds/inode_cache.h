@@ -246,7 +246,7 @@ class InodeCache {
   void Delete(Ino ino);
 
   InodeSPtr Get(Ino ino);
-  std::vector<InodeSPtr> Get(const std::vector<uint64_t>& inoes);
+  std::vector<InodeSPtr> Get(const std::vector<uint64_t>& inos);
 
   void CleanExpired(uint64_t expire_s);
 

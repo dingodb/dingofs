@@ -191,9 +191,9 @@ InodeSPtr InodeCache::Get(Ino ino) {
   return inode;
 }
 
-std::vector<InodeSPtr> InodeCache::Get(const std::vector<uint64_t>& inoes) {
+std::vector<InodeSPtr> InodeCache::Get(const std::vector<uint64_t>& inos) {
   std::vector<InodeSPtr> inodes;
-  for (const auto& ino : inoes) {
+  for (const auto& ino : inos) {
     shard_map_.withRLock(
         [ino, &inodes](Map& map) {
           auto it = map.find(ino);
@@ -210,7 +210,7 @@ std::vector<InodeSPtr> InodeCache::Get(const std::vector<uint64_t>& inoes) {
 }
 
 void InodeCache::CleanExpired(uint64_t expire_s) {
-  if (Size() < FLAGS_vfs_meta_cache_entry_max_count) return;
+  if (Size() < FLAGS_vfs_meta_clean_threshold_count) return;
 
   std::vector<InodeSPtr> inodes;
   shard_map_.iterate([&](const Map& map) {

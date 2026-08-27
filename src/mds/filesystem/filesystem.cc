@@ -3784,7 +3784,7 @@ void FileSystem::AddDentryToPartition(Ino parent, const Dentry& dentry, uint64_t
   if (partition != nullptr) {
     partition->Put(dentry, version);
   } else {
-    LOG(WARNING) << fmt::format("partition({}) not exist in cache.", parent);
+    LOG(INFO) << fmt::format("partition({}) not exist in cache.", parent);
   }
 }
 
@@ -3794,7 +3794,7 @@ void FileSystem::DeleteDentryFromPartition(Ino parent, const std::string& name, 
   if (partition != nullptr) {
     partition->Delete(name, version);
   } else {
-    LOG(WARNING) << fmt::format("partition({}) not exist in cache.", parent);
+    LOG(INFO) << fmt::format("partition({}) not exist in cache.", parent);
   }
 }
 
