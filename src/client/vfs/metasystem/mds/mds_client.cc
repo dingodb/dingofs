@@ -214,6 +214,13 @@ Status MDSClient::RefreshFsInfo(mds::FsInfoEntry& fs_info) {
 
 RPC& MDSClient::GetRpc() { return rpc_; }
 
+Ino MDSClient::QueryParentIno(Ino ino) {
+  Ino parent{0};
+  parent_memo_.GetParent(ino, parent);
+
+  return parent;
+}
+
 Status MDSClient::Heartbeat(
     const std::map<Ino, std::vector<std::string>>& need_keep_alive_sessions,
     uint64_t& last_fs_version) {

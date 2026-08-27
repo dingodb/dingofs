@@ -64,25 +64,17 @@ DEFINE_validator(vfs_meta_access_logging, brpc::PassValidate);
 DEFINE_int64(vfs_meta_access_log_threshold_us, 0, "access log threshold");
 DEFINE_validator(vfs_meta_access_log_threshold_us, brpc::PassValidate);
 
-DEFINE_uint32(vfs_meta_cache_entry_max_count, 100000, "cache entry max count");
-DEFINE_validator(vfs_meta_cache_entry_max_count, brpc::PassValidate);
+DEFINE_uint32(vfs_meta_clean_threshold_count, 100000,
+              "clean cache threshold count");
+DEFINE_validator(vfs_meta_clean_threshold_count, brpc::PassValidate);
+DEFINE_uint64(vfs_meta_clean_expired_s, 3600, "clean expired cache time");
+DEFINE_validator(vfs_meta_clean_expired_s, brpc::PassValidate);
 
-DEFINE_uint64(vfs_meta_memo_expired_s, 3600, "modify time memo expired time");
-DEFINE_validator(vfs_meta_memo_expired_s, brpc::PassValidate);
-
-DEFINE_uint64(vfs_meta_chunk_cache_expired_s, 3600, "chunk cache expired time");
-DEFINE_validator(vfs_meta_chunk_cache_expired_s, brpc::PassValidate);
-
-DEFINE_uint64(vfs_meta_inode_cache_expired_s, 3600, "inode cache expired time");
-DEFINE_validator(vfs_meta_inode_cache_expired_s, brpc::PassValidate);
-
-DEFINE_uint32(vfs_meta_inode_attr_ttl_s, 1,
-              "inode attr freshness ttl, refetch from mds after expired");
+DEFINE_uint32(vfs_meta_inode_attr_ttl_s, 10, "inode cache ttl seconds");
 DEFINE_validator(vfs_meta_inode_attr_ttl_s, brpc::PassValidate);
 
-DEFINE_uint32(vfs_meta_read_chunk_cache_expired_s, 600,
-              "read chunk cache expired time");
-DEFINE_validator(vfs_meta_read_chunk_cache_expired_s, brpc::PassValidate);
+DEFINE_uint32(vfs_meta_dentry_cache_ttl_s, 10, "dentry cache ttl seconds");
+DEFINE_validator(vfs_meta_dentry_cache_ttl_s, brpc::PassValidate);
 
 DEFINE_int32(vfs_flush_thread, 4, "number of background flush threads");
 DEFINE_validator(vfs_flush_thread, brpc::PassValidate);
@@ -156,19 +148,10 @@ DEFINE_int64(vfs_warmup_trigger_restart_interval_secs, 1800,
              "passive warmup restart interval");
 DEFINE_validator(vfs_warmup_trigger_restart_interval_secs, brpc::PassValidate);
 
-// dir-warmup: drive bulk intime prefetch from per-directory profile built
-// during ReadDir. Triggered on Open against the parent directory profile.
+// vfs warmup small file(data/inode/dentry)
 DEFINE_bool(vfs_meta_warmup_small_file_enable, true,
             "enable directory-profile driven warmup on open");
 DEFINE_validator(vfs_meta_warmup_small_file_enable, brpc::PassValidate);
-
-DEFINE_uint32(vfs_meta_warmup_small_file_batch_size, 256,
-              "batch size of inos to warm up per trigger");
-DEFINE_validator(vfs_meta_warmup_small_file_batch_size, brpc::PassValidate);
-
-DEFINE_uint32(vfs_meta_warmup_small_file_ttl_s, 600,
-              "DirProfile TTL in seconds (Tprofile)");
-DEFINE_validator(vfs_meta_warmup_small_file_ttl_s, brpc::PassValidate);
 
 // vfs meta
 

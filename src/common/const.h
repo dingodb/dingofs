@@ -54,6 +54,9 @@ inline bool IsInternalName(const std::string& name) {
   return name == kStatsName || name == kTrashDirName;
 }
 
+inline bool IsDir(Ino ino) { return (ino & 1) == 1; }
+inline bool IsFile(Ino ino) { return (ino & 1) == 0; }
+
 const int kEmptyDirMinLinkNum = 2;
 
 // meta table names
