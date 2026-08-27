@@ -499,13 +499,18 @@ hosts:
   - host: dingo127
     hostname: 172.30.14.127
 HOSTS
-                cat >"${topology_file}" <<TOPOLOGY
+                topology_rendered="${topology_file}.rendered"
+                test ! -e "${topology_file}"
+                test ! -L "${topology_file}"
+                test ! -e "${topology_rendered}"
+                test ! -L "${topology_rendered}"
+                cat >"${topology_file}" <<'TOPOLOGY'
 kind: dingofs
 global:
-  container_image: ${candidate_image_tag}
-  data_dir: ${cluster_runtime}/data/\${service_role}\${service_host_sequence}
-  log_dir: ${cluster_runtime}/logs/\${service_role}\${service_host_sequence}
-  raft_dir: ${cluster_runtime}/raft/\${service_role}\${service_host_sequence}
+  container_image: @CANDIDATE_IMAGE_TAG@
+  data_dir: @CLUSTER_RUNTIME@/data/${service_role}${service_host_sequence}
+  log_dir: @CLUSTER_RUNTIME@/logs/${service_role}${service_host_sequence}
+  raft_dir: @CLUSTER_RUNTIME@/raft/${service_role}${service_host_sequence}
   default_replica_num: 3
   source_core_dir: /mnt/disk1/corefiles
   target_core_dir: /mnt/disk1/corefiles
@@ -514,34 +519,34 @@ global:
     target: dingo127
 coordinator_services:
   config:
-    container_image: ${STORE_IMAGE}
-    server.port: 650\${service_host_sequence}
-    raft.port: 750\${service_host_sequence}
+    container_image: @STORE_IMAGE@
+    server.port: 650${service_host_sequence}
+    raft.port: 750${service_host_sequence}
   deploy:
-    - host: \${target}
-    - host: \${target}
-    - host: \${target}
+    - host: ${target}
+    - host: ${target}
+    - host: ${target}
 store_services:
   config:
-    container_image: ${STORE_IMAGE}
-    server.port: 660\${service_host_sequence}
-    raft.port: 760\${service_host_sequence}
+    container_image: @STORE_IMAGE@
+    server.port: 660${service_host_sequence}
+    raft.port: 760${service_host_sequence}
     gflag.dingo_log_switch_txn_gc_detail: false
     gflag.dingo_log_switch_txn_detail: true
   deploy:
-    - host: \${target}
-    - host: \${target}
-    - host: \${target}
+    - host: ${target}
+    - host: ${target}
+    - host: ${target}
 mds_services:
   config:
-    server.port: 690\${service_host_sequence}
+    server.port: 690${service_host_sequence}
   deploy:
-    - host: \${target}
-    - host: \${target}
-    - host: \${target}
+    - host: ${target}
+    - host: ${target}
+    - host: ${target}
 executor_services:
   config:
-    container_image: ${EXECUTOR_IMAGE}
+    container_image: @EXECUTOR_IMAGE@
     port: 18765
     mysqlPort: 13307
     java.Xms: 256m
@@ -549,8 +554,36 @@ executor_services:
     java.SoftMaxHeapSize: 512m
     java.MaxDirectMemorySize: 256m
   deploy:
-    - host: \${target}
+    - host: ${target}
 TOPOLOGY
+                for topology_value in "${candidate_image_tag}" \
+                                      "${cluster_runtime}" \
+                                      "${STORE_IMAGE}" \
+                                      "${EXECUTOR_IMAGE}"; do
+                  if [[ "${topology_value}" == *'|'* ||
+                        "${topology_value}" == *'&'* ]]; then
+                    echo 'topology replacement contains an unsafe character' >&2
+                    exit 1
+                  fi
+                done
+                sed \
+                  -e "s|@CANDIDATE_IMAGE_TAG@|${candidate_image_tag}|g" \
+                  -e "s|@CLUSTER_RUNTIME@|${cluster_runtime}|g" \
+                  -e "s|@STORE_IMAGE@|${STORE_IMAGE}|g" \
+                  -e "s|@EXECUTOR_IMAGE@|${EXECUTOR_IMAGE}|g" \
+                  "${topology_file}" >"${topology_rendered}"
+                for topology_marker in \
+                  @CANDIDATE_IMAGE_TAG@ @CLUSTER_RUNTIME@ \
+                  @STORE_IMAGE@ @EXECUTOR_IMAGE@; do
+                  if grep -F "${topology_marker}" "${topology_rendered}"; then
+                    echo "unresolved topology marker: ${topology_marker}" >&2
+                    exit 1
+                  fi
+                done
+                grep -F '${service_role}${service_host_sequence}' \
+                  "${topology_rendered}"
+                grep -F '${target}' "${topology_rendered}"
+                mv -f "${topology_rendered}" "${topology_file}"
                 # Keep the reviewed topology's complete fixed port set visible.
                 test '6500 6501 6502 7500 7501 7502' = \
                   '6500 6501 6502 7500 7501 7502'

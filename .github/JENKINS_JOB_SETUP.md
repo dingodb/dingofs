@@ -479,6 +479,18 @@ JENKINS_URL=https://lapping-diagnoses-unbeaten.ngrok-free.dev
 JENKINS_JOB_PATH=dingofs-workflow-PR-127
 ```
 
+如需临时暂停 PR 来源检查和 Jenkins 回归，同时保留 Ruleset 中的 Required checks，
+再创建以下 Repository Variables：
+
+```text
+TRUSTED_SOURCE_ENABLED=false
+JENKINS_REGRESSION_ENABLED=false
+```
+
+`false` 必须为小写字符串。此时 `trusted-source` 和 `jenkins-regression` 会被 GitHub
+标记为 skipped，不会阻止合并，也不会触发 Jenkins。恢复时将对应变量改为 `true`
+或删除变量；变量不存在时 workflow 默认启用对应 job。
+
 ### 13.2 GitHub Environment 与 Secrets
 
 进入：
@@ -508,7 +520,7 @@ JENKINS_API_TOKEN=<服务账号 API token>
 
 本节以 `dingodb` 不是 GitHub Enterprise 为前提。Evaluate mode 在当前组织不可用，
 因此不能先用 Ruleset Insights 观察再上线；必须先以 `Disabled` 保存完整规则，
-完成静态核对后切换为 `Active`，再用专门的同仓测试 PR 验收。
+完成静态核对后切换为 `Active`，再用专门的 fork 测试 PR 验收。
 
 workflow 已经实现触发语义，不需要配置 webhook：
 
@@ -535,7 +547,7 @@ Jenkins 失败才会阻止合并。
 2. 按 13.1、13.2 配置 Repository Variables、Environment 和 secrets；
 3. 按 13.4 创建仓库级 Ruleset，初始状态设为 `Disabled`；
 4. 确认 Jenkins Job、127 agent、共享锁和公网 URL 全部可用；
-5. 把 Ruleset 切换为 `Active` 后，使用专门的同仓 PR 做真实验收；
+5. 把 Ruleset 切换为 `Active` 后，使用专门的 fork PR 做真实验收；
 6. 出现问题时立即把 Ruleset 切回 `Disabled`，停止新的合并操作，修复后重新验收。
 
 ### 13.4 Repository Ruleset：保护 main
@@ -568,10 +580,11 @@ Target branches: Include default branch（main）
 - 勾选当前页面显示的 `Require status checks to pass`。GitHub 官方文档把同一规则
   称为 `Require status checks to pass before merging`；当前 UI 省略了
   `before merging`，右侧说明中的 `before the ref is updated` 表示相同语义。
-  勾选后展开配置区域，使用 `Add checks` 添加下面 4 个精确 job 名，每项的
+  勾选后展开配置区域，使用 `Add checks` 添加下面 5 个精确 job 名，每项的
   `Expected source` 选择 `GitHub Actions`：
 
   ```text
+  trusted-source
   unit-test
   build
   e2e
@@ -597,48 +610,49 @@ Target branches: Include default branch（main）
 `Require branches to be up to date before merging` 保持未勾选。它不是 Merge Queue
 的替代项，也不需要与 Merge Queue 同时开启：Merge Queue 会自动把待合并 PR 放到
 最新 `main` 和队列中前序改动之后，生成新的 merge-group SHA，再对这个 SHA 执行
-四个 Required checks。
+五个 Required checks。
 
-如果 4 个 check 尚未出现在选择列表中，先把本次 workflow 变更合入 `main`，
+如果 5 个 check 尚未出现在选择列表中，先把本次 workflow 变更合入 `main`，
 运行一次普通 PR，让这些 job 名至少上报一次，再返回 Ruleset 添加。不要用
 `PR Check / jenkins-regression`、workflow 文件名或 Jenkins Job 名替代上面的
 裸 job 名。
 
-### 13.5 非 Enterprise 的 PR Source 门禁
+### 13.5 非 Enterprise 的 PR Source 检查
 
 非 Enterprise 组织无法使用原设计中的 Organization Ruleset
 `Require workflows to pass before merging`，因此不能把
 `.github/workflows/pr-source.yml@refs/heads/main` 作为由 GitHub 固定来源路径的
 required workflow。`pr-source.yml` 仍会通过 `pull_request_target` 从 base
-repository 的 `main` 运行，并把 fork PR 标记为失败，但这不等价于 Enterprise
-required-workflow 的强来源绑定。
+repository 的 `main` 运行；`trusted-source` 对同仓和 fork PR 都返回成功，但这不
+等价于 Enterprise required-workflow 的强来源绑定。
 
-本节不需要创建额外的 Ruleset、Secret、Environment 或 webhook。需要人工执行的
-只有以下准入操作：
+本节不需要创建额外的 Ruleset、Secret、Environment、reviewer 或 webhook。需要
+人工执行的只有以下配置和审查操作：
 
 1. 确认 `.github/workflows/pr-source.yml` 已合入 `main`；
-2. 普通 PR 页面出现 `PR Source / trusted-source` 后检查结果：同仓分支应成功，
-   fork PR 应失败；
-3. 只有 head repository 为 `dingodb/dingofs` 的同仓 PR 才允许审批并加入
-   Merge Queue；
-4. fork PR 即使代码审查通过，也不要直接加入 Merge Queue，不要使用管理员绕过；
-5. 需要接收 fork PR 时，由维护者把已审查提交 cherry-pick 到
-   `dingodb/dingofs` 内的新分支，再从该分支创建新的同仓 PR。
+2. 普通 PR 页面出现 `PR Source / trusted-source` 后检查结果：同仓分支和 fork PR
+   都应成功；
+3. fork PR 完成仓库正常的代码审查和审批后，可以直接加入 Merge Queue；
+4. fork PR 不需要由维护者 cherry-pick 到 `dingodb/dingofs` 内的新分支；
+5. `jenkins-regression` Environment 保持无 Required reviewers，以便 Merge Queue
+   全自动触发并等待 Jenkins Job。
 
 不要把普通 Required status check `trusted-source` 当作完全等价的替代品：
 Expected source 只能限定为 `GitHub Actions`，不能固定到具体 workflow path 和 ref。
-在当前套餐下采用以下人工信任边界：
+当前配置明确接受以下信任边界：
 
-1. Jenkins 门禁只允许同仓分支 PR 进入 Merge Queue；
-2. fork PR 不得直接入队或合并；维护者审查后，应把需要的提交 cherry-pick 到
-   `dingodb/dingofs` 内受信任分支，再创建同仓 PR；
-3. PR 页面若出现 `trusted-source` failure，必须停止入队，不能使用管理员绕过；
+1. 同仓和 fork PR 都可以进入 Merge Queue，并自动运行 Jenkins 门禁；
+2. `jenkins-regression` 会从受保护 `main` 检出
+   `.github/scripts/trigger-jenkins.sh`，但 Environment 中的 Jenkins 凭据仍会自动
+   提供给 merge-group job；
+3. 审查 fork PR 时必须重点检查其对 `.github/workflows/`、`.github/scripts/` 和
+   Jenkins 相关文件的修改；当前方案不增加 Environment 人工审批；
 4. 不配置 Organization required-workflow Ruleset，也不要把
    `.github/workflows/pr-check.yml` 作为 required workflow 重复调度。
 
-这是非 Enterprise 套餐下明确接受的限制。如果以后升级 Enterprise，再恢复由
-Organization Ruleset 固定 `dingodb/dingofs`、`.github/workflows/pr-source.yml`、
-`refs/heads/main` 的方案。
+这是为保持 fork PR 全自动入队而明确接受的安全取舍。如果以后升级 Enterprise，
+应优先恢复由 Organization Ruleset 固定 `dingodb/dingofs`、
+`.github/workflows/pr-source.yml`、`refs/heads/main` 的方案。
 
 ### 13.6 Disabled 配置与 Active 上线
 
@@ -698,8 +712,8 @@ Disabled 静态核对、Active 成功验收、Active 受控失败验收三个阶
    Bypass list: 空
    Require a pull request before merging: 开启
    Require status checks to pass: 开启
-   Required checks: unit-test、build、e2e、jenkins-regression
-   Expected source: 四项均为 GitHub Actions
+   Required checks: trusted-source、unit-test、build、e2e、jenkins-regression
+   Expected source: 五项均为 GitHub Actions
    Require branches to be up to date before merging: 关闭
    Require merge queue: 开启
    Merge method: 仓库当前允许并正在使用的方式
@@ -726,8 +740,8 @@ Disabled 静态核对、Active 成功验收、Active 受控失败验收三个阶
 
 #### 13.6.4 验证普通 PR 不触发 Jenkins
 
-1. 在 `dingodb/dingofs` 仓库内创建测试分支；不要使用 fork。提交一个可安全合入
-   的小型文档改动，并创建目标为 `main` 的 PR。
+1. 从个人 fork 创建测试分支，提交一个可安全合入的小型文档改动，并创建目标为
+   `dingodb/dingofs:main` 的 PR。
 2. 打开 PR 的 `Checks` 页面，等待 `PR Check` 完成。预期结果为：
 
    ```text
@@ -781,8 +795,9 @@ Disabled 静态核对、Active 成功验收、Active 受控失败验收三个阶
    jenkins-trigger: Jenkins finished with SUCCESS
    ```
 
-7. 回到 GitHub，确认 `unit-test`、`build`、`e2e`、`jenkins-regression` 四项均为
-   success，测试 PR 随后由 Merge Queue 合入 `main`。
+7. 回到 GitHub，确认 `trusted-source`、`unit-test`、`build`、`e2e`、
+   `jenkins-regression` 五项均为 success，测试 PR 随后由 Merge Queue 合入
+   `main`。
 8. 在 Jenkins 的该 build 页面确认 `jenkins-regression-artifacts` 已归档；在 127
    上确认集群与 guard 已清理、固定端口没有监听：
 
@@ -808,7 +823,7 @@ Disabled 静态核对、Active 成功验收、Active 受控失败验收三个阶
 Jenkins `ABORTED` 做安全的受控失败；触发脚本对 `FAILURE`、`UNSTABLE`、
 `ABORTED` 和未知结果均采用相同的失败路径。
 
-1. 再创建一个同仓文档测试 PR，完成普通 PR 检查与审批，然后点击
+1. 再创建一个 fork 文档测试 PR，完成普通 PR 检查与审批，然后点击
    `Merge when ready` 加入 Merge Queue。
 2. 等待 `unit-test`、`build`、`e2e` 成功，并在 `jenkins-regression` 日志中取得
   新的 Jenkins build URL。
@@ -886,7 +901,7 @@ Ruleset 处于 Disabled 时不会保护 `main`，因此回退后必须依靠“�
 | Jenkins Job | 把本分支最新 Jenkinsfile 复制到受保护的 `Pipeline script` 字段 |
 | Git 仓库 | review 后 commit/push，并通过现有流程把 workflow、trigger、文档变更合入 `main` |
 | GitHub Repository | 创建 Variables、Environment、Environment secrets 和仓库级 main Ruleset |
-| PR 来源管理 | 非 Enterprise 下禁止 fork PR 直接入队；审查后 cherry-pick 到同仓分支 |
+| PR 来源管理 | fork PR 可直接入队；重点审查 workflow、trigger 和 Jenkins 相关文件变更 |
 | 上线验收 | Ruleset 先 Disabled，准备完成后切换 Active，运行成功和受控失败的真实 merge-group |
 
 我不会自动执行上述外部写操作。特别是复制 Jenkinsfile、创建或修改 Ruleset、
@@ -920,9 +935,9 @@ Ruleset 处于 Disabled 时不会保护 `main`，因此回退后必须依靠“�
 [ ] workflow、trigger 和 Jenkinsfile 相关变更已 review 并合入 main
 [ ] Repository Variables 已创建
 [ ] jenkins-regression Environment、branch pattern 与两个 secrets 已创建
-[ ] main Repository Ruleset 已包含 4 个 Required checks，Expected source 均为 GitHub Actions
+[ ] main Repository Ruleset 已包含 5 个 Required checks，Expected source 均为 GitHub Actions
 [ ] main Repository Ruleset 已启用 Merge Queue：ALLGREEN、concurrency=1、timeout=360
-[ ] 非 Enterprise 的 fork PR 禁止直接入队，维护者已知晓同仓 cherry-pick 流程
+[ ] fork PR 的 trusted-source 成功，并可在正常审批后直接进入 Merge Queue
 [ ] Disabled 状态下已完成 Ruleset 静态核对
 [ ] Repository Ruleset 已切换为 Active
 [ ] Active 下普通 PR 未触发 Jenkins

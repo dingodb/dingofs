@@ -7,6 +7,7 @@ python3 - "${ROOT}" <<'PY'
 import json
 import os
 import pathlib
+import re
 import subprocess
 import sys
 
@@ -19,6 +20,7 @@ except ImportError:
 root = pathlib.Path(sys.argv[1])
 pr_check_path = root / ".github/workflows/pr-check.yml"
 source_path = root / ".github/workflows/pr-source.yml"
+pipeline_path = root / "scripts/jenkins/dingofs-merge-regression.Jenkinsfile"
 
 
 class WorkflowLoadError(RuntimeError):
@@ -124,8 +126,13 @@ def validate_source_workflow(workflow):
     )
     job = jobs["trusted-source"]
     require(
-        set(job) == {"runs-on", "steps"} and job["runs-on"] == "ubuntu-latest",
-        "pr-source.yml: trusted-source may contain only runs-on and steps",
+        set(job) == {"if", "runs-on", "steps"}
+        and job["runs-on"] == "ubuntu-latest",
+        "pr-source.yml: trusted-source has unexpected fields",
+    )
+    require(
+        job["if"] == "vars.TRUSTED_SOURCE_ENABLED != 'false'",
+        "pr-source.yml: trusted-source must honor TRUSTED_SOURCE_ENABLED",
     )
     require("environment" not in set(keys(job)), "pr-source.yml: Environment is forbidden")
     require(
@@ -144,23 +151,19 @@ def validate_source_workflow(workflow):
     )
     source_step, merge_group_step = steps
     require(
-        set(source_step) == {"name", "if", "env", "run"},
-        "pr-source.yml: source check step has unexpected fields",
+        {"name", "if", "run"}.issubset(source_step)
+        and set(source_step).issubset({"name", "if", "env", "run"}),
+        "pr-source.yml: source admission step has unexpected fields",
     )
     require(
         source_step["if"] == "github.event_name == 'pull_request_target'",
         "pr-source.yml: source check must run only for pull_request_target",
     )
-    require(
-        source_step["env"]
-        == {
-            "HEAD_REPOSITORY": "${{ github.event.pull_request.head.repo.full_name }}",
-            "BASE_REPOSITORY": "${{ github.event.pull_request.base.repo.full_name }}",
-        },
-        "pr-source.yml: source check must compare event head and base repositories",
-    )
     source_script = source_step["run"]
-    require(isinstance(source_script, str), "pr-source.yml: source check run must be a script")
+    require(
+        isinstance(source_script, str),
+        "pr-source.yml: source admission run must be a script",
+    )
 
     base_env = {"PATH": os.environ.get("PATH", "")}
     same_repo = subprocess.run(
@@ -189,7 +192,10 @@ def validate_source_workflow(workflow):
         text=True,
         check=False,
     )
-    require(fork.returncode != 0, "pr-source.yml: fork source check must fail")
+    require(
+        fork.returncode == 0,
+        f"pr-source.yml: fork source admission failed: {fork.stderr.strip()}",
+    )
 
     require(
         set(merge_group_step) == {"name", "if", "run"},
@@ -199,10 +205,21 @@ def validate_source_workflow(workflow):
         merge_group_step["if"] == "github.event_name == 'merge_group'",
         "pr-source.yml: merge-group step must run only for merge_group",
     )
+    merge_group_script = merge_group_step["run"]
     require(
-        merge_group_step["run"]
-        == 'echo "The merge group was admitted only after the PR source gate passed"',
-        "pr-source.yml: merge-group step must only describe prior gate admission",
+        isinstance(merge_group_script, str),
+        "pr-source.yml: merge-group admission must be a script",
+    )
+    merge_group = subprocess.run(
+        ["bash", "-c", "set -euo pipefail\n" + merge_group_script],
+        env=base_env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    require(
+        merge_group.returncode == 0,
+        f"pr-source.yml: merge-group admission failed: {merge_group.stderr.strip()}",
     )
 
 
@@ -222,8 +239,9 @@ def validate_jenkins_job(workflow):
     )
     require(job["needs"] == "e2e", "pr-check.yml: Jenkins job must need e2e")
     require(
-        job["if"] == "github.event_name == 'merge_group' && needs.e2e.result == 'success'",
-        "pr-check.yml: Jenkins job must run only for a successful merge-group e2e",
+        job["if"]
+        == "vars.JENKINS_REGRESSION_ENABLED != 'false' && github.event_name == 'merge_group' && needs.e2e.result == 'success'",
+        "pr-check.yml: Jenkins job must honor its switch and require a successful merge-group e2e",
     )
     require(job["runs-on"] == "ubuntu-latest", "pr-check.yml: wrong Jenkins runner")
     require(
@@ -303,18 +321,64 @@ def validate_contract_test_step(workflow):
     )
 
 
+def validate_topology_template():
+    pipeline = pipeline_path.read_text()
+    match = re.search(
+        r"cat >\"\$\{topology_file\}\" <<'TOPOLOGY'\n(.*?)\nTOPOLOGY",
+        pipeline,
+        flags=re.DOTALL,
+    )
+    require(
+        match is not None,
+        "Jenkinsfile: topology heredoc must be single-quoted to preserve dingo variables",
+    )
+    for marker, shell_variable in (
+        ("@CANDIDATE_IMAGE_TAG@", "candidate_image_tag"),
+        ("@CLUSTER_RUNTIME@", "cluster_runtime"),
+        ("@STORE_IMAGE@", "STORE_IMAGE"),
+        ("@EXECUTOR_IMAGE@", "EXECUTOR_IMAGE"),
+    ):
+        require(
+            f's|{marker}|${{{shell_variable}}}|g' in pipeline,
+            f"Jenkinsfile: topology renderer must replace {marker}",
+        )
+    template = match.group(1)
+    rendered = (
+        template.replace("@CANDIDATE_IMAGE_TAG@", "candidate-image")
+        .replace("@CLUSTER_RUNTIME@", "/regression/runtime")
+        .replace("@STORE_IMAGE@", "store-image")
+        .replace("@EXECUTOR_IMAGE@", "executor-image")
+    )
+    require(
+        "/regression/runtime/data/${service_role}${service_host_sequence}"
+        in rendered,
+        "Jenkinsfile: rendered topology must preserve dingo service variables",
+    )
+    require(
+        all(
+            marker not in rendered
+            for marker in (
+                "@CANDIDATE_IMAGE_TAG@",
+                "@CLUSTER_RUNTIME@",
+                "@STORE_IMAGE@",
+                "@EXECUTOR_IMAGE@",
+            )
+        ),
+        "Jenkinsfile: rendered topology contains unresolved protected markers",
+    )
 try:
     pr_check = load_workflow(pr_check_path)
     source = load_workflow(source_path)
     validate_source_workflow(source)
     validate_jenkins_job(pr_check)
     validate_contract_test_step(pr_check)
+    validate_topology_template()
     require_external_configuration(
         source_path,
         {
-            "# - source repository: dingodb/dingofs",
-            "# - workflow path: .github/workflows/pr-source.yml",
-            "# - ref: refs/heads/main",
+            "# - require status check: trusted-source",
+            "# - expected source: GitHub Actions",
+            "# - accept both fork and same-repository pull requests",
             "# - merge queue grouping strategy: ALLGREEN",
             "# - no bypass actors",
         },
