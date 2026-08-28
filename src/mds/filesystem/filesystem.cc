@@ -89,25 +89,20 @@ DEFINE_validator(mds_filesystem_hash_mds_num_default, brpc::PassValidate);
 DEFINE_uint32(mds_filesystem_recycle_time_hour, 1, "Filesystem recycle time hour.");
 DEFINE_validator(mds_filesystem_recycle_time_hour, brpc::PassValidate);
 
-DEFINE_bool(mds_compact_chunk_enable, true, "Compact chunk enable.");
-DEFINE_validator(mds_compact_chunk_enable, brpc::PassValidate);
-DEFINE_uint32(mds_compact_chunk_threshold_num, 10, "Compact chunk threshold num.");
-DEFINE_validator(mds_compact_chunk_threshold_num, brpc::PassValidate);
-DEFINE_uint32(mds_compact_chunk_interval_ms, 60 * 1000, "Compact chunk interval ms.");
-DEFINE_validator(mds_compact_chunk_interval_ms, brpc::PassValidate);
-
 DEFINE_uint32(mds_transfer_max_slice_num, 8096, "Max slice num for transfer.");
 DEFINE_validator(mds_transfer_max_slice_num, brpc::PassValidate);
 
-DEFINE_uint32(mds_prefetch_chunk_num, 16, "Prefetch chunk num.");
+DEFINE_uint32(mds_prefetch_chunk_num, 64, "Prefetch chunk num.");
 DEFINE_validator(mds_prefetch_chunk_num, brpc::PassValidate);
 
 DEFINE_uint32(mds_copy_file_range_max_chunks_per_rpc, 256,
               "Max number of dst chunks affected by a single CopyFileRange RPC.");
 DEFINE_validator(mds_copy_file_range_max_chunks_per_rpc, brpc::PassValidate);
 
-DEFINE_uint32(mds_cache_expire_interval_s, 7200, "Cache expire interval in seconds.");
-DEFINE_validator(mds_cache_expire_interval_s, brpc::PassValidate);
+DEFINE_uint64(mds_clean_threshold_count, 4 * 1024 * 1024, "clean cache threshold count");
+DEFINE_validator(mds_clean_threshold_count, brpc::PassValidate);
+DEFINE_uint32(mds_clean_expire_s, 3600, "Cache expire interval in seconds.");
+DEFINE_validator(mds_clean_expire_s, brpc::PassValidate);
 
 DEFINE_string(mds_storage_engine, "dummy", "mds storage engine, e.g dingo-store|tikv|tikv-go|dummy");
 DEFINE_validator(mds_storage_engine, [](const char*, const std::string& value) -> bool {
@@ -3646,7 +3641,7 @@ Status FileSystem::UpdatePartitionPolicy(const std::map<uint64_t, BucketSetEntry
 void FileSystem::CleanExpiredCache() {
   uint64_t now_s = utils::Timestamp();
 
-  uint64_t expired_time = now_s - FLAGS_mds_cache_expire_interval_s;
+  uint64_t expired_time = now_s - FLAGS_mds_clean_expire_s;
   partition_cache_.CleanExpired(expired_time);
   inode_cache_.CleanExpired(expired_time);
   chunk_cache_.CleanExpired(expired_time);
@@ -3745,7 +3740,7 @@ Status FileSystem::GenDirIno(Ino& ino) {
   bool ret = ino_id_generator_->GenID(2, ino);
 
   if (!FLAGS_mds_ino_generator_share_enable) {
-    ino = (self_mds_id_ << kInoShiftBits) + (ino & 0xFFFFFFFFFF);
+    ino = (self_mds_id_ << kInoMdsIdBits) + ((ino & kInoBucketMask) << kInoShiftBits) + (ino & kInoMask);
   }
   ino = (ino & 1) ? ino : (ino + 1);  // ensure odd number for dir inode
 
@@ -3757,7 +3752,8 @@ Status FileSystem::GenFileIno(Ino& ino) {
   bool ret = ino_id_generator_->GenID(2, ino);
 
   if (!FLAGS_mds_ino_generator_share_enable) {
-    ino = (self_mds_id_ << kInoShiftBits) + (ino & 0xFFFFFFFFFF);
+    // mds_id + bucket_id + ino
+    ino = (self_mds_id_ << kInoMdsIdBits) + ((ino & kInoBucketMask) << kInoShiftBits) + (ino & kInoMask);
   }
   ino = (ino & 1) ? (ino + 1) : ino;  // ensure even number for file inode
 
@@ -3780,11 +3776,12 @@ void FileSystem::AddDentryToPartition(Ino parent, const Dentry& dentry, uint64_t
   // Trash parents (.trash root + hour buckets) never enter partition_cache_;
   // see FetchPartition for the design rationale.
   if (IsTrashInode(parent)) return;
+
   auto partition = GetPartitionFromCache(parent);
   if (partition != nullptr) {
     partition->Put(dentry, version);
   } else {
-    LOG(INFO) << fmt::format("partition({}) not exist in cache.", parent);
+    LOG_DEBUG << fmt::format("[fs.{}.{}] partition not exist in cache.", fs_id_, parent);
   }
 }
 
@@ -3794,7 +3791,7 @@ void FileSystem::DeleteDentryFromPartition(Ino parent, const std::string& name, 
   if (partition != nullptr) {
     partition->Delete(name, version);
   } else {
-    LOG(INFO) << fmt::format("partition({}) not exist in cache.", parent);
+    LOG_DEBUG << fmt::format("[fs.{}.{}] partition not exist in cache.", fs_id_, parent);
   }
 }
 
@@ -3804,7 +3801,7 @@ void FileSystem::DeleteDentryFromPartition(Ino parent, const std::vector<std::st
   if (partition != nullptr) {
     partition->Delete(names, version);
   } else {
-    LOG(WARNING) << fmt::format("partition({}) not exist in cache.", parent);
+    LOG_DEBUG << fmt::format("[fs.{}.{}] partition not exist in cache.", fs_id_, parent);
   }
 }
 

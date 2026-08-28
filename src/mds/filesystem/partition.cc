@@ -24,6 +24,7 @@
 #include "brpc/reloadable_flags.h"
 #include "common/helper.h"
 #include "common/logging.h"
+#include "common/options/mds.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
 #include "json/value.h"
@@ -35,7 +36,6 @@ namespace mds {
 static const std::string kPartitionMetricsPrefix = "dingofs_{}_partition_cache_{}";
 
 // 0: no limit
-DEFINE_uint32(mds_partition_cache_shard_max_count, 4 * 1024 * 1024, "partition cache shard max count");
 DEFINE_uint32(mds_partition_dentry_op_max_count, 100000, "partition dentry op max count");
 
 DEFINE_uint32(mds_partition_shard_split_threshold, 8192, "split shard when dentry count exceeds this");
@@ -836,7 +836,7 @@ size_t PartitionCache::Bytes() {
 
 void PartitionCache::CleanExpired(uint64_t expire_s) {
   size_t shard_size = ShardSize();
-  if (shard_size < FLAGS_mds_partition_cache_shard_max_count) return;
+  if (shard_size < FLAGS_mds_clean_threshold_count) return;
 
   size_t clean_count = 0;
   shard_map_.iterate([&](const Map& map) {

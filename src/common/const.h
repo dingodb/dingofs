@@ -83,7 +83,11 @@ constexpr bool HasDirAttrMutation() { return kDirAttrMutationNum != 0; }
 
 const uint32_t kMaxMDSId = 65535;
 
-constexpr uint32_t kInoShiftBits = 40;
+constexpr uint32_t kInoShiftBits = 42;
+constexpr uint32_t kInoBucketBits = 8;
+constexpr uint32_t kInoMdsIdBits = kInoShiftBits + kInoBucketBits;
+constexpr uint64_t kInoMask = (1ULL << kInoShiftBits) - 1;
+constexpr uint64_t kInoBucketMask = (1ULL << kInoBucketBits) - 1;
 
 // 1TB
 constexpr uint64_t kMaxFileLength = 1024ULL * 1024 * 1024 * 1024;

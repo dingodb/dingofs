@@ -20,6 +20,7 @@
 
 #include "brpc/reloadable_flags.h"
 #include "common/logging.h"
+#include "common/options/mds.h"
 #include "fmt/core.h"
 #include "fmt/format.h"
 #include "gflags/gflags.h"
@@ -31,10 +32,6 @@ namespace dingofs {
 namespace mds {
 
 static const std::string kInodeCacheMetricsPrefix = "dingofs_{}_inode_cache_{}";
-
-// 0: no limit
-DEFINE_uint32(mds_inode_cache_max_count, 4 * 1024 * 1024, "inode cache max count");
-DEFINE_validator(mds_inode_cache_max_count, brpc::PassValidate);
 
 DEFINE_uint32(mds_inode_fresh_time_s, 0, "inode cache fresh seconds");
 DEFINE_validator(mds_inode_fresh_time_s, brpc::PassValidate);
@@ -347,7 +344,7 @@ size_t InodeCache::Size() {
 size_t InodeCache::Bytes() { return Size() * (sizeof(Inode) + sizeof(Ino)); }
 
 void InodeCache::CleanExpired(uint64_t expire_s) {
-  if (Size() < FLAGS_mds_inode_cache_max_count) return;
+  if (Size() < FLAGS_mds_clean_threshold_count) return;
 
   std::vector<InodeSPtr> inodes;
   shard_map_.iterate([&](const Map& map) {

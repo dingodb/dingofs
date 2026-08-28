@@ -18,14 +18,11 @@
 #include <utility>
 #include <vector>
 
-#include "brpc/reloadable_flags.h"
+#include "common/options/mds.h"
 #include "utils/time.h"
 
 namespace dingofs {
 namespace mds {
-
-DEFINE_uint32(mds_chunk_cache_max_count, 4 * 1024 * 1024, "chunk cache max count");
-DEFINE_validator(mds_chunk_cache_max_count, brpc::PassValidate);
 
 static const std::string kChunkCacheMetricsPrefix = "dingofs_{}_chunk_cache_{}";
 
@@ -178,7 +175,7 @@ void ChunkCache::Clear() {
 }
 
 void ChunkCache::CleanExpired(uint64_t expire_s) {
-  if (Size() < FLAGS_mds_chunk_cache_max_count) return;
+  if (Size() < FLAGS_mds_clean_threshold_count) return;
 
   std::vector<Key> keys;
   shard_map_.iterate([&](const Map& map) {

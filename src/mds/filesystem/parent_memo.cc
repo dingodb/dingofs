@@ -16,17 +16,13 @@
 
 #include <vector>
 
-#include "brpc/reloadable_flags.h"
+#include "common/options/mds.h"
 #include "utils/time.h"
 
 namespace dingofs {
 namespace mds {
 
 static const std::string kParentMemoTotalCountMetricsName = "dingofs_{}_parent_memo_{}";
-
-// 0: no limit
-DEFINE_uint32(mds_parent_memo_cache_max_count, 1 * 1024 * 1024, "parent memo cache max count");
-DEFINE_validator(mds_parent_memo_cache_max_count, brpc::PassValidate);
 
 ParentMemo::ParentMemo(uint64_t fs_id)
     : fs_id_(fs_id),
@@ -68,7 +64,7 @@ bool ParentMemo::GetParent(Ino ino, Ino& parent) {
 }
 
 void ParentMemo::CleanExpired(uint64_t expire_s) {
-  if (Size() < FLAGS_mds_parent_memo_cache_max_count) return;
+  if (Size() < FLAGS_mds_clean_threshold_count) return;
 
   std::vector<Ino> delete_inos;
   parent_map_.iterate([&](const Map& map) {
