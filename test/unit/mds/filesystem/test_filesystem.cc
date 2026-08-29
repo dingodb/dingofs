@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <absl/container/flat_hash_map.h>
 #include <fmt/format.h>
 
 #include <cstdint>
@@ -30,6 +31,7 @@
 #include "mds/filesystem/id_generator.h"
 #include "mds/filesystem/store_operation.h"
 #include "mds/storage/dummy_storage.h"
+#include "utils/time.h"
 
 namespace dingofs {
 namespace mds {
@@ -194,8 +196,8 @@ class FileSystemTest : public testing::Test {
 
     fs = FileSystem::New(kMdsId, FsInfo::New(fs_info),
                          std::move(inode_id_generator), slice_id_generator,
-                         operation_processor, nullptr, nullptr, quota_worker_set,
-                         quota_worker_set, nullptr);
+                         operation_processor, nullptr, nullptr,
+                         quota_worker_set, quota_worker_set, nullptr);
     auto status = fs->CreateRoot();
     ASSERT_TRUE(status.ok())
         << "create root fail, error: " << status.error_str();
@@ -1756,6 +1758,112 @@ TEST_F(FileSystemTest, CalcDirStatNoPageBoundaryDoubleCount) {
   ASSERT_TRUE(fs->CalcDirStat(bypass_ctx, d, st).ok());
   EXPECT_EQ(st.inodes(),
             kCount);  // exactly kCount, not kCount + (boundary dups)
+}
+
+// --- Performance test ---
+// Run: FILESYSTEM_PERF=1 ./test_mds --gtest_filter=FileSystemTest.MkDirPerf
+// Optionally override count: PERF_MKDIR_COUNT=1000000
+// Note: DummyStorage keeps everything in memory, ~1KB+/dir; 1e8 dirs needs
+// 100GB+ RAM, use PERF_MKDIR_COUNT to scale down on small machines.
+TEST_F(FileSystemTest, MkDirPerf) {
+  if (getenv("FILESYSTEM_PERF") == nullptr) {
+    GTEST_SKIP() << "set FILESYSTEM_PERF=1 to run (long running perf test)";
+  }
+
+  uint64_t total = 100000000ULL;  // 1亿
+  if (const char* s = getenv("PERF_MKDIR_COUNT")) total = std::stoull(s);
+
+  auto fs = Fs();
+
+  const uint64_t report_interval = 100000;
+  auto start_us = utils::TimestampUs();
+  uint64_t last_us = start_us;
+
+  for (uint64_t i = 1; i <= total; ++i) {
+    FileSystem::MkDirParam param;
+    param.parent = kRootIno;
+    param.name = fmt::format("perf_dir_{:012d}", i);
+    param.mode = 0755;
+    param.uid = 1;
+    param.gid = 1;
+    param.rdev = 0;
+
+    {
+      Context ctx;
+      EntryOut entry_out;
+      fs->Lookup(ctx, param.parent, param.name, entry_out);
+    }
+
+    Context ctx;
+    EntryWithPaOut entry_pa_out;
+    auto status = fs->MkDir(ctx, param, entry_pa_out);
+    ASSERT_TRUE(status.ok())
+        << fmt::format("mkdir {} fail: {}", param.name, status.error_str());
+
+    if (i % report_interval == 0) {
+      auto now_us = utils::TimestampUs();
+      double interval_qps =
+          report_interval * 1e6 / static_cast<double>(now_us - last_us);
+      double avg_qps = i * 1e6 / static_cast<double>(now_us - start_us);
+      fmt::print(
+          "progress: {}/{} ({:.1f}%), interval qps: {:.0f}, avg qps: {:.0f}, "
+          "elapsed: {:.1f}s\n",
+          i, total, i * 100.0 / total, interval_qps, avg_qps,
+          (now_us - start_us) / 1e6);
+      last_us = now_us;
+
+      std::string trace_str;
+      auto trace_time = ctx.GetTrace().GetTime();
+      for (auto& [name, elapsed] : trace_time.elapsed_times) {
+        trace_str += fmt::format("{}:{}us ", name, elapsed);
+      }
+
+      fmt::print("trace: {}\n", trace_str);
+    }
+  }
+
+  auto elapsed_us = utils::TimestampUs() - start_us;
+  double qps = total * 1e6 / static_cast<double>(elapsed_us);
+  fmt::print(
+      "=== FileSystem::MkDir perf: total({}) elapsed({:.1f}s) qps({:.0f}) avg "
+      "latency({:.1f}us)\n",
+      total, elapsed_us / 1e6, qps, static_cast<double>(elapsed_us) / total);
+}
+
+TEST_F(FileSystemTest, MapPerf) {
+  if (getenv("FILESYSTEM_PERF") == nullptr) {
+    GTEST_SKIP() << "set FILESYSTEM_PERF=1 to run (long running perf test)";
+  }
+
+  absl::flat_hash_map<Ino, InodeSPtr> map;
+
+  Ino start_ino = 10000000000000;
+
+  const uint64_t report_interval = 100000;
+
+  uint64_t start_us = utils::TimestampUs();
+  uint64_t last_us = start_us;
+  for (uint64_t i = 1; i <= 10000000; ++i) {
+    AttrEntry attr;
+    map.emplace(start_ino + i, std::make_shared<Inode>(attr));
+
+    if (i % report_interval == 0) {
+      auto now_us = utils::TimestampUs();
+      double interval_qps =
+          report_interval * 1e6 / static_cast<double>(now_us - last_us);
+      double avg_qps = i * 1e6 / static_cast<double>(now_us - start_us);
+      fmt::print(
+          "progress: {}/{} ({:.1f}%), time({}u) interval qps: {:.0f}, avg "
+          "qps: {:.0f}, elapsed: {:.1f}s\n",
+          i, 10000000, i * 100.0 / 10000000, now_us - last_us, interval_qps,
+          avg_qps, (now_us - start_us) / 1e6);
+      last_us = now_us;
+    }
+  }
+
+  uint64_t elapsed_time_us = utils::TimestampUs() - start_us;
+  fmt::print("=== btree_map insert perf: total({}) elapsed({:.1f}s)\n",
+             map.size(), elapsed_time_us / 1e6);
 }
 
 }  // namespace unit_test

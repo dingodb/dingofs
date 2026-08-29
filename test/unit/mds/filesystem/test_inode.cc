@@ -12,13 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <bthread/bthread.h>
+
 #include <algorithm>
-#include "common/helper.h"
 #include <atomic>
+#include <cstdint>
 #include <string>
 #include <type_traits>
 #include <utility>
 
+#include "common/helper.h"
 #include "dingofs/mds.pb.h"
 #include "fmt/core.h"
 #include "gtest/gtest.h"
@@ -33,7 +36,7 @@ namespace unit_test {
 const int64_t kFsId = 1000;
 
 static pb::mds::Inode GenInode(uint32_t fs_id, uint64_t ino,
-                               pb::mds::FileType type) {
+                               pb::mds::FileType type, uint64_t version = 1) {
   pb::mds::Inode inode;
   inode.set_ino(ino);
   inode.set_fs_id(fs_id);
@@ -65,7 +68,7 @@ static pb::mds::Inode GenInode(uint32_t fs_id, uint64_t ino,
   inode.mutable_xattrs()->insert({"key2", "value2"});
   inode.mutable_xattrs()->insert({"key3", "value3"});
 
-  inode.set_version(1);
+  inode.set_version(version);
 
   return inode;
 }
@@ -323,50 +326,119 @@ TEST_F(InodeCacheTest, Get) {
 }
 
 TEST_F(InodeCacheTest, Benchmark) {
-  GTEST_SKIP() << "Skip InodeCacheTest.Benchmark test case.";
+  if (getenv("INODECACHE_PERF") == nullptr) {
+    GTEST_SKIP() << "Skip InodeCacheTest.Benchmark test case.";
+  }
 
   InodeCache inode_cache(kFsId);
 
   std::atomic<Ino> ino_gen{1000000000000};
   // create thread to put inodes
-  constexpr int kThreadNum = 32;
+  constexpr int kThreadNum = 1;
   std::vector<std::thread> threads;
   threads.reserve(kThreadNum);
+
   for (int i = 0; i < kThreadNum; ++i) {
     threads.emplace_back([thread_no = i, &inode_cache, &ino_gen]() {
-      uint64_t start_time_us = utils::TimestampUs();
-      const uint32_t ino_per_thread = 2000000;
+      uint64_t last_time_us = utils::TimestampUs();
+      const uint32_t ino_per_thread = 20000000;
       const uint32_t print_count = 100000;
+
+      uint64_t parent_version = 1;
+
       for (uint32_t j = 0; j < ino_per_thread; ++j) {
         Ino ino = ino_gen.fetch_add(1, std::memory_order_relaxed);
-        inode_cache.PutIf(GenInode(kFsId, ino, pb::mds::FileType::FILE),
-                          "test");
+        std::string reason = fmt::format("mkdir.{}.{}.{}", ino, ino, thread_no);
+
+        auto child_attr = GenInode(kFsId, ino, pb::mds::FileType::FILE);
+        inode_cache.PutIf(child_attr, reason);
+
+        auto parent_attr = GenInode(kFsId, 1000, pb::mds::FileType::DIRECTORY,
+                                    ++parent_version);
+        auto parent_inode = inode_cache.PutIf(parent_attr, reason);
 
         if ((j + 1) % print_count == 0) {
-          std::cout << fmt::format(
-                           "thread {} put inodes, cost time: {}us", thread_no,
-                           (utils::TimestampUs() - start_time_us) / print_count)
-                    << std::endl;
-          start_time_us = utils::TimestampUs();
+          uint64_t now_us = utils::TimestampUs();
+          fmt::print("thread {} put inodes, cost time:{}us size({})\n",
+                     thread_no, (now_us - last_time_us) / print_count,
+                     inode_cache.Size());
+
+          last_time_us = now_us;
         }
       }
     });
   }
 
-  // create 10 threads to get inodes
-  // constexpr int kGetThreadNum = 32;
-  // for (int i = 0; i < kGetThreadNum; ++i) {
-  //   threads.emplace_back([thread_no = i, &inode_cache, &ino_gen]() {
-  //     for (;;) {
-  //       Ino ino =
-  //           1000000000000 + ::dingofs::Helper::GenerateRealRandomInteger(0, 100000000);
-  //       auto inode = inode_cache.Get(ino);
-  //     }
-  //   });
-  // }
-
   for (auto& t : threads) {
     t.join();
+  }
+}
+
+TEST_F(InodeCacheTest, BenchmarkBthread) {
+  if (getenv("INODECACHE_PERF") == nullptr) {
+    GTEST_SKIP() << "Skip InodeCacheTest.Benchmark test case.";
+  }
+
+  InodeCache inode_cache(kFsId);
+
+  std::atomic<Ino> ino_gen{1000000000000};
+  // create bthread to put inodes
+  constexpr int kThreadNum = 1;
+  struct BthreadArg {
+    int thread_no;
+    InodeCache* inode_cache;
+    std::atomic<Ino>* ino_gen;
+  };
+  std::vector<BthreadArg> args(kThreadNum);
+  std::vector<bthread_t> threads(kThreadNum);
+
+  for (int i = 0; i < kThreadNum; ++i) {
+    args[i] = {i, &inode_cache, &ino_gen};
+    ASSERT_EQ(
+        0,
+        bthread_start_background(
+            &threads[i], nullptr,
+            [](void* arg) -> void* {
+              auto* bthread_arg = static_cast<BthreadArg*>(arg);
+              const int thread_no = bthread_arg->thread_no;
+              auto& inode_cache = *bthread_arg->inode_cache;
+              auto& ino_gen = *bthread_arg->ino_gen;
+
+              uint64_t last_time_us = utils::TimestampUs();
+              const uint32_t ino_per_thread = 20000000;
+              const uint32_t print_count = 100000;
+
+              uint64_t parent_version = 1;
+
+              for (uint32_t j = 0; j < ino_per_thread; ++j) {
+                Ino ino = ino_gen.fetch_add(1, std::memory_order_relaxed);
+                std::string reason =
+                    fmt::format("mkdir.{}.{}.{}", ino, ino, thread_no);
+
+                auto child_attr = GenInode(kFsId, ino, pb::mds::FileType::FILE);
+                inode_cache.PutIf(child_attr, reason);
+
+                auto parent_attr =
+                    GenInode(kFsId, 1000, pb::mds::FileType::DIRECTORY,
+                             ++parent_version);
+                auto parent_inode = inode_cache.PutIf(parent_attr, reason);
+
+                if ((j + 1) % print_count == 0) {
+                  uint64_t now_us = utils::TimestampUs();
+                  fmt::print("thread {} put inodes, cost time:{}us size({})\n",
+                             thread_no, (now_us - last_time_us) / print_count,
+                             inode_cache.Size());
+
+                  last_time_us = now_us;
+                }
+              }
+              return nullptr;
+            },
+            &args[i]));
+  }
+
+  for (auto& thread : threads) {
+    bthread_join(thread, nullptr);
   }
 }
 

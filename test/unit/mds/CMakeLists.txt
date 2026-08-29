@@ -64,6 +64,10 @@ target_link_libraries(test_mds
   ${TEST_DEPS_WITHOUT_MAIN}
 )
 
+if(USE_TCMALLOC)
+  target_link_libraries(test_mds tcmalloc unwind)
+endif()
+
 set_target_properties(test_mds PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY ${TEST_EXECUTABLE_OUTPUT_PATH}
 )

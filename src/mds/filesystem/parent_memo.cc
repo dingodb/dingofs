@@ -32,13 +32,13 @@ ParentMemo::ParentMemo(uint64_t fs_id)
 void ParentMemo::Remeber(Ino ino, Ino parent) {
   parent_map_.withWLock(
       [this, ino, parent](Map& map) mutable {
-        auto it = map.find(ino);
-        if (it == map.end()) {
-          map[ino] = {parent, utils::Timestamp()};
-          total_count_ << 1;
-        } else {
+        auto [it, inserted] = map.try_emplace(ino, Value{parent, utils::Timestamp()});
+        if (!inserted) {
           it->second.parent = parent;
           it->second.last_active_time_s = utils::Timestamp();
+
+        } else {
+          total_count_ << 1;
         }
       },
       ino);
@@ -75,9 +75,7 @@ void ParentMemo::CleanExpired(uint64_t expire_s) {
     }
   });
 
-  for (const auto& ino : delete_inos) {
-    Forget(ino);
-  }
+  for (const auto& ino : delete_inos) Forget(ino);
 
   clean_count_ << delete_inos.size();
 

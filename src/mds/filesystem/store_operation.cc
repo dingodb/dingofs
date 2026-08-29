@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <chrono>
 #include "mds/filesystem/store_operation.h"
 
 #include <fcntl.h>
@@ -4383,7 +4384,10 @@ void OperationProcessor::ProcessOperation(Dispatcher& dispatcher) {
 
     while (!operations.Dequeue(operation) && !is_stop_.load(std::memory_order_relaxed)) {
       std::unique_lock<std::mutex> lk(thread_mutex);
-      thread_cond.wait(lk);
+      // wait_for instead of wait: Enqueue+notify may happen between the failed
+      // Dequeue above and this wait (queue is not protected by thread_mutex),
+      // losing the wakeup forever. The timeout bounds that race.
+      thread_cond.wait_for(lk, std::chrono::milliseconds(100));
       lk.unlock();
     }
 

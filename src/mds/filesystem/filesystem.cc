@@ -73,11 +73,11 @@ static const std::string kStatsName = ".stats";
 static const std::string kRecyleName = ".recycle";
 
 const std::string kQuotaWorkerSetName = "QUOTA_WORKER_SET";
-DEFINE_uint32(mds_quota_worker_num, 24, "quota worker number");
+DEFINE_uint32(mds_quota_worker_num, 8, "quota worker number");
 DEFINE_uint32(mds_quota_worker_max_pending_num, 1000000, "quota worker max pending number");
 
 const std::string kDirStatWorkerSetName = "DIR_STAT_WORKER_SET";
-DEFINE_uint32(mds_dir_stat_worker_num, 24, "dir stat worker number");
+DEFINE_uint32(mds_dir_stat_worker_num, 8, "dir stat worker number");
 DEFINE_uint32(mds_dir_stat_worker_max_pending_num, 1000000, "dir stat worker max pending number");
 
 DEFINE_uint32(mds_filesystem_name_max_size, 1024, "Max size of filesystem name.");
@@ -242,7 +242,7 @@ Status FileSystem::CreateRoot() {
 
   if (!status.ok()) return status;
 
-  UpsertInodeCache(attr, "createroot");
+  InsertInodeCache(attr, "createroot");
   partition_cache_.PutIf(ShardPartition::New(operation_processor_, attr));
 
   return Status::OK();
@@ -398,7 +398,7 @@ Status FileSystem::BatchCreate(Context& ctx, Ino parent, const std::vector<MkNod
 
   // update inode cache
   std::string reason = fmt::format("create.{}.{}.{}", request_id, parent, names);
-  for (auto& attr : attrs) UpsertInodeCache(attr, reason);
+  for (auto& attr : attrs) InsertInodeCache(attr, reason);
 
   // add dentry to partition
   AttrEntry last_parent_attr = parent_inode->ToAttr();
@@ -508,7 +508,7 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryWithPaOut& 
   auto& parent_attr_or_mutation = result.parent_attr_or_mutation;
 
   // update inode cache
-  UpsertInodeCache(attr, reason);
+  InsertInodeCache(attr, reason);
   // add dentry to partition
   AttrEntry last_parent_attr = parent_inode->ToAttr();
   AddDentryToPartition(parent, dentry, last_parent_attr.version());
@@ -630,7 +630,7 @@ Status FileSystem::BatchMkNod(Context& ctx, const std::vector<MkNodParam>& param
   // update inode cache
   std::string reason = fmt::format("batchmknod.{}.{}.{}", request_id, parent, join_name);
   AttrEntry last_parent_attr = parent_inode->ToAttr();
-  for (const auto& attr : attrs) UpsertInodeCache(attr, reason);
+  for (const auto& attr : attrs) InsertInodeCache(attr, reason);
 
   // add dentry to partition
   for (const auto& dentry : dentries) AddDentryToPartition(parent, dentry, last_parent_attr.version());
@@ -1106,16 +1106,22 @@ Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryWithPaOut& 
 
   // update inode cache
   std::string reason = fmt::format("mkdir.{}.{}.{}", request_id, parent, param.name);
-  UpsertInodeCache(attr, reason);
+  InsertInodeCache(attr, reason);
   InodeSPtr last_parent_inode = UpsertInodeCache(parent_attr, reason);
+
+  trace.RecordElapsedTime("post_inode");
   // add dentry to partition
   AddDentryToPartition(parent, dentry, last_parent_inode->Version());
+
+  trace.RecordElapsedTime("post_dentry");
 
   // update quota
   quota_manager_.AsyncUpdateFsUsage(0, 1, reason);
   quota_manager_.AsyncUpdateDirUsage(param.parent, 0, 1, reason);
   // update dir stat
   AsyncUpdateDirStat(param.parent, 0, 1, 1, reason);
+
+  trace.RecordElapsedTime("post_quota");
 
   // update parent memo
   parent_memo_.Remeber(attr.ino(), param.parent);
@@ -1223,7 +1229,7 @@ Status FileSystem::BatchMkDir(Context& ctx, const std::vector<MkDirParam>& param
 
   // update inode cache
   std::string reason = fmt::format("batchmkdir.{}.{}.{}", request_id, parent, join_name);
-  for (auto& attr : attrs) UpsertInodeCache(attr, reason);
+  for (auto& attr : attrs) InsertInodeCache(attr, reason);
   InodeSPtr last_parent_inode = UpsertInodeCache(parent_attr, reason);
   // add dentry to partition
   for (auto& dentry : dentries) AddDentryToPartition(parent, dentry, last_parent_inode->Version());
@@ -1506,7 +1512,7 @@ Status FileSystem::Link(Context& ctx, Ino ino, Ino new_parent, const std::string
   std::string reason = fmt::format("link.{}.{}.{}.{}", request_id, ino, new_parent, new_name);
 
   // update inode cache
-  UpsertInodeCache(attr, reason);
+  InsertInodeCache(attr, reason);
   // add dentry to partition
   AttrEntry last_parent_attr = parent_inode->ToAttr();
   AddDentryToPartition(new_parent, dentry, last_parent_attr.version());
@@ -1870,7 +1876,7 @@ Status FileSystem::Symlink(Context& ctx, const std::string& symlink, Ino new_par
   std::string reason = fmt::format("symlink.{}.{}.{}", request_id, new_parent, new_name);
 
   // update inode cache
-  UpsertInodeCache(attr, reason);
+  InsertInodeCache(attr, reason);
   // add dentry to partition
   AttrEntry last_parent_attr = parent_inode->ToAttr();
   AddDentryToPartition(new_parent, dentry, last_parent_attr.version());
@@ -4151,6 +4157,10 @@ Status FileSystem::GetDelFileFromStore(Ino ino, AttrEntry& out_attr) {
 InodeSPtr FileSystem::GetInodeFromCache(Ino ino) { return inode_cache_.Get(ino); }
 
 std::vector<InodeSPtr> FileSystem::GetAllInodesFromCache() { return inode_cache_.GetAll(); }
+
+void FileSystem::InsertInodeCache(const AttrEntry& attr, const std::string& reason) {
+  inode_cache_.Insert(attr, reason);
+}
 
 InodeSPtr FileSystem::UpsertInodeCache(const AttrWithMutation& attr_with_mutation, const std::string& reason) {
   return inode_cache_.PutIf(attr_with_mutation, reason);

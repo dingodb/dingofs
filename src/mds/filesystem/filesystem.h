@@ -420,6 +420,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   // inode cache
   InodeSPtr GetInodeFromCache(Ino ino);
   std::vector<InodeSPtr> GetAllInodesFromCache();
+  void InsertInodeCache(const AttrEntry& attr, const std::string& reason);
   InodeSPtr UpsertInodeCache(const AttrWithMutation& attr_with_mutation, const std::string& reason);
   InodeSPtr UpsertInodeCache(const AttrEntry& attr, const std::string& reason);
 

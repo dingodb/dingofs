@@ -555,16 +555,21 @@ class ProgressTracker {
 
  private:
   void Run() {
-    auto start = std::chrono::steady_clock::now();
+    auto last = std::chrono::steady_clock::now();
+    uint64_t last_progress = 0;
     while (running_) {
       std::this_thread::sleep_for(std::chrono::seconds(1));
       if (!running_) break;
 
       auto now = std::chrono::steady_clock::now();
-      double elapsed = std::chrono::duration<double>(now - start).count();
+      double interval = std::chrono::duration<double>(now - last).count();
       uint64_t p = progressed_.load(std::memory_order_relaxed);
+
       double pct = 100.0 * p / total_ops_;
-      double ops_sec = SafeOpsPerSec(p, elapsed);
+      double ops_sec = SafeOpsPerSec(p - last_progress, interval);
+
+      last = now;
+      last_progress = p;
 
       std::cout << "\r  [" << phase_ << " " << num_threads_ << "T] "
                 << std::fixed << std::setprecision(1) << pct << "%  " << p
@@ -655,6 +660,8 @@ static int CreateEmptyFile(MdsDirectClient* client, Ino parent,
                            const std::string& name) {
   CHECK(parent != 0) << "Invalid parent inode 0 for " << name;
 
+  auto start_time = std::chrono::steady_clock::now();
+
   Attr attr;
   Status s = client->Create(parent, name, getuid(), getgid(), 33188,
                             O_CREAT | O_WRONLY | O_EXCL, &attr);
@@ -664,6 +671,14 @@ static int CreateEmptyFile(MdsDirectClient* client, Ino parent,
         s.ToString());
     return StatusToErrno(s);
   }
+
+  auto end_time = std::chrono::steady_clock::now();
+
+  LOG(INFO) << fmt::format(
+      "create file success, parent({}) name({}) time({} ms).", parent, name,
+      std::chrono::duration_cast<std::chrono::milliseconds>(end_time -
+                                                            start_time)
+          .count());
 
   return StatusToErrno(s);
 }
@@ -878,6 +893,10 @@ static void SharedWorker(MdsDirectClient* client, TreeSpec* spec,
   // ---- File phase ----
   pthread_barrier_wait(barrier);
   if (result->error_code == 0) {
+    LOG(INFO) << fmt::format("thread({}) starting file phase, group({}).",
+                             result->thread_id,
+                             result->thread_id % work->file_cursors.size());
+
     uint32_t group_num = result->thread_id % work->file_cursors.size();
     uint64_t total = spec->TotalFiles();
     for (;;) {
@@ -902,7 +921,12 @@ static void SharedWorker(MdsDirectClient* client, TreeSpec* spec,
       result->file_ops++;
       file_progress->Add(1);
     }
+  } else {
+    LOG(ERROR) << fmt::format(
+        "thread({}) skipped file phase due to previous error({}) path({}).",
+        result->thread_id, result->error_code, result->error_path);
   }
+
   pthread_barrier_wait(barrier);
 }
 

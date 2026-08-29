@@ -71,9 +71,6 @@ class Inode {
     for (const auto& xattr : attr.xattrs()) {
       xattrs_.emplace(xattr.first, xattr.second);
     }
-    for (const auto& boundary : attr.shard_boundaries()) {
-      shard_boundaries_.push_back(boundary);
-    }
   }
 
   Inode(const AttrWithMutation& attr_with_mutation)
@@ -105,9 +102,6 @@ class Inode {
 
     for (const auto& xattr : attr_with_mutation.attr.xattrs()) {
       xattrs_.emplace(xattr.first, xattr.second);
-    }
-    for (const auto& boundary : attr_with_mutation.attr.shard_boundaries()) {
-      shard_boundaries_.push_back(boundary);
     }
   }
   ~Inode() = default;
@@ -203,12 +197,6 @@ class Inode {
     return (it != xattrs_.end()) ? it->second : "";
   }
 
-  std::vector<std::string> ShardBoundaries() const {
-    utils::ReadLockGuard lk(lock_);
-
-    return shard_boundaries_;
-  }
-
   void PutIf(const AttrEntry& attr, const std::string& reason);
   void PutIf(const AttrWithMutation& attr_with_mutation, const std::string& reason);
   AttrEntry PutByMutation(const AttrMutationEntry& mutation, const std::string& reason);
@@ -245,8 +233,6 @@ class Inode {
   absl::InlinedVector<mds::Ino, kDefaultParentNum> parents_;
   absl::flat_hash_map<std::string, std::string> xattrs_;
 
-  std::vector<std::string> shard_boundaries_;
-
   uint64_t length_{0};
   uint64_t ctime_{0};
   uint64_t mtime_{0};
@@ -279,6 +265,8 @@ class InodeCache {
   InodeCache& operator=(InodeCache&&) = delete;
 
   static InodeCacheSPtr New(uint32_t fs_id) { return std::make_shared<InodeCache>(fs_id); }
+
+  InodeSPtr Insert(const AttrEntry& attr, const std::string& reason);
 
   InodeSPtr PutIf(const AttrEntry& attr, const std::string& reason);
   InodeSPtr PutIf(const AttrWithMutation& attr_with_mutation, const std::string& reason);
