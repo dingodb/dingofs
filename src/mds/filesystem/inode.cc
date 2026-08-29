@@ -58,11 +58,6 @@ void Inode::Put(const AttrEntry& attr) {
     xattrs_.emplace(xattr.first, xattr.second);
   }
 
-  shard_boundaries_.clear();
-  for (const auto& boundary : attr.shard_boundaries()) {
-    shard_boundaries_.push_back(boundary);
-  }
-
   base_version_ = attr.version();
 
   last_refresh_time_s_.store(utils::Timestamp(), std::memory_order_relaxed);
@@ -172,9 +167,6 @@ Inode::AttrEntry Inode::ToAttrNoLock() {
   for (const auto& [key, value] : xattrs_) {
     (*attr.mutable_xattrs())[key] = value;
   }
-  for (const auto& boundary : shard_boundaries_) {
-    attr.add_shard_boundaries(boundary);
-  }
 
   attr.set_version(base_version_ + total_delta_version_);
 
@@ -196,7 +188,7 @@ InodeCache::InodeCache(uint32_t fs_id)
 
 InodeCache::~InodeCache() {}  // NOLINT
 
-InodeSPtr InodeCache::PutIf(const AttrEntry& attr, const std::string& reason) {
+InodeSPtr InodeCache::Insert(const AttrEntry& attr, const std::string& reason) {
   if (BAIDU_UNLIKELY(attr.ino() == 0)) {
     LOG(FATAL) << fmt::format("[inode.{}] reject zero-ino attr, reason({}).", fs_id_, reason);
     return nullptr;
@@ -211,15 +203,62 @@ InodeSPtr InodeCache::PutIf(const AttrEntry& attr, const std::string& reason) {
         if (!inserted) {
           is_exist = true;
           inode = it->second;
-
-        } else {
-          total_count_ << 1;
-          LOG_DEBUG << fmt::format("[inode.{}.{}] put inode, version({}).", fs_id_, attr.ino(), attr.version());
         }
       },
       attr.ino());
 
-  if (is_exist) inode->PutIf(attr, reason);
+  if (is_exist) {
+    inode->PutIf(attr, reason);
+
+  } else {
+    total_count_ << 1;
+    LOG_DEBUG << fmt::format("[inode.{}.{}] put inode, version({}).", fs_id_, attr.ino(), attr.version());
+  }
+
+  return inode;
+}
+
+InodeSPtr InodeCache::PutIf(const AttrEntry& attr, const std::string& reason) {
+  if (BAIDU_UNLIKELY(attr.ino() == 0)) {
+    LOG(FATAL) << fmt::format("[inode.{}] reject zero-ino attr, reason({}).", fs_id_, reason);
+    return nullptr;
+  }
+
+  // fast path: inode already cached (hot for parent dirs), avoid
+  // constructing a throwaway Inode just to lose the try_emplace race.
+  InodeSPtr inode;
+  shard_map_.withRLock(
+      [&](Map& map) {
+        auto it = map.find(attr.ino());
+        if (it != map.end()) inode = it->second;
+      },
+      attr.ino());
+
+  if (inode != nullptr) {
+    inode->PutIf(attr, reason);
+    return inode;
+  }
+
+  inode = Inode::New(attr);
+
+  bool is_exist = false;
+  shard_map_.withWLock(
+      [&](Map& map) mutable {
+        auto [it, inserted] = map.try_emplace(attr.ino(), inode);
+        if (!inserted) {
+          is_exist = true;
+          inode = it->second;
+        }
+      },
+      attr.ino());
+
+  if (is_exist) {
+    inode->PutIf(attr, reason);
+
+  } else {
+    total_count_ << 1;
+    LOG_DEBUG << fmt::format("[inode.{}.{}] put inode, version({}).", fs_id_, attr.ino(), attr.version());
+  }
 
   return inode;
 }
@@ -231,7 +270,20 @@ InodeSPtr InodeCache::PutIf(const AttrWithMutation& attr_with_mutation, const st
     return nullptr;
   }
 
-  InodeSPtr inode = Inode::New(attr_with_mutation);
+  InodeSPtr inode;
+  shard_map_.withRLock(
+      [&](Map& map) {
+        auto it = map.find(attr.ino());
+        if (it != map.end()) inode = it->second;
+      },
+      attr.ino());
+
+  if (inode != nullptr) {
+    inode->PutIf(attr_with_mutation, reason);
+    return inode;
+  }
+
+  inode = Inode::New(attr_with_mutation);
 
   bool is_exist = false;
   shard_map_.withWLock(
@@ -240,15 +292,17 @@ InodeSPtr InodeCache::PutIf(const AttrWithMutation& attr_with_mutation, const st
         if (!inserted) {
           is_exist = true;
           inode = it->second;
-
-        } else {
-          total_count_ << 1;
-          LOG_DEBUG << fmt::format("[inode.{}.{}] put inode, version({}).", fs_id_, attr.ino(), attr.version());
         }
       },
       attr.ino());
 
-  if (is_exist) inode->PutIf(attr_with_mutation, reason);
+  if (is_exist) {
+    inode->PutIf(attr_with_mutation, reason);
+
+  } else {
+    total_count_ << 1;
+    LOG_DEBUG << fmt::format("[inode.{}.{}] put inode, version({}).", fs_id_, attr.ino(), attr.version());
+  }
 
   return inode;
 }
@@ -307,9 +361,7 @@ std::vector<InodeSPtr> InodeCache::Get(std::vector<uint64_t> inoes) {
     shard_map_.withRLock(
         [ino, &inodes](Map& map) {
           auto it = map.find(ino);
-          if (it != map.end()) {
-            inodes.push_back(it->second);
-          }
+          if (it != map.end()) inodes.push_back(it->second);
         },
         ino);
   }
@@ -326,9 +378,7 @@ std::vector<InodeSPtr> InodeCache::GetAll() {
   std::vector<InodeSPtr> inodes;
 
   shard_map_.iterate([&inodes](const Map& map) {
-    for (const auto& [_, inode] : map) {
-      inodes.push_back(inode);
-    }
+    for (const auto& [_, inode] : map) inodes.push_back(inode);
   });
 
   return inodes;

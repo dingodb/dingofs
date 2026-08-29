@@ -38,7 +38,7 @@ static const std::string kPartitionMetricsPrefix = "dingofs_{}_partition_cache_{
 // 0: no limit
 DEFINE_uint32(mds_partition_dentry_op_max_count, 100000, "partition dentry op max count");
 
-DEFINE_uint32(mds_partition_shard_split_threshold, 8192, "split shard when dentry count exceeds this");
+DEFINE_uint32(mds_partition_shard_split_threshold, 100000, "split shard when dentry count exceeds this");
 
 DEFINE_bool(mds_dirshard_inflight_controller_enable, true, "DirShard inflight controller enable.");
 DEFINE_validator(mds_dirshard_inflight_controller_enable, brpc::PassValidate);
@@ -598,6 +598,8 @@ bool ShardPartition::Refresh(uint64_t new_version) {
 }
 
 Status ShardPartition::DoSplitDirShard(const Range& range) {
+  utils::Duration duration;
+
   auto shard = GetShard(range.start);
   if (shard == nullptr || !shard->IsFull()) return Status::OK();
 
@@ -640,9 +642,9 @@ Status ShardPartition::DoSplitDirShard(const Range& range) {
     shard_boundaries_ = std::move(shard_boundaries);
   }
 
-  LOG(INFO) << fmt::format("[partition.{}.{}] split dir shard, parent({}) left({}) right({}) shard_boundaries({}).",
-                           fs_id_, ino_, shard->ToString(), left->ToString(), right->ToString(),
-                           ::dingofs::Helper::VectorToString(shard_boundaries_));
+  LOG(INFO) << fmt::format(
+      "[partition.{}.{}][{}us] split dir shard, parent({}) left({}) right({}) shard_boundaries({}).", fs_id_, ino_,
+      duration.ElapsedUs(), shard->ToString(), left->ToString(), right->ToString(), shard_boundaries_.size());
 
   return Status::OK();
 }
