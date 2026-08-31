@@ -17,6 +17,7 @@
 
 #include <sys/types.h>
 
+#include <atomic>
 #include <cstdint>
 #include <deque>
 #include <memory>
@@ -46,6 +47,34 @@ class QuotaManager;
 
 class Quota {
  public:
+  struct InnerQuota {
+    std::atomic<int64_t> max_bytes{0};
+    std::atomic<int64_t> max_inodes{0};
+    std::atomic<int64_t> used_bytes{0};
+    std::atomic<int64_t> used_inodes{0};
+
+    std::string uuid;
+    uint64_t version{10};
+    uint64_t create_time_ns{11};
+
+    InnerQuota& operator=(const InnerQuota& other) {
+      max_bytes = other.max_bytes.load();
+      max_inodes = other.max_inodes.load();
+      used_bytes = other.used_bytes.load();
+      used_inodes = other.used_inodes.load();
+      uuid = other.uuid;
+      version = other.version;
+      create_time_ns = other.create_time_ns;
+
+      return *this;
+    }
+  };
+  struct InnerUsage {
+    int64_t bytes{0};
+    int64_t inodes{0};
+    uint64_t time_ns{0};
+  };
+
   Quota(uint32_t fs_id, Ino ino, const QuotaEntry& quota);
   ~Quota() = default;
 
@@ -54,32 +83,42 @@ class Quota {
   }
 
   Ino INo() const { return ino_; }
-  std::string UUID() const { return quota_.uuid(); }
+  std::string UUID() const { return quota_.uuid; }
 
   void UpdateUsage(int64_t byte_delta, int64_t inode_delta, const std::string& reason);
 
   bool Check(int64_t byte_delta, int64_t inode_delta);
 
   std::vector<UsageEntry> GetUsage();
-  QuotaEntry GetQuota();
+
   QuotaEntry GetAccumulatedQuota();
+
+  int64_t GetMaxBytes() const { return quota_.max_bytes.load(std::memory_order_relaxed); }
+  int64_t GetMaxInodes() const { return quota_.max_inodes.load(std::memory_order_relaxed); }
+  int64_t GetUsedBytes() const { return quota_.used_bytes.load(std::memory_order_relaxed); }
+  int64_t GetUsedInodes() const { return quota_.used_inodes.load(std::memory_order_relaxed); }
 
   void Refresh(const QuotaEntry& quota, uint64_t timepoint, const std::string& reason);
 
   uint32_t IncNotFoundCount() { return not_found_count_++; }
 
  private:
-  UsageEntry GetDeltaAccumulatedUsage(uint64_t& timepoint);
-  UsageEntry GetTotalAccumulatedUsage(uint64_t& timepoint);
-  UsageEntry CompactDeltaUsage(uint64_t timepoint);
+  static InnerQuota ToInnerQuota(const QuotaEntry& quota);
+  static QuotaEntry ToQuotaEntry(const InnerQuota& inner_quota);
+  static InnerUsage ToInnerUsage(const UsageEntry& usage);
+  static UsageEntry ToUsageEntry(const InnerUsage& inner_usage);
+
+  InnerUsage GetDeltaAccumulatedUsage(uint64_t& timepoint);
+  InnerUsage GetTotalAccumulatedUsage(uint64_t& timepoint);
+  InnerUsage CompactDeltaUsage(uint64_t timepoint);
 
   uint32_t fs_id_{0};
   Ino ino_{0};
 
   utils::RWLock rwlock_;
 
-  QuotaEntry quota_;
-  std::deque<UsageEntry> delta_usages_;
+  InnerQuota quota_;
+  std::deque<InnerUsage> delta_usages_;
   // running aggregate of delta_usages_, kept in sync on push/compact so
   // per-request quota checks are O(1) instead of scanning the deque
   int64_t delta_bytes_{0};
@@ -263,22 +302,22 @@ class QuotaManager {
  private:
   static int64_t GetFsUsedBytes(void* arg) {
     auto* manager = reinterpret_cast<QuotaManager*>(arg);
-    return manager->fs_quota_.GetQuota().used_bytes();
+    return manager->fs_quota_.GetUsedBytes();
   }
 
   static int64_t GetFsUsedInodes(void* arg) {
     auto* manager = reinterpret_cast<QuotaManager*>(arg);
-    return manager->fs_quota_.GetQuota().used_inodes();
+    return manager->fs_quota_.GetUsedInodes();
   }
 
   static int64_t GetFsMaxBytes(void* arg) {
     auto* manager = reinterpret_cast<QuotaManager*>(arg);
-    return manager->fs_quota_.GetQuota().max_bytes();
+    return manager->fs_quota_.GetMaxBytes();
   }
 
   static int64_t GetFsMaxInodes(void* arg) {
     auto* manager = reinterpret_cast<QuotaManager*>(arg);
-    return manager->fs_quota_.GetQuota().max_inodes();
+    return manager->fs_quota_.GetMaxInodes();
   }
 
   Status FlushFsUsage();

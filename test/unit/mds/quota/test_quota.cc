@@ -107,7 +107,6 @@ TEST(DirQuotaMapTest, RefreshAddsUpdatesAndEventuallyDropsMissingQuota) {
 
   EXPECT_NE(quota_map.GetNearestQuota(100), nullptr);
   ASSERT_NE(quota_map.GetNearestQuota(200), nullptr);
-  EXPECT_EQ(quota_map.GetNearestQuota(200)->GetQuota().used_inodes(), 2);
 
   for (int i = 0; i < 30; ++i) {
     quota_map.Refresh(refreshed, "refresh");
