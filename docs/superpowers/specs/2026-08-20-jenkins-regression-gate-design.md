@@ -7,11 +7,11 @@ gate deploys the exact GitHub merge-group commit to one shared regression
 environment, runs the DingoFS daily regression suite, and permits the merge
 only when Jenkins reports `SUCCESS`.
 
-The regression takes approximately one hour. To avoid running it twice per
+The regression takes approximately one hour. To avoid running checks twice per
 pull request and to ensure that the tested revision includes the latest
-`main` plus any preceding queued changes, the regression runs only for the
-GitHub `merge_group` event. On an ordinary `pull_request` event, the GitHub
-Actions job is present but skipped.
+`main` plus any preceding queued changes, the unit-test/build/E2E chain and
+the regression run only for the GitHub `merge_group` event. On an ordinary
+`pull_request` event, all four GitHub Actions jobs are present but skipped.
 
 ## 2. Scope
 
@@ -69,8 +69,8 @@ future operational change but is not part of this implementation.
 Add a normal inline job named `jenkins-regression` to
 `.github/workflows/pr-check.yml`:
 
-- `needs: e2e`;
-- `if: github.event_name == 'merge_group'`;
+- no `needs`, so it starts independently alongside `unit-test`;
+- `if: vars.JENKINS_REGRESSION_ENABLED != 'false' && github.event_name == 'merge_group'`;
 - `runs-on: ubuntu-latest`;
 - an overall timeout of 270 minutes.
 
@@ -79,9 +79,11 @@ The inline job preserves the stable status-check name
 
 On `pull_request`, the conditional skips the job. A job-level skip reports a
 successful conclusion to required-status-check evaluation. On `merge_group`,
-the job runs only after the existing unit-test, release build, and E2E chain
-has succeeded, avoiding use of the shared environment for revisions already
-known to be bad.
+the job starts in parallel with the existing `unit-test -> build -> e2e`
+chain. A failure in either chain does not cancel the other chain after it has
+started; merge protection waits for every configured required check. This
+uses additional Jenkins capacity when the GitHub-hosted chain later fails,
+but removes the previous serial wait from the merge-queue critical path.
 
 ### 4.2 GitHub configuration
 
@@ -450,7 +452,8 @@ Acceptance tests:
 - invalid credentials fail without exposing the token;
 - an invalid ref or SHA is rejected before environment mutation;
 - a Jenkins outage or polling timeout blocks the merge;
-- an ordinary PR shows `jenkins-regression` as skipped;
+- an ordinary PR shows `unit-test`, `build`, `e2e`, and
+  `jenkins-regression` as skipped;
 - a merge-group run executes Jenkins and cannot merge until Jenkins succeeds.
 
 ## 10. Operational Notes

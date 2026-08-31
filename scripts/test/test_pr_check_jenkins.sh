@@ -234,14 +234,13 @@ def validate_jenkins_job(workflow):
     job = jobs["jenkins-regression"]
     require(
         set(job)
-        == {"needs", "if", "runs-on", "environment", "timeout-minutes", "steps"},
+        == {"if", "runs-on", "environment", "timeout-minutes", "steps"},
         "pr-check.yml: jenkins-regression has unexpected fields",
     )
-    require(job["needs"] == "e2e", "pr-check.yml: Jenkins job must need e2e")
     require(
         job["if"]
-        == "vars.JENKINS_REGRESSION_ENABLED != 'false' && github.event_name == 'merge_group' && needs.e2e.result == 'success'",
-        "pr-check.yml: Jenkins job must honor its switch and require a successful merge-group e2e",
+        == "vars.JENKINS_REGRESSION_ENABLED != 'false' && github.event_name == 'merge_group'",
+        "pr-check.yml: Jenkins job must honor its switch and run independently for merge groups",
     )
     require(job["runs-on"] == "ubuntu-latest", "pr-check.yml: wrong Jenkins runner")
     require(
@@ -249,6 +248,17 @@ def validate_jenkins_job(workflow):
         "pr-check.yml: Jenkins job must use the jenkins-regression Environment",
     )
     require(job["timeout-minutes"] == "270", "pr-check.yml: wrong Jenkins timeout")
+
+    require(
+        jobs["unit-test"].get("if") == "github.event_name == 'merge_group'",
+        "pr-check.yml: unit-test must run only for merge groups",
+    )
+    require("needs" not in jobs["unit-test"],
+            "pr-check.yml: unit-test must start immediately in merge groups")
+    require(jobs["build"].get("needs") == "unit-test",
+            "pr-check.yml: build must wait for unit-test")
+    require(jobs["e2e"].get("needs") == "build",
+            "pr-check.yml: e2e must wait for build")
 
     steps = job["steps"]
     require(
