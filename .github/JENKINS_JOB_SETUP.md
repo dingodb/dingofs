@@ -529,11 +529,17 @@ workflow 已经实现触发语义，不需要配置 webhook：
 - PR 审批完成并加入 Merge Queue 后，GitHub 创建
   `refs/heads/gh-readonly-queue/main/*` 临时 ref，并发送独立的
   `merge_group` 事件；
-- `merge_group` 对重新合并后的 SHA 执行：
+- `merge_group` 对重新合并后的 SHA 同时启动两条链路：
 
 ```text
-unit-test → build → e2e → jenkins-regression → Jenkins Job
+unit-test → build → e2e
+jenkins-regression → Jenkins Job
 ```
+
+`jenkins-regression` 与 `unit-test` 同时开始，不等待 `build` 或 `e2e`；
+`build` 仍只在 `unit-test` 成功后开始，`e2e` 仍只在 `build` 成功后开始。
+两条链路相互独立，其中一条失败不会取消另一条已经启动的任务，Merge Queue
+会等待全部 Required checks 给出最终结果。
 
 `jenkins-regression` 会等待远端 Job 结束。Jenkins 返回 `SUCCESS` 时该 check
 成功；Jenkins 返回 `FAILURE`、`UNSTABLE`、`ABORTED`、未知结果，或者 API
@@ -763,14 +769,17 @@ Disabled 静态核对、Active 成功验收、Active 受控失败验收三个阶
 2. 进入仓库 `Actions → PR Check`，打开新产生的 run。确认该 run 来自
    `merge_group`，其 ref 以
    `refs/heads/gh-readonly-queue/main/` 开头，而不是 PR head branch。
-3. 观察 job 顺序，必须依次为：
+3. 观察 job 启动关系，必须是两条并行链路：
 
    ```text
-   unit-test → build → e2e → jenkins-regression
+   unit-test → build → e2e
+   jenkins-regression
    ```
 
-   后一个 job 在前一个成功前不应开始；`jenkins-regression` 之前不应产生新的
-   Jenkins build。
+   `unit-test` 和 `jenkins-regression` 应在 merge-group run 开始后并行启动；
+   `build` 在 `unit-test` 成功后启动，`e2e` 在 `build` 成功后启动。
+   `jenkins-regression` 不应等待 `e2e`，任一链路失败也不应取消另一条已经启动的
+   链路。
 4. 打开 `jenkins-regression → Trigger Jenkins regression and wait` 日志，找到：
 
    ```text

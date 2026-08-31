@@ -209,11 +209,9 @@ jobs:
         run: bash ${{ github.workspace }}/.github/scripts/down.sh || true
 
   jenkins-regression:
-    needs: e2e
     if: >-
       vars.JENKINS_REGRESSION_ENABLED != 'false' &&
-      github.event_name == 'merge_group' &&
-      needs.e2e.result == 'success'
+      github.event_name == 'merge_group'
     runs-on: ubuntu-latest
     environment: jenkins-regression
     timeout-minutes: 270

@@ -69,8 +69,8 @@ future operational change but is not part of this implementation.
 Add a normal inline job named `jenkins-regression` to
 `.github/workflows/pr-check.yml`:
 
-- `needs: e2e`;
-- `if: github.event_name == 'merge_group'`;
+- no `needs`, so it starts independently alongside `unit-test`;
+- `if: vars.JENKINS_REGRESSION_ENABLED != 'false' && github.event_name == 'merge_group'`;
 - `runs-on: ubuntu-latest`;
 - an overall timeout of 270 minutes.
 
@@ -79,9 +79,11 @@ The inline job preserves the stable status-check name
 
 On `pull_request`, the conditional skips the job. A job-level skip reports a
 successful conclusion to required-status-check evaluation. On `merge_group`,
-the job runs only after the existing unit-test, release build, and E2E chain
-has succeeded, avoiding use of the shared environment for revisions already
-known to be bad.
+the job starts in parallel with the existing `unit-test -> build -> e2e`
+chain. A failure in either chain does not cancel the other chain after it has
+started; merge protection waits for every configured required check. This
+uses additional Jenkins capacity when the GitHub-hosted chain later fails,
+but removes the previous serial wait from the merge-queue critical path.
 
 ### 4.2 GitHub configuration
 
