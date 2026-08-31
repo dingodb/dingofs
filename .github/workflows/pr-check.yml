@@ -23,6 +23,7 @@ concurrency:
 
 jobs:
   unit-test:
+    if: github.event_name == 'merge_group'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -116,7 +117,7 @@ jobs:
 
   # 内联 job：check 名就是 `build`（branch protection 锚这个，跟 unit-test / e2e 一样）。
   # 不走 workflow_call（那会让 check 漂成叶子名 `build / ...` 而锚不住）；构建逻辑复用 composite action。
-  # PR 上 if 跳过 → 直接报 build=skipped（满足 required）；merge_group 才真编译。
+  # 普通 PR 上整条 GitHub CI 链跳过；merge_group 才依次执行 unit-test、build、e2e。
   build:
     needs: unit-test
     if: github.event_name == 'merge_group'

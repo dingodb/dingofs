@@ -524,8 +524,8 @@ JENKINS_API_TOKEN=<服务账号 API token>
 
 workflow 已经实现触发语义，不需要配置 webhook：
 
-- 普通 PR 触发 `pull_request`，只有 `unit-test` 真正执行；
-- `build`、`e2e` 和 `jenkins-regression` 在普通 PR 上为 skipped；
+- 普通 PR 触发 `pull_request`，`unit-test`、`build`、`e2e` 和
+  `jenkins-regression` 全部为 skipped；
 - PR 审批完成并加入 Merge Queue 后，GitHub 创建
   `refs/heads/gh-readonly-queue/main/*` 临时 ref，并发送独立的
   `merge_group` 事件；
@@ -751,7 +751,7 @@ Disabled 静态核对、Active 成功验收、Active 受控失败验收三个阶
 2. 打开 PR 的 `Checks` 页面，等待 `PR Check` 完成。预期结果为：
 
    ```text
-   unit-test: success
+   unit-test: skipped
    build: skipped
    e2e: skipped
    jenkins-regression: skipped

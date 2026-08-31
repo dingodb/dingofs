@@ -249,8 +249,12 @@ def validate_jenkins_job(workflow):
     )
     require(job["timeout-minutes"] == "270", "pr-check.yml: wrong Jenkins timeout")
 
+    require(
+        jobs["unit-test"].get("if") == "github.event_name == 'merge_group'",
+        "pr-check.yml: unit-test must run only for merge groups",
+    )
     require("needs" not in jobs["unit-test"],
-            "pr-check.yml: unit-test must start immediately")
+            "pr-check.yml: unit-test must start immediately in merge groups")
     require(jobs["build"].get("needs") == "unit-test",
             "pr-check.yml: build must wait for unit-test")
     require(jobs["e2e"].get("needs") == "build",
