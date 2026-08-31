@@ -76,8 +76,8 @@ class Chunk {
   uint32_t GetIndex() const { return index_; }
 
   bool Put(const ChunkEntry& chunk, const char* reason);
-  bool Compact(uint32_t start_pos, uint64_t start_slice_id, uint32_t end_pos,
-               uint64_t end_slice_id, const std::vector<Slice>& new_slices);
+  bool Compact(const std::vector<Slice>& old_slices,
+               const std::vector<Slice>& new_slices);
   void AppendSlice(const std::vector<Slice>& slices);
 
   void SetNotCompleted() {
