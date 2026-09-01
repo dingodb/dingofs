@@ -83,7 +83,7 @@ class Quota {
   }
 
   Ino INo() const { return ino_; }
-  std::string UUID() const { return quota_.uuid; }
+  std::string UUID();
 
   void UpdateUsage(int64_t byte_delta, int64_t inode_delta, const std::string& reason);
 
