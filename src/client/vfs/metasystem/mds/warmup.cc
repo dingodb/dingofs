@@ -49,6 +49,7 @@ class WarmupDirAccessStatsWatcher : public AccessStatsWatcher {
                             uint64_t count) override {
     if (event != DirAccessEvent::kOpenSubfileRead) return;
     if (!FLAGS_vfs_meta_warmup_small_file_enable) return;
+    if (!warmup_processor_.IsEnableBlockCache()) return;
     if (count < FLAGS_vfs_meta_open_threshold_count) return;
 
     // check dentry cache

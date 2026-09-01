@@ -182,6 +182,7 @@ class MDSMetaSystem : public vfs::MetaSystem {
 
   void SetBlockStore(BlockStore* block_store) override {
     block_cache_cleaner_.SetBlockStore(block_store);
+    warmup_processor_.SetEnableBlockCache(block_store->EnableCache());
   }
 
   void SetWarmupManager(WarmupManager* warmup_manager) override {
@@ -249,6 +250,7 @@ class MDSMetaSystem : public vfs::MetaSystem {
 
   bool GetChunkFromReadCache(Ino ino, uint32_t chunk_index,
                              std::vector<Slice>* slices, uint64_t& version);
+  void DeleteChunkFromReadCache(Ino ino);
 
   Status CorrectAttr(ContextSPtr ctx, uint64_t time_ns, Attr& attr,
                      bool& is_amend, const std::string& caller);

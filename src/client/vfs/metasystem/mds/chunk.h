@@ -412,6 +412,7 @@ class ReadChunkCache {
 
   void Put(Ino ino, const ChunkEntry& chunk);
   void Delete(Ino ino, uint32_t chunk_index);
+  void DeleteByIno(Ino ino);
 
   bool Get(Ino ino, uint32_t chunk_index, ChunkEntry& chunk);
 

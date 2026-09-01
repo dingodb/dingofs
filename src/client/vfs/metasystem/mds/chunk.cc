@@ -780,6 +780,20 @@ void ReadChunkCache::Delete(Ino ino, uint32_t chunk_index) {
   shard_map_.withWLock([&](Map& map) { map.erase(key); }, ino);
 }
 
+void ReadChunkCache::DeleteByIno(Ino ino) {
+  shard_map_.withWLock(
+      [&](Map& map) {
+        for (auto it = map.begin(); it != map.end();) {
+          if (it->first.ino == ino) {
+            map.erase(it++);
+          } else {
+            ++it;
+          }
+        }
+      },
+      ino);
+}
+
 bool ReadChunkCache::Get(Ino ino, uint32_t chunk_index, ChunkEntry& chunk) {
   uint64_t now_s = utils::Timestamp();
   Key key{ino, chunk_index};

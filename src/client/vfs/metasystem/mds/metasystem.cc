@@ -1493,6 +1493,7 @@ Status MDSMetaSystem::Fallocate(ContextSPtr ctx, Ino ino, int mode,
   }
 
   chunk_memo_.Forget(ino);
+  DeleteChunkFromReadCache(ino);
   modify_time_memo_.Remember(ino);
   PutInodeToCache(out.attr_entry);
 
@@ -1781,6 +1782,7 @@ void MDSMetaSystem::LaunchWriteSlice(ContextSPtr& ctx, ChunkSetSPtr chunk_set,
                   task->TaskID(), status.ToString());
 
               meta_system->PutInodeToCache(result.attr);
+              meta_system->DeleteChunkFromReadCache(ino);
               auto status = chunk_set->FinishCommitTask(task, result.chunks);
               if (status.ok()) {
                 meta_system->chunk_memo_.Remember(ino, result.chunks);
@@ -1929,6 +1931,10 @@ bool MDSMetaSystem::GetChunkFromReadCache(Ino ino, uint32_t chunk_index,
   return true;
 }
 
+void MDSMetaSystem::DeleteChunkFromReadCache(Ino ino) {
+  read_chunk_cache_.DeleteByIno(ino);
+}
+
 Status MDSMetaSystem::CorrectAttr(ContextSPtr ctx, uint64_t time_ns, Attr& attr,
                                   bool& is_amend, const std::string& caller) {
   if (modify_time_memo_.ModifiedSince(attr.ino, time_ns)) {
@@ -1982,6 +1988,7 @@ void MDSMetaSystem::ResetFileChunkSet(Ino ino, const std::string& reason) {
   if (file_session != nullptr) file_session->GetChunkSet()->Reset();
 
   chunk_memo_.Forget(ino);
+  DeleteChunkFromReadCache(ino);
 }
 
 void MDSMetaSystem::InvalidateFileSessionReadCache(Ino ino) {
@@ -2074,6 +2081,7 @@ Status MDSMetaSystem::CopyFileRange(ContextSPtr ctx, Ino src_ino,
   }
 
   chunk_memo_.Forget(dst_ino);
+  DeleteChunkFromReadCache(dst_ino);
   modify_time_memo_.Remember(dst_ino);
 
   return Status::OK();
