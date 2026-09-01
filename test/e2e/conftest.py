@@ -31,6 +31,15 @@ def pytest_addoption(parser):
         required=True,
         help="FUSE mount point path (e.g. /home/me/mounts/claude-mount/<inst>)",
     )
+    parser.addoption("--mds-addr", help="MDS HTTP address for quota tests")
+    parser.addoption("--fs-id", type=int, help="filesystem ID for quota tests")
+    parser.addoption("--root-ino", type=int, help="root inode for quota tests")
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    outcome = yield
+    setattr(item, f"rep_{call.when}", outcome.get_result())
 
 
 @pytest.fixture(scope="session")
@@ -41,9 +50,29 @@ def mount_point(request):
 
 
 @pytest.fixture
-def test_dir(mount_point):
-    """Per-test isolated subdir under the mountpoint; auto-removed at teardown."""
+def test_dir(request, mount_point):
+    """Per-test directory; retain it when setup or test execution fails."""
     d = os.path.join(mount_point, f"test_{uuid.uuid4().hex[:8]}")
     os.makedirs(d)
     yield d
-    shutil.rmtree(d, ignore_errors=True)
+    reports = (getattr(request.node, f"rep_{phase}", None)
+               for phase in ("setup", "call"))
+    if any(report and report.failed for report in reports):
+        print(f"case dir kept: {d}")
+    else:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+@pytest.fixture
+def quota_config(request):
+    """Quota control-plane parameters, required only by quota tests."""
+    values = {
+        "mds_addr": request.config.getoption("--mds-addr"),
+        "fs_id": request.config.getoption("--fs-id"),
+        "root_ino": request.config.getoption("--root-ino"),
+    }
+    missing = [name for name, value in values.items() if value is None]
+    if missing:
+        pytest.skip("quota tests require " + ", ".join(
+            "--" + name.replace("_", "-") for name in missing))
+    return values

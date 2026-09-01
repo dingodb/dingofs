@@ -181,7 +181,7 @@ jobs:
           export PATH="$HOME/.local/bin:$PATH"
           cd ${{ github.workspace }}/test/e2e
           uv sync
-          uv run pytest -v --tb=short --mount-point=${{ runner.temp }}/dingofs-mount
+          uv run pytest -v --tb=short -m "not slow" --mount-point=${{ runner.temp }}/dingofs-mount
 
       - name: Collect logs
         if: always()

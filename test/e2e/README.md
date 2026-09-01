@@ -28,6 +28,8 @@ test/e2e/
 ├── README.md              # this file
 ├── posix/                 # vendor-neutral POSIX baseline (transitional)
 │   └── test_*.py
+├── quota/                 # MDS quota API plus mounted-filesystem checks
+│   └── test_*.py
 ├── regression/            # Bug-fix regression keyed to specific commits
 │   └── test_regression_*.py
 └── specific/              # DingoFS-specific layout / data path
@@ -47,6 +49,13 @@ Maintenance policy:
   job, not this directory's.
 - When adding a new test, first check whether pjdfstest already covers
   it; if so, do not duplicate here.
+
+### `quota/` — Quota accounting
+
+These slow tests pair filesystem mutations through the FUSE mount with MDS
+HTTP quota queries. They require `--mds-addr`, `--fs-id`, and `--root-ino`;
+when those options are absent, pytest skips them. They are deliberately kept
+out of the default merge-queue selection.
 
 ### `regression/` — Bug-fix regression
 
@@ -88,6 +97,13 @@ uv run pytest --mount-point=/home/me/mounts/claude-mount/bench-vs-fs
 
 # Smoke only
 uv run pytest --mount-point=<MP> -m smoke
+
+# Default merge-queue selection (excludes large/stress/quota tests)
+uv run pytest --mount-point=<MP> -m "not slow"
+
+# Run slow quota tests with their control-plane identity
+uv run pytest quota --mount-point=<MP> -m slow \
+  --mds-addr=<host:port> --fs-id=<id> --root-ino=<inode>
 
 # Single file
 uv run pytest regression/test_regression_fallocate_modes.py --mount-point=<MP>

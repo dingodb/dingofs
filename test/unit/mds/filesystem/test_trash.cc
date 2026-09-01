@@ -58,7 +58,9 @@ static std::map<uint64_t, DirStatDelta> DrainDirStats(
 // helpers live in test/unit/mds/common/test_trash.cc.
 // ============================================================================
 
-const int64_t kTrashMdsId = 10000;
+// Keep the test MDS ID below the reserved trash inode range when using the
+// per-MDS inode layout.
+const int64_t kTrashMdsId = 1000;
 
 static pb::mds::S3Info CreateS3Info() {
   pb::mds::S3Info s3_info;
