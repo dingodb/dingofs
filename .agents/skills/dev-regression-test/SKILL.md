@@ -219,7 +219,7 @@ mkdir -p ${FIO_LOG_DIR}
 cd ${FIO_TEST_DIR}
 
 # 示例: 运行测试命令
-fio --ioengine=libaio --iodepth=1  --direct=1 --rw=read --bs=128KB --size=8GB --numjobs=32 --group_reporting --name=test --log-file=${FIO_LOG_DIR}/fio.log
+fio --ioengine=libaio --iodepth=1  --direct=1 --rw=read --bs=128KB --size=1GB --numjobs=8 --group_reporting --name=test > ${FIO_LOG_DIR}/fio.log 2>&1
 
 ```
 
