@@ -94,10 +94,10 @@ bash "${GITHUB_WORKSPACE}/.github/scripts/_lib/glog-scan.sh" 2>&1 | sed 's/^/   
 
 # ── pytest ─────────────────────────────────────────────────────────────────
 T0=$(t)
-log "pytest 119 tests"
+log "pytest (excluding slow tests)"
 cd "${GITHUB_WORKSPACE}/test/e2e"
 uv sync 2>&1 | tail -3
-uv run pytest --tb=short --mount-point="${RUNNER_TEMP}/dingofs-mount" 2>&1 | tail -10
+uv run pytest --tb=short -m "not slow" --mount-point="${RUNNER_TEMP}/dingofs-mount" 2>&1 | tail -10
 log "  pytest took $(($(t)-T0))s"
 
 log "════════════════════════════════════════"

@@ -39,6 +39,10 @@ def test_hardlink(test_dir):
 
     with open(lnk, "r") as f:
         assert f.read() == "hello hardlink"
+    with open(lnk, "a") as f:
+        f.write(" through link")
+    with open(src, "r") as f:
+        assert f.read() == "hello hardlink through link"
 
 
 @pytest.mark.smoke
@@ -75,6 +79,10 @@ def test_symlink_readlink(test_dir):
 
     with open(link, "r") as f:
         assert f.read() == "symlink content"
+    with open(link, "a") as f:
+        f.write(" through link")
+    with open(target, "r") as f:
+        assert f.read() == "symlink content through link"
 
 
 @pytest.mark.smoke

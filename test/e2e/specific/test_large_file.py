@@ -35,3 +35,25 @@ def test_write_read_md5(test_dir, size):
         actual = md5(f.read())
 
     assert actual == expected, f"md5 mismatch for size {size}"
+
+
+@pytest.mark.slow
+def test_write_read_large_md5(test_dir):
+    """Stream a configurable large-file round trip without buffering it all."""
+    size = int(os.environ.get("DINGOFS_LARGE_SIZE_MB", "1024")) * 1024 * 1024
+    path = os.path.join(test_dir, "large")
+    expected = hashlib.md5()
+
+    with open(path, "wb") as f:
+        for _ in range((size + 4 * 1024 * 1024 - 1) // (4 * 1024 * 1024)):
+            data = os.urandom(min(4 * 1024 * 1024, size - f.tell()))
+            f.write(data)
+            expected.update(data)
+
+    actual = hashlib.md5()
+    with open(path, "rb") as f:
+        for data in iter(lambda: f.read(4 * 1024 * 1024), b""):
+            actual.update(data)
+
+    assert os.path.getsize(path) == size
+    assert actual.hexdigest() == expected.hexdigest()

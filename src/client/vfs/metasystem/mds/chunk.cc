@@ -83,31 +83,24 @@ bool Chunk::Put(const ChunkEntry& chunk, const char* reason) {
   return true;
 }
 
-bool Chunk::Compact(uint32_t start_pos, uint64_t start_slice_id,
-                    uint32_t end_pos, uint64_t end_slice_id,
+bool Chunk::Compact(const std::vector<Slice>& old_slices,
                     const std::vector<Slice>& new_slices) {
-  CHECK(start_pos < end_pos) << "invalid compact range";
-  CHECK(start_slice_id != 0) << "start_slice_id is 0";
-  CHECK(end_slice_id != 0) << "end_slice_id is 0";
+  CHECK(!old_slices.empty()) << "old_slices is empty";
   CHECK(!new_slices.empty()) << "new_slices is empty";
 
   utils::WriteLockGuard guard(lock_);
 
-  if (end_pos >= commited_slices_.size()) {
-    return false;
-  }
-  if (start_slice_id != commited_slices_[start_pos].id) {
-    return false;
-  }
-  if (end_slice_id != commited_slices_[end_pos].id) {
-    return false;
+  if (old_slices.size() > commited_slices_.size()) return false;
+
+  for (size_t i = 0; i < old_slices.size(); ++i) {
+    if (old_slices[i].id != commited_slices_[i].id) return false;
   }
 
-  uint32_t pos = start_pos;
+  uint32_t pos = 0;
   for (const auto& new_slice : new_slices) {
     commited_slices_[pos++] = new_slice;
   }
-  for (uint32_t i = end_pos + 1; i < commited_slices_.size(); ++i) {
+  for (uint32_t i = old_slices.size(); i < commited_slices_.size(); ++i) {
     commited_slices_[pos++] = commited_slices_[i];
   }
   commited_slices_.resize(pos);
@@ -785,6 +778,20 @@ void ReadChunkCache::Delete(Ino ino, uint32_t chunk_index) {
   Key key{ino, chunk_index};
 
   shard_map_.withWLock([&](Map& map) { map.erase(key); }, ino);
+}
+
+void ReadChunkCache::DeleteByIno(Ino ino) {
+  shard_map_.withWLock(
+      [&](Map& map) {
+        for (auto it = map.begin(); it != map.end();) {
+          if (it->first.ino == ino) {
+            map.erase(it++);
+          } else {
+            ++it;
+          }
+        }
+      },
+      ino);
 }
 
 bool ReadChunkCache::Get(Ino ino, uint32_t chunk_index, ChunkEntry& chunk) {

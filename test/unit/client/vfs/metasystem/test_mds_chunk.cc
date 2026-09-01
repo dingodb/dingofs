@@ -30,6 +30,24 @@ namespace test {
 
 using namespace std::chrono_literals;
 
+TEST(ReadChunkCacheTest, DeleteByInoRemovesOnlyTargetInode) {
+  ReadChunkCache cache;
+  ChunkEntry first;
+  first.set_index(0);
+  ChunkEntry second;
+  second.set_index(1);
+
+  cache.Put(1, first);
+  cache.Put(1, second);
+  cache.Put(2, first);
+  cache.DeleteByIno(1);
+
+  ChunkEntry out;
+  EXPECT_FALSE(cache.Get(1, 0, out));
+  EXPECT_FALSE(cache.Get(1, 1, out));
+  EXPECT_TRUE(cache.Get(2, 0, out));
+}
+
 TEST(ChunkSetTest, FlushGuardDefersConcurrentWrites) {
   auto chunk_set = ChunkSet::New(100, 1 << 20);
   auto flush_guard = chunk_set->AcquireFlushGuard();

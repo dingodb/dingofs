@@ -82,6 +82,9 @@ class WarmupProcessor {
     warmup_manager_ = warmup_manager;
   }
 
+  void SetEnableBlockCache(bool enable) { enable_block_cache_ = enable; }
+  bool IsEnableBlockCache() const { return enable_block_cache_; }
+
   void CleanExpired(uint64_t expire_s) { warmup_memo_.CleanExpired(expire_s); }
 
  private:
@@ -103,6 +106,8 @@ class WarmupProcessor {
   void WarmupSmallFileDataAndChunk(Ino parent, const std::vector<Ino>& inos);
 
   const uint32_t fs_id_{0};
+
+  bool enable_block_cache_{false};
 
   Executor& executor_;
   ChunkMemo& chunk_memo_;

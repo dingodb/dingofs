@@ -48,8 +48,7 @@ constexpr int kScrapesPerWave = 16;
 constexpr int kMutationCount = 12;
 constexpr int kWatchdogMs = 15'000;
 constexpr char kPrefix[] = "fs_quota_starvation_test";
-constexpr char kMetricName[] =
-    "fs_quota_starvation_test_bytes_usage_ratio";
+constexpr char kMetricName[] = "fs_quota_starvation_test_bytes_usage_ratio";
 
 QuotaEntry MakeQuota() {
   QuotaEntry quota;
@@ -62,16 +61,16 @@ QuotaEntry MakeQuota() {
 
 struct MetricSource {
   static int64_t UsedBytes(void* arg) {
-    return static_cast<MetricSource*>(arg)->quota->GetQuota().used_bytes();
+    return static_cast<MetricSource*>(arg)->quota->GetUsedBytes();
   }
   static int64_t UsedInodes(void* arg) {
-    return static_cast<MetricSource*>(arg)->quota->GetQuota().used_inodes();
+    return static_cast<MetricSource*>(arg)->quota->GetUsedInodes();
   }
   static int64_t MaxBytes(void* arg) {
-    return static_cast<MetricSource*>(arg)->quota->GetQuota().max_bytes();
+    return static_cast<MetricSource*>(arg)->quota->GetMaxBytes();
   }
   static int64_t MaxInodes(void* arg) {
-    return static_cast<MetricSource*>(arg)->quota->GetQuota().max_inodes();
+    return static_cast<MetricSource*>(arg)->quota->GetMaxInodes();
   }
 
   Quota* quota;
@@ -80,9 +79,12 @@ struct MetricSource {
 struct Scenario {
   Quota quota{1, 10, MakeQuota()};
   MetricSource source{&quota};
-  metrics::mds::FsQuotaMetric metric{
-      kPrefix, &source, MetricSource::UsedBytes, MetricSource::UsedInodes,
-      MetricSource::MaxBytes, MetricSource::MaxInodes};
+  metrics::mds::FsQuotaMetric metric{kPrefix,
+                                     &source,
+                                     MetricSource::UsedBytes,
+                                     MetricSource::UsedInodes,
+                                     MetricSource::MaxBytes,
+                                     MetricSource::MaxInodes};
   std::atomic<bool> stop{false};
   std::atomic<int> scrape_start_error{0};
 
@@ -151,9 +153,8 @@ std::string RunScenario(bool with_writer, bool with_scrapes,
       bthread_start_urgent(&writer_tid, nullptr, Writer, scenario) != 0) {
     return "writer start failed";
   }
-  if (with_scrapes &&
-      pthread_create(&scrape_launcher_tid, nullptr, LaunchScrapes,
-                     scenario) != 0) {
+  if (with_scrapes && pthread_create(&scrape_launcher_tid, nullptr,
+                                     LaunchScrapes, scenario) != 0) {
     return "scrape launcher start failed";
   }
 
@@ -161,7 +162,6 @@ std::string RunScenario(bool with_writer, bool with_scrapes,
   // unpatched brpc the first parked scrape holds the VarMap mutex and
   // waiters pin the workers within a few waves.
   std::this_thread::sleep_for(std::chrono::milliseconds(500));
-
 
   for (int i = 0; i < mutation_count; ++i) {
     bthread_t tid;

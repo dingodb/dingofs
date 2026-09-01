@@ -11,13 +11,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <chrono>
 #include "mds/filesystem/store_operation.h"
 
 #include <fcntl.h>
 #include <sys/stat.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -815,7 +815,9 @@ Status MkDirOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) 
   }
 
   // create dentry
-  txn->Put(dentry_key, MetaCodec::EncodeDentryValue(dentry_.Copy()));
+  const std::string dentry_value = MetaCodec::EncodeDentryValue(dentry_.Copy());
+  txn->Put(dentry_key, dentry_value);
+  shared_param.AddPrefetchKV(dentry_key, dentry_value);
 
   // create inode
   ApplySetgidInheritance(parent_attr, attr_);
@@ -868,7 +870,9 @@ Status BatchMkDirOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_pa
     }
 
     // create dentry
-    txn->Put(dentry_key, MetaCodec::EncodeDentryValue(dentry.Copy()));
+    const std::string dentry_value = MetaCodec::EncodeDentryValue(dentry.Copy());
+    txn->Put(dentry_key, dentry_value);
+    shared_param.AddPrefetchKV(dentry_key, dentry_value);
   }
 
   // create inode + seed empty dir-stat in the same txn so each dir is tracked from birth
@@ -911,7 +915,9 @@ Status MkNodOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) 
   }
 
   // create dentry
-  txn->Put(dentry_key, MetaCodec::EncodeDentryValue(dentry_.Copy()));
+  const std::string dentry_value = MetaCodec::EncodeDentryValue(dentry_.Copy());
+  txn->Put(dentry_key, dentry_value);
+  shared_param.AddPrefetchKV(dentry_key, dentry_value);
 
   // create inode
   if (shared_param.UseMutation()) {
@@ -972,7 +978,9 @@ Status BatchMkNodOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_pa
     }
 
     // create dentry
-    txn->Put(dentry_key, MetaCodec::EncodeDentryValue(dentry.Copy()));
+    const std::string dentry_value = MetaCodec::EncodeDentryValue(dentry.Copy());
+    txn->Put(dentry_key, dentry_value);
+    shared_param.AddPrefetchKV(dentry_key, dentry_value);
   }
 
   // create inode
@@ -1041,7 +1049,9 @@ Status BatchCreateFileOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shar
     }
 
     // create dentry
-    txn->Put(dentry_key, MetaCodec::EncodeDentryValue(dentry.Copy()));
+    const std::string dentry_value = MetaCodec::EncodeDentryValue(dentry.Copy());
+    txn->Put(dentry_key, dentry_value);
+    shared_param.AddPrefetchKV(dentry_key, dentry_value);
 
     // create inode
     if (shared_param.UseMutation()) {
@@ -1118,7 +1128,9 @@ Status HardLinkOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_para
   txn->Put(child_key, MetaCodec::EncodeInodeValue(attr));
 
   // create dentry
-  txn->Put(dentry_key, MetaCodec::EncodeDentryValue(dentry_.Copy()));
+  const std::string dentry_value = MetaCodec::EncodeDentryValue(dentry_.Copy());
+  txn->Put(dentry_key, dentry_value);
+  shared_param.AddPrefetchKV(dentry_key, dentry_value);
 
   // update parent attr
   if (shared_param.UseMutation()) {
@@ -1165,7 +1177,9 @@ Status SymLinkOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param
   }
 
   // create dentry
-  txn->Put(dentry_key, MetaCodec::EncodeDentryValue(dentry_.Copy()));
+  const std::string dentry_value = MetaCodec::EncodeDentryValue(dentry_.Copy());
+  txn->Put(dentry_key, dentry_value);
+  shared_param.AddPrefetchKV(dentry_key, dentry_value);
 
   // create inode
   txn->Put(MetaCodec::EncodeInodeKey(fs_id, dentry_.INo()), MetaCodec::EncodeInodeValue(attr_));

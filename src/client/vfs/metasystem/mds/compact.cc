@@ -14,6 +14,8 @@
 
 #include "client/vfs/metasystem/mds/compact.h"
 
+#include <absl/hash/hash.h>
+
 #include "fmt/format.h"
 #include "glog/logging.h"
 
@@ -142,9 +144,7 @@ Status CompactChunkTask::Compact() {
     if (chunk_entry.version() > version &&
         !chunk_->Put(chunk_entry, "compact")) {
       if (status.ok()) {
-        extra_local_compact =
-            chunk_->Compact(param.start_pos, param.start_slice_id,
-                            param.end_pos, param.end_slice_id, new_slices);
+        extra_local_compact = chunk_->Compact(old_slices, new_slices);
       }
     }
 
@@ -172,7 +172,7 @@ Status CompactProcessor::Execute(Ino ino, InodeSPtr inode, ChunkSPtr& chunk,
 
   auto task = CompactChunkTask::New(ino, inode, chunk, *this);
 
-  int64_t hash_id = ino + chunk->GetIndex();
+  int64_t hash_id = absl::HashOf(ino, chunk->GetIndex());
   if (!executor_.ExecuteByHash(hash_id, task, false)) {
     LOG(WARNING) << fmt::format(
         "[meta.compact.{}.{}] commit compact task fail, beyond max pending "

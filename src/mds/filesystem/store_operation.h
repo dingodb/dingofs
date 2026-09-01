@@ -329,6 +329,11 @@ class Operation {
 
     bool UseMutation() const { return attr.ino() == 0; }
 
+    void AddPrefetchKV(const std::string& key, const std::string& value) {
+      prefetch_kvs.push_back({KeyValue::OpType::kPut, key, value});
+      RebuildIndex();
+    }
+
     void RebuildIndex() {
       prefetch_index.clear();
       prefetch_index.reserve(prefetch_kvs.size());
@@ -341,6 +346,7 @@ class Operation {
       attr.Clear();
       attr_mutation.Clear();
       prefetch_kvs.clear();
+      prefetch_index.clear();
 
       is_prefetched_chunk = false;
       chunk_map.clear();

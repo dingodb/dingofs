@@ -62,7 +62,9 @@ const int64_t kSliceTableId = 3456;
 
 const uint64_t kRootIno = 1;
 
-const int64_t kMdsId = 10000;
+// Keep the test MDS ID below the reserved trash inode range when using the
+// per-MDS inode layout.
+const int64_t kMdsId = 1000;
 
 static pb::mds::S3Info CreateS3Info() {
   pb::mds::S3Info s3_info;
@@ -1136,6 +1138,7 @@ TEST_F(FileSystemTest, CalcDirStat) {
   EntryWithPaOut dout;
   auto mkdir_status = fs->MkDir(ctx, dp, dout);
   ASSERT_TRUE(mkdir_status.ok()) << "mkdir fail: " << mkdir_status.error_str();
+  ASSERT_GT(dout.attr.ino(), 0) << "mkdir ino invalid";
   Ino d = dout.attr.ino();
 
   auto mk = [&](const std::string& name, uint64_t len) {
