@@ -27,6 +27,7 @@
 #include <infiniband/verbs.h>
 
 #include <cstdint>
+#include <memory>
 #include <utility>
 
 #include "cache/infiniband/infiniband.h"
@@ -48,15 +49,38 @@ DEFINE_int32(
     "maximum number of receive work requests posted to a receive queue");
 
 Connection::Connection(QueuePairUPtr queue_pair,
-                       CompletionQueueUPtr completion_queue)
-    : send_buffer_pool_(RDMABufferPool::Create(queue_pair->GetProtectDomain(),
-                                               FLAGS_rdma_send_buffer_size,
-                                               FLAGS_rdma_send_queue_size)),
-      recv_buffer_pool_(RDMABufferPool::Create(queue_pair->GetProtectDomain(),
-                                               FLAGS_rdma_recv_buffer_size,
-                                               FLAGS_rdma_recv_queue_size)),
+                       CompletionQueueUPtr completion_queue,
+                       RDMABufferPoolUPtr send_buffer_pool,
+                       RDMABufferPoolUPtr recv_buffer_pool)
+    : send_buffer_pool_(std::move(send_buffer_pool)),
+      recv_buffer_pool_(std::move(recv_buffer_pool)),
       completion_queue_(std::move(completion_queue)),
-      queue_pair_(std::move(queue_pair)) {}
+      queue_pair_(std::move(queue_pair)) {
+  CHECK_NOTNULL(send_buffer_pool_);
+  CHECK_NOTNULL(recv_buffer_pool_);
+}
+
+ConnectionUPtr Connection::Create(QueuePairUPtr queue_pair,
+                                  CompletionQueueUPtr completion_queue) {
+  auto* protect_domain = queue_pair->GetProtectDomain();
+  auto send_buffer_pool = RDMABufferPool::Create(
+      protect_domain, FLAGS_rdma_send_buffer_size, FLAGS_rdma_send_queue_size);
+  if (send_buffer_pool == nullptr) {
+    LOG(ERROR) << "Fail to create send buffer pool for " << *queue_pair;
+    return nullptr;
+  }
+
+  auto recv_buffer_pool = RDMABufferPool::Create(
+      protect_domain, FLAGS_rdma_recv_buffer_size, FLAGS_rdma_recv_queue_size);
+  if (recv_buffer_pool == nullptr) {
+    LOG(ERROR) << "Fail to create receive buffer pool for " << *queue_pair;
+    return nullptr;
+  }
+
+  return std::make_unique<Connection>(
+      std::move(queue_pair), std::move(completion_queue),
+      std::move(send_buffer_pool), std::move(recv_buffer_pool));
+}
 
 Status Connection::ValidateSendWorkRequest(const SendWorkRequest& entry) {
   if (entry.signaled && entry.ctx == nullptr) {
@@ -245,10 +269,15 @@ bool Connection::PollCompletionQueue(CompletionHandler handler) {
         case IBV_WC_SUCCESS:
           wc.status = Status::OK();
           break;
+        case IBV_WC_WR_FLUSH_ERR:
+          wc.status = Status::Internal(ibv_wc_status_str(cqe[i].status));
+          VLOG(9) << "Work request flushed: wr_id=0x" << std::hex
+                  << cqe[i].wr_id;
+          break;
         default:
           wc.status = Status::Internal(ibv_wc_status_str(cqe[i].status));
-          LOG(ERROR) << "[DBG] WR failed: wr_id=0x" << std::hex << cqe[i].wr_id
-                     << " opcode=" << std::dec << cqe[i].opcode
+          LOG(ERROR) << "Work request failed: wr_id=0x" << std::hex
+                     << cqe[i].wr_id << " opcode=" << std::dec << cqe[i].opcode
                      << " vendor_err=0x" << std::hex << cqe[i].vendor_err
                      << " status=" << ibv_wc_status_str(cqe[i].status);
       }

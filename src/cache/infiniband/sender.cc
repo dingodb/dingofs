@@ -105,7 +105,9 @@ Status ResponseSender::Send(RDMABuffer* response,
 
 Status ResponseSender::CheckAttachment(const IOBuffer& src,
                                        const Region& dest) {
-  if (src.ConstIOBuf().backing_block_num() != 1) {
+  if (src.Size() == 0) {
+    return Status::OK();
+  } else if (src.BackingBlockNum() != 1) {
     return Status::InvalidParam("buffer is not continuous");
   } else if (src.GetFirstDataMeta() == 0) {
     return Status::InvalidParam("buffer not register for rdma");
@@ -113,7 +115,7 @@ Status ResponseSender::CheckAttachment(const IOBuffer& src,
     return Status::InvalidParam(
         "response attachment exceeds advertised rdma length");
   } else if (dest.addr == 0 || dest.rkey == 0) {
-    return Status::Internal("response rdma memory context is missing");
+    return Status::InvalidParam("response rdma memory context is missing");
   }
   return Status::OK();
 }

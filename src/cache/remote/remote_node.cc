@@ -31,6 +31,7 @@
 
 #include "common/options/cache.h"
 #include "common/status.h"
+#include "dingofs/infiniband.pb.h"
 
 namespace dingofs {
 namespace cache {
@@ -143,7 +144,10 @@ uint32_t RemoteNode::NextTimeoutMs(const std::string& method,
   return std::min(timeout_ms, FLAGS_cache_rpc_max_timeout_ms);
 }
 
-bool RemoteNode::ShouldRetry(const std::string& method, int /*retcode*/) const {
+bool RemoteNode::ShouldRetry(const std::string& method, int retcode) const {
+  if (FLAGS_use_rdma && retcode == pb::infiniband::ErrorCode::ProtocolError) {
+    return false;
+  }
   return method == "Range";
 }
 

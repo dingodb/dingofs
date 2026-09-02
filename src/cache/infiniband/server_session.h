@@ -26,7 +26,9 @@
 #include <bthread/execution_queue.h>
 #include <google/protobuf/service.h>
 
+#include <atomic>
 #include <memory>
+#include <vector>
 
 #include "cache/infiniband/common.h"
 #include "cache/infiniband/connection.h"
@@ -36,7 +38,7 @@
 #include "cache/infiniband/reader.h"
 #include "cache/infiniband/sender.h"
 #include "cache/infiniband/service.h"
-#include "cache/iutil/bthread.h"
+#include "cache/iutil/gate.h"
 #include "common/status.h"
 
 namespace dingofs {
@@ -46,16 +48,21 @@ namespace infiniband {
 class ServerSession : public EventHandler {
  public:
   ServerSession(ConnectionUPtr conn, ServiceHub* service_hub);
-  ~ServerSession() override = default;
+  ~ServerSession() override;
   Status Start();
   void Shutdown();
+  void SendKeepalive();
 
   void HandleEvent() override;
+
+  bool IsBroken() const { return broken_.load(std::memory_order_relaxed); }
 
  private:
   static int HandleWorkCompletion(void* meta,
                                   bthread::TaskIterator<WorkCompletions>& iter);
 
+  void MarkBroken(const Status& status);
+  void ReleaseKeepalive();
   Status OnEstablished();
   void PrepRecvWorkRequest(RDMABuffer* recv_buffer, RecvWorkRequest* wr);
   void OnNewMessage(const WorkCompletion& wc, RDMABuffer* recv_buffer);
@@ -74,12 +81,17 @@ class ServerSession : public EventHandler {
                     const Attachment& attachment = {});
 
   ConnectionUPtr conn_;
+  std::atomic<bool> broken_{false};
+  std::atomic<bool> closed_{false};
+  std::atomic<bool> keepalive_inflight_{false};
+  iutil::Gate gate_;
   std::vector<WorkRequestContext> recv_contexts_;
+  RDMABuffer* keepalive_buffer_{nullptr};
+  WorkRequestContext keepalive_context_;
   RequestParserUPtr request_parser_;
   BodyReaderUPtr body_reader_;
   ResponseSerializerUPtr response_serializer_;
   ResponseSenderUPtr response_sender_;
-  iutil::BthreadJoinerUPtr joiner_;
   bthread::ExecutionQueueId<WorkCompletions> queue_id_;
 };
 

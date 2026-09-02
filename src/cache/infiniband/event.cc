@@ -22,6 +22,7 @@
 
 #include "cache/infiniband/event.h"
 
+#include <butil/errno.h>
 #include <butil/third_party/murmurhash3/murmurhash3.h>
 #include <gflags/gflags.h>
 #include <glog/logging.h>
@@ -29,6 +30,7 @@
 #include <sys/eventfd.h>
 #include <unistd.h>
 
+#include <cerrno>
 #include <cstdint>
 #include <cstdlib>
 #include <mutex>
@@ -146,9 +148,11 @@ Status EventDispatcher::AddEvent(int fd, EventType type,
 
 Status EventDispatcher::DelEvent(int fd) {
   int rc = epoll_ctl(epoll_fd_, EPOLL_CTL_DEL, fd, nullptr);
+  int error = errno;
   DeleteHandler(fd);
-  if (rc != 0) {
-    PLOG(ERROR) << "Fail to del event from epoll, fd=" << fd;
+  if (rc != 0 && error != ENOENT) {
+    LOG(ERROR) << "Fail to del event from epoll, fd=" << fd << ": "
+               << berror(error);
     return Status::Internal("del event failed");
   }
   return Status::OK();

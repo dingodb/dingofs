@@ -134,7 +134,6 @@ Response<U> RemoteNode::SendRequest(const Request<T>& request) {
       }
 
       if (result.conn_broken) {
-        conn->Close();
         DoConnect(conn);
       }
       continue;

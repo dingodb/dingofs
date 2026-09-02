@@ -101,6 +101,7 @@ class TCPConnection : public RemoteNodeConnection {
 class RDMAConnection : public RemoteNodeConnection {
  public:
   ~RDMAConnection() override;
+  static bool IsConnBroken(int error_code);
 
   Status Connect(const std::string& ip, uint32_t port,
                  uint32_t timeout_ms) override;
@@ -116,7 +117,7 @@ class RDMAConnection : public RemoteNodeConnection {
   static constexpr const char* kServiceName =
       "dingofs.pb.cache.BlockCacheService";
 
-  bool IsConnBroken(int error_code);
+  void Invalidate(const std::shared_ptr<infiniband::Client>& client);
 
   bthread::Mutex mutex_;
   std::shared_ptr<infiniband::Client> rdma_client_;

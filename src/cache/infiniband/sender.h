@@ -51,11 +51,11 @@ using RequestSenderUPtr = std::unique_ptr<RequestSender>;
 class ResponseSender {
  public:
   explicit ResponseSender(Connection* conn);
+  static Status CheckAttachment(const IOBuffer& src, const Region& dest);
 
   Status Send(RDMABuffer* response, const Attachment& attachment = {});
 
  private:
-  Status CheckAttachment(const IOBuffer& src, const Region& dest);
   Status PrepWorkRequest(const Attachment& attachment, SendWorkRequest* wr);
   void PrepWorkRequest(InflightContext* ctx, RDMABuffer* response,
                        SendWorkRequest* wr);

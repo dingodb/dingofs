@@ -35,6 +35,7 @@ namespace cache {
 namespace iutil {
 
 bthread_t RunInBthread(std::function<void()> func);
+bool StartBthread(std::function<void()> func);
 
 class BthreadJoiner {
  public:

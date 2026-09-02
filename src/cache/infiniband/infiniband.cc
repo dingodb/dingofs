@@ -220,7 +220,6 @@ QueuePairUPtr QueuePair::Create(Device* device, Port* port,
   if (nullptr == qp) {
     PLOG(ERROR) << "Fail to create QueuePair for " << device->GetName() << ":"
                 << port->GetPortNum();
-    ibv_destroy_qp(qp);
     return nullptr;
   }
 

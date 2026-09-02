@@ -20,6 +20,7 @@
  * Author: AI
  */
 
+#include <bthread/countdown_event.h>
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 
@@ -71,6 +72,19 @@ TEST(BthreadTest, RunMultipleBthreads) {
   }
 
   EXPECT_EQ(counter.load(), kThreadCount);
+}
+
+TEST(BthreadTest, StartBthread) {
+  std::atomic<bool> executed{false};
+  bthread::CountdownEvent done(1);
+
+  ASSERT_TRUE(StartBthread([&]() {
+    executed = true;
+    done.signal();
+  }));
+  done.wait();
+
+  EXPECT_TRUE(executed.load());
 }
 
 TEST(BthreadJoinerTest, StartAndShutdown) {

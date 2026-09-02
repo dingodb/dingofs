@@ -189,6 +189,48 @@ void RDMAConnection::Send(const std::string& method,
                           const IOBuffer* request_attachment,
                           IOBuffer* response_attachment, uint32_t timeout_ms,
                           Result* result) {
+  infiniband::Controller cntl;
+  cntl.set_timeout_ms(timeout_ms);
+  if (method == "Range") {
+    if (response_attachment != nullptr && response_attachment->Size() > 0) {
+      if (response_attachment->BackingBlockNum() != 1 ||
+          response_attachment->GetFirstDataMeta() == 0) {
+        LOG_EVERY_SECOND(ERROR)
+            << "Response buffer is not registered for rdma: method=" << method
+            << " buffer=" << response_attachment->Describe();
+        result->SetFailed(pb::infiniband::ErrorCode::ProtocolError,
+                          "response buffer is not registered for rdma");
+        return;
+      }
+
+      auto& region = cntl.write_region();
+      region.set_addr(
+          reinterpret_cast<uint64_t>(response_attachment->Fetch1()));
+      region.set_length(static_cast<uint32_t>(response_attachment->Size()));
+      region.set_rkey(
+          static_cast<uint32_t>(response_attachment->GetFirstDataMeta()));
+    }
+  } else if (request_attachment != nullptr && request_attachment->Size() > 0) {
+    cntl.request_attachment() = *request_attachment;
+    for (const auto& iov : request_attachment->Fetch()) {
+      auto rkey = static_cast<uint32_t>(infiniband::GetRkey(
+          FLAGS_cache_rdma_device, iov.iov_base, iov.iov_len));
+      if (rkey == 0) {
+        LOG_EVERY_SECOND(ERROR)
+            << "Request attachment is not registered for rdma: method="
+            << method << " buffer=" << request_attachment->Describe();
+        result->SetFailed(pb::infiniband::ErrorCode::ProtocolError,
+                          "request attachment is not registered for rdma");
+        return;
+      }
+
+      auto* region = cntl.read_regions().Add();
+      region->set_addr(reinterpret_cast<uint64_t>(iov.iov_base));
+      region->set_length(static_cast<uint32_t>(iov.iov_len));
+      region->set_rkey(rkey);
+    }
+  }
+
   std::shared_ptr<infiniband::Client> client;
   {
     std::lock_guard<bthread::Mutex> guard(mutex_);
@@ -200,33 +242,22 @@ void RDMAConnection::Send(const std::string& method,
     return;
   }
 
-  infiniband::Controller cntl;
-  cntl.set_timeout_ms(timeout_ms);
-  if (method == "Range") {
-    if (response_attachment != nullptr && response_attachment->Size() > 0) {
-      auto& region = cntl.write_region();
-      region.set_addr(
-          reinterpret_cast<uint64_t>(response_attachment->Fetch1()));
-      region.set_length(static_cast<uint32_t>(response_attachment->Size()));
-      region.set_rkey(
-          static_cast<uint32_t>(response_attachment->GetFirstDataMeta()));
-    }
-  } else if (request_attachment != nullptr && request_attachment->Size() > 0) {
-    cntl.request_attachment() = *request_attachment;
-    for (const auto& iov : request_attachment->Fetch()) {
-      auto* region = cntl.read_regions().Add();
-      region->set_addr(reinterpret_cast<uint64_t>(iov.iov_base));
-      region->set_length(static_cast<uint32_t>(iov.iov_len));
-      region->set_rkey(static_cast<uint32_t>(infiniband::GetRkey(
-          FLAGS_cache_rdma_device, iov.iov_base, iov.iov_len)));
-    }
-  }
-
   client->Call(&cntl, kServiceName, method, raw_request, raw_response);
   if (cntl.Failed()) {
-    result->SetFailed(cntl.ErrorCode(), cntl.ErrorText(),
-                      IsConnBroken(cntl.ErrorCode()));
+    bool broken = IsConnBroken(cntl.ErrorCode());
+    if (broken) {
+      Invalidate(client);
+    }
+    result->SetFailed(cntl.ErrorCode(), cntl.ErrorText(), broken);
     return;
+  }
+}
+
+void RDMAConnection::Invalidate(
+    const std::shared_ptr<infiniband::Client>& client) {
+  std::lock_guard<bthread::Mutex> guard(mutex_);
+  if (rdma_client_ == client) {
+    rdma_client_.reset();
   }
 }
 
