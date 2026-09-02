@@ -228,7 +228,9 @@ FileSystemSPtr FileSystemTest::fs = nullptr;
 OperationProcessorSPtr FileSystemTest::operation_processor = nullptr;
 
 TEST_F(FileSystemSetTest, CreateFs) {
-  GTEST_SKIP() << "skip test.";
+  if (getenv("MANUAL_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip manual test case.";
+  }
 
   auto fs_set = FsSet();
 
@@ -253,7 +255,9 @@ TEST_F(FileSystemSetTest, CreateFs) {
 }
 
 TEST_F(FileSystemSetTest, GetFsInfo) {
-  GTEST_SKIP() << "skip test.";
+  if (getenv("MANUAL_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip manual test case.";
+  }
 
   auto fs_set = FsSet();
 
@@ -286,8 +290,9 @@ TEST_F(FileSystemSetTest, GetFsInfo) {
 }
 
 TEST_F(FileSystemSetTest, DeleteFs) {
-  GTEST_SKIP() << "skip test.";
-
+  if (getenv("MANUAL_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip manual test case.";
+  }
   auto fs_set = FsSet();
 
   FileSystemSet::CreateFsParam param;
@@ -319,7 +324,9 @@ TEST_F(FileSystemSetTest, DeleteFs) {
 }
 
 TEST_F(FileSystemSetTest, MountFs) {
-  GTEST_SKIP() << "skip test.";
+  if (getenv("MANUAL_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip manual test case.";
+  }
 
   auto fs_set = FsSet();
 
@@ -362,7 +369,9 @@ TEST_F(FileSystemSetTest, MountFs) {
 }
 
 TEST_F(FileSystemSetTest, UnMountFs) {
-  GTEST_SKIP() << "skip test.";
+  if (getenv("MANUAL_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip manual test case.";
+  }
 
   auto fs_set = FsSet();
 
@@ -418,7 +427,9 @@ TEST_F(FileSystemSetTest, UnMountFs) {
 }
 
 TEST_F(FileSystemTest, CreateRoot) {
-  GTEST_SKIP() << "skip test.";
+  if (getenv("MANUAL_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip manual test case.";
+  }
 
   auto fs = Fs();
 
@@ -435,7 +446,9 @@ TEST_F(FileSystemTest, CreateRoot) {
 }
 
 TEST_F(FileSystemTest, MkNod) {
-  GTEST_SKIP() << "skip test.";
+  if (getenv("MANUAL_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip manual test case.";
+  }
 
   auto fs = Fs();
   auto& partition_cache = fs->GetPartitionCache();
@@ -476,8 +489,9 @@ TEST_F(FileSystemTest, MkNod) {
 }
 
 TEST_F(FileSystemTest, MkDir) {
-  GTEST_SKIP() << "skip test.";
-
+  if (getenv("MANUAL_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip manual test case.";
+  }
   auto fs = Fs();
   auto& partition_cache = fs->GetPartitionCache();
   auto& inode_cache = fs->GetInodeCache();
@@ -567,7 +581,9 @@ TEST_F(FileSystemTest, CreateInheritsSetgidParent) {
 }
 
 TEST_F(FileSystemTest, RmDir) {
-  GTEST_SKIP() << "skip test.";
+  if (getenv("MANUAL_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip manual test case.";
+  }
 
   auto fs = Fs();
   auto& partition_cache = fs->GetPartitionCache();
@@ -618,8 +634,9 @@ TEST_F(FileSystemTest, RmDir) {
 }
 
 TEST_F(FileSystemTest, Link) {
-  GTEST_SKIP() << "skip test.";
-
+  if (getenv("MANUAL_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip manual test case.";
+  }
   auto fs = Fs();
   auto& partition_cache = fs->GetPartitionCache();
   auto& inode_cache = fs->GetInodeCache();
@@ -652,7 +669,9 @@ TEST_F(FileSystemTest, Link) {
 }
 
 TEST_F(FileSystemTest, UnLink) {
-  GTEST_SKIP() << "skip test.";
+  if (getenv("MANUAL_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip manual test case.";
+  }
 
   auto fs = Fs();
   auto& partition_cache = fs->GetPartitionCache();
@@ -690,7 +709,9 @@ TEST_F(FileSystemTest, UnLink) {
 }
 
 TEST_F(FileSystemTest, SymlinkWithFile) {
-  GTEST_SKIP() << "skip test.";
+  if (getenv("MANUAL_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip manual test case.";
+  }
 
   auto fs = Fs();
   auto& partition_cache = fs->GetPartitionCache();
@@ -732,7 +753,9 @@ TEST_F(FileSystemTest, SymlinkWithFile) {
 }
 
 TEST_F(FileSystemTest, SymlinkWithDir) {
-  GTEST_SKIP() << "skip test.";
+  if (getenv("MANUAL_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip manual test case.";
+  }
 
   auto fs = Fs();
   auto& partition_cache = fs->GetPartitionCache();
@@ -774,7 +797,9 @@ TEST_F(FileSystemTest, SymlinkWithDir) {
 }
 
 TEST_F(FileSystemTest, ReadLink) {
-  GTEST_SKIP() << "skip test.";
+  if (getenv("MANUAL_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip manual test case.";
+  }
 
   auto fs = Fs();
   auto& partition_cache = fs->GetPartitionCache();
@@ -816,7 +841,9 @@ TEST_F(FileSystemTest, ReadLink) {
 }
 
 TEST_F(FileSystemTest, SetXAttr) {
-  GTEST_SKIP() << "skip test.";
+  if (getenv("MANUAL_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip manual test case.";
+  }
 
   auto fs = Fs();
   auto& partition_cache = fs->GetPartitionCache();
@@ -849,7 +876,9 @@ TEST_F(FileSystemTest, SetXAttr) {
 }
 
 TEST_F(FileSystemTest, GetXAttr) {
-  GTEST_SKIP() << "skip test.";
+  if (getenv("MANUAL_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip manual test case.";
+  }
 
   auto fs = Fs();
   auto& partition_cache = fs->GetPartitionCache();
@@ -900,7 +929,9 @@ TEST_F(FileSystemTest, GetXAttr) {
 // |  |--file2
 // rename dir1/file1 to dir1/file2
 TEST_F(FileSystemTest, RenameWithSameDir) {
-  GTEST_SKIP() << "skip test.";
+  if (getenv("MANUAL_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip manual test case.";
+  }
 
   auto fs = Fs();
   auto& partition_cache = fs->GetPartitionCache();
@@ -981,7 +1012,9 @@ TEST_F(FileSystemTest, RenameWithSameDir) {
 // |  |--file1
 // rename dir1/file1 to dir2/file1
 TEST_F(FileSystemTest, RenameWithDiffDir) {
-  GTEST_SKIP() << "skip test.";
+  if (getenv("MANUAL_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip manual test case.";
+  }
 
   auto fs = Fs();
   auto& partition_cache = fs->GetPartitionCache();
@@ -1769,8 +1802,8 @@ TEST_F(FileSystemTest, CalcDirStatNoPageBoundaryDoubleCount) {
 // Note: DummyStorage keeps everything in memory, ~1KB+/dir; 1e8 dirs needs
 // 100GB+ RAM, use PERF_MKDIR_COUNT to scale down on small machines.
 TEST_F(FileSystemTest, MkDirPerf) {
-  if (getenv("FILESYSTEM_PERF") == nullptr) {
-    GTEST_SKIP() << "set FILESYSTEM_PERF=1 to run (long running perf test)";
+  if (getenv("MANUAL_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip manual test case.";
   }
 
   uint64_t total = 100000000ULL;  // 1亿
@@ -1834,8 +1867,8 @@ TEST_F(FileSystemTest, MkDirPerf) {
 }
 
 TEST_F(FileSystemTest, MapPerf) {
-  if (getenv("FILESYSTEM_PERF") == nullptr) {
-    GTEST_SKIP() << "set FILESYSTEM_PERF=1 to run (long running perf test)";
+  if (getenv("MANUAL_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip manual test case.";
   }
 
   absl::flat_hash_map<Ino, InodeSPtr> map;

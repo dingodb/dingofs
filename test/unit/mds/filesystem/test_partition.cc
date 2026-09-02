@@ -826,8 +826,8 @@ TEST_F(ShardPartitionWithBoundariesTest, PutMultipleShards) {
 // Run: PARTITION_PERF=1 ./test_mds --gtest_filter=ShardPartitionPerfTest.*
 // Optionally override count: PERF_PUT_COUNT=1000000
 TEST(ShardPartitionPerfTest, Put400Million) {
-  if (getenv("PARTITION_PERF") == nullptr) {
-    GTEST_SKIP() << "set PARTITION_PERF=1 to run (long running perf test)";
+  if (getenv("MANUAL_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip manual test case.";
   }
 
   uint64_t total = 400000000ULL;  // 4亿
