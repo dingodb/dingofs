@@ -41,6 +41,7 @@ class WarmupMemo {
   void Forget(Ino ino);
 
   bool IsRemembered(Ino ino);
+  bool CheckAndRemember(Ino ino, uint64_t now_s);
 
   void CleanExpired(uint64_t expire_s);
 
@@ -54,7 +55,7 @@ class WarmupMemo {
   // ino -> last warmup timestamp
   using Map = absl::flat_hash_map<Ino, Value>;
 
-  constexpr static size_t kShardNum = 64;
+  constexpr static size_t kShardNum = 128;
   utils::Shards<Map, kShardNum> shard_map_;
 };
 
@@ -88,6 +89,7 @@ class WarmupProcessor {
   void CleanExpired(uint64_t expire_s) { warmup_memo_.CleanExpired(expire_s); }
 
  private:
+  friend class WarmupTask;
   friend class WarmupChunkTask;
   friend class ReadDirTask;
   friend class WarmupDirAccessStatsWatcher;
@@ -99,11 +101,17 @@ class WarmupProcessor {
   ReadChunkCache& GetReadChunkCache() { return read_chunk_cache_; }
   WarmupMemo& GetWarmupMemo() { return warmup_memo_; }
 
-  void ExecuteReadDir(Ino ino);
+  void AsyncWarmupSmallFile(Ino parent);
 
-  void WarmupSmallFileData(Ino parent, const std::vector<Ino>& inos);
-  void WarmupSmallFileChunk(Ino parent, const std::vector<Ino>& inos);
-  void WarmupSmallFileDataAndChunk(Ino parent, const std::vector<Ino>& inos);
+  void DoWarmupSmallFileData(Ino parent, const std::vector<Ino>& inos);
+
+  Status DoWarmupSmallFileChunk(Ino parent, const std::vector<Ino>& inos);
+  void AsyncWarmupSmallFileChunk(Ino parent, const std::vector<Ino>& inos);
+
+  void AsyncWarmupSmallFileDataAndChunk(Ino parent,
+                                        const std::vector<Ino>& inos);
+
+  Status DoWarmupReadDir(Ino parent);
 
   const uint32_t fs_id_{0};
 

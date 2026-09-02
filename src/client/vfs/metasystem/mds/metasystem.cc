@@ -69,7 +69,7 @@ DEFINE_uint32(vfs_meta_executor_max_pending_num, 1048576,
 const std::string kBgExecutorWorkerSetName = "meta_bg_executor";
 
 DEFINE_uint32(vfs_meta_bg_executor_worker_num, 16, "number of compact workers");
-DEFINE_uint32(vfs_meta_bg_executor_max_pending_num, 4096,
+DEFINE_uint32(vfs_meta_bg_executor_max_pending_num, 8192,
               "compact worker max pending num");
 DEFINE_bool(vfs_meta_bg_executor_use_pthread, true,
             "compact worker use pthread");
@@ -653,7 +653,7 @@ Status MDSMetaSystem::MkNod(ContextSPtr ctx, Ino parent,
 
 Status MDSMetaSystem::DoOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
                              const std::string& session_id,
-                             FileSessionSPtr file_session) {
+                             FileSessionSPtr file_session, bool is_async) {
   CHECK(file_session != nullptr) << "file_session is null.";
 
   // check whether prefetch chunk
@@ -673,10 +673,10 @@ Status MDSMetaSystem::DoOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
                                  chunk_descriptors, attr_entry, chunks);
 
   LOG_DEBUG << fmt::format(
-      "[meta.fs.{}.{}] open file flags({:o}:{}) session_id({}) "
-      "chunks({}) status({}).",
+      "[meta.fs.{}.{}] open file flags({:o}:{}) session_id({}) is_async({})"
+      " chunks({}) status({}).",
       ino, fh, flags, dingofs::Helper::DescOpenFlags(flags), session_id,
-      chunks.size(), status.ToString());
+      is_async, chunks.size(), status.ToString());
 
   if (!status.ok()) return status;
 
@@ -749,7 +749,7 @@ void MDSMetaSystem::AsyncOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
       }
 
       auto status = metasystem_.DoOpen(ctx_, ino_, flags_, fh_, session_id_,
-                                       file_session_);
+                                       file_session_, true);
       if (!status.ok()) {
         LOG(ERROR) << fmt::format(
             "[meta.fs.{}.{}] async open file fail, error({}).", ino_, fh_,
@@ -816,7 +816,7 @@ Status MDSMetaSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
     }
   }
 
-  auto status = DoOpen(ctx, ino, flags, fh, session_id, file_session);
+  auto status = DoOpen(ctx, ino, flags, fh, session_id, file_session, false);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format("[meta.fs.{}.{}] open file fail, error({}).", ino,
                               fh, status.ToString());

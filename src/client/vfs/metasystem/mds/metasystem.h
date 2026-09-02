@@ -261,7 +261,8 @@ class MDSMetaSystem : public vfs::MetaSystem {
   void InvalidateFileSessionReadCache(Ino ino);
 
   Status DoOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
-                const std::string& session_id, FileSessionSPtr file_session);
+                const std::string& session_id, FileSessionSPtr file_session,
+                bool is_async);
   void AsyncOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
                  const std::string& session_id, FileSessionSPtr file_session);
 

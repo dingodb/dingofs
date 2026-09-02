@@ -39,7 +39,8 @@ class Executor {
   bool Init();
   void Stop();
 
-  bool ExecuteByHash(uint64_t hash_id, TaskRunnablePtr task, bool retry = true);
+  bool ExecuteLeastQueue(TaskRunnablePtr task);
+  bool ExecuteByHash(uint64_t hash_id, TaskRunnablePtr task, bool retry);
 
  private:
   const std::string name_;
