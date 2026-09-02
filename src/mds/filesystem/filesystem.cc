@@ -1370,6 +1370,7 @@ Status FileSystem::RmDir(Context& ctx, Ino parent, const std::string& name, Entr
 
   // update parent memo
   parent_memo_.Forget(dentry.ino());
+  if (!enable_trash) DeleteInodeFromCache(dentry.ino());
 
   // notify buddy
   if (IsParentHashPartition()) {

@@ -13,10 +13,17 @@
 // limitations under the License.
 
 #include <absl/container/flat_hash_map.h>
+#include <fcntl.h>
 #include <fmt/format.h>
 
+#include <algorithm>
+#include <atomic>
 #include <cstdint>
+#include <mutex>
+#include <numeric>
+#include <random>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -228,16 +235,16 @@ FileSystemSPtr FileSystemTest::fs = nullptr;
 OperationProcessorSPtr FileSystemTest::operation_processor = nullptr;
 
 TEST_F(FileSystemSetTest, CreateFs) {
-  if (getenv("MANUAL_TEST") == nullptr) {
-    GTEST_SKIP() << "Skip manual test case.";
-  }
-
   auto fs_set = FsSet();
 
   FileSystemSet::CreateFsParam param;
+  param.fs_id = 0;
   param.fs_name = "test_fs_for_create";
   param.block_size = 1024 * 1024;
+  param.chunk_size = 64 * 1024 * 1024;
   param.fs_type = pb::mds::FsType::S3;
+  param.partition_type = pb::mds::PartitionType::MONOLITHIC_PARTITION;
+  param.candidate_mds_ids = {kMdsId};
   *param.fs_extra.mutable_s3_info() = CreateS3Info();
   param.enable_dir_stats = false;
   param.owner = "dengzh";
@@ -255,16 +262,16 @@ TEST_F(FileSystemSetTest, CreateFs) {
 }
 
 TEST_F(FileSystemSetTest, GetFsInfo) {
-  if (getenv("MANUAL_TEST") == nullptr) {
-    GTEST_SKIP() << "Skip manual test case.";
-  }
-
   auto fs_set = FsSet();
 
   FileSystemSet::CreateFsParam param;
+  param.fs_id = 0;
   param.fs_name = "test_fs_for_get";
   param.block_size = 1024 * 1024;
+  param.chunk_size = 64 * 1024 * 1024;
   param.fs_type = pb::mds::FsType::S3;
+  param.partition_type = pb::mds::PartitionType::MONOLITHIC_PARTITION;
+  param.candidate_mds_ids = {kMdsId};
   *param.fs_extra.mutable_s3_info() = CreateS3Info();
   param.enable_dir_stats = false;
   param.owner = "dengzh";
@@ -290,15 +297,16 @@ TEST_F(FileSystemSetTest, GetFsInfo) {
 }
 
 TEST_F(FileSystemSetTest, DeleteFs) {
-  if (getenv("MANUAL_TEST") == nullptr) {
-    GTEST_SKIP() << "Skip manual test case.";
-  }
   auto fs_set = FsSet();
 
   FileSystemSet::CreateFsParam param;
+  param.fs_id = 0;
   param.fs_name = "test_fs_for_delete";
   param.block_size = 1024 * 1024;
+  param.chunk_size = 64 * 1024 * 1024;
   param.fs_type = pb::mds::FsType::S3;
+  param.partition_type = pb::mds::PartitionType::MONOLITHIC_PARTITION;
+  param.candidate_mds_ids = {kMdsId};
   *param.fs_extra.mutable_s3_info() = CreateS3Info();
   param.enable_dir_stats = false;
   param.owner = "dengzh";
@@ -324,16 +332,16 @@ TEST_F(FileSystemSetTest, DeleteFs) {
 }
 
 TEST_F(FileSystemSetTest, MountFs) {
-  if (getenv("MANUAL_TEST") == nullptr) {
-    GTEST_SKIP() << "Skip manual test case.";
-  }
-
   auto fs_set = FsSet();
 
   FileSystemSet::CreateFsParam param;
+  param.fs_id = 0;
   param.fs_name = "test_fs_for_mount";
   param.block_size = 1024 * 1024;
+  param.chunk_size = 64 * 1024 * 1024;
   param.fs_type = pb::mds::FsType::S3;
+  param.partition_type = pb::mds::PartitionType::MONOLITHIC_PARTITION;
+  param.candidate_mds_ids = {kMdsId};
   *param.fs_extra.mutable_s3_info() = CreateS3Info();
   param.enable_dir_stats = false;
   param.owner = "dengzh";
@@ -349,6 +357,7 @@ TEST_F(FileSystemSetTest, MountFs) {
 
   Context ctx;
   pb::mds::MountPoint mount_point;
+  mount_point.set_client_id("00000000-0000-0000-0000-000000000002");
   mount_point.set_hostname("localhost");
   mount_point.set_port(8080);
   mount_point.set_path("/mnt/dingofs");
@@ -369,16 +378,16 @@ TEST_F(FileSystemSetTest, MountFs) {
 }
 
 TEST_F(FileSystemSetTest, UnMountFs) {
-  if (getenv("MANUAL_TEST") == nullptr) {
-    GTEST_SKIP() << "Skip manual test case.";
-  }
-
   auto fs_set = FsSet();
 
   FileSystemSet::CreateFsParam param;
+  param.fs_id = 0;
   param.fs_name = "test_fs_for_unmount";
   param.block_size = 1024 * 1024;
+  param.chunk_size = 64 * 1024 * 1024;
   param.fs_type = pb::mds::FsType::S3;
+  param.partition_type = pb::mds::PartitionType::MONOLITHIC_PARTITION;
+  param.candidate_mds_ids = {kMdsId};
   *param.fs_extra.mutable_s3_info() = CreateS3Info();
   param.enable_dir_stats = false;
   param.owner = "dengzh";
@@ -394,7 +403,7 @@ TEST_F(FileSystemSetTest, UnMountFs) {
 
   Context ctx;
   pb::mds::MountPoint mount_point;
-  mount_point.set_client_id("xxxxxxxxxxxxxxxxxxxxxxxx");
+  mount_point.set_client_id("00000000-0000-0000-0000-000000000001");
   mount_point.set_hostname("localhost");
   mount_point.set_port(8080);
   mount_point.set_path("/mnt/dingofs");
@@ -427,10 +436,6 @@ TEST_F(FileSystemSetTest, UnMountFs) {
 }
 
 TEST_F(FileSystemTest, CreateRoot) {
-  if (getenv("MANUAL_TEST") == nullptr) {
-    GTEST_SKIP() << "Skip manual test case.";
-  }
-
   auto fs = Fs();
 
   auto& partition_cache = fs->GetPartitionCache();
@@ -446,10 +451,6 @@ TEST_F(FileSystemTest, CreateRoot) {
 }
 
 TEST_F(FileSystemTest, MkNod) {
-  if (getenv("MANUAL_TEST") == nullptr) {
-    GTEST_SKIP() << "Skip manual test case.";
-  }
-
   auto fs = Fs();
   auto& partition_cache = fs->GetPartitionCache();
   auto& inode_cache = fs->GetInodeCache();
@@ -488,10 +489,24 @@ TEST_F(FileSystemTest, MkNod) {
   ASSERT_EQ(param.rdev, inode->Rdev()) << "inode rdev not equal.";
 }
 
+TEST_F(FileSystemTest, MkNodDuplicate) {
+  auto fs = Fs();
+  Context ctx;
+
+  FileSystem::MkNodParam param;
+  param.parent = kRootIno;
+  param.name = "duplicate_file";
+
+  EntryWithPaOut entry_out;
+  ASSERT_TRUE(fs->MkNod(ctx, param, entry_out).ok());
+  const auto first_ino = entry_out.attr.ino();
+
+  auto status = fs->MkNod(ctx, param, entry_out);
+  ASSERT_EQ(pb::error::EEXISTED, status.error_code());
+  ASSERT_EQ(first_ino, entry_out.attr.ino());
+}
+
 TEST_F(FileSystemTest, MkDir) {
-  if (getenv("MANUAL_TEST") == nullptr) {
-    GTEST_SKIP() << "Skip manual test case.";
-  }
   auto fs = Fs();
   auto& partition_cache = fs->GetPartitionCache();
   auto& inode_cache = fs->GetInodeCache();
@@ -523,13 +538,30 @@ TEST_F(FileSystemTest, MkDir) {
   InodeSPtr inode = inode_cache.Get(entry_out.attr.ino());
   ASSERT_TRUE(status.ok()) << "get inode fail, error: " << status.error_str();
   ASSERT_TRUE(inode != nullptr) << "get inode fail.";
-  ASSERT_EQ(param.mode, inode->Mode()) << "inode mode not equal.";
+  ASSERT_EQ(S_IFDIR | param.mode, inode->Mode()) << "inode mode not equal.";
   ASSERT_EQ(param.uid, inode->Uid()) << "inode uid not equal.";
   ASSERT_EQ(param.gid, inode->Gid()) << "inode gid not equal.";
   ASSERT_EQ(pb::mds::FileType::DIRECTORY, inode->Type())
       << "inode type not equal.";
   ASSERT_EQ(4096, inode->Length()) << "inode length not equal.";
   ASSERT_EQ(param.rdev, inode->Rdev()) << "inode rdev not equal.";
+}
+
+TEST_F(FileSystemTest, MkDirDuplicate) {
+  auto fs = Fs();
+  Context ctx;
+
+  FileSystem::MkDirParam param;
+  param.parent = kRootIno;
+  param.name = "duplicate_dir";
+
+  EntryWithPaOut entry_out;
+  ASSERT_TRUE(fs->MkDir(ctx, param, entry_out).ok());
+  const auto first_ino = entry_out.attr.ino();
+
+  auto status = fs->MkDir(ctx, param, entry_out);
+  ASSERT_EQ(pb::error::EEXISTED, status.error_code());
+  ASSERT_EQ(first_ino, entry_out.attr.ino());
 }
 
 TEST_F(FileSystemTest, CreateInheritsSetgidParent) {
@@ -581,10 +613,6 @@ TEST_F(FileSystemTest, CreateInheritsSetgidParent) {
 }
 
 TEST_F(FileSystemTest, RmDir) {
-  if (getenv("MANUAL_TEST") == nullptr) {
-    GTEST_SKIP() << "Skip manual test case.";
-  }
-
   auto fs = Fs();
   auto& partition_cache = fs->GetPartitionCache();
   auto& inode_cache = fs->GetInodeCache();
@@ -634,9 +662,6 @@ TEST_F(FileSystemTest, RmDir) {
 }
 
 TEST_F(FileSystemTest, Link) {
-  if (getenv("MANUAL_TEST") == nullptr) {
-    GTEST_SKIP() << "Skip manual test case.";
-  }
   auto fs = Fs();
   auto& partition_cache = fs->GetPartitionCache();
   auto& inode_cache = fs->GetInodeCache();
@@ -645,7 +670,7 @@ TEST_F(FileSystemTest, Link) {
 
   FileSystem::MkNodParam param;
   param.parent = kRootIno;
-  param.name = "link_file";
+  param.name = "link_file_source";
   param.mode = 0777;
   param.uid = 1;
   param.gid = 3;
@@ -661,18 +686,24 @@ TEST_F(FileSystemTest, Link) {
 
   {
     EntryWithPaOut entry_out;
-    auto status = fs->Link(ctx, inode->Ino(), kRootIno, "link_file", entry_out);
+    auto status =
+        fs->Link(ctx, inode->Ino(), kRootIno, "link_file_hardlink", entry_out);
     ASSERT_TRUE(status.ok()) << "link fail, error: " << status.error_str();
     ASSERT_EQ(inode->Ino(), entry_out.attr.ino()) << "ino is invalid.";
     ASSERT_EQ(2, inode->Nlink()) << "nlink not equal.";
   }
 }
 
-TEST_F(FileSystemTest, UnLink) {
-  if (getenv("MANUAL_TEST") == nullptr) {
-    GTEST_SKIP() << "Skip manual test case.";
-  }
+TEST_F(FileSystemTest, RmDirNotFound) {
+  auto fs = Fs();
+  Context ctx;
+  EntryWithPaOut entry_out;
 
+  auto status = fs->RmDir(ctx, kRootIno, "missing_dir", entry_out);
+  ASSERT_EQ(pb::error::ENOT_FOUND, status.error_code());
+}
+
+TEST_F(FileSystemTest, UnLink) {
   auto fs = Fs();
   auto& partition_cache = fs->GetPartitionCache();
   auto& inode_cache = fs->GetInodeCache();
@@ -681,7 +712,7 @@ TEST_F(FileSystemTest, UnLink) {
 
   FileSystem::MkNodParam param;
   param.parent = kRootIno;
-  param.name = "unlink_file";
+  param.name = "unlink_file_source";
   param.mode = 0777;
   param.uid = 1;
   param.gid = 3;
@@ -697,22 +728,68 @@ TEST_F(FileSystemTest, UnLink) {
 
   {
     EntryWithPaOut entry_out;
-    auto status = fs->Link(ctx, inode->Ino(), kRootIno, "link_file", entry_out);
+    auto status = fs->Link(ctx, inode->Ino(), kRootIno, "unlink_file_hardlink",
+                           entry_out);
     ASSERT_TRUE(status.ok()) << "link fail, error: " << status.error_str();
     ASSERT_EQ(inode->Ino(), entry_out.attr.ino()) << "ino is invalid.";
     ASSERT_EQ(2, inode->Nlink()) << "nlink not equal.";
 
-    status = fs->UnLink(ctx, kRootIno, "link_file", entry_out);
+    status = fs->UnLink(ctx, kRootIno, "unlink_file_hardlink", entry_out);
     ASSERT_TRUE(status.ok()) << "link fail, error: " << status.error_str();
     ASSERT_EQ(1, inode->Nlink()) << "nlink not equal.";
   }
 }
 
-TEST_F(FileSystemTest, SymlinkWithFile) {
-  if (getenv("MANUAL_TEST") == nullptr) {
-    GTEST_SKIP() << "Skip manual test case.";
-  }
+TEST_F(FileSystemTest, UnLinkNotFound) {
+  auto fs = Fs();
+  Context ctx;
+  EntryWithPaOut entry_out;
 
+  auto status = fs->UnLink(ctx, kRootIno, "missing_file", entry_out);
+  ASSERT_EQ(pb::error::ENOT_FOUND, status.error_code());
+}
+
+TEST_F(FileSystemTest, LinkDuplicate) {
+  auto fs = Fs();
+  Context ctx;
+
+  FileSystem::MkNodParam param;
+  param.parent = kRootIno;
+  param.name = "duplicate_hardlink_source";
+
+  EntryWithPaOut source_out;
+  ASSERT_TRUE(fs->MkNod(ctx, param, source_out).ok());
+
+  const std::string link_name = "duplicate_hardlink";
+  EntryWithPaOut entry_out;
+  ASSERT_TRUE(
+      fs->Link(ctx, source_out.attr.ino(), kRootIno, link_name, entry_out)
+          .ok());
+  const auto first_ino = entry_out.attr.ino();
+
+  auto status =
+      fs->Link(ctx, source_out.attr.ino(), kRootIno, link_name, entry_out);
+  ASSERT_EQ(pb::error::EEXISTED, status.error_code());
+  ASSERT_EQ(first_ino, entry_out.attr.ino());
+}
+
+TEST_F(FileSystemTest, SymlinkDuplicate) {
+  auto fs = Fs();
+  Context ctx;
+  const std::string link_name = "duplicate_symlink";
+
+  EntryWithPaOut entry_out;
+  ASSERT_TRUE(
+      fs->Symlink(ctx, "/target", kRootIno, link_name, 1, 1, entry_out).ok());
+  const auto first_ino = entry_out.attr.ino();
+
+  auto status =
+      fs->Symlink(ctx, "/target", kRootIno, link_name, 1, 1, entry_out);
+  ASSERT_EQ(pb::error::EEXISTED, status.error_code());
+  ASSERT_EQ(first_ino, entry_out.attr.ino());
+}
+
+TEST_F(FileSystemTest, SymlinkWithFile) {
   auto fs = Fs();
   auto& partition_cache = fs->GetPartitionCache();
   auto& inode_cache = fs->GetInodeCache();
@@ -737,7 +814,7 @@ TEST_F(FileSystemTest, SymlinkWithFile) {
 
   {
     std::string symlink = fmt::format("/{}", param.name);
-    std::string name = "symlinkwithfile";
+    std::string name = "symlink_file_link";
     EntryWithPaOut entry_out;
     auto status = fs->Symlink(ctx, symlink, kRootIno, name, 1, 3, entry_out);
     ASSERT_TRUE(status.ok())
@@ -753,10 +830,6 @@ TEST_F(FileSystemTest, SymlinkWithFile) {
 }
 
 TEST_F(FileSystemTest, SymlinkWithDir) {
-  if (getenv("MANUAL_TEST") == nullptr) {
-    GTEST_SKIP() << "Skip manual test case.";
-  }
-
   auto fs = Fs();
   auto& partition_cache = fs->GetPartitionCache();
   auto& inode_cache = fs->GetInodeCache();
@@ -797,10 +870,6 @@ TEST_F(FileSystemTest, SymlinkWithDir) {
 }
 
 TEST_F(FileSystemTest, ReadLink) {
-  if (getenv("MANUAL_TEST") == nullptr) {
-    GTEST_SKIP() << "Skip manual test case.";
-  }
-
   auto fs = Fs();
   auto& partition_cache = fs->GetPartitionCache();
   auto& inode_cache = fs->GetInodeCache();
@@ -841,10 +910,6 @@ TEST_F(FileSystemTest, ReadLink) {
 }
 
 TEST_F(FileSystemTest, SetXAttr) {
-  if (getenv("MANUAL_TEST") == nullptr) {
-    GTEST_SKIP() << "Skip manual test case.";
-  }
-
   auto fs = Fs();
   auto& partition_cache = fs->GetPartitionCache();
   auto& inode_cache = fs->GetInodeCache();
@@ -876,10 +941,6 @@ TEST_F(FileSystemTest, SetXAttr) {
 }
 
 TEST_F(FileSystemTest, GetXAttr) {
-  if (getenv("MANUAL_TEST") == nullptr) {
-    GTEST_SKIP() << "Skip manual test case.";
-  }
-
   auto fs = Fs();
   auto& partition_cache = fs->GetPartitionCache();
   auto& inode_cache = fs->GetInodeCache();
@@ -915,9 +976,9 @@ TEST_F(FileSystemTest, GetXAttr) {
   ASSERT_EQ(xattr.size(), actual_xattr.size()) << "xattr not equal.";
 
   std::string value;
-  status = fs->GetXAttr(ctx, inode->Ino(), "key1", value);
+  status = fs->GetXAttr(ctx, inode->Ino(), "key3", value);
   ASSERT_TRUE(status.ok()) << "get xattr fail, error: " << status.error_str();
-  ASSERT_EQ("value1", value) << "xattr value not equal.";
+  ASSERT_EQ("value3", value) << "xattr value not equal.";
 }
 
 // /
@@ -929,10 +990,6 @@ TEST_F(FileSystemTest, GetXAttr) {
 // |  |--file2
 // rename dir1/file1 to dir1/file2
 TEST_F(FileSystemTest, RenameWithSameDir) {
-  if (getenv("MANUAL_TEST") == nullptr) {
-    GTEST_SKIP() << "Skip manual test case.";
-  }
-
   auto fs = Fs();
   auto& partition_cache = fs->GetPartitionCache();
   auto& inode_cache = fs->GetInodeCache();
@@ -989,7 +1046,10 @@ TEST_F(FileSystemTest, RenameWithSameDir) {
   auto status = fs->Rename(ctx, param, rename_result);
   ASSERT_TRUE(status.ok()) << "rename fail, error: " << status.error_str();
 
+  std::vector<EntryWithNameOut> entries;
+  ASSERT_TRUE(fs->ReadDir(ctx, old_parent_ino, "", 0, false, entries).ok());
   auto partition = partition_cache.Get(old_parent_ino);
+  ASSERT_TRUE(partition != nullptr);
   Dentry dentry;
   status = partition->Get(old_name, dentry);
   ASSERT_FALSE(status.ok())
@@ -1012,10 +1072,6 @@ TEST_F(FileSystemTest, RenameWithSameDir) {
 // |  |--file1
 // rename dir1/file1 to dir2/file1
 TEST_F(FileSystemTest, RenameWithDiffDir) {
-  if (getenv("MANUAL_TEST") == nullptr) {
-    GTEST_SKIP() << "Skip manual test case.";
-  }
-
   auto fs = Fs();
   auto& partition_cache = fs->GetPartitionCache();
   auto& inode_cache = fs->GetInodeCache();
@@ -1084,7 +1140,7 @@ TEST_F(FileSystemTest, RenameWithDiffDir) {
   FileSystem::RenameParam param;
   param.old_parent = old_parent_ino;
   param.old_name = old_name;
-  param.new_parent = old_parent_ino;
+  param.new_parent = new_parent_ino;
   param.new_name = new_name;
 
   FileSystem::RenameResult rename_result;
@@ -1092,7 +1148,10 @@ TEST_F(FileSystemTest, RenameWithDiffDir) {
   ASSERT_TRUE(status.ok()) << "rename fail, error: " << status.error_str();
 
   {
+    std::vector<EntryWithNameOut> entries;
+    ASSERT_TRUE(fs->ReadDir(ctx, old_parent_ino, "", 0, false, entries).ok());
     auto partition = partition_cache.Get(old_parent_ino);
+    ASSERT_TRUE(partition != nullptr);
     Dentry dentry;
     auto status = partition->Get(old_name, dentry);
     ASSERT_FALSE(status.ok())
@@ -1100,7 +1159,10 @@ TEST_F(FileSystemTest, RenameWithDiffDir) {
   }
 
   {
+    std::vector<EntryWithNameOut> entries;
+    ASSERT_TRUE(fs->ReadDir(ctx, new_parent_ino, "", 0, false, entries).ok());
     auto partition = partition_cache.Get(new_parent_ino);
+    ASSERT_TRUE(partition != nullptr);
     Dentry dentry;
     auto status = partition->Get(new_name, dentry);
     ASSERT_TRUE(status.ok())
@@ -1794,6 +1856,607 @@ TEST_F(FileSystemTest, CalcDirStatNoPageBoundaryDoubleCount) {
   ASSERT_TRUE(fs->CalcDirStat(bypass_ctx, d, st).ok());
   EXPECT_EQ(st.inodes(),
             kCount);  // exactly kCount, not kCount + (boundary dups)
+}
+
+// Every worker owns a private directory.  The operation order is random, but
+// each operation has a pre-created, independent fixture so failures are real
+// filesystem failures rather than expected dependency races.
+TEST_F(FileSystemTest, ChaosOperations) {
+  if (getenv("SLOW_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip slow test case.";
+  }
+
+  auto fs = Fs();
+  constexpr int kWorkerCount = 8;
+  constexpr int kRoundCount = 1000;
+
+  struct Fixture {
+    std::string prefix;
+    std::string file_name;
+    std::string src_name;
+    std::string dst_name;
+    std::string unlink_name;
+    std::string batch_unlink_a;
+    std::string batch_unlink_b;
+    std::string rmdir_name;
+    std::string rename_src;
+    std::string rename_dst;
+    std::string readlink_name;
+    Ino dir{0};
+    Ino file{0};
+    Ino src{0};
+    Ino dst{0};
+    Ino unlink_ino{0};
+    Ino rmdir_ino{0};
+    Ino rename_ino{0};
+    Ino readlink_ino{0};
+    uint64_t first_slice_id{0};
+    uint64_t second_slice_id{0};
+    std::string release_session;
+  };
+
+  std::vector<Fixture> fixtures(kWorkerCount * kRoundCount);
+  auto make_dir = [&](Ino parent, const std::string& name) -> Ino {
+    FileSystem::MkDirParam param;
+    param.parent = parent;
+    param.name = name;
+    param.mode = 0755;
+    param.uid = 1;
+    param.gid = 1;
+    EntryWithPaOut out;
+    Context ctx("chaos-setup-" + name, "ChaosSetup");
+    auto status = fs->MkDir(ctx, param, out);
+    if (!status.ok()) {
+      ADD_FAILURE() << "mkdir " << name << ": " << status.error_str();
+      return 0;
+    }
+    return out.attr.ino();
+  };
+  auto make_file = [&](Ino parent, const std::string& name) -> Ino {
+    FileSystem::MkNodParam param;
+    param.parent = parent;
+    param.name = name;
+    param.mode = 0644;
+    param.uid = 1;
+    param.gid = 1;
+    EntryWithPaOut out;
+    Context ctx("chaos-setup-" + name, "ChaosSetup");
+    auto status = fs->MkNod(ctx, param, out);
+    if (!status.ok()) {
+      ADD_FAILURE() << "mknod " << name << ": " << status.error_str();
+      return 0;
+    }
+    return out.attr.ino();
+  };
+
+  for (int round = 0; round < kRoundCount; ++round) {
+    for (int worker = 0; worker < kWorkerCount; ++worker) {
+      auto& f = fixtures[round * kWorkerCount + worker];
+      f.prefix = fmt::format("chaos_ops_{}_{}", round, worker);
+      f.file_name = f.prefix + "_file";
+      f.src_name = f.prefix + "_src";
+      f.dst_name = f.prefix + "_dst";
+      f.unlink_name = f.prefix + "_unlink";
+      f.batch_unlink_a = f.prefix + "_batch_unlink_a";
+      f.batch_unlink_b = f.prefix + "_batch_unlink_b";
+      f.rmdir_name = f.prefix + "_rmdir";
+      f.rename_src = f.prefix + "_rename_src";
+      f.rename_dst = f.prefix + "_rename_dst";
+      f.readlink_name = f.prefix + "_readlink";
+      f.release_session = f.prefix + "_release_session";
+
+      f.dir = make_dir(kRootIno, f.prefix);
+      ASSERT_GT(f.dir, 0u);
+      f.file = make_file(f.dir, f.file_name);
+      f.src = make_file(f.dir, f.src_name);
+      f.dst = make_file(f.dir, f.dst_name);
+      f.unlink_ino = make_file(f.dir, f.unlink_name);
+      ASSERT_GT(f.file, 0u);
+      ASSERT_GT(f.src, 0u);
+      ASSERT_GT(f.dst, 0u);
+      ASSERT_GT(f.unlink_ino, 0u);
+      ASSERT_GT(make_file(f.dir, f.batch_unlink_a), 0u);
+      ASSERT_GT(make_file(f.dir, f.batch_unlink_b), 0u);
+      f.rmdir_ino = make_dir(f.dir, f.rmdir_name);
+      ASSERT_GT(f.rmdir_ino, 0u);
+      f.rename_ino = make_file(f.dir, f.rename_src);
+      ASSERT_GT(f.rename_ino, 0u);
+
+      {
+        EntryWithPaOut out;
+        Context ctx("chaos-setup-" + f.readlink_name, "ChaosSetup");
+        auto status = fs->Symlink(ctx, "/chaos-target", f.dir, f.readlink_name,
+                                  1, 1, out);
+        ASSERT_TRUE(status.ok()) << status.error_str();
+        f.readlink_ino = out.attr.ino();
+      }
+
+      // Give the slice operations a stable chunk with two slices.  The IDs are
+      // deliberately outside the test generator's normal range and unique per
+      // worker.
+      f.first_slice_id = (1ULL << 50) + (round * kWorkerCount + worker) * 100;
+      f.second_slice_id = f.first_slice_id + 1;
+      auto seed_slices = [&](Ino ino, uint64_t first_id, int count) {
+        DeltaSliceEntry delta;
+        delta.set_chunk_index(0);
+        delta.set_curr_version(0);
+        for (int i = 0; i < count; ++i) {
+          auto* slice = delta.add_slices();
+          slice->set_id(first_id + i);
+          slice->set_off(0);
+          slice->set_size(4096);
+          slice->set_pos(i * 4096);
+          slice->set_len(4096);
+        }
+        EntryWithChunkOut out;
+        Context ctx(fmt::format("chaos-setup-slice-{}", ino), "ChaosSetup");
+        auto status = fs->WriteSlice(ctx, ino, {delta}, out);
+        ASSERT_TRUE(status.ok()) << status.error_str();
+        ASSERT_EQ(out.attr.ino(), ino);
+      };
+      seed_slices(f.file, f.first_slice_id, 2);
+      seed_slices(f.src, f.first_slice_id + 10, 1);
+
+      {
+        Inode::XAttrMap xattrs;
+        xattrs["chaos.seed"] = "value";
+        xattrs["chaos.remove"] = "value";
+        EntryOut out;
+        Context ctx("chaos-setup-xattr-" + std::to_string(worker),
+                    "ChaosSetup");
+        auto status = fs->SetXAttr(ctx, f.file, xattrs, out);
+        ASSERT_TRUE(status.ok()) << status.error_str();
+      }
+
+      {
+        FileSystem::OpenParam param;
+        param.flags = O_RDWR;
+        param.session_id = f.release_session;
+        EntryOutForOpen out;
+        Context ctx("chaos-setup-open-" + std::to_string(worker), "ChaosSetup");
+        auto status = fs->Open(ctx, f.file, param, out);
+        ASSERT_TRUE(status.ok()) << status.error_str();
+        ASSERT_EQ(out.attr.ino(), f.file);
+      }
+    }
+  }
+
+  std::mutex failures_mutex;
+  std::vector<std::string> failures;
+  auto fail = [&](const std::string& message) {
+    std::lock_guard<std::mutex> lock(failures_mutex);
+    failures.push_back(message);
+  };
+  auto check_status = [&](int worker, const char* operation,
+                          const Status& status) {
+    if (!status.ok()) {
+      fail(fmt::format("worker {} {}: {}", worker, operation,
+                       status.error_str()));
+      return false;
+    }
+    return true;
+  };
+
+  struct OperationContext {
+    OperationContext(int worker, const char* name)
+        : context(fmt::format("chaos-{}-{}", worker, name), "ChaosOperations") {
+    }
+    operator Context&() { return context; }
+    Context context;
+  };
+
+  std::atomic<int> ready_workers{0};
+  std::atomic<bool> start_workers{false};
+  std::vector<std::thread> workers;
+  workers.reserve(kWorkerCount);
+  for (int worker = 0; worker < kWorkerCount; ++worker) {
+    workers.emplace_back([&, worker] {
+      ready_workers.fetch_add(1);
+      while (!start_workers.load()) std::this_thread::yield();
+
+      for (int round = 0; round < kRoundCount; ++round) {
+        const auto& f = fixtures[round * kWorkerCount + worker];
+        std::vector<int> operations(27);
+        std::iota(operations.begin(), operations.end(), 0);
+        std::mt19937 random(
+            static_cast<uint32_t>(0xd1a0f5 + round * kWorkerCount + worker));
+        std::shuffle(operations.begin(), operations.end(), random);
+
+        for (int operation : operations) {
+          auto context = [&](const char* name) {
+            return OperationContext(worker, name);
+          };
+          switch (operation) {
+            case 0: {  // Lookup
+              EntryOut out;
+              auto status =
+                  fs->Lookup(context("lookup"), f.dir, f.file_name, out);
+              if (check_status(worker, "Lookup", status) &&
+                  out.attr.ino() != f.file) {
+                fail(fmt::format("worker {} Lookup returned ino {} (want {})",
+                                 worker, out.attr.ino(), f.file));
+              }
+              break;
+            }
+            case 1: {  // BatchCreate
+              std::vector<FileSystem::MkNodParam> params(2);
+              for (int i = 0; i < 2; ++i) {
+                params[i].parent = f.dir;
+                params[i].name = fmt::format("{}_batch_create_{}", f.prefix, i);
+                params[i].mode = 0644;
+              }
+              EntriesWithPaOut out;
+              auto status =
+                  fs->BatchCreate(context("batch-create"), f.dir, params, out);
+              if (check_status(worker, "BatchCreate", status)) {
+                if (out.attrs.size() != 2) {
+                  fail(fmt::format("worker {} BatchCreate returned {} attrs",
+                                   worker, out.attrs.size()));
+                }
+                for (const auto& attr : out.attrs) {
+                  if (attr.type() != pb::mds::FileType::FILE || attr.ino() == 0)
+                    fail(fmt::format("worker {} BatchCreate returned bad attr",
+                                     worker));
+                }
+              }
+              break;
+            }
+            case 2: {  // MkNod
+              FileSystem::MkNodParam param;
+              param.parent = f.dir;
+              param.name = f.prefix + "_mknod";
+              param.mode = 0644;
+              EntryWithPaOut out;
+              auto status = fs->MkNod(context("mknod"), param, out);
+              if (check_status(worker, "MkNod", status) &&
+                  (out.attr.ino() == 0 ||
+                   out.attr.type() != pb::mds::FileType::FILE)) {
+                fail(fmt::format("worker {} MkNod returned bad attr", worker));
+              }
+              break;
+            }
+            case 3: {  // BatchMkNod
+              std::vector<FileSystem::MkNodParam> params(2);
+              for (int i = 0; i < 2; ++i) {
+                params[i].parent = f.dir;
+                params[i].name = fmt::format("{}_batch-mknod_{}", f.prefix, i);
+                params[i].mode = 0644;
+              }
+              EntriesWithPaOut out;
+              auto status = fs->BatchMkNod(context("batch-mknod"), params, out);
+              if (check_status(worker, "BatchMkNod", status) &&
+                  out.attrs.size() != 2) {
+                fail(fmt::format("worker {} BatchMkNod returned {} attrs",
+                                 worker, out.attrs.size()));
+              }
+              break;
+            }
+            case 4: {  // Open
+              FileSystem::OpenParam param;
+              param.flags = O_RDWR;
+              param.session_id = f.prefix + "_open_session";
+              EntryOutForOpen out;
+              auto status = fs->Open(context("open"), f.file, param, out);
+              if (check_status(worker, "Open", status) &&
+                  out.attr.ino() != f.file) {
+                fail(fmt::format("worker {} Open returned wrong ino", worker));
+              }
+              break;
+            }
+            case 5: {  // Release
+              auto status =
+                  fs->Release(context("release"), f.file, f.release_session);
+              check_status(worker, "Release", status);
+              break;
+            }
+            case 6: {  // FlushFile
+              FileSystem::FlushFileParam param;
+              param.length = 12345 + worker;
+              EntryWithFileChangeOut out;
+              auto status = fs->FlushFile(context("flush"), f.file, param, out);
+              if (check_status(worker, "FlushFile", status) &&
+                  out.attr.length() != param.length) {
+                fail(fmt::format("worker {} FlushFile length {} (want {})",
+                                 worker, out.attr.length(), param.length));
+              }
+              break;
+            }
+            case 7: {  // MkDir
+              FileSystem::MkDirParam param;
+              param.parent = f.dir;
+              param.name = f.prefix + "_mkdir";
+              param.mode = 0755;
+              EntryWithPaOut out;
+              auto status = fs->MkDir(context("mkdir"), param, out);
+              if (check_status(worker, "MkDir", status) &&
+                  out.attr.type() != pb::mds::FileType::DIRECTORY) {
+                fail(fmt::format("worker {} MkDir returned non-directory",
+                                 worker));
+              }
+              break;
+            }
+            case 8: {  // BatchMkDir
+              std::vector<FileSystem::MkDirParam> params(2);
+              for (int i = 0; i < 2; ++i) {
+                params[i].parent = f.dir;
+                params[i].name = fmt::format("{}_batch-mkdir_{}", f.prefix, i);
+                params[i].mode = 0755;
+              }
+              EntriesWithPaOut out;
+              auto status = fs->BatchMkDir(context("batch-mkdir"), params, out);
+              if (check_status(worker, "BatchMkDir", status) &&
+                  out.attrs.size() != 2) {
+                fail(fmt::format("worker {} BatchMkDir returned {} attrs",
+                                 worker, out.attrs.size()));
+              }
+              break;
+            }
+            case 9: {  // RmDir
+              EntryWithPaOut out;
+              auto status =
+                  fs->RmDir(context("rmdir"), f.dir, f.rmdir_name, out);
+              if (check_status(worker, "RmDir", status) &&
+                  out.attr.ino() != f.rmdir_ino) {
+                fail(fmt::format("worker {} RmDir returned wrong ino", worker));
+              }
+              break;
+            }
+            case 10: {  // ReadDir
+              std::vector<EntryWithNameOut> entries;
+              auto status =
+                  fs->ReadDir(context("readdir"), f.dir, "", 0, false, entries);
+              if (check_status(worker, "ReadDir", status)) {
+                const bool found = std::any_of(
+                    entries.begin(), entries.end(), [&](const auto& entry) {
+                      return entry.name == f.file_name &&
+                             entry.attr.ino() == f.file;
+                    });
+                if (!found)
+                  fail(fmt::format("worker {} ReadDir missed file", worker));
+              }
+              break;
+            }
+            case 11: {  // Link
+              EntryWithPaOut out;
+              auto status = fs->Link(context("link"), f.file, f.dir,
+                                     f.prefix + "_link", out);
+              if (check_status(worker, "Link", status) &&
+                  out.attr.ino() != f.file) {
+                fail(fmt::format("worker {} Link returned wrong ino", worker));
+              }
+              break;
+            }
+            case 12: {  // UnLink
+              EntryWithPaOut out;
+              auto status =
+                  fs->UnLink(context("unlink"), f.dir, f.unlink_name, out);
+              if (check_status(worker, "UnLink", status) &&
+                  out.attr.ino() != f.unlink_ino) {
+                fail(
+                    fmt::format("worker {} UnLink returned wrong ino", worker));
+              }
+              break;
+            }
+            case 13: {  // BatchUnLink
+              EntriesWithPaOut out;
+              auto status =
+                  fs->BatchUnLink(context("batch-unlink"), f.dir,
+                                  {f.batch_unlink_a, f.batch_unlink_b}, out);
+              if (check_status(worker, "BatchUnLink", status) &&
+                  out.attrs.size() != 2) {
+                fail(fmt::format("worker {} BatchUnLink returned {} attrs",
+                                 worker, out.attrs.size()));
+              }
+              break;
+            }
+            case 14: {  // Symlink
+              EntryWithPaOut out;
+              auto status =
+                  fs->Symlink(context("symlink"), "/chaos-created-target",
+                              f.dir, f.prefix + "_symlink", 1, 1, out);
+              if (check_status(worker, "Symlink", status) &&
+                  (out.attr.type() != pb::mds::FileType::SYM_LINK ||
+                   out.attr.symlink() != "/chaos-created-target")) {
+                fail(
+                    fmt::format("worker {} Symlink returned bad attr", worker));
+              }
+              break;
+            }
+            case 15: {  // ReadLink
+              std::string link;
+              auto status =
+                  fs->ReadLink(context("readlink"), f.readlink_ino, link);
+              if (check_status(worker, "ReadLink", status) &&
+                  link != "/chaos-target") {
+                fail(fmt::format("worker {} ReadLink returned {}", worker,
+                                 link));
+              }
+              break;
+            }
+            case 16: {  // SetAttr
+              FileSystem::SetAttrParam param;
+              param.to_set = kSetAttrMode;
+              param.attr.set_fs_id(fs->FsId());
+              param.attr.set_ino(f.file);
+              param.attr.set_mode(0600);
+              EntryWithChunkOut out;
+              auto status = fs->SetAttr(context("setattr"), f.file, param, out);
+              if (check_status(worker, "SetAttr", status) &&
+                  out.attr.mode() != 0600) {
+                fail(fmt::format("worker {} SetAttr mode {}", worker,
+                                 out.attr.mode()));
+              }
+              break;
+            }
+            case 17: {  // GetAttr
+              EntryOut out;
+              auto status = fs->GetAttr(context("getattr"), f.file, out);
+              if (check_status(worker, "GetAttr", status) &&
+                  out.attr.ino() != f.file) {
+                fail(fmt::format("worker {} GetAttr returned wrong ino",
+                                 worker));
+              }
+              break;
+            }
+            case 18: {  // GetXAttr
+              Inode::XAttrMap xattrs;
+              auto status = fs->GetXAttr(context("getxattr"), f.file, xattrs);
+              if (check_status(worker, "GetXAttr", status) &&
+                  xattrs["chaos.seed"] != "value") {
+                fail(fmt::format("worker {} GetXAttr lost seed", worker));
+              }
+              break;
+            }
+            case 19: {  // SetXAttr
+              Inode::XAttrMap xattrs;
+              xattrs["chaos.set"] = "value";
+              EntryOut out;
+              auto status =
+                  fs->SetXAttr(context("setxattr"), f.file, xattrs, out);
+              if (check_status(worker, "SetXAttr", status) &&
+                  out.attr.xattrs().find("chaos.set") ==
+                      out.attr.xattrs().end()) {
+                fail(fmt::format("worker {} SetXAttr returned no value",
+                                 worker));
+              }
+              break;
+            }
+            case 20: {  // RemoveXAttr
+              EntryOut out;
+              auto status = fs->RemoveXAttr(context("removexattr"), f.file,
+                                            "chaos.remove", out);
+              if (check_status(worker, "RemoveXAttr", status) &&
+                  out.attr.xattrs().find("chaos.remove") !=
+                      out.attr.xattrs().end()) {
+                fail(fmt::format("worker {} RemoveXAttr kept value", worker));
+              }
+              break;
+            }
+            case 21: {  // Rename
+              FileSystem::RenameParam param;
+              param.old_parent = f.dir;
+              param.old_name = f.rename_src;
+              param.new_parent = f.dir;
+              param.new_name = f.rename_dst;
+              FileSystem::RenameResult out;
+              auto status = fs->Rename(context("rename"), param, out);
+              if (check_status(worker, "Rename", status)) {
+                EntryOut renamed;
+                auto lookup = fs->Lookup(context("rename-verify"), f.dir,
+                                         f.rename_dst, renamed);
+                if (check_status(worker, "Rename verify", lookup) &&
+                    renamed.attr.ino() != f.rename_ino) {
+                  fail(fmt::format("worker {} Rename returned ino {} (want {})",
+                                   worker, renamed.attr.ino(), f.rename_ino));
+                }
+              }
+              break;
+            }
+            case 22: {  // WriteSlice
+              DeltaSliceEntry delta;
+              delta.set_chunk_index(0);
+              delta.set_curr_version(1);
+              auto* slice = delta.add_slices();
+              slice->set_id(f.first_slice_id + 2);
+              slice->set_off(0);
+              slice->set_size(1024);
+              slice->set_pos(8192);
+              slice->set_len(1024);
+              EntryWithChunkOut out;
+              auto status =
+                  fs->WriteSlice(context("writeslice"), f.file, {delta}, out);
+              if (check_status(worker, "WriteSlice", status) &&
+                  (out.attr.ino() != f.file || out.chunks.empty())) {
+                fail(fmt::format("worker {} WriteSlice returned bad result",
+                                 worker));
+              }
+              break;
+            }
+            case 23: {  // ReadSlice
+              ChunkDescriptor descriptor;
+              descriptor.set_index(0);
+              descriptor.set_version(1);
+              std::vector<ChunkEntry> chunks;
+              auto status = fs->ReadSlice(context("readslice"), f.file,
+                                          {descriptor}, chunks);
+              const bool found = std::any_of(
+                  chunks.begin(), chunks.end(),
+                  [](const auto& chunk) { return chunk.index() == 0; });
+              if (check_status(worker, "ReadSlice", status) && !found) {
+                fail(fmt::format("worker {} ReadSlice missed chunk", worker));
+              }
+              break;
+            }
+            case 24: {  // CopyFileRange
+              FileSystem::CopyFileRangeParam param{.src_ino = f.src,
+                                                   .dst_ino = f.dst,
+                                                   .src_off = 0,
+                                                   .dst_off = 0,
+                                                   .len = 4096};
+              EntryWithChunkOut out;
+              auto status = fs->CopyFileRange(context("copy"), param, out);
+              if (check_status(worker, "CopyFileRange", status) &&
+                  (out.delta_bytes != 4096 || out.chunks.empty())) {
+                fail(fmt::format("worker {} CopyFileRange copied {} bytes",
+                                 worker, out.delta_bytes));
+              }
+              break;
+            }
+            case 25: {  // Fallocate
+              EntryOut before;
+              auto get_status =
+                  fs->GetAttr(context("fallocate-before"), f.dst, before);
+              if (!check_status(worker, "Fallocate GetAttr", get_status)) break;
+              EntryWithChunkOut out;
+              auto status = fs->Fallocate(context("fallocate"), f.dst, 0, 8192,
+                                          4096, out);
+              const uint64_t want =
+                  std::max<uint64_t>(before.attr.length(), 12288);
+              if (check_status(worker, "Fallocate", status) &&
+                  out.attr.length() != want) {
+                fail(fmt::format("worker {} Fallocate length {} (want {})",
+                                 worker, out.attr.length(), want));
+              }
+              break;
+            }
+            case 26: {  // CompactChunk
+              FileSystem::CompactChunkParam param;
+              param.start_pos = 0;
+              param.start_slice_id = f.first_slice_id;
+              param.end_pos = 1;
+              param.end_slice_id = f.second_slice_id;
+              SliceEntry replacement;
+              replacement.set_id(f.first_slice_id + 3);
+              replacement.set_size(8192);
+              replacement.set_pos(0);
+              replacement.set_len(8192);
+              param.new_slices.push_back(replacement);
+              ChunkEntry out;
+              auto status =
+                  fs->CompactChunk(context("compact"), f.file, 0, param, out);
+              if (check_status(worker, "CompactChunk", status) &&
+                  (out.index() != 0 || out.slices_size() == 0)) {
+                fail(fmt::format("worker {} CompactChunk returned bad chunk",
+                                 worker));
+              }
+              break;
+            }
+            default:
+              fail(fmt::format("worker {} unknown operation {}", worker,
+                               operation));
+          }
+          std::this_thread::yield();
+        }
+      }
+    });
+  }
+  while (ready_workers.load() != kWorkerCount) std::this_thread::yield();
+  start_workers.store(true);
+  for (auto& worker : workers) worker.join();
+
+  std::string failure_message;
+  for (const auto& failure : failures) failure_message += "\n" + failure;
+  ASSERT_TRUE(failures.empty()) << failure_message;
 }
 
 // --- Performance test ---

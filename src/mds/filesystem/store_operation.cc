@@ -4443,6 +4443,8 @@ void OperationProcessor::ProcessOperation(Dispatcher& dispatcher) {
   while (operations.Dequeue(operation)) {
     LOG_DEBUG << fmt::format("[operation] pending operation type({}) ino({}).", operation->OpName(),
                              operation->GetIno());
+    operation->SetStatus(Status(pb::error::ESERVICE_STOPPED, "operation stopped"));
+    operation->NotifyEvent();
   }
 }
 
