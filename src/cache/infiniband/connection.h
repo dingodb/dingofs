@@ -39,11 +39,18 @@ namespace dingofs {
 namespace cache {
 namespace infiniband {
 
+class Connection;
+using ConnectionUPtr = std::unique_ptr<Connection>;
+
 class Connection {
  public:
   using CompletionHandler = std::function<void(WorkCompletions)>;
 
-  Connection(QueuePairUPtr queue_pair, CompletionQueueUPtr completion_queue);
+  Connection(QueuePairUPtr queue_pair, CompletionQueueUPtr completion_queue,
+             RDMABufferPoolUPtr send_buffer_pool,
+             RDMABufferPoolUPtr recv_buffer_pool);
+  static ConnectionUPtr Create(QueuePairUPtr queue_pair,
+                               CompletionQueueUPtr completion_queue);
 
   Status PostSendWorkRequest(const SendWorkRequest& entry);
   Status PostSendWorkRequests(const std::vector<SendWorkRequest>& entries);
@@ -64,13 +71,11 @@ class Connection {
                                   ibv_sge* sge);
   bool PollCompletionQueue(CompletionHandler handler);
 
-  std::unique_ptr<RDMABufferPool> send_buffer_pool_;
-  std::unique_ptr<RDMABufferPool> recv_buffer_pool_;
-  std::unique_ptr<CompletionQueue> completion_queue_;
-  std::unique_ptr<QueuePair> queue_pair_;
+  RDMABufferPoolUPtr send_buffer_pool_;
+  RDMABufferPoolUPtr recv_buffer_pool_;
+  CompletionQueueUPtr completion_queue_;
+  QueuePairUPtr queue_pair_;
 };
-
-using ConnectionUPtr = std::unique_ptr<Connection>;
 
 }  // namespace infiniband
 }  // namespace cache

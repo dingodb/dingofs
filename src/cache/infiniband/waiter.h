@@ -71,12 +71,13 @@ class Waiters {
     return waiter;
   }
 
-  void GetAll(std::vector<Waiter*>* waiters) {
+  void TakeAll(std::vector<Waiter*>* waiters) {
     for (auto& shard : shards_) {
       BAIDU_SCOPED_LOCK(shard.mutex);
       for (const auto [_, waiter] : shard.index) {
         waiters->emplace_back(waiter);
       }
+      shard.index.clear();
     }
   }
 

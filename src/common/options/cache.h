@@ -82,7 +82,8 @@ DECLARE_double(free_space_ratio);
 // Expiration time for cached blocks in seconds. Staged blocks are not expired.
 DECLARE_uint32(cache_expire_s);
 
-// Cache eviction policy: sieve | s3fifo | 2random | lru | none (restart to change).
+// Cache eviction policy: sieve | s3fifo | 2random | lru | none (restart to
+// change).
 DECLARE_string(cache_eviction);
 
 // Interval for scanning and removing expired cached blocks in milliseconds.
@@ -280,6 +281,10 @@ DECLARE_int32(rdma_rpc_timeout_ms);
 // Signal one client request SEND every N requests. 0 disables periodic
 // signaled request SENDs.
 DECLARE_uint32(rdma_client_signal_request_send_every);
+
+// Interval in seconds between server keepalives sent on every RDMA session to
+// detect vanished peers. 0 disables keepalive.
+DECLARE_uint32(rdma_server_keepalive_interval_s);
 
 }  // namespace infiniband
 

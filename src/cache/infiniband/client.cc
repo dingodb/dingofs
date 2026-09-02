@@ -89,8 +89,7 @@ ConnectionUPtr Dialer::Dial(const std::string& address) {
     return nullptr;
   }
 
-  return std::make_unique<Connection>(std::move(queue_pair),
-                                      std::move(completion_queue));
+  return Connection::Create(std::move(queue_pair), std::move(completion_queue));
 }
 
 Status Dialer::SyncConnManagementMeta(const std::string& address,
@@ -150,19 +149,22 @@ Status Client::Connect(const std::string& address) {
   }
 
   int fd = conn->GetFd();
-  session_ = std::make_shared<ClientSession>(std::move(conn));
-  auto status = session_->Start();
+  auto session = std::make_shared<ClientSession>(std::move(conn));
+  auto status = session->Start();
   if (!status.ok()) {
+    session->Shutdown();
     return status;
   }
 
-  status = GetGlobalEventDispatcher(fd).AddEvent(fd, EventType::kReadEvent,
-                                                 session_);
+  status =
+      GetGlobalEventDispatcher(fd).AddEvent(fd, EventType::kReadEvent, session);
   if (!status.ok()) {
-    session_->Shutdown();
+    session->Shutdown();
     LOG(ERROR) << "Fail to add event to dispatcher";
     return status;
   }
+
+  session_ = std::move(session);
   return Status::OK();
 }
 

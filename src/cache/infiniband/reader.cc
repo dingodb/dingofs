@@ -55,13 +55,13 @@ Status BodyReader::CheckSource(const std::vector<Region>& regions,
   size_t total_length = 0;
   for (const auto& region : regions) {
     if (region.addr == 0 || region.rkey == 0) {
-      return Status::Internal("request rdma memory context is missing");
+      return Status::InvalidParam("request rdma memory context is missing");
     }
     total_length += region.length;
   }
 
   if (regions.empty() || total_length != size) {
-    return Status::Internal(
+    return Status::InvalidParam(
         "request attachment size mismatches advertised rdma regions");
   }
   return Status::OK();

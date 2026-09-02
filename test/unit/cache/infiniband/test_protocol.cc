@@ -27,6 +27,7 @@
 #include <string_view>
 #include <vector>
 
+#include "cache/helper/infiniband.h"
 #include "cache/infiniband/common.h"
 #include "cache/infiniband/protocol.h"
 #include "cache/infiniband/service.h"
@@ -71,20 +72,7 @@ class StubBlockCacheService : public pb::cache::BlockCacheService {
 };
 }  // namespace
 
-// Owns the backing storage that an RDMABuffer points at.
-class ScopedBuffer {
- public:
-  explicit ScopedBuffer(uint32_t capacity) : storage_(capacity, 0) {
-    buf_.data = storage_.data();
-    buf_.capacity = capacity;
-    buf_.length = 0;
-  }
-  RDMABuffer* get() { return &buf_; }
-
- private:
-  std::vector<char> storage_;
-  RDMABuffer buf_;
-};
+using test::ScopedBuffer;
 
 class ProtocolTest : public ::testing::Test {};
 
@@ -165,6 +153,25 @@ TEST_F(ProtocolTest, ResponseRoundTrip) {
     EXPECT_EQ(parsed_meta.error_message(), "boom");
     EXPECT_EQ(view.size(), 0u);
   }
+}
+
+TEST_F(ProtocolTest, KeepaliveFrame) {
+  ScopedBuffer sb(Protocol::kHeaderSize);  // header only, no meta, no body
+  pb::infiniband::ResponseMeta meta;
+  ASSERT_TRUE(Protocol::SerializeResponse(0, meta, nullptr, sb.get()).ok());
+  EXPECT_EQ(sb.get()->length, Protocol::kHeaderSize);
+
+  uint64_t id = 99;
+  ASSERT_TRUE(Protocol::PeekCorrelationId(sb.get(), &id).ok());
+  EXPECT_EQ(id, 0u);
+
+  ResponseParser parser;
+  ResponseParser::Result result;
+  pb::cache::PingResponse response;
+  ASSERT_TRUE(parser.Parse(sb.get(), &result, &response).ok());
+  EXPECT_EQ(result.correlation_id, 0u);
+  EXPECT_EQ(result.error_code, ErrorCode::Ok);
+  EXPECT_EQ(result.attachment_size, 0u);
 }
 
 TEST_F(ProtocolTest, SerializeRejectsTooSmallBuffer) {

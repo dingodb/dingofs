@@ -30,6 +30,7 @@
 
 #include <cerrno>
 #include <cstdint>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -70,24 +71,21 @@ Status ClientSession::Start() {
 }
 
 void ClientSession::Shutdown() {
+  if (closed_.exchange(true, std::memory_order_acq_rel)) {
+    return;
+  }
+
   GetGlobalEventDispatcher(conn_->GetFd()).DelEvent(conn_->GetFd());
 
   CHECK_EQ(0, bthread::execution_queue_stop(queue_id_));
   CHECK_EQ(0, bthread::execution_queue_join(queue_id_));
 
-  std::vector<Waiter*> waiters;
-  waiters_->GetAll(&waiters);
-  for (auto* waiter : waiters) {
-    SetFailed(waiter->ctx.cntl, ErrorCode::InternalError,
-              "rdma session shutdown");
-    waiter->notify.signal();
-  }
+  FailWaiters(ErrorCode::InternalError, "rdma session shutdown");
 }
 
 void ClientSession::HandleEvent() {
   conn_->HandleCompletion([this](WorkCompletions cqes) {
     int rc = bthread::execution_queue_execute(queue_id_, cqes);
-    // TODO: close graceful
     LOG_IF(ERROR, rc != 0) << "Drop " << cqes.size()
                            << " work completions: execution queue stopped";
   });
@@ -102,6 +100,10 @@ int ClientSession::HandleWorkCompletion(
   auto* session = static_cast<ClientSession*>(meta);
   for (; iter; iter++) {
     for (const auto& wc : *iter) {
+      if (!wc.status.ok()) {
+        session->MarkBroken();
+      }
+
       auto* ctx = wc.ctx;
       if (ctx && ctx->on_completion) {
         ctx->on_completion(wc);
@@ -142,6 +144,11 @@ void ClientSession::DoCall(Controller* cntl, std::string_view service_name,
                            std::string_view method_name,
                            const google::protobuf::Message& request,
                            google::protobuf::Message* response) {
+  if (broken_.load(std::memory_order_relaxed)) {
+    SetFailed(cntl, ErrorCode::QueuePairError, "rdma session broken");
+    return;
+  }
+
   auto correlation_id = GetNextCorrelationId();
 
   Waiter waiter;
@@ -150,25 +157,32 @@ void ClientSession::DoCall(Controller* cntl, std::string_view service_name,
   waiter.ctx.response = response;
   waiters_->Add(correlation_id, &waiter);
 
-  SendRequest(cntl, correlation_id, service_name, method_name, request);
-  if (cntl->Failed()) {
-    waiters_->Remove(correlation_id);
+  ErrorCode error_code = ErrorCode::Ok;
+  auto status = SendRequest(cntl, correlation_id, service_name, method_name,
+                            request, &error_code);
+  if (!status.ok()) {
+    if (waiters_->Remove(correlation_id)) {
+      SetFailed(cntl, error_code, status.ToString());
+    } else {
+      waiter.notify.wait();
+    }
     return;
   }
 
   WaitingResponse(&waiter);
 }
 
-void ClientSession::SendRequest(Controller* cntl, uint64_t correlation_id,
-                                std::string_view service_name,
-                                std::string_view method_name,
-                                const google::protobuf::Message& request) {
+Status ClientSession::SendRequest(Controller* cntl, uint64_t correlation_id,
+                                  std::string_view service_name,
+                                  std::string_view method_name,
+                                  const google::protobuf::Message& request,
+                                  ErrorCode* error_code) {
   auto* send_buffer_pool = conn_->GetSendBufferPool();
   auto* send_buffer = send_buffer_pool->Alloc();
   if (send_buffer == nullptr) {
     LOG(ERROR) << "Fail to send request because send buffer is exhausted";
-    SetFailed(cntl, ErrorCode::NoMem, "alloc send buffer failed");
-    return;
+    *error_code = ErrorCode::NoMem;
+    return Status::OutOfMemory("alloc send buffer failed");
   }
 
   BRPC_SCOPE_EXIT { send_buffer_pool->Free(send_buffer); };
@@ -183,14 +197,16 @@ void ClientSession::SendRequest(Controller* cntl, uint64_t correlation_id,
   ctx.request = &request;
   auto status = request_serializer_->Serialize(ctx, send_buffer);
   if (!status.ok()) {
-    SetFailed(cntl, ErrorCode::ProtocolError, status.ToString());
-    return;
+    *error_code = ErrorCode::ProtocolError;
+    return status;
   }
 
   status = request_sender_->Send(send_buffer);
   if (!status.ok()) {
-    SetFailed(cntl, ErrorCode::QueuePairError, status.ToString());
+    *error_code = ErrorCode::QueuePairError;
+    return status;
   }
+  return Status::OK();
 }
 
 void ClientSession::WaitingResponse(Waiter* waiter) {
@@ -230,12 +246,25 @@ void ClientSession::WaitingResponse(Waiter* waiter) {
 }
 
 void ClientSession::MarkBroken() {
-  if (broken_.exchange(true, std::memory_order_relaxed)) {
+  if (broken_.exchange(true, std::memory_order_acq_rel)) {
     return;  // already fenced
   }
+
+  LOG(WARNING) << "Client session is broken: " << *conn_->GetQueuePair();
   auto status = conn_->GetQueuePair()->ModifyQpToError();
-  LOG_IF(WARNING, !status.ok())
-      << "Fail to fence qp on timeout: " << status.ToString();
+  LOG_IF(WARNING, !status.ok()) << "Fail to fence qp: " << status.ToString();
+
+  FailWaiters(ErrorCode::QueuePairError, "rdma session broken");
+}
+
+void ClientSession::FailWaiters(ErrorCode error_code,
+                                const std::string& reason) {
+  std::vector<Waiter*> waiters;
+  waiters_->TakeAll(&waiters);
+  for (auto* waiter : waiters) {
+    SetFailed(waiter->ctx.cntl, error_code, reason);
+    waiter->notify.signal();
+  }
 }
 
 void ClientSession::PrepRecvWorkRequest(RDMABuffer* recv_buffer,
@@ -251,6 +280,10 @@ void ClientSession::PrepRecvWorkRequest(RDMABuffer* recv_buffer,
 
 void ClientSession::OnResponseReceived(const WorkCompletion& wc,
                                        RDMABuffer* recv_buffer) {
+  if (!wc.status.ok()) {
+    return;
+  }
+
   BRPC_SCOPE_EXIT {
     RecvWorkRequest wr;
     PrepRecvWorkRequest(recv_buffer, &wr);
@@ -260,20 +293,14 @@ void ClientSession::OnResponseReceived(const WorkCompletion& wc,
     }
   };
 
-  if (!wc.status.ok()) {
-    LOG(ERROR) << "Fail to execute receive work request: "
-               << wc.status.ToString();
-    return;
-  }
-
   recv_buffer->length = wc.byte_len;
   uint64_t correlation_id;
   auto status = Protocol::PeekCorrelationId(recv_buffer, &correlation_id);
   if (!status.ok()) {
     LOG(ERROR) << "Receive invalid response which missing correlation_id";
     return;
-  } else if (correlation_id == 0) {  // TODO: log error message
-    LOG(ERROR) << "Receive response with 0 collrelation id";
+  } else if (correlation_id == 0) {
+    VLOG(9) << "Receive keepalive from " << *conn_->GetQueuePair();
     return;
   }
 

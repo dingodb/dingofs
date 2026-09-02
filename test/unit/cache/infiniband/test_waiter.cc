@@ -62,7 +62,7 @@ TEST(WaitersTest, AddTakeRemove) {
   EXPECT_EQ(waiters.Take(999), nullptr);  // never added
 }
 
-TEST(WaitersTest, GetAll) {
+TEST(WaitersTest, TakeAll) {
   Waiters waiters;
   std::vector<Waiter> storage(64);
   for (size_t i = 0; i < storage.size(); ++i) {
@@ -71,7 +71,7 @@ TEST(WaitersTest, GetAll) {
   }
 
   std::vector<Waiter*> all;
-  waiters.GetAll(&all);
+  waiters.TakeAll(&all);
   EXPECT_EQ(all.size(), storage.size());
 
   std::set<uint64_t> ids;
@@ -79,6 +79,10 @@ TEST(WaitersTest, GetAll) {
     ids.insert(w->correlation_id);
   }
   EXPECT_EQ(ids.size(), storage.size());
+
+  for (size_t i = 0; i < storage.size(); ++i) {  // ownership left the index
+    EXPECT_EQ(waiters.Take(i + 1), nullptr);
+  }
 }
 
 TEST(WaitersTest, DifferentIdsLandConsistently) {

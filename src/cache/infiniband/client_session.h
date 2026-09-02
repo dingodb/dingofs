@@ -29,6 +29,7 @@
 #include <atomic>
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <string_view>
 
 #include "cache/infiniband/common.h"
@@ -62,13 +63,17 @@ class ClientSession : public EventHandler {
                                   bthread::TaskIterator<WorkCompletions>& iter);
 
   Status OnEstablished();
-  void SendRequest(Controller* cntl, uint64_t correlation_id,
-                   std::string_view service_name, std::string_view method_name,
-                   const google::protobuf::Message& request);
+  Status SendRequest(Controller* cntl, uint64_t correlation_id,
+                     std::string_view service_name,
+                     std::string_view method_name,
+                     const google::protobuf::Message& request,
+                     pb::infiniband::ErrorCode* error_code);
   void WaitingResponse(Waiter* Waiter);
   // Idempotently transition the QP to error so the client HCA stops servicing
   // late one-sided RDMA from the server (memory-safety fence on timeout).
   void MarkBroken();
+  void FailWaiters(pb::infiniband::ErrorCode error_code,
+                   const std::string& reason);
   void PrepRecvWorkRequest(RDMABuffer* recv_buffer, RecvWorkRequest* wr);
   void OnResponseReceived(const WorkCompletion& wc, RDMABuffer* buffer);
   void ParseResponse(Controller* cntl, RDMABuffer* recv_buffer,
@@ -80,6 +85,7 @@ class ClientSession : public EventHandler {
 
   ConnectionUPtr conn_;
   std::atomic<bool> broken_{false};
+  std::atomic<bool> closed_{false};
   std::atomic<uint64_t> next_correlation_id_;
   std::vector<WorkRequestContext> recv_contexts_;
   RequestSerializerUPtr request_serializer_;

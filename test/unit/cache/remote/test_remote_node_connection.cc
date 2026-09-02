@@ -25,8 +25,10 @@
 #include <cerrno>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "cache/remote/remote_node_connection.h"
+#include "common/io_buffer.h"
 #include "common/options/cache.h"
 #include "dingofs/blockcache.pb.h"
 #include "dingofs/infiniband.pb.h"
@@ -118,6 +120,7 @@ TEST_F(RemoteNodeConnectionTest, TcpSendConnectedFailureMarksConnectionBroken) {
   EXPECT_NE(result.error_code, 0);
   EXPECT_FALSE(result.error_text.empty());
   EXPECT_TRUE(result.conn_broken);
+  EXPECT_TRUE(conn.IsConnected());  // brpc channel heals itself, keep it
 }
 
 TEST_F(RemoteNodeConnectionTest, RdmaSendWithoutConnectionFails) {
@@ -134,6 +137,96 @@ TEST_F(RemoteNodeConnectionTest, RdmaSendWithoutConnectionFails) {
   EXPECT_EQ(result.error_code, pb::infiniband::ErrorCode::InternalError);
   EXPECT_NE(result.error_text.find("not connected"), std::string::npos);
   EXPECT_TRUE(result.conn_broken);
+}
+
+TEST_F(RemoteNodeConnectionTest, RdmaIsConnBroken) {
+  using EC = pb::infiniband::ErrorCode;
+  EXPECT_TRUE(RDMAConnection::IsConnBroken(EC::QueuePairError));
+  EXPECT_TRUE(RDMAConnection::IsConnBroken(EC::InternalError));
+  EXPECT_TRUE(RDMAConnection::IsConnBroken(EC::Timeout));
+
+  EXPECT_FALSE(RDMAConnection::IsConnBroken(EC::Ok));
+  EXPECT_FALSE(RDMAConnection::IsConnBroken(EC::NoMem));
+  EXPECT_FALSE(RDMAConnection::IsConnBroken(EC::ProtocolError));
+}
+
+TEST_F(RemoteNodeConnectionTest, RdmaSendRejectsUnregisteredBuffers) {
+  RDMAConnection conn;
+  std::vector<char> storage(8192, 0);
+  auto noop = [](void*) {};
+
+  {  // Range: response buffer without rdma meta is refused locally
+    pb::cache::RangeRequest request;
+    pb::cache::RangeResponse response;
+    IOBuffer buffer(storage.data(), 4096);
+    RemoteNodeConnection::Result result;
+
+    conn.Send("Range", request, &response, nullptr, &buffer, 1, &result);
+
+    EXPECT_TRUE(result.failed);
+    EXPECT_EQ(result.error_code, pb::infiniband::ErrorCode::ProtocolError);
+    EXPECT_NE(result.error_text.find("not registered"), std::string::npos);
+    EXPECT_FALSE(result.conn_broken);
+  }
+
+  {  // Range: response buffer spanning two blocks is refused, not CHECK-ed
+    pb::cache::RangeRequest request;
+    pb::cache::RangeResponse response;
+    IOBuffer buffer;
+    buffer.AppendUserDataWithMeta(storage.data(), 4096, noop, 0x1234);
+    buffer.AppendUserDataWithMeta(storage.data() + 4096, 4096, noop, 0x1234);
+    RemoteNodeConnection::Result result;
+
+    conn.Send("Range", request, &response, nullptr, &buffer, 1, &result);
+
+    EXPECT_TRUE(result.failed);
+    EXPECT_EQ(result.error_code, pb::infiniband::ErrorCode::ProtocolError);
+    EXPECT_FALSE(result.conn_broken);
+  }
+
+  {  // Put: request attachment outside every registered region is refused
+    pb::cache::PutRequest request;
+    pb::cache::PutResponse response;
+    IOBuffer block;
+    block.AppendUserData(storage.data(), 4096, noop);
+    RemoteNodeConnection::Result result;
+
+    conn.Send("Put", request, &response, &block, nullptr, 1, &result);
+
+    EXPECT_TRUE(result.failed);
+    EXPECT_EQ(result.error_code, pb::infiniband::ErrorCode::ProtocolError);
+    EXPECT_NE(result.error_text.find("not registered"), std::string::npos);
+    EXPECT_FALSE(result.conn_broken);
+  }
+
+  {  // a registered single-block buffer passes and reaches the client lookup
+    pb::cache::RangeRequest request;
+    pb::cache::RangeResponse response;
+    IOBuffer buffer;
+    buffer.AppendUserDataWithMeta(storage.data(), 4096, noop, 0x1234);
+    RemoteNodeConnection::Result result;
+
+    conn.Send("Range", request, &response, nullptr, &buffer, 1, &result);
+
+    EXPECT_TRUE(result.failed);
+    EXPECT_EQ(result.error_code, pb::infiniband::ErrorCode::InternalError);
+    EXPECT_NE(result.error_text.find("not connected"), std::string::npos);
+    EXPECT_TRUE(result.conn_broken);
+  }
+
+  {  // an empty response buffer needs no validation: still "not connected"
+    pb::cache::RangeRequest request;
+    pb::cache::RangeResponse response;
+    IOBuffer buffer;
+    RemoteNodeConnection::Result result;
+
+    conn.Send("Range", request, &response, nullptr, &buffer, 1, &result);
+
+    EXPECT_TRUE(result.failed);
+    EXPECT_EQ(result.error_code, pb::infiniband::ErrorCode::InternalError);
+    EXPECT_NE(result.error_text.find("not connected"), std::string::npos);
+    EXPECT_TRUE(result.conn_broken);
+  }
 }
 
 }  // namespace cache

@@ -24,11 +24,14 @@
 #define DINGOFS_SRC_CACHE_INFINIBAND_SERVER_H_
 
 #include <brpc/server.h>
+#include <bthread/countdown_event.h>
 #include <bthread/mutex.h>
+#include <bthread/types.h>
 
+#include <atomic>
 #include <memory>
 #include <mutex>
-#include <vector>
+#include <unordered_map>
 
 #include "cache/infiniband/connection.h"
 #include "cache/infiniband/infiniband.h"
@@ -63,6 +66,8 @@ class InfinibandServiceImpl : public pb::infiniband::InfinibandService {
  public:
   InfinibandServiceImpl(Listener* listener, ServiceHub* service_hub);
   ~InfinibandServiceImpl() override;
+  void Start();
+  void Shutdown();
 
   void Sync(google::protobuf::RpcController* controller,
             const pb::infiniband::SyncRequest* request,
@@ -70,13 +75,20 @@ class InfinibandServiceImpl : public pb::infiniband::InfinibandService {
             google::protobuf::Closure* done) override;
 
  private:
-  void AddSession(ServerSessionSPtr session);
-  void CloseAllSessions();
+  static void* RunSweeper(void* meta);
+
+  bool AddSession(ServerSessionSPtr session);
+  void Sweep();
+  void ReapBrokenSessions();
+  void SendKeepalives();
 
   Listener* listener_;
   ServiceHub* service_hub_;
+  std::atomic<bool> running_{false};
+  bthread_t sweeper_{0};
+  bthread::CountdownEvent stopped_{1};
   bthread::Mutex mutex_;
-  std::vector<ServerSessionSPtr> sessions_;
+  std::unordered_map<ServerSession*, ServerSessionSPtr> sessions_;
 };
 
 class Server {
@@ -92,7 +104,7 @@ class Server {
  private:
   ListenerUPtr listener_;
   ServiceHubUPtr service_hub_;
-  std::unique_ptr<pb::infiniband::InfinibandService> service_;
+  std::unique_ptr<InfinibandServiceImpl> service_;
 };
 
 }  // namespace infiniband

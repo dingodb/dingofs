@@ -23,9 +23,11 @@
 #include "cache/iutil/bthread.h"
 
 #include <bthread/types.h>
+#include <butil/errno.h>
 #include <glog/logging.h>
 
 #include <atomic>
+#include <utility>
 
 #include "cache/common/macro.h"
 
@@ -34,26 +36,31 @@ namespace cache {
 namespace iutil {
 
 struct FuncArg {
-  FuncArg(std::function<void()> func) : func(func) {}
+  FuncArg(std::function<void()> func) : func(std::move(func)) {}
 
   std::function<void()> func;
 };
 
+static void* RunFuncArg(void* arg) {
+  auto* func_arg = static_cast<FuncArg*>(arg);
+  func_arg->func();
+  delete func_arg;
+  return nullptr;
+}
+
+static int Start(std::function<void()> func, bthread_t* tid) {
+  const bthread_attr_t attr = BTHREAD_ATTR_NORMAL;
+  auto* arg = new FuncArg(std::move(func));
+  int rc = bthread_start_background(tid, &attr, RunFuncArg, arg);
+  if (rc != 0) {
+    delete arg;
+  }
+  return rc;
+}
+
 bthread_t RunInBthread(std::function<void()> func) {
   bthread_t tid;
-  const bthread_attr_t attr = BTHREAD_ATTR_NORMAL;
-  auto* arg = new FuncArg(func);
-  int rc = bthread_start_background(
-      &tid, &attr,
-      [](void* arg) -> void* {
-        FuncArg* func_arg = reinterpret_cast<FuncArg*>(arg);
-        func_arg->func();
-
-        delete func_arg;
-        return nullptr;
-      },
-      (void*)arg);
-
+  int rc = Start(func, &tid);
   if (rc != 0) {
     LOG(ERROR) << "Fail to start bthread, run in current thread";
     func();
@@ -63,6 +70,13 @@ bthread_t RunInBthread(std::function<void()> func) {
   VLOG(9) << "Successfully start bthread{tid=" << tid << "}";
 
   return tid;
+}
+
+bool StartBthread(std::function<void()> func) {
+  bthread_t tid;
+  int rc = Start(std::move(func), &tid);
+  LOG_IF(ERROR, rc != 0) << "Fail to start bthread: " << berror(rc);
+  return rc == 0;
 }
 
 BthreadJoiner::BthreadJoiner() : running_(false), queue_id_({0}) {}
