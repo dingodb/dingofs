@@ -4408,6 +4408,10 @@ void OperationProcessor::ProcessOperation(Dispatcher& dispatcher) {
     if (operation) {
       stage_operations.push_back(operation);
       operation = nullptr;
+
+      if (before_batch_drain_hook_for_test_) {
+        std::call_once(before_batch_drain_hook_once_for_test_, [this] { before_batch_drain_hook_for_test_(); });
+      }
     }
 
     if (is_stop_.load(std::memory_order_relaxed) && stage_operations.empty()) {
@@ -4439,6 +4443,8 @@ void OperationProcessor::ProcessOperation(Dispatcher& dispatcher) {
   while (operations.Dequeue(operation)) {
     LOG_DEBUG << fmt::format("[operation] pending operation type({}) ino({}).", operation->OpName(),
                              operation->GetIno());
+    operation->SetStatus(Status(pb::error::ESERVICE_STOPPED, "operation stopped"));
+    operation->NotifyEvent();
   }
 }
 

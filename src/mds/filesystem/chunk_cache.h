@@ -18,6 +18,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <utility>
 #include <vector>
 
 #include "absl/container/btree_map.h"
@@ -49,6 +50,9 @@ class ChunkCache {
 
   ChunkSPtr Get(Ino ino, uint64_t chunk_index);
   std::vector<ChunkSPtr> Get(Ino ino);
+  // Returns copies for diagnostics without changing cache metrics or lifetime.
+  std::vector<ChunkEntry> Find(Ino ino, size_t offset, size_t limit, size_t& total);
+  std::vector<std::pair<Ino, size_t>> ListInos();
 
   bool IsExist(Ino ino);
 

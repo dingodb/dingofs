@@ -114,6 +114,27 @@ TEST_F(ChunkCacheTest, Get) {
   ASSERT_EQ(chunk_cache.Size(), 0);
 }
 
+TEST_F(ChunkCacheTest, FindPaginatesWithoutMixingInodes) {
+  mds::ChunkCache chunk_cache(kFsId);
+  const Ino ino = 100000;
+  ASSERT_TRUE(chunk_cache.PutIf(ino, GenChunkEntry(0, 1)));
+  ASSERT_TRUE(chunk_cache.PutIf(ino, GenChunkEntry(1, 2)));
+  ASSERT_TRUE(chunk_cache.PutIf(ino + 1, GenChunkEntry(0, 3)));
+
+  size_t total = 0;
+  auto chunks = chunk_cache.Find(ino, 1, 1, total);
+
+  ASSERT_EQ(2, total);
+  ASSERT_EQ(1, chunks.size());
+  EXPECT_EQ(1, chunks[0].index());
+  EXPECT_EQ(2, chunks[0].version());
+
+  const auto entries = chunk_cache.ListInos();
+  ASSERT_EQ(2, entries.size());
+  EXPECT_EQ(ino, entries[0].first);
+  EXPECT_EQ(2, entries[0].second);
+}
+
 TEST_F(ChunkCacheTest, Delete) {
   mds::ChunkCache chunk_cache(kFsId);
   Ino ino = 100000;

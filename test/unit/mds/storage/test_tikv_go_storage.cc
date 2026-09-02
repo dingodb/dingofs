@@ -50,7 +50,9 @@ class TikvGoStorageTest : public testing::Test {
 KVStorageSPtr TikvGoStorageTest::storage_ = nullptr;
 
 TEST_F(TikvGoStorageTest, Put) {
-  GTEST_SKIP() << "Skip Put test case.";
+  if (getenv("MANUAL_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip manual test case.";
+  }
 
   auto txn = storage_->NewTxn();
 
@@ -66,7 +68,9 @@ TEST_F(TikvGoStorageTest, Put) {
 }
 
 TEST_F(TikvGoStorageTest, PutGet) {
-  GTEST_SKIP() << "Skip PutGet test case.";
+  if (getenv("MANUAL_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip manual test case.";
+  }
 
   auto txn = storage_->NewTxn();
 
@@ -92,7 +96,9 @@ TEST_F(TikvGoStorageTest, PutGet) {
 }
 
 TEST_F(TikvGoStorageTest, PutDelete) {
-  GTEST_SKIP() << "Skip PutDelete test case.";
+  if (getenv("MANUAL_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip manual test case.";
+  }
 
   std::string key =
       "unit_tikv_go_putdelete_" + ::dingofs::Helper::GenerateRandomString(32);
@@ -125,7 +131,9 @@ TEST_F(TikvGoStorageTest, PutDelete) {
 }
 
 TEST_F(TikvGoStorageTest, PutBatchGet) {
-  GTEST_SKIP() << "Skip PutBatchGet test case.";
+  if (getenv("MANUAL_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip manual test case.";
+  }
 
   std::vector<std::string> keys;
   {
@@ -166,7 +174,9 @@ TEST_F(TikvGoStorageTest, PutBatchGet) {
 }
 
 TEST_F(TikvGoStorageTest, Scan) {
-  GTEST_SKIP() << "Skip Scan test case.";
+  if (getenv("MANUAL_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip manual test case.";
+  }
 
   std::string prefix =
       "unit_tikv_go_scan_" + ::dingofs::Helper::GenerateRandomString(16) + "_";
@@ -200,7 +210,9 @@ TEST_F(TikvGoStorageTest, Scan) {
 }
 
 TEST_F(TikvGoStorageTest, ScanWithLimit) {
-  GTEST_SKIP() << "Skip ScanWithLimit test case.";
+  if (getenv("MANUAL_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip manual test case.";
+  }
 
   std::string prefix = "unit_tikv_go_scanlimit_" +
                        ::dingofs::Helper::GenerateRandomString(16) + "_";
@@ -232,7 +244,9 @@ TEST_F(TikvGoStorageTest, ScanWithLimit) {
 }
 
 TEST_F(TikvGoStorageTest, ScanWithHandler) {
-  GTEST_SKIP() << "Skip ScanWithHandler test case.";
+  if (getenv("MANUAL_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip manual test case.";
+  }
 
   std::string prefix = "unit_tikv_go_scanhandler_" +
                        ::dingofs::Helper::GenerateRandomString(16) + "_";
@@ -269,7 +283,9 @@ TEST_F(TikvGoStorageTest, ScanWithHandler) {
 }
 
 TEST_F(TikvGoStorageTest, StoragePutGet) {
-  GTEST_SKIP() << "Skip StoragePutGet test case.";
+  if (getenv("MANUAL_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip manual test case.";
+  }
 
   std::string key = "unit_tikv_go_storage_putget_" +
                     ::dingofs::Helper::GenerateRandomString(32);
@@ -287,7 +303,9 @@ TEST_F(TikvGoStorageTest, StoragePutGet) {
 }
 
 TEST_F(TikvGoStorageTest, StorageDelete) {
-  GTEST_SKIP() << "Skip StorageDelete test case.";
+  if (getenv("MANUAL_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip manual test case.";
+  }
 
   std::string key = "unit_tikv_go_storage_delete_" +
                     ::dingofs::Helper::GenerateRandomString(32);
@@ -308,7 +326,9 @@ TEST_F(TikvGoStorageTest, StorageDelete) {
 }
 
 TEST_F(TikvGoStorageTest, StorageBatchPut) {
-  GTEST_SKIP() << "Skip StorageBatchPut test case.";
+  if (getenv("MANUAL_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip manual test case.";
+  }
 
   std::vector<KeyValue> kvs;
   for (int i = 0; i < 10; ++i) {
@@ -338,7 +358,9 @@ TEST_F(TikvGoStorageTest, StorageBatchPut) {
 }
 
 TEST_F(TikvGoStorageTest, GetNotFound) {
-  GTEST_SKIP() << "Skip GetNotFound test case.";
+  if (getenv("MANUAL_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip manual test case.";
+  }
 
   auto txn = storage_->NewTxn();
   std::string value;
@@ -351,7 +373,9 @@ TEST_F(TikvGoStorageTest, GetNotFound) {
 }
 
 TEST_F(TikvGoStorageTest, BatchGetEmpty) {
-  GTEST_SKIP() << "Skip BatchGetEmpty test case.";
+  if (getenv("MANUAL_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip manual test case.";
+  }
 
   auto txn = storage_->NewTxn();
   std::vector<std::string> keys;
@@ -363,7 +387,9 @@ TEST_F(TikvGoStorageTest, BatchGetEmpty) {
 }
 
 TEST_F(TikvGoStorageTest, BatchGetPartialMiss) {
-  GTEST_SKIP() << "Skip BatchGetPartialMiss test case.";
+  if (getenv("MANUAL_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip manual test case.";
+  }
 
   std::string existing_key =
       "unit_tikv_go_partialmiss_" + ::dingofs::Helper::GenerateRandomString(32);
@@ -390,7 +416,9 @@ TEST_F(TikvGoStorageTest, BatchGetPartialMiss) {
 }
 
 TEST_F(TikvGoStorageTest, ScanWithKVHandler) {
-  GTEST_SKIP() << "Skip ScanWithKVHandler test case.";
+  if (getenv("MANUAL_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip manual test case.";
+  }
 
   std::string prefix = "unit_tikv_go_scankvhandler_" +
                        ::dingofs::Helper::GenerateRandomString(16) + "_";
@@ -425,7 +453,9 @@ TEST_F(TikvGoStorageTest, ScanWithKVHandler) {
 }
 
 TEST_F(TikvGoStorageTest, ScanHandlerEarlyStop) {
-  GTEST_SKIP() << "Skip ScanHandlerEarlyStop test case.";
+  if (getenv("MANUAL_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip manual test case.";
+  }
 
   std::string prefix = "unit_tikv_go_earlystop_" +
                        ::dingofs::Helper::GenerateRandomString(16) + "_";
@@ -462,7 +492,9 @@ TEST_F(TikvGoStorageTest, ScanHandlerEarlyStop) {
 }
 
 TEST_F(TikvGoStorageTest, ScanEmptyRange) {
-  GTEST_SKIP() << "Skip ScanEmptyRange test case.";
+  if (getenv("MANUAL_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip manual test case.";
+  }
 
   auto txn = storage_->NewTxn();
   Range range;
@@ -478,7 +510,9 @@ TEST_F(TikvGoStorageTest, ScanEmptyRange) {
 }
 
 TEST_F(TikvGoStorageTest, PutIfAbsent) {
-  GTEST_SKIP() << "Skip PutIfAbsent test case.";
+  if (getenv("MANUAL_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip manual test case.";
+  }
 
   auto txn = storage_->NewTxn();
   auto status = txn->PutIfAbsent("any_key", "any_value");
@@ -488,7 +522,9 @@ TEST_F(TikvGoStorageTest, PutIfAbsent) {
 }
 
 TEST_F(TikvGoStorageTest, TxnID) {
-  GTEST_SKIP() << "Skip TxnID test case.";
+  if (getenv("MANUAL_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip manual test case.";
+  }
 
   auto txn = storage_->NewTxn();
   ASSERT_NE(txn->ID(), 0) << "txn id should not be zero.";
@@ -496,7 +532,9 @@ TEST_F(TikvGoStorageTest, TxnID) {
 }
 
 TEST_F(TikvGoStorageTest, GetTrace) {
-  GTEST_SKIP() << "Skip GetTrace test case.";
+  if (getenv("MANUAL_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip manual test case.";
+  }
 
   auto txn = storage_->NewTxn();
 
@@ -518,7 +556,9 @@ TEST_F(TikvGoStorageTest, GetTrace) {
 }
 
 TEST_F(TikvGoStorageTest, StoragePutKV) {
-  GTEST_SKIP() << "Skip StoragePutKV test case.";
+  if (getenv("MANUAL_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip manual test case.";
+  }
 
   KeyValue kv;
   kv.key = "unit_tikv_go_storage_putkv_" +
@@ -536,7 +576,9 @@ TEST_F(TikvGoStorageTest, StoragePutKV) {
 }
 
 TEST_F(TikvGoStorageTest, StorageBatchDelete) {
-  GTEST_SKIP() << "Skip StorageBatchDelete test case.";
+  if (getenv("MANUAL_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip manual test case.";
+  }
 
   std::vector<std::string> keys;
   KVStorage::WriteOption opt;
@@ -559,7 +601,9 @@ TEST_F(TikvGoStorageTest, StorageBatchDelete) {
 }
 
 TEST_F(TikvGoStorageTest, StorageScan) {
-  GTEST_SKIP() << "Skip StorageScan test case.";
+  if (getenv("MANUAL_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip manual test case.";
+  }
 
   std::string prefix = "unit_tikv_go_storage_scan_" +
                        ::dingofs::Helper::GenerateRandomString(16) + "_";
@@ -582,7 +626,9 @@ TEST_F(TikvGoStorageTest, StorageScan) {
 }
 
 TEST_F(TikvGoStorageTest, NewTxnReadCommitted) {
-  GTEST_SKIP() << "Skip NewTxnReadCommitted test case.";
+  if (getenv("MANUAL_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip manual test case.";
+  }
 
   auto txn = storage_->NewTxn(Txn::kReadCommitted);
   ASSERT_NE(txn, nullptr);
@@ -603,7 +649,9 @@ TEST_F(TikvGoStorageTest, NewTxnReadCommitted) {
 }
 
 TEST_F(TikvGoStorageTest, PutOverwrite) {
-  GTEST_SKIP() << "Skip PutOverwrite test case.";
+  if (getenv("MANUAL_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip manual test case.";
+  }
 
   std::string key =
       "unit_tikv_go_overwrite_" + ::dingofs::Helper::GenerateRandomString(32);
@@ -635,7 +683,9 @@ TEST_F(TikvGoStorageTest, PutOverwrite) {
 }
 
 TEST_F(TikvGoStorageTest, MultiBthreadConcurrent) {
-  GTEST_SKIP() << "Skip MultiBthreadConcurrent test case.";
+  if (getenv("MANUAL_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip manual test case.";
+  }
 
   struct Param {
     KVStorageSPtr storage;
@@ -685,6 +735,10 @@ TEST_F(TikvGoStorageTest, MultiBthreadConcurrent) {
 }
 
 TEST_F(TikvGoStorageTest, PutBatchGetInBthread) {
+  if (getenv("MANUAL_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip manual test case.";
+  }
+
   struct Param {
     KVStorageSPtr storage;
   };
@@ -733,7 +787,9 @@ TEST_F(TikvGoStorageTest, PutBatchGetInBthread) {
 }
 
 TEST_F(TikvGoStorageTest, LostUpdate) {
-  GTEST_SKIP() << "Skip LostUpdate test case.";
+  if (getenv("MANUAL_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip manual test case.";
+  }
 
   struct Param {
     KVStorageSPtr storage;

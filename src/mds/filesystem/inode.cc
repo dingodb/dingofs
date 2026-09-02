@@ -333,16 +333,7 @@ void InodeCache::Clear() {
 }
 
 InodeSPtr InodeCache::Get(Ino ino) {
-  InodeSPtr inode;
-  shard_map_.withRLock(
-      [ino, &inode](Map& map) {
-        auto it = map.find(ino);
-        if (it != map.end()) {
-          inode = it->second;
-        }
-      },
-      ino);
-
+  auto inode = Find(ino);
   if (inode != nullptr) {
     inode->UpdateLastActiveTime();
     access_hit_count_ << 1;
@@ -350,6 +341,18 @@ InodeSPtr InodeCache::Get(Ino ino) {
   } else {
     access_miss_count_ << 1;
   }
+
+  return inode;
+}
+
+InodeSPtr InodeCache::Find(Ino ino) {
+  InodeSPtr inode;
+  shard_map_.withRLock(
+      [ino, &inode](Map& map) {
+        auto it = map.find(ino);
+        if (it != map.end()) inode = it->second;
+      },
+      ino);
 
   return inode;
 }

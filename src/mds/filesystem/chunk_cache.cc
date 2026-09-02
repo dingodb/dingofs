@@ -14,6 +14,7 @@
 
 #include "mds/filesystem/chunk_cache.h"
 
+#include <map>
 #include <string>
 #include <utility>
 #include <vector>
@@ -142,6 +143,30 @@ std::vector<ChunkCache::ChunkSPtr> ChunkCache::Get(Ino ino) {
   access_hit_count_ << chunks.size();
 
   return chunks;
+}
+
+std::vector<ChunkEntry> ChunkCache::Find(Ino ino, size_t offset, size_t limit, size_t& total) {
+  total = 0;
+
+  std::vector<ChunkEntry> chunks;
+  shard_map_.withRLock(
+      [ino, offset, limit, &chunks, &total](Map& map) {
+        Key key{.ino = ino, .chunk_index = 0};
+        for (auto it = map.lower_bound(key); it != map.end() && it->first.ino == ino; ++it) {
+          if (total++ >= offset && chunks.size() < limit) chunks.push_back(*it->second);
+        }
+      },
+      ino);
+
+  return chunks;
+}
+
+std::vector<std::pair<Ino, size_t>> ChunkCache::ListInos() {
+  std::map<Ino, size_t> counts;
+  shard_map_.iterate([&counts](const Map& map) {
+    for (const auto& [key, _] : map) ++counts[key.ino];
+  });
+  return {counts.begin(), counts.end()};
 }
 
 bool ChunkCache::IsExist(Ino ino) {

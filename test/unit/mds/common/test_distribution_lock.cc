@@ -36,7 +36,9 @@ class CoorDistributionLockTest : public testing::Test {
 };
 
 TEST_F(CoorDistributionLockTest, Lock) {
-  GTEST_SKIP() << "Skip test case.";
+  if (getenv("MANUAL_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip slow test case.";
+  }
 
   auto coordinator_client = DingoCoordinatorClient::New();
   ASSERT_TRUE(coordinator_client->Init("172.20.3.17:22001"));

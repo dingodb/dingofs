@@ -326,8 +326,8 @@ TEST_F(InodeCacheTest, Get) {
 }
 
 TEST_F(InodeCacheTest, Benchmark) {
-  if (getenv("INODECACHE_PERF") == nullptr) {
-    GTEST_SKIP() << "Skip InodeCacheTest.Benchmark test case.";
+  if (getenv("SLOW_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip slow test case.";
   }
 
   InodeCache inode_cache(kFsId);
@@ -375,8 +375,8 @@ TEST_F(InodeCacheTest, Benchmark) {
 }
 
 TEST_F(InodeCacheTest, BenchmarkBthread) {
-  if (getenv("INODECACHE_PERF") == nullptr) {
-    GTEST_SKIP() << "Skip InodeCacheTest.Benchmark test case.";
+  if (getenv("SLOW_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip slow test case.";
   }
 
   InodeCache inode_cache(kFsId);

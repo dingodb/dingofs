@@ -207,6 +207,7 @@ class Inode {
 
   void UpdateLastActiveTime() { last_active_time_s_.store(utils::Timestamp(), std::memory_order_relaxed); }
   uint64_t LastActiveTimeS() { return last_active_time_s_.load(std::memory_order_relaxed); }
+  uint64_t LastRefreshTimeS() { return last_refresh_time_s_.load(std::memory_order_relaxed); }
 
   bool IsFresh();
 
@@ -277,6 +278,8 @@ class InodeCache {
   void Clear();
 
   InodeSPtr Get(Ino ino);
+  // Returns an entry for diagnostics without changing cache metrics or lifetime.
+  InodeSPtr Find(Ino ino);
   std::vector<InodeSPtr> Get(std::vector<uint64_t> inoes);
   std::vector<InodeSPtr> GetAll();
 

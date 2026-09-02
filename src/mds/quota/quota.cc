@@ -14,6 +14,7 @@
 
 #include "mds/quota/quota.h"
 
+#include <atomic>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -38,6 +39,11 @@ Quota::Quota(uint32_t fs_id, Ino ino, const QuotaEntry& quota) : fs_id_(fs_id), 
   LOG_DEBUG << fmt::format("[quota.{}.{}] create quota, detail({}).", fs_id_, ino_, quota.ShortDebugString());
 }
 
+std::string Quota::UUID() {
+  utils::ReadLockGuard lk(rwlock_);
+  return quota_.uuid;
+}
+
 Quota::InnerUsage Quota::GetDeltaAccumulatedUsage(uint64_t& timepoint) {
   if (!delta_usages_.empty()) timepoint = delta_usages_.back().time_ns;
 
@@ -49,9 +55,9 @@ Quota::InnerUsage Quota::GetDeltaAccumulatedUsage(uint64_t& timepoint) {
 }
 
 Quota::InnerUsage Quota::GetTotalAccumulatedUsage(uint64_t& timepoint) {
-  auto usage = GetDeltaAccumulatedUsage(timepoint);
-  usage.bytes = usage.bytes + quota_.used_bytes;
-  usage.inodes = usage.inodes + quota_.used_inodes;
+  InnerUsage usage = GetDeltaAccumulatedUsage(timepoint);
+  usage.bytes += quota_.used_bytes.load(std::memory_order_acquire);
+  usage.inodes += quota_.used_inodes.load(std::memory_order_acquire);
 
   return usage;
 }
@@ -61,8 +67,9 @@ Quota::InnerUsage Quota::CompactDeltaUsage(uint64_t timepoint) {
   while (!delta_usages_.empty()) {
     const auto& delta_usage = delta_usages_.front();
     if (delta_usage.time_ns > timepoint) break;
-    usage.bytes = usage.bytes + delta_usage.bytes;
-    usage.inodes = usage.inodes + delta_usage.inodes;
+    usage.bytes += delta_usage.bytes;
+    usage.inodes += delta_usage.inodes;
+
     delta_bytes_ -= delta_usage.bytes;
     delta_inodes_ -= delta_usage.inodes;
     delta_usages_.pop_front();

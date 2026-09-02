@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <glog/logging.h>
-#include "common/helper.h"
 
 #include <chrono>
 #include <cstdint>
@@ -25,6 +24,7 @@
 #include <thread>
 #include <vector>
 
+#include "common/helper.h"
 #include "dingofs/mds.pb.h"
 #include "fmt/format.h"
 #include "gtest/gtest.h"
@@ -83,7 +83,9 @@ class FileStore {
 using FileStoreSPtr = std::shared_ptr<FileStore>;
 
 TEST_F(DentryTest, ReadDir) {
-  GTEST_SKIP() << "Skip DentryTest.ReadDir test case.";
+  if (getenv("SLOW_TEST") == nullptr) {
+    GTEST_SKIP() << "Skip slow test case.";
+  }
 
   FileStoreSPtr file_store = std::make_shared<FileStore>();
 
@@ -153,8 +155,9 @@ TEST_F(DentryTest, ReadDir) {
   for (int i = 0; i < createfile_thread_num; ++i) {
     std::thread t([sandbox, thread_no = i, file_store]() {
       for (size_t j = 0; j < 10000; ++j) {
-        const std::string file_path = fmt::format(
-            "{}/file_{}_{}", sandbox, ::dingofs::Helper::GenerateRandomString(32), j);
+        const std::string file_path =
+            fmt::format("{}/file_{}_{}", sandbox,
+                        ::dingofs::Helper::GenerateRandomString(32), j);
 
         std::ofstream ofs(file_path);
         // ofs << "this is a test file." << '\n';
