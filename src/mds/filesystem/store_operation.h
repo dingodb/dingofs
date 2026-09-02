@@ -2940,6 +2940,13 @@ class OperationProcessor : public std::enable_shared_from_this<OperationProcesso
   Status RunAlone(Operation* operation);
   bool AsyncRun(OperationSPtr operation, OperationTask::PostHandler post_handler);
 
+  // Must be set before Init(). Invoked once after a dispatcher dequeues the
+  // first operation of a batch and before it drains further operations.
+  void SetBeforeBatchDrainHookForTest(std::function<void()> hook) {
+    CHECK(dispatchers_.empty()) << "test hook must be set before Init.";
+    before_batch_drain_hook_for_test_ = std::move(hook);
+  }
+
   Status CheckTable(const Range& range);
   Status CreateTable(const std::string& table_name, const Range& range, int64_t& table_id);
 
@@ -2987,6 +2994,9 @@ class OperationProcessor : public std::enable_shared_from_this<OperationProcesso
   std::vector<std::unique_ptr<Dispatcher>> dispatchers_;
 
   std::atomic<bool> is_stop_{false};
+
+  std::function<void()> before_batch_drain_hook_for_test_;
+  std::once_flag before_batch_drain_hook_once_for_test_;
 
   ConflictController conflict_controller_;
 
