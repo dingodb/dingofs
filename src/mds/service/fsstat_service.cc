@@ -17,9 +17,11 @@
 #include <json/value.h>
 #include <sys/types.h>
 
+#include <charconv>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <map>
 #include <string>
 #include <vector>
@@ -471,6 +473,8 @@ void FsStatServiceImpl::RenderAutoIncrementIdGenerator(FileSystemSetSPtr file_sy
   os << R"(</div>)";
 }
 
+static std::string HtmlEscape(const std::string& input);
+
 static void RenderMdsCacheSummary(Json::Value& json_value, butil::IOBufBuilder& os) {
   os << R"(<div style="margin:12px;margin-top:64px;font-size:smaller">)";
   os << R"(<h3>MDS Cache Summary</h3>)";
@@ -510,7 +514,14 @@ static void RenderMdsCacheSummary(Json::Value& json_value, butil::IOBufBuilder& 
       os << "<tr>";
 
       os << "<td>" << fs_id << "</td>";
-      os << "<td>" << name << "</td>";
+      os << "<td>";
+      if (name == "partitioncache" || name == "inodecache" || name == "chunkcache") {
+        os << fmt::format(R"(<a href="/FsStatService/cache/{}/{}" target="_blank" rel="noopener">{}</a>)", name, fs_id,
+                          name);
+      } else {
+        os << HtmlEscape(name);
+      }
+      os << "</td>";
       os << "<td>" << item["count"].asUInt64() << "</td>";
       os << "<td>" << (item["total_count"].isNull() ? "N/A" : std::to_string(item["total_count"].asUInt64()))
          << "</td>";
@@ -572,6 +583,257 @@ static std::string HtmlEscape(const std::string& input) {
   }
 
   return output;
+}
+
+static constexpr size_t kCachePageSize = 100;
+
+static bool ParseUint64(const std::string& input, uint64_t& value) {
+  if (input.empty()) return false;
+  const auto [ptr, ec] = std::from_chars(input.data(), input.data() + input.size(), value);
+  return ec == std::errc() && ptr == input.data() + input.size();
+}
+
+static size_t ParsePage(const std::string* input) {
+  uint64_t page = 0;
+  if (input == nullptr || !ParseUint64(*input, page) || page == 0 ||
+      page > std::numeric_limits<size_t>::max() / kCachePageSize) {
+    return 1;
+  }
+  return static_cast<size_t>(page);
+}
+
+static std::string CacheUrl(const std::string& cache_name, uint32_t fs_id, Ino ino, size_t dentry_page,
+                            size_t delta_page, size_t chunk_page) {
+  return fmt::format("/FsStatService/cache/{}/{}?ino={}&dentry_page={}&delta_page={}&chunk_page={}", cache_name, fs_id,
+                     ino, dentry_page, delta_page, chunk_page);
+}
+
+static void RenderCachePageStart(const std::string& cache_name, uint32_t fs_id, butil::IOBufBuilder& os) {
+  os << "<!DOCTYPE html><html>" << RenderHead("dingofs local cache") << "<body>";
+  os << fmt::format(R"(<h1 style="text-align:center;">Local {} (fs {})</h1>)", cache_name, fs_id);
+  os << R"(<div style="margin:12px;font-size:smaller">)";
+}
+
+static void RenderCachePageEnd(butil::IOBufBuilder& os) { os << "</div></body></html>"; }
+
+static void RenderPageNavigation(const std::string& cache_name, uint32_t fs_id, Ino ino, size_t dentry_page,
+                                 size_t delta_page, size_t chunk_page, const char* page_name, size_t page, size_t total,
+                                 butil::IOBufBuilder& os) {
+  const size_t page_count = (total + kCachePageSize - 1) / kCachePageSize;
+  if (page_count <= 1) return;
+
+  os << fmt::format("<p>Page {}/{} ", page, page_count);
+  if (page > 1) {
+    size_t previous_dentry_page = dentry_page;
+    size_t previous_delta_page = delta_page;
+    size_t previous_chunk_page = chunk_page;
+    if (std::string(page_name) == "dentry_page") previous_dentry_page = page - 1;
+    if (std::string(page_name) == "delta_page") previous_delta_page = page - 1;
+    if (std::string(page_name) == "chunk_page") previous_chunk_page = page - 1;
+    os << fmt::format(R"(<a href="{}">Previous</a> )",
+                      CacheUrl(cache_name, fs_id, ino, previous_dentry_page, previous_delta_page, previous_chunk_page));
+  }
+  if (page < page_count) {
+    size_t next_dentry_page = dentry_page;
+    size_t next_delta_page = delta_page;
+    size_t next_chunk_page = chunk_page;
+    if (std::string(page_name) == "dentry_page") next_dentry_page = page + 1;
+    if (std::string(page_name) == "delta_page") next_delta_page = page + 1;
+    if (std::string(page_name) == "chunk_page") next_chunk_page = page + 1;
+    os << fmt::format(R"(<a href="{}">Next</a>)",
+                      CacheUrl(cache_name, fs_id, ino, next_dentry_page, next_delta_page, next_chunk_page));
+  }
+  os << "</p>";
+}
+
+static std::string CacheListUrl(const std::string& cache_name, uint32_t fs_id, size_t page) {
+  return fmt::format("/FsStatService/cache/{}/{}?page={}", cache_name, fs_id, page);
+}
+
+static void RenderListNavigation(const std::string& cache_name, uint32_t fs_id, size_t page, size_t total,
+                                 butil::IOBufBuilder& os) {
+  const size_t page_count = std::max<size_t>(1, (total + kCachePageSize - 1) / kCachePageSize);
+  if (page_count <= 1) return;
+
+  os << fmt::format("<p>Page {}/{} ", page, page_count);
+  if (page > 1) os << fmt::format(R"(<a href="{}">Previous</a> )", CacheListUrl(cache_name, fs_id, page - 1));
+  if (page < page_count) os << fmt::format(R"(<a href="{}">Next</a>)", CacheListUrl(cache_name, fs_id, page + 1));
+  os << "</p>";
+}
+
+static void RenderPartitionCacheListPage(uint32_t fs_id, size_t page, std::vector<PartitionPtr> partitions,
+                                         butil::IOBufBuilder& os) {
+  std::sort(partitions.begin(), partitions.end(),
+            [](const PartitionPtr& lhs, const PartitionPtr& rhs) { return lhs->INo() < rhs->INo(); });
+  const size_t total = partitions.size();
+  const size_t page_count = std::max<size_t>(1, (total + kCachePageSize - 1) / kCachePageSize);
+  page = std::min(page, page_count);
+  const size_t begin = (page - 1) * kCachePageSize;
+  const size_t end = std::min(begin + kCachePageSize, total);
+
+  RenderCachePageStart("Partition Cache", fs_id, os);
+  os << fmt::format(R"(<h3>Cached partitions [{}]</h3><table class="gridtable sortable" border=1>)"
+                    R"(<tr><th>Ino</th><th>Base version</th><th>Delta version</th><th>Loaded shards</th>)"
+                    R"(<th>Loaded dentries</th></tr>)",
+                    total);
+  for (size_t i = begin; i < end; ++i) {
+    const auto& partition = partitions[i];
+    os << fmt::format(
+        R"(<tr><td><a href="/FsStatService/cache/partitioncache/{}?ino={}" target="_blank" rel="noopener">{}</a></td>)"
+        R"(<td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>)",
+        fs_id, partition->INo(), partition->INo(), partition->BaseVersion(), partition->DeltaVersion(),
+        partition->ShardSize(), partition->Size());
+  }
+  os << "</table>";
+  RenderListNavigation("partitioncache", fs_id, page, total, os);
+  RenderCachePageEnd(os);
+}
+
+static void RenderInodeCacheListPage(uint32_t fs_id, size_t page, std::vector<InodeSPtr> inodes,
+                                     butil::IOBufBuilder& os) {
+  std::sort(inodes.begin(), inodes.end(),
+            [](const InodeSPtr& lhs, const InodeSPtr& rhs) { return lhs->Ino() < rhs->Ino(); });
+  const size_t total = inodes.size();
+  const size_t page_count = std::max<size_t>(1, (total + kCachePageSize - 1) / kCachePageSize);
+  page = std::min(page, page_count);
+  const size_t begin = (page - 1) * kCachePageSize;
+  const size_t end = std::min(begin + kCachePageSize, total);
+
+  RenderCachePageStart("Inode Cache", fs_id, os);
+  os << fmt::format(R"(<h3>Cached inodes [{}]</h3><table class="gridtable sortable" border=1>)"
+                    R"(<tr><th>Ino</th><th>Type</th><th>Version</th><th>Fresh</th></tr>)",
+                    total);
+  for (size_t i = begin; i < end; ++i) {
+    const auto& inode = inodes[i];
+    os << fmt::format(
+        R"(<tr><td><a href="/FsStatService/cache/inodecache/{}?ino={}" target="_blank" rel="noopener">{}</a></td>)"
+        R"(<td>{}</td><td>{}</td><td>{}</td></tr>)",
+        fs_id, inode->Ino(), inode->Ino(), pb::mds::FileType_Name(inode->Type()), inode->Version(),
+        inode->IsFresh() ? "yes" : "no");
+  }
+  os << "</table>";
+  RenderListNavigation("inodecache", fs_id, page, total, os);
+  RenderCachePageEnd(os);
+}
+
+static void RenderChunkCacheListPage(uint32_t fs_id, size_t page, std::vector<std::pair<Ino, size_t>> entries,
+                                     butil::IOBufBuilder& os) {
+  const size_t total = entries.size();
+  const size_t page_count = std::max<size_t>(1, (total + kCachePageSize - 1) / kCachePageSize);
+  page = std::min(page, page_count);
+  const size_t begin = (page - 1) * kCachePageSize;
+  const size_t end = std::min(begin + kCachePageSize, total);
+
+  RenderCachePageStart("Chunk Cache", fs_id, os);
+  os << fmt::format(R"(<h3>Cached files [{}]</h3><table class="gridtable sortable" border=1>)"
+                    R"(<tr><th>Ino</th><th>Cached chunks</th></tr>)",
+                    total);
+  for (size_t i = begin; i < end; ++i) {
+    const auto& [ino, chunk_count] = entries[i];
+    os << fmt::format(
+        R"(<tr><td><a href="/FsStatService/cache/chunkcache/{}?ino={}" target="_blank" rel="noopener">{}</a></td><td>{}</td></tr>)",
+        fs_id, ino, ino, chunk_count);
+  }
+  os << "</table>";
+  RenderListNavigation("chunkcache", fs_id, page, total, os);
+  RenderCachePageEnd(os);
+}
+
+static void RenderPartitionCachePage(uint32_t fs_id, Ino ino, size_t dentry_page, size_t delta_page,
+                                     const Json::Value& value, butil::IOBufBuilder& os) {
+  RenderCachePageStart("Partition Cache", fs_id, os);
+  os << fmt::format("<h3>Partition ino {}: base version {}, delta version {}</h3>", ino,
+                    value["base_version"].asUInt64(), value["delta_version"].asUInt64());
+
+  os << fmt::format(R"(<h3>Shards [{}]</h3><table class="gridtable sortable" border=1><tr><th>Range</th><th>ID</th>)"
+                    R"(<th>Size</th><th>Version</th></tr>)",
+                    value["shards"].size());
+  for (const auto& shard : value["shards"]) {
+    os << "<tr>";
+    os << fmt::format("<td>[{}, {})</td>", HtmlEscape(shard["start"].asString()), HtmlEscape(shard["end"].asString()));
+    os << "<td>" << (shard["id"].isNull() ? "not loaded" : std::to_string(shard["id"].asUInt64())) << "</td>";
+    os << "<td>" << (shard["size"].isNull() ? "unknown" : std::to_string(shard["size"].asUInt64())) << "</td>";
+    os << "<td>" << (shard["version"].isNull() ? "unknown" : std::to_string(shard["version"].asUInt64()))
+       << "</td></tr>";
+  }
+  os << "</table>";
+
+  const size_t dentry_total = value["dentry_total"].asUInt64();
+  os << fmt::format(R"(<h3>Loaded dentries [{}]</h3><table class="gridtable sortable" border=1>)"
+                    R"(<tr><th>No.</th><th>Name</th><th>Ino</th><th>Parent</th><th>Type</th><th>Flag</th></tr>)",
+                    dentry_total);
+  size_t number = (dentry_page - 1) * kCachePageSize;
+  for (const auto& dentry : value["dentries"]) {
+    os << fmt::format("<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>", ++number,
+                      HtmlEscape(dentry["name"].asString()), dentry["ino"].asUInt64(), dentry["parent_ino"].asUInt64(),
+                      HtmlEscape(dentry["type"].asString()), dentry["flag"].asUInt());
+  }
+  os << "</table>";
+  RenderPageNavigation("partitioncache", fs_id, ino, dentry_page, delta_page, 1, "dentry_page", dentry_page,
+                       dentry_total, os);
+
+  const size_t delta_total = value["delta_dentry_ops_total"].asUInt64();
+  os << fmt::format(R"(<h3>Pending delta operations [{}]</h3><table class="gridtable sortable" border=1>)"
+                    R"(<tr><th>No.</th><th>Operation</th><th>Version</th><th>Time</th><th>Name</th><th>Ino</th></tr>)",
+                    delta_total);
+  number = (delta_page - 1) * kCachePageSize;
+  for (const auto& op : value["delta_dentry_ops"]) {
+    const auto& dentry = op["dentry"];
+    os << fmt::format("<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>", ++number,
+                      op["op"].asString(), op["version"].asUInt64(),
+                      utils::FormatMsTime(op["time_s"].asUInt64() * 1000), HtmlEscape(dentry["name"].asString()),
+                      dentry["ino"].asUInt64());
+  }
+  os << "</table>";
+  RenderPageNavigation("partitioncache", fs_id, ino, dentry_page, delta_page, 1, "delta_page", delta_page, delta_total,
+                       os);
+  RenderCachePageEnd(os);
+}
+
+static void RenderInodeCachePage(uint32_t fs_id, Ino ino, const InodeSPtr& inode, butil::IOBufBuilder& os) {
+  RenderCachePageStart("Inode Cache", fs_id, os);
+
+  AttrEntry attr = inode->ToAttr();
+  std::string attr_json;
+  ::dingofs::Helper::ProtoToJson(attr, attr_json);
+  os << fmt::format("<h3>Inode {}: base version {}, current version {}, fresh {}</h3>", ino, inode->BaseVersion(),
+                    inode->Version(), inode->IsFresh() ? "yes" : "no");
+  os << fmt::format("<p>Last active: {}<br>Last refresh: {}</p>", utils::FormatMsTime(inode->LastActiveTimeS() * 1000),
+                    utils::FormatMsTime(inode->LastRefreshTimeS() * 1000));
+  os << "<h3>Attributes</h3><pre>" << HtmlEscape(attr_json) << "</pre>";
+
+  RenderCachePageEnd(os);
+}
+
+static void RenderChunkCachePage(uint32_t fs_id, Ino ino, size_t chunk_page, size_t total,
+                                 const std::vector<ChunkEntry>& chunks, butil::IOBufBuilder& os) {
+  RenderCachePageStart("Chunk Cache", fs_id, os);
+
+  os << fmt::format(
+      R"(<h3>Cached chunks [{}]</h3><table class="gridtable sortable" border=1>)"
+      R"(<tr><th>Index</th><th>Version</th><th>Expires</th><th>Slices</th><th>Compacted slices</th></tr>)",
+      total);
+  for (const auto& chunk : chunks) {
+    os << fmt::format("<tr><td>{}</td><td>{}</td><td>{}</td><td><ul>", chunk.index(), chunk.version(),
+                      utils::FormatMsTime(chunk.expire_time_s() * 1000));
+    for (const auto& slice : chunk.slices()) {
+      os << fmt::format("<li>id={} pos={} size={} off={} len={}</li>", slice.id(), slice.pos(), slice.size(),
+                        slice.off(), slice.len());
+    }
+    os << "</ul></td><td><ul>";
+    for (const auto& compacted : chunk.compacted_slices()) {
+      os << fmt::format("<li>time={} ids=", utils::FormatMsTime(compacted.time_ms()));
+      for (int i = 0; i < compacted.slice_ids_size(); ++i) {
+        if (i > 0) os << ",";
+        os << compacted.slice_ids(i);
+      }
+      os << "</li>";
+    }
+    os << "</ul></td></tr>";
+  }
+  os << "</table>";
+  RenderPageNavigation("chunkcache", fs_id, ino, 1, 1, chunk_page, "chunk_page", chunk_page, total, os);
+  RenderCachePageEnd(os);
 }
 
 // Tools module: parse a raw storage key (hex string) and show its decoded
@@ -1899,6 +2161,77 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
   } else if (params.size() == 1 && params[0] == "server") {
     // /FsStatService/server
     RenderServerPage(os);
+
+  } else if (params.size() == 3 && params[0] == "cache") {
+    // /FsStatService/cache/{partitioncache|inodecache|chunkcache}/{fs_id}?ino={ino}
+    const std::string& cache_name = params[1];
+    uint64_t parsed_fs_id = 0;
+    if ((cache_name != "partitioncache" && cache_name != "inodecache" && cache_name != "chunkcache") ||
+        !ParseUint64(params[2], parsed_fs_id) || parsed_fs_id > std::numeric_limits<uint32_t>::max()) {
+      cntl->SetFailed("invalid cache path: " + path);
+    } else {
+      const uint32_t fs_id = static_cast<uint32_t>(parsed_fs_id);
+      auto file_system = Server::GetInstance().GetFileSystemSet()->GetFileSystem(fs_id);
+      if (file_system == nullptr) {
+        RenderCachePageStart(cache_name, fs_id, os);
+        os << fmt::format(R"(<p class="red-text">File system {} was not found on this MDS.</p>)", fs_id);
+        RenderCachePageEnd(os);
+      } else {
+        const std::string* ino_query = cntl->http_request().uri().GetQuery("ino");
+        if (ino_query == nullptr) {
+          const size_t page = ParsePage(cntl->http_request().uri().GetQuery("page"));
+          if (cache_name == "partitioncache") {
+            RenderPartitionCacheListPage(fs_id, page, file_system->GetPartitionCache().GetAll(), os);
+          } else if (cache_name == "inodecache") {
+            RenderInodeCacheListPage(fs_id, page, file_system->GetInodeCache().GetAll(), os);
+          } else {
+            RenderChunkCacheListPage(fs_id, page, file_system->GetChunkCache().ListInos(), os);
+          }
+        } else {
+          uint64_t ino = 0;
+          if (!ParseUint64(*ino_query, ino) || ino == 0) {
+            RenderCachePageStart(cache_name, fs_id, os);
+            os << R"(<p class="red-text">Please enter a valid non-zero ino.</p>)";
+            RenderCachePageEnd(os);
+          } else if (cache_name == "partitioncache") {
+            const size_t dentry_page = ParsePage(cntl->http_request().uri().GetQuery("dentry_page"));
+            const size_t delta_page = ParsePage(cntl->http_request().uri().GetQuery("delta_page"));
+            auto partition = file_system->GetPartitionCache().Find(ino);
+            if (partition == nullptr) {
+              RenderCachePageStart(cache_name, fs_id, os);
+              os << R"(<p class="red-text">This ino is not in the local partition cache.</p>)";
+              RenderCachePageEnd(os);
+            } else {
+              Json::Value value;
+              partition->Dump(value, (dentry_page - 1) * kCachePageSize, kCachePageSize,
+                              (delta_page - 1) * kCachePageSize, kCachePageSize);
+              RenderPartitionCachePage(fs_id, ino, dentry_page, delta_page, value, os);
+            }
+          } else if (cache_name == "inodecache") {
+            auto inode = file_system->GetInodeCache().Find(ino);
+            if (inode == nullptr) {
+              RenderCachePageStart(cache_name, fs_id, os);
+              os << R"(<p class="red-text">This ino is not in the local inode cache.</p>)";
+              RenderCachePageEnd(os);
+            } else {
+              RenderInodeCachePage(fs_id, ino, inode, os);
+            }
+          } else {
+            const size_t chunk_page = ParsePage(cntl->http_request().uri().GetQuery("chunk_page"));
+            size_t total = 0;
+            auto chunks =
+                file_system->GetChunkCache().Find(ino, (chunk_page - 1) * kCachePageSize, kCachePageSize, total);
+            if (total == 0) {
+              RenderCachePageStart(cache_name, fs_id, os);
+              os << R"(<p class="red-text">This ino is not in the local chunk cache.</p>)";
+              RenderCachePageEnd(os);
+            } else {
+              RenderChunkCachePage(fs_id, ino, chunk_page, total, chunks, os);
+            }
+          }
+        }
+      }
+    }
 
   } else if (params.size() == 1) {
     // /FsStatService/{fs_id}

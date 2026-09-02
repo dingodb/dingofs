@@ -176,7 +176,17 @@ void DirShard::Dump(Json::Value& value) const {
   value["start"] = ::dingofs::Helper::StringToHex(range_.start);
   value["end"] = ::dingofs::Helper::StringToHex(range_.end);
   value["version"] = version_;
-  value["size"] = Size();
+  value["size"] = children_.size();
+}
+
+void DirShard::Snapshot(size_t offset, size_t limit, std::vector<Dentry>& dentries) const {
+  utils::ReadLockGuard lk(lock_);
+
+  auto it = children_.begin();
+  std::advance(it, std::min(offset, children_.size()));
+  for (; it != children_.end() && dentries.size() < limit; ++it) {
+    dentries.push_back(it->second);
+  }
 }
 
 // --- ShardPartition operations ---
@@ -358,7 +368,17 @@ size_t ShardPartition::Bytes() const {
   return bytes;
 }
 
-void ShardPartition::Dump(Json::Value& value) const {
+static void DentryToJson(const Dentry& dentry, Json::Value& value) {
+  value["name"] = dentry.Name();
+  value["fs_id"] = dentry.FsId();
+  value["ino"] = dentry.INo();
+  value["parent_ino"] = dentry.ParentIno();
+  value["type"] = pb::mds::FileType_Name(dentry.Type());
+  value["flag"] = dentry.Flag();
+}
+
+void ShardPartition::Dump(Json::Value& value, size_t dentry_offset, size_t dentry_limit, size_t delta_offset,
+                          size_t delta_limit) const {
   utils::ReadLockGuard lk(lock_);
 
   value["fs_id"] = fs_id_;
@@ -394,6 +414,7 @@ void ShardPartition::Dump(Json::Value& value) const {
     }
   }
 
+  std::vector<DirShardSPtr> loaded_shards;
   for (const auto& [shard_key, shard] : shard_map_) {
     auto it = shard_map_value.find(shard_key);
     if (it == shard_map_value.end()) continue;
@@ -402,14 +423,52 @@ void ShardPartition::Dump(Json::Value& value) const {
     shard_value["id"] = shard->ID();
     shard_value["size"] = shard->Size();
     shard_value["version"] = shard->Version();
+    loaded_shards.push_back(shard);
   }
 
   Json::Value shards_value(Json::arrayValue);
   for (auto& it : shard_map_value) {
     shards_value.append(it.second);
   }
-
   value["shards"] = shards_value;
+
+  std::sort(loaded_shards.begin(), loaded_shards.end(),
+            [](const DirShardSPtr& lhs, const DirShardSPtr& rhs) { return lhs->Start() < rhs->Start(); });
+  size_t remaining_offset = dentry_offset;
+  size_t total_dentries = 0;
+  std::vector<Dentry> dentries;
+  for (const auto& shard : loaded_shards) {
+    const size_t shard_size = shard->Size();
+    total_dentries += shard_size;
+    if (remaining_offset >= shard_size) {
+      remaining_offset -= shard_size;
+    } else if (dentries.size() < dentry_limit) {
+      shard->Snapshot(remaining_offset, dentry_limit, dentries);
+      remaining_offset = 0;
+    }
+  }
+  value["dentry_total"] = total_dentries;
+  Json::Value dentries_value(Json::arrayValue);
+  for (const auto& dentry : dentries) {
+    Json::Value dentry_value(Json::objectValue);
+    DentryToJson(dentry, dentry_value);
+    dentries_value.append(dentry_value);
+  }
+  value["dentries"] = dentries_value;
+
+  value["delta_dentry_ops_total"] = delta_dentry_ops_.size();
+  Json::Value delta_value(Json::arrayValue);
+  auto it = delta_dentry_ops_.begin();
+  std::advance(it, std::min(delta_offset, delta_dentry_ops_.size()));
+  for (size_t i = 0; it != delta_dentry_ops_.end() && i < delta_limit; ++it, ++i) {
+    Json::Value op_value(Json::objectValue);
+    op_value["op"] = it->op_type == DentryOpType::ADD ? "ADD" : "DELETE";
+    op_value["version"] = it->version;
+    op_value["time_s"] = it->time_s;
+    DentryToJson(it->dentry, op_value["dentry"]);
+    delta_value.append(op_value);
+  }
+  value["delta_dentry_ops"] = delta_value;
 }
 
 // --- ShardPartition private helpers ---
@@ -774,23 +833,25 @@ void PartitionCache::Clear() {
 }
 
 PartitionPtr PartitionCache::Get(Ino ino) {
-  PartitionPtr partition;
-
-  shard_map_.withRLock(
-      [ino, &partition](Map& map) {
-        auto it = map.find(ino);
-        if (it != map.end()) {
-          partition = it->second;
-        }
-      },
-      ino);
-
+  auto partition = Find(ino);
   if (partition != nullptr) {
     access_hit_count_ << 1;
 
   } else {
     access_miss_count_ << 1;
   }
+
+  return partition;
+}
+
+PartitionPtr PartitionCache::Find(Ino ino) {
+  PartitionPtr partition;
+  shard_map_.withRLock(
+      [ino, &partition](Map& map) {
+        auto it = map.find(ino);
+        if (it != map.end()) partition = it->second;
+      },
+      ino);
 
   return partition;
 }

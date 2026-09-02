@@ -107,6 +107,7 @@ class DirShard {
   size_t Bytes() const;
 
   void Dump(Json::Value& value) const;
+  void Snapshot(size_t offset, size_t limit, std::vector<Dentry>& dentries) const;
 
  private:
   const uint64_t id_;
@@ -168,7 +169,8 @@ class ShardPartition {
   size_t ShardSize() const;
   size_t Bytes() const;
 
-  void Dump(Json::Value& value) const;
+  void Dump(Json::Value& value, size_t dentry_offset = 0, size_t dentry_limit = 0, size_t delta_offset = 0,
+            size_t delta_limit = 0) const;
 
  private:
   friend class PartitionCache;
@@ -256,6 +258,8 @@ class PartitionCache {
   void Clear();
 
   PartitionPtr Get(Ino ino);
+  // Returns an entry for diagnostics without changing cache metrics.
+  PartitionPtr Find(Ino ino);
   std::vector<PartitionPtr> GetAll();
 
   size_t Size();

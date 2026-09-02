@@ -171,6 +171,22 @@ TEST_F(DirShardTest, MultipleDentries) {
   }
 }
 
+TEST_F(DirShardTest, SnapshotPaginates) {
+  std::vector<Dentry> initial_dentries;
+  initial_dentries.emplace_back(
+      GenDentry(kFsId, kParentIno, 200, "first", pb::mds::FileType::FILE));
+  initial_dentries.emplace_back(GenDentry(kFsId, kParentIno, 201, "second",
+                                          pb::mds::FileType::DIRECTORY));
+  DirShardSPtr shard = DirShard::New(1, Range{"", ""}, 1, initial_dentries);
+
+  std::vector<Dentry> snapshot;
+  shard->Snapshot(1, 1, snapshot);
+
+  ASSERT_EQ(1, snapshot.size());
+  EXPECT_EQ("second", snapshot[0].Name());
+  EXPECT_EQ(pb::mds::FileType::DIRECTORY, snapshot[0].Type());
+}
+
 TEST_F(DirShardTest, Scan) {
   Range range{"", ""};
   std::vector<Dentry> initial_dentries;
@@ -652,6 +668,26 @@ TEST_F(ShardPartitionBasicTest, PutWithVersion) {
   // Note: Size() only counts dentries in shards, not delta ops
   // So size will be 0 because no shard has been fetched yet
   ASSERT_EQ(partition_->Size(), 0);
+}
+
+TEST_F(ShardPartitionBasicTest, DumpPaginatesPendingDentryOperations) {
+  partition_->Put(Dentry(GenDentry(kFsId, kParentIno, 200, "first",
+                                   pb::mds::FileType::FILE)),
+                  2);
+  partition_->Put(Dentry(GenDentry(kFsId, kParentIno, 201, "second",
+                                   pb::mds::FileType::DIRECTORY)),
+                  3);
+
+  Json::Value value;
+  partition_->Dump(value, 0, 100, 1, 1);
+
+  ASSERT_EQ(2, value["delta_dentry_ops_total"].asUInt64());
+  ASSERT_EQ(1, value["delta_dentry_ops"].size());
+  EXPECT_EQ("ADD", value["delta_dentry_ops"][0]["op"].asString());
+  EXPECT_EQ("second",
+            value["delta_dentry_ops"][0]["dentry"]["name"].asString());
+  EXPECT_EQ("DIRECTORY",
+            value["delta_dentry_ops"][0]["dentry"]["type"].asString());
 }
 
 TEST_F(ShardPartitionBasicTest, DeleteSingle) {
