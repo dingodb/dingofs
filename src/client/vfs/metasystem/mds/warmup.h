@@ -43,6 +43,9 @@ class WarmupMemo {
   bool IsRemembered(Ino ino);
   bool CheckAndRemember(Ino ino, uint64_t now_s);
 
+  void RememberTrigger(Ino ino);
+  bool ShouldTrigger(Ino ino);
+
   void CleanExpired(uint64_t expire_s);
 
   size_t Size();
@@ -51,6 +54,7 @@ class WarmupMemo {
  private:
   struct Value {
     uint64_t last_time_s{0};
+    uint64_t last_trigger_time_ms{0};
   };
   // ino -> last warmup timestamp
   using Map = absl::flat_hash_map<Ino, Value>;
@@ -91,14 +95,9 @@ class WarmupProcessor {
  private:
   friend class WarmupTask;
   friend class WarmupChunkTask;
-  friend class ReadDirTask;
   friend class WarmupDirAccessStatsWatcher;
 
-  ChunkMemo& GetChunkMemo() { return chunk_memo_; }
-  MDSClient& GetMDSClient() { return mds_client_; }
-  InodeCache& GetInodeCache() { return inode_cache_; }
   DentryCache& GetDentryCache() { return dentry_cache_; }
-  ReadChunkCache& GetReadChunkCache() { return read_chunk_cache_; }
   WarmupMemo& GetWarmupMemo() { return warmup_memo_; }
 
   void AsyncWarmupSmallFile(Ino parent);
