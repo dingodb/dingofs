@@ -14,6 +14,8 @@
 
 #include "client/vfs/metasystem/mds/warmup.h"
 
+#include <glog/logging.h>
+
 #include <memory>
 #include <string>
 #include <vector>
@@ -36,6 +38,10 @@ DEFINE_validator(vfs_meta_open_threshold_count, brpc::PassValidate);
 DEFINE_uint32(vfs_meta_warmup_readdir_interval_s, 8,
               "Interval seconds to trigger warmup readdir.");
 DEFINE_validator(vfs_meta_warmup_readdir_interval_s, brpc::PassValidate);
+
+DEFINE_uint32(vfs_meta_warmup_trigger_interval_ms, 500,
+              "Interval milliseconds to trigger warmup trigger.");
+DEFINE_validator(vfs_meta_warmup_trigger_interval_ms, brpc::PassValidate);
 
 // watch the open subfile read window count change, if the count is greater
 // than the threshold, trigger warmup readdir and small file data and chunk.
@@ -173,6 +179,36 @@ bool WarmupMemo::CheckAndRemember(Ino ino, uint64_t now_s) {
   return remembered;
 }
 
+void WarmupMemo::RememberTrigger(Ino ino) {
+  shard_map_.withWLock(
+      [&](Map& map) {
+        auto [it, inserted] =
+            map.try_emplace(ino, Value{0, utils::TimestampMs()});
+        if (!inserted) {
+          it->second.last_trigger_time_ms = utils::TimestampMs();
+        }
+      },
+      ino);
+}
+
+bool WarmupMemo::ShouldTrigger(Ino ino) {
+  uint64_t now_ms = utils::TimestampMs();
+
+  bool should_trigger = true;
+  shard_map_.withRLock(
+      [&](const Map& map) {
+        auto it = map.find(ino);
+        if (it != map.end() &&
+            now_ms < (it->second.last_trigger_time_ms +
+                      FLAGS_vfs_meta_warmup_trigger_interval_ms)) {
+          should_trigger = false;
+        }
+      },
+      ino);
+
+  return should_trigger;
+}
+
 void WarmupMemo::CleanExpired(uint64_t expire_s) {
   if (Size() < FLAGS_vfs_meta_clean_threshold_count) return;
 
@@ -205,6 +241,11 @@ bool WarmupProcessor::Init() {
 
 void WarmupProcessor::AsyncWarmupSmallFile(Ino parent) {
   if (warmup_manager_ == nullptr) return;
+  if (!warmup_memo_.ShouldTrigger(parent)) return;
+
+  warmup_memo_.RememberTrigger(parent);
+
+  LOG_DEBUG << fmt::format("[meta.warmup.{}] async warmup small file.", parent);
 
   auto task = std::make_shared<WarmupTask>(parent, *this);
   if (!executor_.ExecuteByHash(parent, task, false)) {

@@ -1670,6 +1670,7 @@ Status MDSMetaSystem::Rename(ContextSPtr ctx, Ino old_parent,
   PutInodeToCache(result.deleted_attr);
 
   dentry_cache_.Delete(old_parent, old_name);
+  dentry_cache_.Delete(new_parent, new_name);
   // in-flight readdir snapshots still hold the old binding, drop it before
   // readdirplus feeds a stale dentry back to the kernel
   dir_iterator_manager_.DeleteEntry(old_parent, old_name);
