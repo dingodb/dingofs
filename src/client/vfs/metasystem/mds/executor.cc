@@ -33,6 +33,10 @@ bool Executor::Init() {
 
 void Executor::Stop() { worker_set_->Stop(); }
 
+bool Executor::ExecuteLeastQueue(TaskRunnablePtr task) {
+  return worker_set_->ExecuteLeastQueue(task);
+}
+
 bool Executor::ExecuteByHash(uint64_t hash_id, TaskRunnablePtr task,
                              bool retry) {
   do {

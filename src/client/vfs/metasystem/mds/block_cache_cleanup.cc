@@ -100,7 +100,7 @@ void BlockCacheCleaner::Execute(Ino ino, uint64_t length) {
 
   auto task =
       std::make_shared<BlockCacheCleanupTask>(fs_id_, ino, length, *this);
-  if (!executor_.ExecuteByHash(ino, task, true)) {
+  if (!executor_.ExecuteByHash(ino, task, false)) {
     LOG(ERROR) << fmt::format(
         "[meta.cleanup.{}] submit block cache cleanup task fail, "
         "length({}).",
