@@ -786,7 +786,8 @@ Status MDSMetaSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
   // dir stats
   IncOpenCount(ino, is_readonly);
 
-  const std::string session_id = utils::GenerateUUID();
+  const std::string session_id = utils::GenerateUUIDFastly();
+
   auto file_session = file_session_map_.Put(ino, fh, session_id, flags);
   if (file_session->HasMultipleWriters()) {
     LOG(WARNING) << fmt::format(
@@ -805,6 +806,7 @@ Status MDSMetaSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
 
     if (!(flags & O_TRUNC)) {
       file_session->GetChunkSet()->InitFlushCheckpoint(inode->Length());
+
       // launch async open
       AsyncOpen(ctx, ino, flags, fh, session_id, file_session);
 
