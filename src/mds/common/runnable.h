@@ -115,6 +115,7 @@ class Worker {
 
   void Notify(TaskRunnablePtr& task, WorkerEventType type);
 
+  bool IsUseTrace() const { return is_use_trace_; }
   void PushPendingTaskTrace(const std::string& trace);
   void PopPendingTaskTrace();
   std::vector<std::string> TracePendingTasks();

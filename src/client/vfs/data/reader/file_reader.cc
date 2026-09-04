@@ -216,8 +216,8 @@ void FileReader::ShrinkMem() {
 
 void FileReader::SchedulePeriodicShrink() {
   if (closing_.load(std::memory_order_acquire)) {
-    LOG(INFO) << fmt::format("{} SchedulePeriodicShrink skipped because closed",
-                             uuid_);
+    VLOG(8) << fmt::format("{} SchedulePeriodicShrink skipped because closed",
+                           uuid_);
     return;
   }
 
@@ -229,8 +229,8 @@ void FileReader::SchedulePeriodicShrink() {
 
 void FileReader::RunPeriodicShrink() {
   if (closing_.load(std::memory_order_acquire)) {
-    LOG(INFO) << fmt::format("{} RunPeriodicShrink skipped because closed",
-                             uuid_);
+    VLOG(8) << fmt::format("{} RunPeriodicShrink skipped because closed",
+                           uuid_);
     return;
   }
 

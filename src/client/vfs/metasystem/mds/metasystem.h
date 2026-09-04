@@ -244,7 +244,7 @@ class MDSMetaSystem : public vfs::MetaSystem {
                          bool is_force, bool is_wait);
 
   // flush slices and file
-  Status FlushSliceAndFile(ContextSPtr ctx, Ino ino);
+  Status FlushSliceAndFile(ContextSPtr& ctx, Ino ino);
   // flush slices of all files (called internally by Stop)
   void FlushAllFile();
 
@@ -252,7 +252,7 @@ class MDSMetaSystem : public vfs::MetaSystem {
                              std::vector<Slice>* slices, uint64_t& version);
   void DeleteChunkFromReadCache(Ino ino);
 
-  Status CorrectAttr(ContextSPtr ctx, uint64_t time_ns, Attr& attr,
+  Status CorrectAttr(ContextSPtr& ctx, uint64_t time_ns, Attr& attr,
                      bool& is_amend, const std::string& caller);
   bool CorrectAttrLength(Attr& attr, const std::string& caller);
 
@@ -260,13 +260,13 @@ class MDSMetaSystem : public vfs::MetaSystem {
   // invalidate file session's read cache, called when mtime changed
   void InvalidateFileSessionReadCache(Ino ino);
 
-  Status DoOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
+  Status DoOpen(ContextSPtr& ctx, Ino ino, int flags, uint64_t fh,
                 const std::string& session_id, FileSessionSPtr file_session,
                 bool is_async);
-  void AsyncOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
+  void AsyncOpen(ContextSPtr& ctx, Ino ino, int flags, uint64_t fh,
                  const std::string& session_id, FileSessionSPtr file_session);
 
-  void AsyncClose(ContextSPtr ctx, Ino ino, uint64_t fh,
+  void AsyncClose(ContextSPtr& ctx, Ino ino, uint64_t fh,
                   const std::string& session_id);
 
   // dir stats

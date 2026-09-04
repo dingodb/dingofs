@@ -15,6 +15,7 @@
 #ifndef DINGOFS_SRC_CLIENT_VFS_META_MDS_FILE_SESSION_H_
 #define DINGOFS_SRC_CLIENT_VFS_META_MDS_FILE_SESSION_H_
 
+#include <absl/container/flat_hash_map.h>
 #include <fmt/format.h>
 #include <glog/logging.h>
 
@@ -140,7 +141,7 @@ class FileSessionMap {
 
   const uint32_t chunk_size_{0};
 
-  using Map = absl::btree_map<Ino, FileSessionSPtr>;
+  using Map = absl::flat_hash_map<Ino, FileSessionSPtr>;
 
   constexpr static size_t kShardNum = 128;
   utils::Shards<Map, kShardNum> shard_map_;
