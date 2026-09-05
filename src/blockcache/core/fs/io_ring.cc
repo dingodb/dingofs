@@ -28,7 +28,7 @@
 namespace dingofs {
 namespace blockcache {
 
-static bool Positive(const char* /*name*/, uint32_t value) { return value > 0; }
+static bool Positive(const char*, uint32_t value) { return value > 0; }
 
 DEFINE_uint32(io_queue_depth, 512, "submission queue entries per shard's ring");
 DEFINE_validator(io_queue_depth, Positive);
@@ -59,8 +59,6 @@ constexpr unsigned kSetupLadder[] = {
     0,
 };
 
-// Both LOG(FATAL) on a kernel that cannot serve the ring: a missing opcode or
-// a missing feature is a deployment error, not something to degrade around.
 static void CheckOpCodes(io_uring* ring) {
   static std::once_flag once;
   std::call_once(once, [ring] {
@@ -128,21 +126,36 @@ void FixedBuffers::Unregister() {
   chunk_shift_ = 0;
 }
 
-int FixedFiles::Acquire(int fd) {
-  if (!registered_) {
-    std::vector<int> sparse(kSlots, -1);
-    if (io_uring_register_files(ring_, sparse.data(), kSlots) < 0) {
-      return -1;
-    }
-
-    registered_ = true;
-    free_slots_.reserve(kSlots);
-    for (unsigned i = kSlots; i > 0; --i) {
-      free_slots_.push_back(static_cast<int>(i - 1));
-    }
+bool FixedFiles::EnsureRegistered() {
+  if (registered_) {
+    return true;
   }
 
-  if (free_slots_.empty()) {
+  std::vector<int> sparse(kSlots, -1);
+  if (io_uring_register_files(ring_, sparse.data(), kSlots) < 0) {
+    return false;
+  }
+
+  registered_ = true;
+  free_slots_.reserve(kSlots);
+  for (unsigned i = kSlots; i > 0; --i) {
+    free_slots_.push_back(static_cast<int>(i - 1));
+  }
+  return true;
+}
+
+int FixedFiles::AcquireSlot() {
+  if (!EnsureRegistered() || free_slots_.empty()) {
+    return -1;
+  }
+
+  const int slot = free_slots_.back();
+  free_slots_.pop_back();
+  return slot;
+}
+
+int FixedFiles::Acquire(int fd) {
+  if (!EnsureRegistered() || free_slots_.empty()) {
     return -1;
   }
 
@@ -181,8 +194,8 @@ IoRing::IoRing() {
 }
 
 IoRing::~IoRing() {
-  Reap();                 // best-effort: consume already-finished CQEs
-  buffers_.Unregister();  // both give their tables back while the ring lives
+  Reap();
+  buffers_.Unregister();
   files_.Unregister();
   io_uring_queue_exit(&ring_);
   tls_io_ring = nullptr;
@@ -204,6 +217,12 @@ io_uring_sqe* IoRing::GetSqe(IoCompletion* c) {
   ++inflight_;
   io_uring_sqe_set_data(sqe, static_cast<void*>(c));
   return sqe;
+}
+
+void IoRing::ReserveSqes(unsigned n) {
+  if (io_uring_sq_space_left(&ring_) < n) {
+    SubmitAndCollect();
+  }
 }
 
 bool IoRing::Poll() {
@@ -233,6 +252,7 @@ void IoRing::Init(unsigned queue_len) {
   }
 
   CheckFeatures(&ring_, params);
+  features_ = params.features;
 
   (void)io_uring_register_ring_fd(&ring_);
   io_uring_ring_dontfork(&ring_);
@@ -246,7 +266,7 @@ void IoRing::SubmitAndCollect() {
   int rc = io_uring_submit_and_get_events(&ring_);
   if (rc < 0) {
     if (rc == -EBUSY || rc == -EAGAIN) {
-      return;  // CQ full / resources
+      return;
     }
 
     errno = -rc;

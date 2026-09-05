@@ -39,13 +39,10 @@ inline void CpuRelax() noexcept {
 }
 
 std::vector<int> GetAllCpus();
-
 StatusOr<std::vector<int>> ParseCpuSet(const std::string& spec);
-
 std::vector<int> GetPhyCores(const std::vector<int>& cpus);
-
-int NumaNode(int cpu);
-
+int GetNumaNode(int cpu);
+int GetSmtSibling(int cpu);
 void BindPages(void* addr, size_t length, int numa_node);
 
 }  // namespace blockcache

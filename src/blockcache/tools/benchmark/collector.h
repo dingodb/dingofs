@@ -17,14 +17,10 @@
 #ifndef DINGOFS_BLOCKCACHE_TOOLS_BENCHMARK_COLLECTOR_H_
 #define DINGOFS_BLOCKCACHE_TOOLS_BENCHMARK_COLLECTOR_H_
 
-#include <bthread/execution_queue.h>
-#include <bthread/execution_queue_inl.h>
-
 #include <cstdint>
-#include <functional>
 #include <memory>
-
-#include "common/status.h"
+#include <mutex>
+#include <vector>
 
 namespace dingofs {
 namespace blockcache {
@@ -33,11 +29,13 @@ class Stat {
  public:
   Stat() = default;
 
-  void Add(uint64_t bytes, uint64_t latency_us);
+  void Add(uint64_t bytes, uint64_t latency_ns);
+  void Merge(const Stat& other);
 
   uint64_t IOPS(uint64_t interval_us) const;
   uint64_t Bandwidth(uint64_t interval_us) const;
 
+  // latencies in nanoseconds
   uint64_t AvgLat() const;
   uint64_t MaxLat() const;
   uint64_t MinLat() const;
@@ -47,28 +45,41 @@ class Stat {
  private:
   uint64_t count_{0};
   uint64_t total_bytes_{0};
-  uint64_t max_latency_us_{0};
-  uint64_t min_latency_us_{0};
-  uint64_t total_latency_us_{0};
+  uint64_t max_latency_ns_{0};
+  uint64_t min_latency_ns_{0};
+  uint64_t total_latency_ns_{0};
 };
 
+// Every worker owns one slot and updates it under the slot mutex on each
+// completion; the reporter drains all slots on its tick. This keeps the hot
+// path free of any shared queue, which used to pin a core above ~2.5M op/s.
 class Collector {
  public:
-  using Func = std::function<void(Stat* interval, Stat* total)>;
+  class Slot {
+   public:
+    void Add(uint64_t bytes, uint64_t latency_ns) {
+      std::lock_guard<std::mutex> lock(mutex_);
+      stat_.Add(bytes, latency_ns);
+    }
 
-  Collector() = default;
+    void Drain(Stat* into) {
+      std::lock_guard<std::mutex> lock(mutex_);
+      into->Merge(stat_);
+      stat_ = Stat();
+    }
 
-  Status Start();
-  Status Destroy();
+   private:
+    std::mutex mutex_;
+    Stat stat_;
+  };
 
-  void Submit(Func func);
+  explicit Collector(uint32_t slots);
+
+  Slot* SlotAt(uint32_t index) { return slots_[index].get(); }
+  void Drain(Stat* into);
 
  private:
-  static int Executor(void* meta, bthread::TaskIterator<Func>& iter);
-
-  Stat interval_;
-  Stat total_;
-  bthread::ExecutionQueueId<Func> queue_id_;
+  std::vector<std::unique_ptr<Slot>> slots_;
 };
 
 using CollectorSPtr = std::shared_ptr<Collector>;

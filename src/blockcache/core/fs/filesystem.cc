@@ -134,6 +134,73 @@ void RwAwaiter::Submit() {
   }
 }
 
+OpenReadCloseAwaiter::OpenReadCloseAwaiter(int file_slot, const char* path,
+                                           uint64_t pos, void* buffer,
+                                           uint32_t len,
+                                           int open_flags) noexcept
+    : file_slot_(file_slot),
+      path_(path),
+      pos_(pos),
+      buffer_(buffer),
+      len_(len),
+      open_flags_(open_flags) {
+  open_completion_.owner = this;
+  read_completion_.owner = this;
+  close_completion_.owner = this;
+}
+
+void OpenReadCloseAwaiter::Arm() {
+  IoRing& ring = ThisIoRing();
+  ring.ReserveSqes(3);
+
+  io_uring_sqe* sqe = ring.GetSqe(&open_completion_);
+  io_uring_prep_openat_direct(sqe, AT_FDCWD, path_, open_flags_, 0,
+                              static_cast<unsigned>(file_slot_));
+  sqe->flags |= IOSQE_IO_LINK;
+
+  sqe = ring.GetSqe(&read_completion_);
+  const uint16_t buffer_index = ring.buffers().IndexOf(buffer_);
+  if (buffer_index != kNoBufIndex) {
+    io_uring_prep_read_fixed(sqe, file_slot_, buffer_, len_, pos_,
+                             buffer_index);
+  } else {
+    io_uring_prep_read(sqe, file_slot_, buffer_, len_, pos_);
+  }
+  sqe->flags |= IOSQE_FIXED_FILE | IOSQE_IO_HARDLINK;
+
+  sqe = ring.GetSqe(&close_completion_);
+  io_uring_prep_close_direct(sqe, static_cast<unsigned>(file_slot_));
+}
+
+void OpenReadCloseAwaiter::OpCompletion::Complete(int32_t res) noexcept {
+  result = res;
+  owner->OnOpComplete();
+}
+
+void OpenReadCloseAwaiter::OnOpComplete() noexcept {
+  if (--pending_completions_ == 0) {
+    ResumeLater(0);
+  }
+}
+
+StatusOr<size_t> OpenReadCloseAwaiter::await_resume() {
+  FixedFiles& files = ThisIoRing().files();
+  if (open_completion_.result >= 0 && close_completion_.result < 0 &&
+      close_completion_.result != -ECANCELED) {
+    files.Release(file_slot_);
+  } else {
+    files.ReleaseSlot(file_slot_);
+  }
+
+  if (open_completion_.result < 0) {
+    return ToStatus(-open_completion_.result, "open file");
+  }
+  if (read_completion_.result < 0) {
+    return ToStatus(-read_completion_.result, "read from file");
+  }
+  return static_cast<size_t>(read_completion_.result);
+}
+
 File::~File() { CloseSyncIfOpen(); }
 
 Future<Status> File::Close() {
@@ -231,8 +298,6 @@ Future<StatusOr<File>> FileSystem::Open(std::string path, OpenFlags flags,
   }
 
   if (!option.direct) {
-    // Buffered means the kernel decides how much to read; without this it
-    // would read ahead into a page cache we do not want in the first place.
     (void)posix_fadvise(fd, 0, 0, POSIX_FADV_RANDOM);
   }
 
@@ -244,6 +309,44 @@ Future<StatusOr<File>> FileSystem::Open(std::string path, OpenFlags flags,
     }
   }
   co_return file;
+}
+
+Future<StatusOr<size_t>> FileSystem::ReadFallback(std::string path,
+                                                  uint64_t pos, void* buffer,
+                                                  uint32_t len, OpenFlags flags,
+                                                  OpenOption option) {
+  StatusOr<File> open = co_await Open(std::move(path), flags, option);
+  if (!open.ok()) {
+    co_return open.status();
+  }
+
+  File file = std::move(open).value();
+  StatusOr<size_t> nread = co_await file.Read(pos, buffer, len);
+  const Status close = co_await file.Close();
+  if (!nread.ok()) {
+    co_return nread.status();
+  }
+  if (!close.ok()) {
+    co_return close;
+  }
+  co_return *nread;
+}
+
+Future<StatusOr<size_t>> FileSystem::Read(std::string path, uint64_t pos,
+                                          void* buffer, uint32_t len,
+                                          OpenFlags flags, OpenOption option) {
+  IoRing& ring = ThisIoRing();
+  const int file_slot =
+      (option.direct && ring.linked_files()) ? ring.files().AcquireSlot() : -1;
+  if (file_slot < 0) {
+    co_return co_await ReadFallback(std::move(path), pos, buffer, len, flags,
+                                    option);
+  }
+
+  const int open_flags = ToOpenFlags(flags, option.direct) & ~O_CLOEXEC;
+  OpenReadCloseAwaiter awaiter(file_slot, path.c_str(), pos, buffer, len,
+                               open_flags);
+  co_return co_await awaiter;
 }
 
 Future<Status> FileSystem::Unlink(std::string path) {

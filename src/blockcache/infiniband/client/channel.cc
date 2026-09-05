@@ -117,7 +117,7 @@ Future<Status> Channel::CallMethod(blockcache::Call call) {
   const Status sent = co_await SendRequest(
       inflight_rpcs_.GetCorrelationId(index), call, attachment.value());
   if (!sent.ok()) {
-    inflight_rpcs_.Release(index);
+    inflight_rpcs_.Fail(index, sent);
     co_return sent;
   }
 

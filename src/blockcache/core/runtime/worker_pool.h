@@ -65,7 +65,8 @@ class CpuWorker {
   CpuWorker(const CpuWorker&) = delete;
   CpuWorker& operator=(const CpuWorker&) = delete;
 
-  void Start(unsigned shard);
+  // `cpu` >= 0 pins the worker thread to that cpu.
+  void Start(unsigned shard, int cpu = -1);
   void Shutdown();  // drains what is queued, then joins
 
   void Post(InboxWork* work);  // any thread
@@ -90,7 +91,9 @@ class WorkerPool {
   WorkerPool& operator=(const WorkerPool&) = delete;
 
   // External thread only (main); Shutdown MUST finish before the shards stop.
-  void Start();
+  // `shard_cpus[i]` is the cpu shard i is pinned to (-1 = unpinned); each cpu
+  // worker then sits on the SMT sibling of its shard's core.
+  void Start(std::vector<int> shard_cpus = {});
   void Shutdown();
 
   // SHARD-ONLY. `fn` self-contained; resolves on the calling shard. Blocking

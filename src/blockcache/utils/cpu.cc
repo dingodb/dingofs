@@ -83,7 +83,7 @@ std::vector<int> GetPhyCores(const std::vector<int>& cpus) {
   return leaders.empty() ? cpus : leaders;
 }
 
-int NumaNode(int cpu) {
+int GetNumaNode(int cpu) {
   std::error_code ec;
   for (const auto& entry :
        std::filesystem::directory_iterator(CpuDir(cpu), ec)) {
@@ -93,6 +93,24 @@ int NumaNode(int cpu) {
         std::from_chars(name.data() + 4, name.data() + name.size(), node).ec ==
             std::errc()) {
       return node;
+    }
+  }
+  return -1;
+}
+
+int GetSmtSibling(int cpu) {
+  std::ifstream file(CpuDir(cpu) + "/topology/thread_siblings_list");
+  std::string spec;
+  if (!file || !std::getline(file, spec)) {
+    return -1;
+  }
+  auto siblings = ParseCpuSet(spec);
+  if (!siblings.ok()) {
+    return -1;
+  }
+  for (int sibling : siblings.value()) {
+    if (sibling != cpu) {
+      return sibling;
     }
   }
   return -1;

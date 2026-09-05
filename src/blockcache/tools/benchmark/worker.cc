@@ -28,10 +28,10 @@ namespace dingofs {
 namespace blockcache {
 
 Worker::Worker(uint64_t idx, char* buffer, TaskFactorySPtr factory,
-               CollectorSPtr collector)
+               Collector::Slot* stats)
     : idx_(idx),
       factory_(factory),
-      collector_(collector),
+      stats_(stats),
       slots_(FLAGS_iodepth),
       window_(FLAGS_iodepth),
       done_(1) {
@@ -92,20 +92,17 @@ void Worker::SubmitOne(BlockHandle key, uint64_t offset, uint64_t length) {
 }
 
 void Worker::OnComplete(Slot* slot, Status status) {
-  const auto latency_us = std::chrono::duration_cast<std::chrono::microseconds>(
-                              std::chrono::steady_clock::now() - slot->t0)
-                              .count();
+  const uint64_t latency_ns =
+      std::chrono::duration_cast<std::chrono::nanoseconds>(
+          std::chrono::steady_clock::now() - slot->t0)
+          .count();
 
   if (!status.ok()) {
-    LOG(ERROR) << "Task on block (key=" << slot->key.Filename()
-               << ") failed: " << status.ToString();
+    LOG_EVERY_N(ERROR, 1000) << "Task on block (key=" << slot->key.Filename()
+                             << ") failed: " << status.ToString();
   }
 
-  const uint64_t bytes = factory_->BytesPerOp(slot);
-  collector_->Submit([bytes, latency_us](Stat* stat, Stat* total) {
-    stat->Add(bytes, latency_us);
-    total->Add(bytes, latency_us);
-  });
+  stats_->Add(factory_->BytesPerOp(slot), latency_ns);
 
   PushSlot(slot);
   window_.release();

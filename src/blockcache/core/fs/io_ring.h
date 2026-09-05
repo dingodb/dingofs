@@ -28,7 +28,7 @@
 
 #include "blockcache/core/reactor/io_awaiter.h"
 #include "blockcache/core/reactor/poller.h"
-#include "blockcache/core/reactor/reactor.h"  // Schedule, Task, TaskPromise
+#include "blockcache/core/reactor/reactor.h"
 
 namespace dingofs {
 namespace blockcache {
@@ -69,10 +69,16 @@ class FixedFiles {
 
   int Acquire(int fd);
   void Release(int slot);
+  int AcquireSlot();
+  void ReleaseSlot(int slot) { free_slots_.push_back(slot); }
   void Unregister();
+
+  size_t free_slots() const { return free_slots_.size(); }
 
  private:
   static constexpr unsigned kSlots = 1024;
+
+  bool EnsureRegistered();
 
   io_uring* ring_;
   bool registered_ = false;
@@ -88,6 +94,11 @@ class IoRing final : public Poller {
   IoRing& operator=(const IoRing&) = delete;
 
   io_uring_sqe* GetSqe(IoCompletion* c);
+  void ReserveSqes(unsigned n);
+
+  bool linked_files() const {
+    return (features_ & IORING_FEAT_LINKED_FILE) != 0;
+  }
 
   bool Poll() override;
   bool PurePoll() override { return inflight_ > 0; }
@@ -105,6 +116,7 @@ class IoRing final : public Poller {
   unsigned Reap();
 
   io_uring ring_;
+  uint32_t features_ = 0;
   unsigned inflight_ = 0;
   bool reaping_ = false;
   FixedBuffers buffers_{&ring_};
@@ -133,7 +145,6 @@ class UringAwaiter : public IoCompletion, public IoAwaiter<Derived> {
   UringAwaiter& operator=(const UringAwaiter&) = delete;
 };
 
-// One-shot io_uring op; prep-closure pointees must outlive the suspension.
 template <typename PrepFn>
 class UringOpAwaiter final : public UringAwaiter<UringOpAwaiter<PrepFn>> {
  public:

@@ -114,6 +114,15 @@ class InflightRpcTable {
     NotifyWaiter(waiter);
   }
 
+  void Fail(uint16_t slot_index, const Status& reason) {
+    Slot& slot = slots_[slot_index];
+    if (!slot.in_use) {
+      return;
+    }
+    slot.promise.SetValue(reason);
+    Release(slot_index);
+  }
+
   void FailAll(const Status& reason) {
     slot_waiters_.TakeAllAnd([this](SlotAwaiter* waiter) {
       waiter->failed_ = true;
@@ -121,14 +130,7 @@ class InflightRpcTable {
     });
 
     for (uint16_t i = 0; i < slots_.size(); ++i) {
-      Slot& slot = slots_[i];
-      if (!slot.in_use) {
-        continue;
-      }
-      slot.in_use = false;
-      ++slot.generation;
-      free_slots_.push_back(i);
-      slot.promise.SetValue(reason);
+      Fail(i, reason);
     }
   }
 

@@ -35,7 +35,7 @@ void BecomeShardThread(unsigned shard, int cpu) {
     PinThreadToCpu(::pthread_self(), cpu);
   }
 
-  memory::ShardInit(shard, cpu >= 0 ? NumaNode(cpu) : -1);
+  memory::ShardInit(shard, cpu >= 0 ? GetNumaNode(cpu) : -1);
 }
 
 Shard::Shard(unsigned id, ShardInbox* inbox, Poller* mesh_poller)
