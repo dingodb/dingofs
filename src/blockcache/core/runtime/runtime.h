@@ -86,6 +86,8 @@ class Runtime {
   void Join();
 
   unsigned shard_count() const { return layout_.shard_count(); }
+  // Cpu shard `shard` is pinned to, -1 when unpinned.
+  int CpuOf(unsigned shard) const { return layout_.CpuOf(shard); }
 
  private:
   enum class State : uint8_t { kIdle, kRunning, kStopping, kJoined };

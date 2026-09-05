@@ -48,7 +48,6 @@ class Benchmarker {
   Status InitStorage();
   Status InitBlockCache();
   Status InitBuffers();
-  Status InitCollector();
   void InitFactory();
   void InitWorkers();
 
@@ -59,7 +58,6 @@ class Benchmarker {
   void StopAll();
   void StopWorkers();
   void StopReporter();
-  void StopCollector();
   void StopBlockCache();
 
   MDSClientUPtr mds_client_;

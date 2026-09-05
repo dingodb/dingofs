@@ -16,8 +16,6 @@
 
 #include "blockcache/tools/benchmark/collector.h"
 
-#include <glog/logging.h>
-
 #include <algorithm>
 
 namespace dingofs {
@@ -27,22 +25,40 @@ namespace {
 constexpr uint64_t kMiB = 1ULL << 20;
 }  // namespace
 
-void Stat::Add(uint64_t bytes, uint64_t latency_us) {
-  max_latency_us_ = std::max(max_latency_us_, latency_us);
-  if (min_latency_us_ == 0 || latency_us < min_latency_us_) {
-    min_latency_us_ = latency_us;
+void Stat::Add(uint64_t bytes, uint64_t latency_ns) {
+  max_latency_ns_ = std::max(max_latency_ns_, latency_ns);
+  if (min_latency_ns_ == 0 || latency_ns < min_latency_ns_) {
+    min_latency_ns_ = latency_ns;
   }
 
   count_++;
   total_bytes_ += bytes;
-  total_latency_us_ += latency_us;
+  total_latency_ns_ += latency_ns;
+}
+
+void Stat::Merge(const Stat& other) {
+  max_latency_ns_ = std::max(max_latency_ns_, other.max_latency_ns_);
+  if (other.min_latency_ns_ != 0 &&
+      (min_latency_ns_ == 0 || other.min_latency_ns_ < min_latency_ns_)) {
+    min_latency_ns_ = other.min_latency_ns_;
+  }
+
+  count_ += other.count_;
+  total_bytes_ += other.total_bytes_;
+  total_latency_ns_ += other.total_latency_ns_;
 }
 
 uint64_t Stat::IOPS(uint64_t interval_us) const {
+  if (interval_us == 0) {
+    return 0;
+  }
   return count_ / (interval_us * 1.0 / 1e6);
 }
 
 uint64_t Stat::Bandwidth(uint64_t interval_us) const {
+  if (interval_us == 0) {
+    return 0;
+  }
   return total_bytes_ * 1.0 / (interval_us * 1.0 / 1e6) / kMiB;
 }
 
@@ -50,52 +66,26 @@ uint64_t Stat::AvgLat() const {
   if (count_ == 0) {
     return 0;
   }
-  return total_latency_us_ / count_;
+  return total_latency_ns_ / count_;
 }
 
-uint64_t Stat::MaxLat() const { return max_latency_us_; }
+uint64_t Stat::MaxLat() const { return max_latency_ns_; }
 
-uint64_t Stat::MinLat() const { return min_latency_us_; }
+uint64_t Stat::MinLat() const { return min_latency_ns_; }
 
 uint64_t Stat::Count() const { return count_; }
 
-Status Collector::Start() {
-  bthread::ExecutionQueueOptions queue_options;
-  queue_options.use_pthread = true;
-  int rc = bthread::execution_queue_start(&queue_id_, &queue_options, Executor,
-                                          this);
-  if (rc != 0) {
-    return Status::Internal("start collector execution queue failed");
+Collector::Collector(uint32_t slots) {
+  slots_.reserve(slots);
+  for (uint32_t i = 0; i < slots; i++) {
+    slots_.push_back(std::make_unique<Slot>());
   }
-
-  return Status::OK();
 }
 
-Status Collector::Destroy() {
-  int rc = bthread::execution_queue_stop(queue_id_);
-  if (rc != 0) {
-    return Status::Internal("stop collector execution queue failed");
+void Collector::Drain(Stat* into) {
+  for (auto& slot : slots_) {
+    slot->Drain(into);
   }
-
-  rc = bthread::execution_queue_join(queue_id_);
-  if (rc != 0) {
-    return Status::Internal("join collector execution queue failed");
-  }
-
-  return Status::OK();
-}
-
-void Collector::Submit(Func func) {
-  CHECK_EQ(0, bthread::execution_queue_execute(queue_id_, func));
-}
-
-int Collector::Executor(void* meta, bthread::TaskIterator<Func>& iter) {
-  Collector* c = static_cast<Collector*>(meta);
-  for (; iter; iter++) {
-    auto& func = *iter;
-    func(&c->interval_, &c->total_);
-  }
-  return 0;
 }
 
 }  // namespace blockcache

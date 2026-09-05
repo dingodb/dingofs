@@ -37,18 +37,23 @@ DEFINE_uint32(offload_queue_capacity, 4096,
               "queued offload jobs beyond which submits answer busy");
 DEFINE_uint32(offload_cpu_min_bytes, 32768,
               "copies below this stay on the shard");
-DEFINE_uint32(offload_cpu_spin_us, 0,
-              "cpu workers spin this long for more work before parking");
+DEFINE_uint32(offload_cpu_spin_us, 200,
+              "cpu workers spin this long for more work before parking;"
+              " matches the reactor's idle_poll_us so a QD1 stream never"
+              " pays a condvar wakeup per completion");
 
 constexpr uint64_t kParkTimeoutNs = 100'000'000;
 
 CpuWorker::~CpuWorker() { Shutdown(); }
 
-void CpuWorker::Start(unsigned shard) {
+void CpuWorker::Start(unsigned shard, int cpu) {
   CHECK(!thread_.joinable()) << "CpuWorker started twice";
   stopping_.store(false, std::memory_order_release);
-  thread_ = std::thread([this, shard] {
+  thread_ = std::thread([this, shard, cpu] {
     SetThreadName("cpu-" + std::to_string(shard));
+    if (cpu >= 0) {
+      PinThreadToCpu(::pthread_self(), cpu);
+    }
     Loop();
   });
 }
@@ -113,16 +118,25 @@ WorkerPool::WorkerPool()
 
 WorkerPool::~WorkerPool() { Shutdown(); }
 
-void WorkerPool::Start() {
+void WorkerPool::Start(std::vector<int> shard_cpus) {
   CHECK(closed_.load(std::memory_order_relaxed)) << "WorkerPool started twice";
 
   LOG(INFO) << "WorkerPool is starting...";
 
-  // One cpu worker per shard, fixed to it. Up before the lane opens.
+  // One cpu worker per shard, fixed to it. Up before the lane opens. A pinned
+  // shard gets its worker on the SMT sibling of its core: the completion
+  // handoff stays inside one core's caches and never crosses a socket, and a
+  // spinning worker does not take a whole core away from another shard.
   cpu_worker_count_ = ShardCount();
   cpu_workers_ = std::make_unique<CpuWorker[]>(cpu_worker_count_);
   for (unsigned shard = 0; shard < cpu_worker_count_; ++shard) {
-    cpu_workers_[shard].Start(shard);
+    const int shard_cpu = shard < shard_cpus.size() ? shard_cpus[shard] : -1;
+    const int cpu = shard_cpu >= 0 ? GetSmtSibling(shard_cpu) : -1;
+    cpu_workers_[shard].Start(shard, cpu);
+    if (cpu >= 0) {
+      LOG(INFO) << "Pin cpu worker of shard " << shard << " to cpu " << cpu
+                << " (sibling of " << shard_cpu << ")";
+    }
   }
 
   CHECK(g_workers == nullptr) << "a second WorkerPool in this process";

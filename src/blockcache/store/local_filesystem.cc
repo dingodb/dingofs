@@ -74,26 +74,17 @@ Future<Status> LocalFileSystem::ReadFile(std::string path, uint64_t offset,
                       IsAligned(offset, kBlockAlign) &&
                       IsAligned(length, kBlockAlign);
 
-  // open
-  StatusOr<File> open =
-      co_await OpenFile(std::move(path), OpenFlags::kRead, direct);
-  if (!open.ok()) {
-    co_return Report(open.status());
-  }
-
-  // read
-  File file = std::move(open).value();
-  Status status = Status::OK();
-  StatusOr<size_t> nread = co_await file.Read(offset, buffer, length);
+  OpenOption option = BlockOpenOption();
+  option.direct = direct;
+  StatusOr<size_t> nread = co_await FileSystem::Read(
+      std::move(path), offset, buffer, length, OpenFlags::kRead, option);
   if (!nread.ok()) {
-    status = nread.status();
-  } else if (*nread < length) {
-    status = Status::IoError("short read");
+    co_return Report(nread.status());
   }
-
-  // close
-  const Status close = co_await file.Close();
-  co_return Report(status.ok() ? close : status);
+  if (*nread < length) {
+    co_return Report(Status::IoError("short read"));
+  }
+  co_return Report(Status::OK());
 }
 
 Future<Status> LocalFileSystem::Link(std::string from, std::string to) {

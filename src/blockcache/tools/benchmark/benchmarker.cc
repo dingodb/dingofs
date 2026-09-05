@@ -29,7 +29,7 @@ namespace dingofs {
 namespace blockcache {
 
 Benchmarker::Benchmarker()
-    : collector_(std::make_shared<Collector>()),
+    : collector_(std::make_shared<Collector>(FLAGS_threads)),
       reporter_(std::make_shared<Reporter>(collector_)),
       thread_pool_(
           std::make_unique<utils::TaskThreadPool<>>("benchmark_worker")) {
@@ -53,7 +53,6 @@ Status Benchmarker::InitAll() {
       [this]() { return InitStorage(); },
       [this]() { return InitBlockCache(); },
       [this]() { return InitBuffers(); },
-      [this]() { return InitCollector(); },
       [this]() {
         InitFactory();
         return Status::OK();
@@ -110,14 +109,6 @@ Status Benchmarker::InitBuffers() {
   return RegisterMemoryForRDMA(buffers_, bytes);
 }
 
-Status Benchmarker::InitCollector() {
-  auto status = collector_->Start();
-  if (!status.ok()) {
-    LOG(ERROR) << "Init collector failed: " << status.ToString();
-  }
-  return status;
-}
-
 void Benchmarker::InitFactory() {
   factory_ = NewFactory(block_cache_.get(), FLAGS_op);
 }
@@ -128,7 +119,7 @@ void Benchmarker::InitWorkers() {
     char* buffer =
         buffers_ + (static_cast<size_t>(i) * FLAGS_iodepth * FLAGS_blksize);
     workers_.emplace_back(
-        std::make_unique<Worker>(i, buffer, factory_, collector_));
+        std::make_unique<Worker>(i, buffer, factory_, collector_->SlotAt(i)));
   }
 }
 
@@ -151,7 +142,6 @@ void Benchmarker::StartWorkers() {
 void Benchmarker::StopAll() {
   StopWorkers();
   StopReporter();
-  StopCollector();
   StopBlockCache();
 }
 
@@ -163,8 +153,6 @@ void Benchmarker::StopWorkers() {
 }
 
 void Benchmarker::StopReporter() { reporter_->Shutdown(); }
-
-void Benchmarker::StopCollector() { collector_->Destroy(); }
 
 void Benchmarker::StopBlockCache() {
   block_cache_->Shutdown();

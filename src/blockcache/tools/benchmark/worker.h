@@ -34,7 +34,7 @@ namespace blockcache {
 class Worker {
  public:
   Worker(uint64_t idx, char* buffer, TaskFactorySPtr factory,
-         CollectorSPtr collector);
+         Collector::Slot* stats);
   Worker(const Worker&) = delete;
   Worker& operator=(const Worker&) = delete;
 
@@ -50,7 +50,7 @@ class Worker {
 
   uint64_t idx_;
   TaskFactorySPtr factory_;
-  CollectorSPtr collector_;
+  Collector::Slot* stats_;
   std::vector<Slot> slots_;
   std::mutex mutex_;
   std::vector<Slot*> free_slots_;

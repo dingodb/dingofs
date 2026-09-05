@@ -19,6 +19,8 @@
 #include <glog/logging.h>
 
 #include <memory>
+#include <utility>
+#include <vector>
 
 #include "blockcache/core/memory/buffer.h"
 #include "blockcache/core/runtime/runtime.h"
@@ -41,8 +43,12 @@ void StartProcessRuntime() {
   CHECK(status.ok()) << "Fail to create the buffer pools: "
                      << status.ToString();
 
+  std::vector<int> shard_cpus(g_runtime->shard_count());
+  for (unsigned shard = 0; shard < shard_cpus.size(); ++shard) {
+    shard_cpus[shard] = g_runtime->CpuOf(shard);
+  }
   g_worker_pool = std::make_unique<WorkerPool>();
-  g_worker_pool->Start();
+  g_worker_pool->Start(std::move(shard_cpus));
 }
 
 void StopProcessRuntime() {

@@ -52,14 +52,9 @@ struct FileStat {
 };
 
 struct OpenOption {
-  uint32_t io_inflight = 128;  // per-file admission limit, on this shard
+  uint32_t io_inflight = 128;
   uint32_t mode = 0644;
   bool register_fd = true;
-  // O_DIRECT, and with it the 4 KiB alignment every buffer must satisfy.
-  // Clearing it hands an unaligned transfer to the kernel instead: the copy
-  // still happens, but page-cache misses run it on an io-wq thread rather
-  // than on the shard, and we write no bounce code for it. Reads only --
-  // a buffered write would sit in the page cache and be lost on a crash.
   bool direct = true;
 };
 
@@ -69,8 +64,6 @@ class RwAwaiter final : public UringAwaiter<RwAwaiter> {
  public:
   RwAwaiter(File* file, bool write, uint64_t pos, void* buffer,
             uint32_t len) noexcept;
-  // Vectored write. `iov` must outlive the await; `len` is its total, kept
-  // separately so the short-write check reads the same in both modes.
   RwAwaiter(File* file, uint64_t pos, const struct iovec* iov, unsigned iovcnt,
             uint32_t len) noexcept;
 
@@ -78,18 +71,50 @@ class RwAwaiter final : public UringAwaiter<RwAwaiter> {
 
   void Arm();
   void OnResult() noexcept;
-  void Submit();  // prep + tag the SQE
+  void Submit();
 
   RwAwaiter* park_next = nullptr;
 
  private:
   File* file_;
-  void* buffer_;                       // scalar mode
-  const struct iovec* iov_ = nullptr;  // vectored mode, when non-null
+  void* buffer_;
+  const struct iovec* iov_ = nullptr;
   uint64_t pos_;
   uint32_t len_;
   unsigned iovcnt_ = 0;
   bool write_;
+};
+
+class OpenReadCloseAwaiter final : public IoAwaiter<OpenReadCloseAwaiter> {
+ public:
+  OpenReadCloseAwaiter(int file_slot, const char* path, uint64_t pos,
+                       void* buffer, uint32_t len, int open_flags) noexcept;
+
+  StatusOr<size_t> await_resume();
+
+  void Arm();
+  void OnResult() noexcept {}
+
+ private:
+  struct OpCompletion final : IoCompletion {
+    void Complete(int32_t res) noexcept override;
+
+    OpenReadCloseAwaiter* owner = nullptr;
+    int32_t result = 0;
+  };
+
+  void OnOpComplete() noexcept;
+
+  int file_slot_;
+  const char* path_;
+  uint64_t pos_;
+  void* buffer_;
+  uint32_t len_;
+  int open_flags_;
+  unsigned pending_completions_ = 3;
+  OpCompletion open_completion_;
+  OpCompletion read_completion_;
+  OpCompletion close_completion_;
 };
 
 class File {
@@ -126,8 +151,6 @@ class File {
 
   RwAwaiter Read(uint64_t pos, void* buffer, uint32_t len);
   RwAwaiter Write(uint64_t pos, const void* buffer, uint32_t len);
-  // One io for a body that arrived in pieces. No fixed-buffer variant
-  // exists for vectored io, so a single-range body should use Write.
   RwAwaiter Writev(uint64_t pos, const struct iovec* iov, unsigned iovcnt,
                    uint32_t len);
   Future<Status> Sync() const;
@@ -150,7 +173,7 @@ class File {
   }
 
   void CloseSyncIfOpen();
-  void ReleaseSlot();  // no-op unless a slot is owned
+  void ReleaseSlot();
   void Disown() {
     fd_ = -1;
     fixed_fd_ = -1;
@@ -164,23 +187,27 @@ class File {
   AdmissionQueue<RwAwaiter> queue_{128};
 };
 
-// Async fs ops on this shard's io_uring; missing opcodes fall back to syscall.
 class FileSystem {
  public:
   FileSystem() = delete;
 
   static Future<StatusOr<File>> Open(std::string path, OpenFlags flags,
                                      OpenOption option = {});
-
+  static Future<StatusOr<size_t>> Read(std::string path, uint64_t pos,
+                                       void* buffer, uint32_t len,
+                                       OpenFlags flags = OpenFlags::kRead,
+                                       OpenOption option = {});
   static Future<Status> Unlink(std::string path);
   static Future<Status> Link(std::string from, std::string to);
   static Future<Status> Rename(std::string from, std::string to);
-
-  // mkdir -p; an existing dir at any level is success (cross-shard race-free).
   static Future<Status> MakeDirs(std::string path, uint32_t mode = 0755);
-
-  // Stat by path; NotExist when absent.
   static Future<StatusOr<FileStat>> StatPath(std::string path);
+
+ private:
+  static Future<StatusOr<size_t>> ReadFallback(std::string path, uint64_t pos,
+                                               void* buffer, uint32_t len,
+                                               OpenFlags flags,
+                                               OpenOption option);
 };
 
 }  // namespace blockcache

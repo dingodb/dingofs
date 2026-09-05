@@ -36,25 +36,27 @@ Status Reporter::Start() {
     return Status::Internal("start reporter timer failed");
   }
   start_ = std::chrono::steady_clock::now();
+  last_ = start_;
 
-  collector_->Submit([this](Stat* stat, Stat* total) { OnStart(stat, total); });
+  OnStart();
   executor_->Schedule([this]() { TickTok(); }, kReportIntervalSeconds * 1000);
   return Status::OK();
 }
 
+// Stop() joins the timer thread and its pool, so no OnShow() is still running
+// once OnStop() drains the workers here.
 void Reporter::Shutdown() {
   executor_->Stop();
-  collector_->Submit([this](Stat* stat, Stat* total) { OnStop(stat, total); });
+  OnStop();
 }
 
 void Reporter::TickTok() {
-  collector_->Submit([this](Stat* stat, Stat* total) { OnShow(stat, total); });
+  OnShow();
   executor_->Schedule([this]() { TickTok(); }, kReportIntervalSeconds * 1000);
 }
 
-void Reporter::OnStart(Stat* stat, Stat* total) {
-  CHECK_EQ(stat->Count(), 0);
-  CHECK_EQ(total->Count(), 0);
+void Reporter::OnStart() {
+  CHECK_EQ(total_.Count(), 0);
 
   std::cout << fmt::format(
       "{}: threads={} iodepth={} fsid={} blksize={} blocks={} time_based={} "
@@ -67,39 +69,57 @@ void Reporter::OnStart(Stat* stat, Stat* total) {
   std::cout << "...\n";
 }
 
-void Reporter::OnShow(Stat* stat, Stat* total) {
-  auto interval_us = kReportIntervalSeconds * 1e6;
-  auto iops = stat->IOPS(interval_us);
-  auto bandwidth = stat->Bandwidth(interval_us);
-  auto avglat = stat->AvgLat() * 1.0 / 1e6;
-  auto maxlat = stat->MaxLat() * 1.0 / 1e6;
-  auto minlat = stat->MinLat() * 1.0 / 1e6;
-
-  std::cout << fmt::format(
-      "{:>9}  {}: {:>6} op/s  {:>5} MB/s  lat({:.6f} {:.6f} {:.6f})\n",
-      fmt::format("[{:.2f}%]", Percent(total)), FLAGS_op, iops, bandwidth,
-      avglat, maxlat, minlat);
-
-  *stat = Stat();
+void Reporter::OnShow() {
+  Stat interval;
+  const uint64_t interval_us = Drain(&interval);
+  Show(interval, interval_us);
 }
 
-void Reporter::OnStop(Stat* stat, Stat* total) {
-  if (stat->Count() != 0) {
-    OnShow(stat, total);
+void Reporter::OnStop() {
+  Stat interval;
+  const uint64_t interval_us = Drain(&interval);
+  if (interval.Count() != 0) {
+    Show(interval, interval_us);
   }
 
-  auto interval_us = ElapsedUs();
-  auto iops = total->IOPS(interval_us);
-  auto bandwidth = total->Bandwidth(interval_us);
-  auto avglat = total->AvgLat() * 1.0 / 1e6;
-  auto maxlat = total->MaxLat() * 1.0 / 1e6;
-  auto minlat = total->MinLat() * 1.0 / 1e6;
+  auto elapsed_us = ElapsedUs();
+  auto iops = total_.IOPS(elapsed_us);
+  auto bandwidth = total_.Bandwidth(elapsed_us);
+  auto avglat = total_.AvgLat() * 1.0 / 1e9;
+  auto maxlat = total_.MaxLat() * 1.0 / 1e9;
+  auto minlat = total_.MinLat() * 1.0 / 1e9;
 
   std::cout << "\n";
   std::cout << "Summary (" << FLAGS_threads << " workers):\n";
   std::cout << fmt::format(
       "  Avg({}):  {} op/s  {} MB/s  lat({:.6f} {:.6f} {:.6f})\n", FLAGS_op,
       iops, bandwidth, avglat, maxlat, minlat);
+}
+
+// Moves what the workers recorded since the last tick into `interval`, folds
+// it into the running total and returns the wall time the interval covers.
+uint64_t Reporter::Drain(Stat* interval) {
+  collector_->Drain(interval);
+  const auto now = std::chrono::steady_clock::now();
+  const uint64_t interval_us =
+      std::chrono::duration_cast<std::chrono::microseconds>(now - last_)
+          .count();
+  last_ = now;
+  total_.Merge(*interval);
+  return interval_us;
+}
+
+void Reporter::Show(const Stat& stat, uint64_t interval_us) const {
+  auto iops = stat.IOPS(interval_us);
+  auto bandwidth = stat.Bandwidth(interval_us);
+  auto avglat = stat.AvgLat() * 1.0 / 1e9;
+  auto maxlat = stat.MaxLat() * 1.0 / 1e9;
+  auto minlat = stat.MinLat() * 1.0 / 1e9;
+
+  std::cout << fmt::format(
+      "{:>9}  {}: {:>6} op/s  {:>5} MB/s  lat({:.6f} {:.6f} {:.6f})\n",
+      fmt::format("[{:.2f}%]", Percent(&total_)), FLAGS_op, iops, bandwidth,
+      avglat, maxlat, minlat);
 }
 
 uint64_t Reporter::ElapsedUs() const {

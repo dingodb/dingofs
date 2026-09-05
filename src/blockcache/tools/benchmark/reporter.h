@@ -21,6 +21,7 @@
 #include <memory>
 
 #include "blockcache/tools/benchmark/collector.h"
+#include "common/status.h"
 #include "utils/executor/executor.h"
 
 namespace dingofs {
@@ -40,15 +41,19 @@ class Reporter {
 
   void TickTok();
 
-  void OnStart(Stat* stat, Stat* total);
-  void OnShow(Stat* stat, Stat* total);
-  void OnStop(Stat* stat, Stat* total);
+  void OnStart();
+  void OnShow();
+  void OnStop();
 
+  uint64_t Drain(Stat* interval);
+  void Show(const Stat& stat, uint64_t interval_us) const;
   uint64_t ElapsedUs() const;
   double Percent(const Stat* total) const;
 
   std::chrono::steady_clock::time_point start_;
+  std::chrono::steady_clock::time_point last_;
   CollectorSPtr collector_;
+  Stat total_;
   std::unique_ptr<Executor> executor_;
 };
 
