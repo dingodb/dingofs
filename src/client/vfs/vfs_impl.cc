@@ -605,6 +605,7 @@ Status VFSImpl::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t* fh,
     reader_registry_->InvalidateByIno(ino, 0,
                                       std::numeric_limits<int64_t>::max());
   }
+
   if (s.ok()) {
     auto* handle = handle_manager_->NewHandle(gfh, ino, flags);
     if (handle == nullptr) {

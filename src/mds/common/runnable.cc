@@ -67,7 +67,7 @@ int ExecuteRoutine(void* meta,
       LOG(INFO) << fmt::format("[execqueue][type({})] task is stopped.", (*iter)->Type());
     }
 
-    worker->PopPendingTaskTrace();
+    if (BAIDU_UNLIKELY(worker->IsUseTrace())) worker->PopPendingTaskTrace();
     worker->DecPendingTaskCount();
     worker->Notify(*iter, WorkerEventType::kFinishTask);
   }
@@ -117,7 +117,7 @@ bool Worker::Execute(TaskRunnablePtr task) {
     return false;
   }
 
-  PushPendingTaskTrace(task->Trace());
+  if (BAIDU_UNLIKELY(is_use_trace_)) PushPendingTaskTrace(task->Trace());
 
   if (BAIDU_UNLIKELY(bthread::execution_queue_execute(queue_id_, task) != 0)) {
     LOG(ERROR) << fmt::format("[execqueue][type({})] worker execution queue execute failed", task->Type());
@@ -472,7 +472,7 @@ bool SimpleWorkerSet::Execute(TaskRunnablePtr task) {
   // directly else push the task to the task queue the total count of pending
   // task will be decreased in the worker function and the total concurrency is
   // limited by the worker number
-  if (is_inplace_run && pending_task_count < WorkerNum()) {
+  if (BAIDU_UNLIKELY(is_inplace_run && pending_task_count < WorkerNum())) {
     HandleNotify(task, WorkerEventType::kHandleTask);
 
     task->Run();
