@@ -23,30 +23,24 @@
 #include "blockcache/core/runtime/bootstrap.h"
 #include "blockcache/node/cli.h"
 #include "blockcache/node/node.h"
+#include "blockcache/utils/daemon.h"
 #include "blockcache/utils/flags.h"
 #include "common/logging.h"
 #include "common/options/cache.h"
-#include "utils/daemonize.h"
 
 using dingofs::Logger;
 using dingofs::Status;
 using dingofs::blockcache::CacheNode;
+using dingofs::blockcache::DaemonizeAndWait;
 using dingofs::blockcache::FlagParser;
 using dingofs::blockcache::FLAGS_daemonize;
 using dingofs::blockcache::kNodeUsage;
+using dingofs::blockcache::ReportDaemonReady;
 using dingofs::blockcache::StartProcessRuntime;
 using dingofs::blockcache::StopProcessRuntime;
-using dingofs::utils::DaemonizeExec;
 
 static bool ParseOptions(int argc, char** argv) {
   return FlagParser::Parse(&argc, &argv, kNodeUsage);
-}
-
-static bool Daemonize(const std::vector<std::string>& args) {
-  if (!FLAGS_daemonize) {
-    return true;
-  }
-  return DaemonizeExec(args);
 }
 
 static void InitLogger() {
@@ -62,6 +56,7 @@ static bool RunNode() {
     return false;
   }
 
+  ReportDaemonReady();
   node.RunUntilAskedToQuit();
   node.Shutdown();
   return true;
@@ -70,8 +65,9 @@ static bool RunNode() {
 int main(int argc, char** argv) {
   if (!ParseOptions(argc, argv)) {
     return 0;
-  } else if (!Daemonize({argv + 1, argv + argc})) {
-    return -1;
+  }
+  if (FLAGS_daemonize) {
+    return DaemonizeAndWait({argv + 1, argv + argc});
   }
 
   InitLogger();

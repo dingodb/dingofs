@@ -279,14 +279,6 @@ message("Using uring ${uring_VERSION}")
 find_library(NUMA_LIBRARY numa REQUIRED)
 message("Using libnuma: ${NUMA_LIBRARY}")
 
-# blockcache links into shared libraries (sdk/c, python), so it needs a PIC
-# libnuma; the dingo-eureka static archive is non-PIC.
-find_library(NUMA_SHARED_LIBRARY NAMES libnuma.so)
-if(NOT NUMA_SHARED_LIBRARY)
-  set(NUMA_SHARED_LIBRARY ${NUMA_LIBRARY})
-endif()
-message("Using shared libnuma: ${NUMA_SHARED_LIBRARY}")
-
 find_package(ibverbs REQUIRED)
 message("Using ibverbs, lib:${ibverbs_LIBRARIES}, include_dir:${ibverbs_INCLUDE_DIR}")
 

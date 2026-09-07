@@ -17,10 +17,11 @@
 #include "blockcache/utils/cpu.h"
 
 #include <glog/logging.h>
-#include <numaif.h>
+#include <linux/mempolicy.h>
 #include <pthread.h>
 #include <sched.h>
 #include <sys/mman.h>
+#include <sys/syscall.h>
 #include <unistd.h>
 
 #include <charconv>
@@ -116,11 +117,13 @@ int GetSmtSibling(int cpu) {
   return -1;
 }
 
+// Raw syscall instead of libnuma's mbind(): blockcache is linked into shared
+// libraries (sdk/c, python) and the dingo-eureka libnuma.a is not PIC.
 void BindPages(void* addr, size_t length, int numa_node) {
   if (numa_node >= 0) {
     unsigned long nodemask = 1ul << numa_node;
-    (void)::mbind(addr, length, MPOL_BIND, &nodemask,
-                  (sizeof(nodemask) * 8) + 1, 0);
+    (void)::syscall(SYS_mbind, addr, length, MPOL_BIND, &nodemask,
+                    (sizeof(nodemask) * 8) + 1, 0);
   }
   (void)::madvise(addr, length, MADV_HUGEPAGE);
 }
