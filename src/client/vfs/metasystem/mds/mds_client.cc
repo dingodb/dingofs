@@ -352,13 +352,19 @@ Status MDSClient::Lookup(ContextSPtr& ctx, Ino parent, const std::string& name,
 
   const auto& inode = response.inode();
 
+  // primary mds partition cache has been refreshed by base version, consume
+  // the rename ref count. bypass path does not touch primary cache, keep it.
+  if (use_base_version && !request.context().is_bypass_cache()) {
+    parent_memo_.DecRenameRefCount(parent);
+  }
+
   if (fs_info_.IsHashPartition() && mds::IsDir(inode.ino())) {
     uint64_t local_last_version = GetInodeVersion(inode.ino());
     if (inode.version() < local_last_version) {
       // fetch last version inode
       status = GetAttr(span_ctx, inode.ino(), attr_entry);
       if (status.ok()) {
-        parent_memo_.Upsert(inode.ino(), parent, 0, use_base_version);
+        parent_memo_.Upsert(inode.ino(), parent);
         return Status::OK();
 
       } else {
@@ -370,7 +376,7 @@ Status MDSClient::Lookup(ContextSPtr& ctx, Ino parent, const std::string& name,
   }
 
   // save ino to parent mapping
-  parent_memo_.Upsert(inode.ino(), parent, inode.version(), use_base_version);
+  parent_memo_.Upsert(inode.ino(), parent, inode.version());
 
   attr_entry.Swap(response.mutable_inode());
 
@@ -712,7 +718,9 @@ Status MDSClient::ReadDir(ContextSPtr& ctx, Ino ino, uint64_t fh,
     return status;
   }
 
-  if (use_base_version) parent_memo_.DecRenameRefCount(ino);
+  if (use_base_version && !request.context().is_bypass_cache()) {
+    parent_memo_.DecRenameRefCount(ino);
+  }
 
   entries.reserve(response.entries_size());
   for (const auto& entry : response.entries()) {

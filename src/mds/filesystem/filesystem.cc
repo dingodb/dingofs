@@ -1426,6 +1426,12 @@ Status FileSystem::ReadDir(Context& ctx, Ino ino, const std::string& last_name, 
       InodeSPtr inode;
       status = GetInode(ctx, 0, dentry.INo(), inode);
       if (!status.ok()) {
+        if (status.error_code() == pb::error::ENOT_FOUND) {
+          LOG(WARNING) << fmt::format("[fs.{}.{}.{}] get inode fail, dentry({}/{}) status({}).", fs_id_, ino,
+                                      ctx.RequestId(), dentry.Name(), dentry.INo(), status.error_str());
+          continue;
+        }
+
         LOG(ERROR) << fmt::format("[fs.{}.{}.{}] get inode fail, dentry({}/{}) status({}).", fs_id_, ino,
                                   ctx.RequestId(), dentry.Name(), dentry.INo(), status.error_str());
 
@@ -2299,9 +2305,8 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, RenameResult& 
     }
 
   } else {
-    // clean partition cache
-    // NotifyBuddyCleanPartitionCache(old_parent, old_parent_attr.version());
-    // if (!is_same_parent) NotifyBuddyCleanPartitionCache(new_parent, new_parent_attr.version());
+    // clean old parent partition cache
+    NotifyBuddyCleanPartitionCache(old_parent, reason);
 
     // refresh new parent inode and dentry cache
     auto new_parent_inode = UpsertInodeCache(new_parent_attr_with_mutation, reason);
