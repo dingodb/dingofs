@@ -21,7 +21,6 @@ target_link_libraries(blockcache_utils
     blockcache_status
     dingofs_common
     glog::glog
-    ${NUMA_SHARED_LIBRARY}
 )
 blockcache_tune(blockcache_utils)
 
