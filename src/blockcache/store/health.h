@@ -21,10 +21,10 @@
 #include <memory>
 #include <string>
 
+#include "blockcache/common/stats.h"
 #include "blockcache/core/reactor/coroutine.h"
 #include "blockcache/core/reactor/reactor.h"
 #include "blockcache/store/layout.h"
-#include "blockcache/store/stats.h"
 #include "blockcache/utils/gate.h"
 
 namespace dingofs {
@@ -62,7 +62,11 @@ class HealthStateMachine {
         break;
 
       case DiskHealth::kDown:
-        return;
+        if (successes_ > min_successes_ && errors_ == 0) {
+          state_ = DiskHealth::kNormal;
+          ResetWindow(now_sec);
+        }
+        break;
     }
 
     if (now_sec - window_start_sec_ >= tick_seconds_) {

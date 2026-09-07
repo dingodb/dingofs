@@ -30,11 +30,11 @@
 #include <memory>
 #include <utility>
 
+#include "cache/common/flags.h"
 #include "cache/common/macro.h"
 #include "cache/iutil/file_util.h"
 #include "cache/iutil/time_util.h"
 #include "common/const.h"
-#include "common/options/cache.h"
 #include "utils/concurrent/task_thread_pool.h"
 
 namespace dingofs {

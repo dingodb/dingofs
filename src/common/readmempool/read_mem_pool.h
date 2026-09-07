@@ -19,6 +19,7 @@
 
 #include <bvar/reducer.h>
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -115,7 +116,9 @@ class ReadMemPool {
 
   // Bytes the caller currently still holds and has not returned (release-lag
   // signal).
-  int64_t OutstandingBytes() const { return outstanding_bytes_.get_value(); }
+  int64_t OutstandingBytes() const {
+    return outstanding_bytes_.load(std::memory_order_relaxed);
+  }
 
   // Usage ratio for backpressure = outstanding / total. This is the demand the
   // callers actually hold, NOT the arena-carved footprint (BuddyUsedBytes),
@@ -166,12 +169,14 @@ class ReadMemPool {
   void OnAllocated(size_t len, size_t cap) {
     requested_bytes_ << static_cast<int64_t>(len);
     served_bytes_ << static_cast<int64_t>(cap);
-    outstanding_bytes_ << static_cast<int64_t>(cap);
+    outstanding_bytes_.fetch_add(static_cast<int64_t>(cap),
+                                 std::memory_order_relaxed);
   }
 
   // Account a free.
   void OnFreed(size_t cap) {
-    outstanding_bytes_ << -static_cast<int64_t>(cap);
+    outstanding_bytes_.fetch_sub(static_cast<int64_t>(cap),
+                                 std::memory_order_relaxed);
   }
 
   std::unique_ptr<Arena> arena_;
@@ -181,7 +186,9 @@ class ReadMemPool {
 
   bvar::Adder<int64_t> alloc_num_;
   bvar::Adder<int64_t> alloc_fail_num_;
-  bvar::Adder<int64_t> outstanding_bytes_;
+  // Plain atomic, not a bvar::Adder: the read path polls it on every request
+  // for backpressure and an Adder read walks every thread's shard.
+  std::atomic<int64_t> outstanding_bytes_{0};
   bvar::Adder<int64_t> requested_bytes_;
   bvar::Adder<int64_t> served_bytes_;
   bvar::Adder<int64_t> drain_reclaimed_bytes_;

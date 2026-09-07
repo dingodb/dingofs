@@ -31,11 +31,11 @@
 #include <memory>
 #include <utility>
 
+#include "cache/common/flags.h"
 #include "cache/common/macro.h"
 #include "cache/common/storage_client.h"
 #include "cache/remote/remote_cache_cluster.h"
 #include "common/io_buffer.h"
-#include "common/options/cache.h"
 #include "common/status.h"
 
 namespace brpc {

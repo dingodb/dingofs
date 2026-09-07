@@ -21,6 +21,7 @@
 #include <memory>
 #include <utility>
 
+#include "blockcache/common/metrics.h"
 #include "blockcache/common/route.h"
 #include "blockcache/core/runtime/smp.h"
 
@@ -49,6 +50,7 @@ Status ShardedLocalCache::Start() {
   if (!status.ok()) {
     return status;
   }
+  ExposeMetrics();
 
   running_ = true;
   LOG(INFO) << "Successfully start ShardedLocalCache{shards=" << ShardCount()
@@ -63,6 +65,7 @@ void ShardedLocalCache::Shutdown() {
 
   LOG(INFO) << "ShardedLocalCache is shutting down...";
 
+  HideMetrics();
   block_cache_.ShutdownOnAllShards();  // it will invoke LocalCache::Shutdown
   storage_client_->Shutdown();
 

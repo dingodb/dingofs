@@ -24,9 +24,9 @@
 
 #include <string>
 
+#include "cache/common/flags.h"
 #include "cache/iutil/ketama_con_hash.h"
 #include "cache/remote/remote_cache_cluster.h"
-#include "common/options/cache.h"
 
 namespace dingofs {
 namespace cache {

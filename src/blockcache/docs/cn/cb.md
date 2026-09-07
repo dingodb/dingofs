@@ -9,7 +9,7 @@
 | 缓存节点 2 | aurora-dingofs-0002 | 100.64.0.6:10002 | 盘 `/mnt/cache0`=nvme3n1、`/mnt/disk0`=nvme0n1（后者与他人共用，已用 15%） |
 
 - 三台 128 核（2 NUMA）、内核 5.14.0-570（RHEL 9.6）、mlx5_0 200G IB、四块 NVMe 都在 node1。
-- 节点：`--shards=8 --pin_cpu=true --cpuset=32-63 --rdma=true --cache_size_mb=5242880`，两种口径：**默认**（`poll_mode=false`，`buffer_pool_mb=256`）与 **poll**（`--poll_mode=true --buffer_pool_mb=1024`，§C2 起全部矩阵用此配置）。
+- 节点：`--shards=8 --pin_cpu=true --cpuset=32-63 --use_rdma=true --cache_size_mb=5242880`，两种口径：**默认**（`poll_mode=false`，`buffer_pool_mb=256`）与 **poll**（`--poll_mode=true --buffer_pool_mb=1024`，§C2 起全部矩阵用此配置）。
 - 数据集（fsid=10000，`cache-bench`）：4M 集 16 线程×512 块=8192 块 32 GiB；4K 集 16 线程×100000 块=160 万块 6.1 GiB；灌数用 `--op=put --stage=false`（写穿 minio + 同步 fill 两节点），errors=0，两节点四盘各占 45–55%。灌完沉降 30 分钟再开测。
 - 时延单位 µs；p50/p99/p999 来自 cb 的 log-linear 直方图（每 octave 256 桶，误差 ≤0.4%）。
 
@@ -39,9 +39,9 @@ LD_PRELOAD=/lib64/libjemalloc.so.2 \
 --free_space_ratio=0.01
 --shards=8
 --pin_cpu=true
---rdma=true
---rdma_device=mlx5_0
---rdma_port_num=1
+--use_rdma=true
+--cache_rdma_device=mlx5_0
+--cache_rdma_port_num=1
 --rdma_idle_timeout_s=300
 --cpuset=32-63
 ```
@@ -59,7 +59,7 @@ LD_PRELOAD=/lib64/libjemalloc.so.2 \
 客户端 cb 的参数见 §方法学。
 ## 方法学
 
-- **工具**：`build/bin/blockcache/cb`（`src/blockcache/tools/benchmark/`），直接驱动客户端 `BlockCacheImpl`，不经 FUSE/VFS。时延从 `AsyncGet` 提交前到完成回调返回，纳秒计时进 log-linear 直方图（每 octave 256 桶，分位数误差 ≤0.4%），每 3s 打一行 `op/s MiB/s avg p50 p99 p999 max errors rejects little`，退出打印 `hits/misses/cpu_copied_bytes`。失败 op 只计 `errors`，不进 op/s 与时延；`little = IOPS×avg/(threads×iodepth)`，≈1 说明测出的时延与吞吐自洽。
+- **工具**：`build/bin/blockcache/cb`（`src/blockcache/tools/benchmark/`），直接驱动客户端 `BlockCacheImpl`，不经 FUSE/VFS。时延从 `AsyncGet` 提交前到完成回调返回，纳秒计时进 log-linear 直方图（每 octave 256 桶，分位数误差 ≤0.4%），每 3s 打一行 `op/s MiB/s avg p50 p99 p999 max errors rejects little`，退出打印 `hits/misses/cpu_copied_bytes`。失败 op 只计 `errors`，不进 op/s 与时延；`little = IOPS×avg/(threads×inflight)`，≈1 说明测出的时延与吞吐自洽。
 - **键空间**：`chunkid = idx×blocks + 1`，每 16 块换 chunk，只由 (线程 idx, blocks, fsid, blksize) 决定。get 的 `--threads ≤ 灌数的 16` 即全命中；`--cache_store=none`（客户端无本地盘）、`--retrieve_storage=false`（miss 报错不回源），所以每格 `misses=0 errors=0` 是"纯远端命中"的硬证据。
 - **路由**：客户端 shard 与节点 shard 都按 `Mix64(chunk id)` 选（两端 `--shards=8` 相同，无转发跳）；节点内按 chunk id 一致性哈希选盘，同 chunk 的 16 块落同一盘；节点按 `Hash(handle)`（含 block index）选，同 chunk 的块在两节点间交替。因此**单提交线程任意时刻只压 1 个客户端 shard、每节点 1 块盘**，扩展性以线程数扫描为主线。
 - **口径**：每格 `--time_based --runtime=30`，3 轮交错随机序；每轮丢弃首个 3s 区间（含懒拨号）和末尾不足区间后取各区间中位数，再取 3 轮中位数；表中 `(min-max)` 为 3 轮 op/s 极差。同时采样两节点 `iostat -x 1`（四盘 r/s、rMB/s、util）、客户端 `port_rcv_data` 每秒差分（NIC 入向 GiB/s）、`mpstat -P 40-63`（shard 核占用）。
@@ -69,7 +69,7 @@ LD_PRELOAD=/lib64/libjemalloc.so.2 \
 ```bash
 numactl --membind=1 --physcpubind=40-63 cb \
   --mds_addrs=10.220.88.31:6900 --fsid=10000 --cache_group=group-1 --cache_store=none \
-  --remote_rdma=true --remote_rdma_device=mlx5_0 --rdma_port_num=1 \
+  --use_rdma=true --cache_rdma_device=mlx5_0 --cache_rdma_port_num=1 \
   --shards=8 --pin_cpu=true --cpuset=40-47 --rdma_max_connections=8 \
   --op=get --retrieve_storage=false --time_based --runtime=30
 # 4M: --blksize=4194304 --length=4194304 --blocks=512
@@ -140,7 +140,7 @@ numactl --membind=1 --physcpubind=40-63 cb \
 
 表头说明：op/s、MiB/s、avg/p50/p99/p999/max 为 3 轮稳态中位数（µs）；"四盘 MiB/s / 盘 util%" 来自两节点 iostat；
 "NIC GiB/s" 是客户端 mlx5_0 入向计数差分；"器件 avg/p50" 是 0001 两盘块层每请求读时延（4M 被拆成 33 个 124K 请求，
-只反映排队趋势）；little = IOPS×avg/(threads×iodepth)。
+只反映排队趋势）；little = IOPS×avg/(threads×inflight)。
 
 ### A1：QD1 地板（默认 vs 调优客户端）
 

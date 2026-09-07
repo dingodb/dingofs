@@ -29,7 +29,7 @@
 
 #include <memory>
 
-#include "common/options/cache.h"
+#include "cache/common/flags.h"
 #include "common/status.h"
 #include "dingofs/infiniband.pb.h"
 

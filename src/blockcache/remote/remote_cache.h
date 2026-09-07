@@ -22,6 +22,7 @@
 
 #include "blockcache/block/block_cache.h"
 #include "blockcache/common/mds_client.h"
+#include "blockcache/common/metrics.h"
 #include "blockcache/remote/members.h"
 #include "blockcache/remote/node_group.h"
 
@@ -59,9 +60,6 @@ class RemoteCache final : public BlockCache {
   MDSClient* mds_client_;
   RemoteNodeGroupUPtr nodes_;
   CacheGroupMemberSyncerUPtr syncer_;
-
-  uint64_t hits_ = 0;
-  uint64_t misses_ = 0;
 };
 
 using RemoteCacheUPtr = std::unique_ptr<RemoteCache>;

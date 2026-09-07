@@ -24,10 +24,10 @@
 #define DINGOFS_SRC_CACHE_REMOTE_REMOTE_BLOCK_CACHE_H_
 
 #include "cache/api/block_cache.h"
+#include "cache/common/flags.h"
 #include "cache/common/storage_client.h"
 #include "cache/iutil/bthread.h"
 #include "cache/remote/remote_cache_cluster.h"
-#include "common/options/cache.h"
 
 namespace dingofs {
 namespace cache {

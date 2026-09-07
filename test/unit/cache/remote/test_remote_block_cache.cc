@@ -28,10 +28,10 @@
 #include <string>
 #include <thread>
 
+#include "cache/common/flags.h"
 #include "cache/remote/remote_block_cache.h"
 #include "common/block/block_handle.h"
 #include "common/block/block_key.h"
-#include "common/options/cache.h"
 
 namespace dingofs {
 namespace cache {

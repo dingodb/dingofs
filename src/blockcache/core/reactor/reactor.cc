@@ -19,8 +19,8 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
-#include "blockcache/common/flag_decls.h"
 #include "blockcache/core/memory/shard_allocator.h"
+#include "common/options/cache.h"
 
 namespace dingofs {
 namespace blockcache {

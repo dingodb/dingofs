@@ -26,11 +26,11 @@
 #include <utility>
 #include <vector>
 
-#include "blockcache/common/flag_decls.h"
 #include "blockcache/core/runtime/shard_inbox.h"
 #include "blockcache/core/runtime/smp.h"
 #include "blockcache/remote/node_group.h"
 #include "blockcache/utils/thread.h"
+#include "common/options/cache.h"
 
 namespace dingofs {
 namespace blockcache {
@@ -39,7 +39,7 @@ DEFINE_uint32(periodic_sync_members_ms, 3000,
               "interval for sync members from mds in milliseconds");
 
 MemberGroup::MemberGroup(Members members)
-    : members_(FilterMembers(std::move(members))) {
+    : raw_members_(std::move(members)), members_(FilterMembers(raw_members_)) {
   const std::vector<uint32_t> weights = RecalcWeights(members_);
   for (uint32_t i = 0; i < members_.size(); ++i) {
     chash_.Add(i, members_[i].id, weights[i]);
@@ -91,8 +91,7 @@ std::vector<uint32_t> MemberGroup::RecalcWeights(const Members& members) {
 }
 
 CacheGroupMemberSyncer::CacheGroupMemberSyncer(MDSClient* mds_client)
-    : mds_client_(mds_client),
-      member_group_(std::make_shared<const MemberGroup>(Members{})) {
+    : mds_client_(mds_client) {
   CHECK(mds_client_ != nullptr) << "cache group syncer needs mds client";
   CHECK(!FLAGS_cache_group.empty()) << "cache group syncer needs group";
 }
@@ -151,21 +150,19 @@ void CacheGroupMemberSyncer::SyncMembers() {
     LOG(ERROR) << "Fail to list members of cache group=" << FLAGS_cache_group
                << " from mds: " << status.ToString();
     return;
+  } else if (members.empty()) {
+    LOG(ERROR) << "There is no member in cache group=" << FLAGS_cache_group;
+    return;
   }
 
   auto member_group = std::make_shared<const MemberGroup>(std::move(members));
-  if (member_group->empty()) {
-    LOG(ERROR) << "There is no member in cache group=" << FLAGS_cache_group;
-  } else if (*member_group != *member_group_) {
+  if (member_group_ == nullptr || *member_group != *member_group_) {
     LOG(INFO) << "Cache group=" << FLAGS_cache_group
-              << " changed: " << member_group_->size() << " -> "
-              << member_group->size() << " member(s)";
+              << " changed: " << member_group->size() << " online of "
+              << member_group->raw_members().size() << " member(s)";
     member_group_ = std::move(member_group);
   }
-
-  if (!member_group_->empty()) {
-    PublishToAllShards(member_group_);
-  }
+  PublishToAllShards(member_group_);
 }
 
 struct PublishTask : InboxWork {

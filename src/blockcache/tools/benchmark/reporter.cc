@@ -59,9 +59,9 @@ void Reporter::OnStart() {
   CHECK_EQ(total_.Count(), 0);
 
   std::cout << fmt::format(
-      "{}: threads={} iodepth={} fsid={} blksize={} blocks={} time_based={} "
+      "{}: threads={} inflight={} fsid={} blksize={} blocks={} time_based={} "
       "runtime={}\n",
-      FLAGS_op, FLAGS_threads, FLAGS_iodepth, FLAGS_fsid, FLAGS_blksize,
+      FLAGS_op, FLAGS_threads, FLAGS_inflight, FLAGS_fsid, FLAGS_blksize,
       FLAGS_blocks, FLAGS_time_based, FLAGS_runtime);
 
   std::cout << "...\n";

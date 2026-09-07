@@ -201,7 +201,7 @@ int main(int argc, char* argv[]) {
   }
 
   // used for remote cache
-  dingofs::cache::FLAGS_mds_addrs = mds_addrs;
+  dingofs::blockcache::FLAGS_mds_addrs = mds_addrs;
 
   // init global log
   dingofs::Logger::Init("dingo-client");

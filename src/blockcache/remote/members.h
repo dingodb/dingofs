@@ -37,6 +37,7 @@ class MemberGroup {
   const CacheGroupMember* GetMember(uint64_t key) const;
 
   const Members& members() const { return members_; }
+  const Members& raw_members() const { return raw_members_; }
   size_t size() const { return members_.size(); }
   bool empty() const { return members_.empty(); }
 
@@ -50,6 +51,7 @@ class MemberGroup {
   Members FilterMembers(Members members);
   std::vector<uint32_t> RecalcWeights(const Members& members);
 
+  Members raw_members_;
   Members members_;
   ConsistentHash chash_;
 };

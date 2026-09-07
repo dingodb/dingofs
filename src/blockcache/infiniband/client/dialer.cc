@@ -30,11 +30,11 @@
 #include <utility>
 #include <vector>
 
-#include "blockcache/common/flag_decls.h"
 #include "blockcache/core/reactor/reactor.h"
 #include "blockcache/core/runtime/shard_inbox.h"
 #include "blockcache/core/runtime/smp.h"
 #include "blockcache/core/runtime/worker_pool.h"
+#include "common/options/cache.h"
 #include "dingofs/cache.pb.h"
 
 namespace dingofs {
@@ -92,9 +92,9 @@ void Handshaker::OnShard(InboxWork* base) {
 Status Handshaker::Call() {
   brpc::ChannelOptions options;
   options.connect_timeout_ms =
-      static_cast<int32_t>(FLAGS_remote_connect_timeout_ms);
-  options.timeout_ms = static_cast<int32_t>(FLAGS_remote_rpc_timeout_ms);
-  options.max_retry = FLAGS_remote_rpc_max_retry;
+      static_cast<int32_t>(FLAGS_cache_rpc_connect_timeout_ms);
+  options.timeout_ms = static_cast<int32_t>(FLAGS_cache_rpc_timeout_ms);
+  options.max_retry = FLAGS_cache_rpc_max_retry_times;
   options.connection_type = "single";
   options.connection_group = option_.tag;
 

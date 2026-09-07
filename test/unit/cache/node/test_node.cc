@@ -25,10 +25,10 @@
 #include <sstream>
 #include <string>
 
+#include "cache/common/flags.h"
 #include "cache/node/node.h"
 #include "common/block/block_handle.h"
 #include "common/block/block_key.h"
-#include "common/options/cache.h"
 
 namespace dingofs {
 namespace cache {

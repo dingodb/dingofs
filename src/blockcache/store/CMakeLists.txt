@@ -18,7 +18,9 @@ add_library(blockcache_store ${BLOCKCACHE_STORE_SRCS})
 target_compile_features(blockcache_store PRIVATE cxx_std_20)
 target_link_libraries(blockcache_store
     blockcache_core
+    blockcache_common
     dingofs_common
+    brpc::brpc
     gflags::gflags
 )
 blockcache_tune(blockcache_store)

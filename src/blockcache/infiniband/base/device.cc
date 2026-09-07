@@ -33,17 +33,22 @@
 
 namespace dingofs {
 namespace blockcache {
-namespace infiniband {
 
-DEFINE_uint32(rdma_port_num, 1, "hca port to use");
-DEFINE_validator(rdma_port_num, [](const char* /*name*/, uint32_t value) {
+DEFINE_bool(use_rdma, false, "use rdma for the cache group transport");
+DEFINE_string(cache_rdma_device, "", "rdma device; empty picks the first");
+DEFINE_uint32(cache_rdma_port_num, 1, "hca port to use");
+DEFINE_validator(cache_rdma_port_num, [](const char* /*name*/, uint32_t value) {
   return value > 0;
 });
 
-DEFINE_int32(rdma_gid_index, -1,
+DEFINE_int32(rdma_gid_idx, -1,
              "gid index; -1 auto-selects a RoCEv2 IPv4 gid (RoCE only)");
 
-static uint8_t PortNum() { return static_cast<uint8_t>(FLAGS_rdma_port_num); }
+namespace infiniband {
+
+static uint8_t PortNum() {
+  return static_cast<uint8_t>(FLAGS_cache_rdma_port_num);
+}
 
 static LinkLayer ToLinkLayer(uint8_t verbs_link_layer) {
   switch (verbs_link_layer) {
@@ -97,8 +102,8 @@ static bool GidTypeIsRoceV2(const std::string& name, int index) {
 }
 
 static int SelectGidIndex(ibv_context* context, const std::string& name) {
-  if (FLAGS_rdma_gid_index >= 0) {
-    return FLAGS_rdma_gid_index;
+  if (FLAGS_rdma_gid_idx >= 0) {
+    return FLAGS_rdma_gid_idx;
   }
   for (int i = 0; i < 16; ++i) {
     ibv_gid gid;

@@ -31,21 +31,21 @@
 namespace dingofs {
 namespace blockcache {
 
-DEFINE_uint32(storage_put_tries, 10, "upload tries per block");
-DEFINE_validator(storage_put_tries, brpc::PassValidate);
+DEFINE_uint32(storage_upload_max_tries, 10, "upload tries per block");
+DEFINE_validator(storage_upload_max_tries, brpc::PassValidate);
 
-DEFINE_uint32(storage_get_tries, 10, "retrieval tries per block");
-DEFINE_validator(storage_get_tries, brpc::PassValidate);
+DEFINE_uint32(storage_download_max_tries, 10, "retrieval tries per block");
+DEFINE_validator(storage_download_max_tries, brpc::PassValidate);
 
-DEFINE_uint32(storage_get_notfound_tries, 8,
+DEFINE_uint32(storage_download_notfound_max_tries, 8,
               "retrieval tries when storage says not found");
-DEFINE_validator(storage_get_notfound_tries, brpc::PassValidate);
+DEFINE_validator(storage_download_notfound_max_tries, brpc::PassValidate);
 
-DEFINE_uint32(storage_put_backoff_base_ms, 1000,
+DEFINE_uint32(storage_upload_retry_backoff_base_ms, 1000,
               "first upload retry delay, doubling up to the cap (ms)");
-DEFINE_uint32(storage_get_backoff_base_ms, 300,
+DEFINE_uint32(storage_download_retry_backoff_base_ms, 300,
               "first retrieve retry delay, doubling up to the cap (ms)");
-DEFINE_uint32(storage_get_notfound_backoff_base_ms, 500,
+DEFINE_uint32(storage_download_notfound_retry_backoff_base_ms, 500,
               "first retry delay after a not-found retrieve (ms)");
 
 static constexpr uint64_t kPutBackoffCapMs = 60 * 1000;
@@ -53,17 +53,17 @@ static constexpr uint64_t kGetBackoffCapMs = 10 * 1000;
 static constexpr uint64_t kBackoffSliceMs = 200;
 
 static uint64_t PutBackoffMs(uint32_t tried) {
-  const uint64_t base = FLAGS_storage_put_backoff_base_ms;
+  const uint64_t base = FLAGS_storage_upload_retry_backoff_base_ms;
   return std::min(base * tried * tried, kPutBackoffCapMs);
 }
 
 static uint64_t GetBackoffMs(uint32_t tried) {
-  const uint64_t base = FLAGS_storage_get_backoff_base_ms;
+  const uint64_t base = FLAGS_storage_download_retry_backoff_base_ms;
   return std::min(base * tried, kGetBackoffCapMs);
 }
 
 static uint64_t NotFoundBackoffMs(uint32_t tried) {
-  const uint64_t base = FLAGS_storage_get_notfound_backoff_base_ms;
+  const uint64_t base = FLAGS_storage_download_notfound_retry_backoff_base_ms;
   return std::min(base * tried, kGetBackoffCapMs);
 }
 
@@ -139,7 +139,8 @@ Future<bool> ObjectStorage::WaitBackoff(uint64_t backoff_ms) {
 Future<Status> ObjectStorage::Put(BlockHandle handle, BufferViews block,
                                   ObjectPutOption option) {
   const uint32_t max_tries = std::max(
-      option.max_tries > 0 ? option.max_tries : FLAGS_storage_put_tries, 1U);
+      option.max_tries > 0 ? option.max_tries : FLAGS_storage_upload_max_tries,
+      1U);
   const std::string key = handle.StoreKey();
   const blockaccess::PutPayload payload = PayloadOf(block);
 
@@ -172,11 +173,14 @@ Future<Status> ObjectStorage::Put(BlockHandle handle, BufferViews block,
 Future<Status> ObjectStorage::Get(BlockHandle handle, uint64_t offset,
                                   uint32_t length, char* buffer,
                                   ObjectGetOption option) {
-  const uint32_t max_tries = std::max(
-      option.max_tries > 0 ? option.max_tries : FLAGS_storage_get_tries, 1U);
+  const uint32_t max_tries =
+      std::max(option.max_tries > 0 ? option.max_tries
+                                    : FLAGS_storage_download_max_tries,
+               1U);
   const uint32_t notfound_max_tries =
-      option.retry_notfound ? std::max(FLAGS_storage_get_notfound_tries, 1U)
-                            : 1;
+      option.retry_notfound
+          ? std::max(FLAGS_storage_download_notfound_max_tries, 1U)
+          : 1;
   const std::string key = handle.StoreKey();
 
   uint32_t tried = 0;

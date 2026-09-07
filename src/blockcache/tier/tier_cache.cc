@@ -23,9 +23,9 @@
 #include <utility>
 
 #include "blockcache/block/local_cache.h"
-#include "blockcache/common/flag_decls.h"
 #include "blockcache/core/runtime/smp.h"
 #include "blockcache/remote/remote_cache.h"
+#include "common/options/cache.h"
 
 namespace dingofs {
 namespace blockcache {
@@ -39,6 +39,12 @@ static bool DiskOrNone(const char* /*name*/, const std::string& value) {
 
 DEFINE_string(cache_store, "disk", "local disk cache: disk | none");
 DEFINE_validator(cache_store, DiskOrNone);
+
+DEFINE_bool(enable_stage, true,
+            "stage writeback blocks on the local disk before uploading them; "
+            "off: stage in the cache group or write through");
+DEFINE_bool(enable_cache, true,
+            "keep blocks read from storage on the local disk (read cache)");
 
 TierCache::TierCache(ObjectStorage* storage, MDSClient* mds_client)
     : TierCache(storage, MakeLocal(storage), MakeRemote(mds_client)) {}
@@ -100,7 +106,7 @@ Future<Status> TierCache::Put(BlockHandle handle, BufferViews block,
   if (option.stage) {
     Status status = Status::NotFound("no cache tier can stage");
 
-    if (HasLocal()) {
+    if (HasLocal() && FLAGS_enable_stage) {
       status = co_await local_cache_->Put(handle, block, {.stage = true});
     }
 
@@ -131,7 +137,7 @@ Future<Status> TierCache::Put(BlockHandle handle, BufferViews block,
 
 Future<Status> TierCache::Get(BlockHandle handle, uint64_t offset,
                               uint32_t length, char* buffer, GetOption option) {
-  if (HasLocal()) {
+  if (HasLocal() && (FLAGS_enable_cache || FLAGS_enable_stage)) {
     const Status status = co_await local_cache_->Get(
         handle, offset, length, buffer,
         {.retrieve_storage = false, .stats = option.stats});
@@ -154,16 +160,21 @@ Future<Status> TierCache::Get(BlockHandle handle, uint64_t offset,
     co_return Status::NotFound("block is not cached");
   }
 
-  // if (HasLocal()) {
-  //   co_return co_await local_cache_->Get(handle, offset, length, buffer,
-  //                                        {.retrieve_storage = true});
-  // }
+  if (HasLocal() && FLAGS_enable_cache) {
+    const Status status = co_await local_cache_->Get(
+        handle, offset, length, buffer,
+        {.retrieve_storage = true, .stats = option.stats});
+    if (!status.IsNotFound()) {
+      co_return status;
+    }
+  }
+
   co_return co_await storage_->Get(handle, offset, length, buffer,
                                    {.retry_notfound = true});
 }
 
 Future<Status> TierCache::Prefetch(BlockHandle handle, PrefetchOption option) {
-  if (HasLocal()) {
+  if (HasLocal() && FLAGS_enable_cache) {
     co_return co_await local_cache_->Prefetch(handle, option);
   }
 
@@ -211,6 +222,9 @@ BlockCacheUPtr TierCache::MakeLocal(ObjectStorage* storage) {
         << "; running without a local cache";
     return nullptr;
   }
+  LOG_IF(WARNING, !FLAGS_enable_cache && !FLAGS_enable_stage)
+      << "--cache_store=disk but --enable_cache and --enable_stage are both "
+         "off; the local disk will not be used";
   return std::make_unique<LocalCache>(storage);
 }
 

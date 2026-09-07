@@ -37,11 +37,11 @@
 #include <string>
 
 #include "cache/common/error.h"
+#include "cache/common/flags.h"
 #include "cache/remote/remote_node_connection.h"
 #include "cache/remote/remote_node_health_checker.h"
 #include "cache/remote/request.h"
 #include "common/io_buffer.h"
-#include "common/options/cache.h"
 #include "common/status.h"
 #include "dingofs/blockcache.pb.h"
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 dingodb.com, Inc. All Rights Reserved
+ * Copyright (c) 2026 dingodb.com, Inc. All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,11 +17,11 @@
 #ifndef DINGOFS_CLIENT_BLOCK_STORE_IMPL_H_
 #define DINGOFS_CLIENT_BLOCK_STORE_IMPL_H_
 
-#include <atomic>
+#include <cstdint>
+#include <memory>
+#include <string>
 
-#include "cache/api/block_cache.h"
 #include "client/vfs/blockstore/block_store.h"
-#include "common/blockaccess/block_accesser.h"
 
 namespace dingofs {
 namespace client {
@@ -29,38 +29,9 @@ namespace vfs {
 
 class VFSHub;
 
-class BlockStoreImpl final : public BlockStore {
- public:
-  BlockStoreImpl(VFSHub* hub, std::string uuid,
-                 blockaccess::BlockAccesser* block_accesser)
-      : hub_(hub), uuid_(std::move(uuid)), block_accesser_(block_accesser) {}
-
-  ~BlockStoreImpl() override { Shutdown(); }
-
-  Status Start() override;
-
-  void Shutdown() override;
-
-  void RangeAsync(ContextSPtr ctx, RangeReq req,
-                  StatusCallback callback) override;
-
-  void PutAsync(ContextSPtr ctx, PutReq req, StatusCallback callback) override;
-
-  void PrefetchAsync(ContextSPtr ctx, PrefetchReq req,
-                     StatusCallback callback) override;
-  // utility
-  bool EnableCache() const override;
-  cache::BlockCache* GetBlockCache() const override;
-
- private:
-  VFSHub* hub_;
-  const std::string uuid_;
-  std::atomic<bool> started_{false};
-  blockaccess::BlockAccesser* block_accesser_;
-  std::unique_ptr<cache::BlockCache> block_cache_;
-
-  bvar::Adder<int64_t> num_async_put_{"dingofs_blockstore_num_async_put"};
-};
+// fs_id names the mounted filesystem the hub's block accesser serves.
+std::unique_ptr<BlockStore> NewBlockStore(VFSHub* hub, std::string uuid,
+                                          uint32_t fs_id, uint64_t block_size);
 
 }  // namespace vfs
 }  // namespace client

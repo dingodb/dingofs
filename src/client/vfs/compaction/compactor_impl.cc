@@ -31,6 +31,7 @@
 #include "client/vfs/data/slice/slice_writer.h"
 #include "client/vfs/hub/vfs_hub.h"
 #include "common/block/block_utils.h"
+#include "common/readmempool/read_mem_pool.h"
 #include "utils/scoped_cleanup.h"
 
 namespace dingofs {
@@ -125,22 +126,30 @@ Status CompactorImpl::DoCompact(ContextSPtr ctx, Ino ino, int64_t chunk_index,
 
   VLOG(9) << "Start comaction for req: " << req.ToString();
 
-  std::string to_write;
-  {
-    // read data into our own destination buffer (compaction is not the FUSE
-    // read-reply / RDMA path, so a plain buffer is the fill target here).
-    to_write.resize(static_cast<size_t>(file_range.len));
+  // The block store fills the destination in place, and with an RDMA cache
+  // group that destination must be registered memory: take it from the
+  // compaction-private read pool so it never competes with the foreground
+  // read pool. Best-effort: a capacity miss skips this round (NotFit is
+  // swallowed by the compact task and the chunk is retried after the
+  // compaction interval) instead of falling back to the heap.
+  const size_t to_write_len = static_cast<size_t>(file_range.len);
+  ReadBuf to_write = vfs_hub_->GetCompactMemPool()->Allocate(to_write_len);
+  if (!to_write) {
+    LOG(WARNING) << "Skip compaction because compact mempool exhausted, len: "
+                 << to_write_len << ", req: " << req.ToString();
+    return Status::NotFit("compact mempool exhausted");
+  }
 
+  {
     Status s;
     BSynchronizer sync;
-    ReadBufView dst{reinterpret_cast<uint8_t*>(to_write.data()), 0,
-                    to_write.size()};
+    ReadBufView dst{to_write.data(), 0, to_write_len};
     StartChunkRead(SpanScope::GetContext(span), vfs_hub_, req, slices, dst,
                    sync.AsStatusCallBack(s));
     sync.Wait();
 
     if (!s.ok()) {
-      LOG(WARNING) << "Faile compaction because read failed: " << s.ToString()
+      LOG(WARNING) << "Fail compaction because read failed: " << s.ToString()
                    << ", req: " << req.ToString();
       return s;
     }
@@ -156,9 +165,12 @@ Status CompactorImpl::DoCompact(ContextSPtr ctx, Ino ino, int64_t chunk_index,
 
     auto writer = std::make_shared<SliceWriter>(ctx, vfs_hub_, offset_in_chunk);
 
-    writer->Write(SpanScope::GetContext(span), to_write.data(),
-                  static_cast<int32_t>(to_write.size()), offset_in_chunk,
-                  &lease);
+    writer->Write(SpanScope::GetContext(span),
+                  reinterpret_cast<const char*>(to_write.data()),
+                  static_cast<int32_t>(to_write_len), offset_in_chunk, &lease);
+    // Write copied everything into write-pool pages: hand the slot back before
+    // the upload so another compaction can proceed.
+    to_write.Reset();
 
     Status s;
     BSynchronizer sync;

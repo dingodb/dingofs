@@ -17,10 +17,11 @@ add_library(vfs_block_store
     block_store_access_log.cc
     fake_block_store.cc
 )
-
+target_compile_features(vfs_block_store PRIVATE cxx_std_20)
 target_link_libraries(vfs_block_store
-    cache_tier
-    cache_local
+    blockcache_api
+    blockcache_object
+    blockcache_common
     fmt::fmt
     glog::glog
 )

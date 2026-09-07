@@ -42,7 +42,6 @@
 #include "google/protobuf/message.h"
 #include "google/protobuf/repeated_field.h"
 #include "google/protobuf/util/json_util.h"
-#include "options/cache.h"
 #include "utils/string.h"
 
 namespace dingofs {
@@ -416,11 +415,11 @@ class Helper {
     }
   }
 
-  static std::string GenCacheConfigInfo() {
+  static std::string GenCacheConfigInfo(const std::string& cache_dir,
+                                        uint64_t cache_size_mb) {
     std::vector<std::pair<std::string, uint64_t>> cache_dirs;
 
-    Helper::SplitUniteCacheDir(cache::FLAGS_cache_dir,
-                               cache::FLAGS_cache_size_mb, &cache_dirs);
+    Helper::SplitUniteCacheDir(cache_dir, cache_size_mb, &cache_dirs);
 
     std::string result;
     for (size_t i = 0; i < cache_dirs.size(); ++i) {

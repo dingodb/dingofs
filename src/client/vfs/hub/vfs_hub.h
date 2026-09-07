@@ -88,6 +88,8 @@ class VFSHub {
 
   virtual ReadMemPool* GetReadMemPool() = 0;
 
+  virtual ReadMemPool* GetCompactMemPool() = 0;
+
   virtual FileSuffixWatcher* GetFileSuffixWatcher() = 0;
 
   virtual PrefetchManager* GetPrefetchManager() = 0;
@@ -178,6 +180,11 @@ class VFSHubImpl : public VFSHub {
   ReadMemPool* GetReadMemPool() override {
     CHECK_NOTNULL(read_mem_pool_);
     return read_mem_pool_.get();
+  }
+
+  ReadMemPool* GetCompactMemPool() override {
+    CHECK_NOTNULL(compact_mem_pool_);
+    return compact_mem_pool_.get();
   }
 
   FileSuffixWatcher* GetFileSuffixWatcher() override {
@@ -278,6 +285,9 @@ class VFSHubImpl : public VFSHub {
   std::unique_ptr<ReadMemPool> read_mem_pool_;
   std::unique_ptr<ReadMemPoolVars>
       read_mem_pool_vars_;  // after pool: dtor first
+  std::unique_ptr<ReadMemPool> compact_mem_pool_;
+  std::unique_ptr<ReadMemPoolVars>
+      compact_mem_pool_vars_;  // after pool: dtor first
   std::unique_ptr<FileSuffixWatcher> file_suffix_watcher_;
   std::unique_ptr<PrefetchManager> prefetch_manager_;
   std::unique_ptr<WarmupManager> warmup_manager_;

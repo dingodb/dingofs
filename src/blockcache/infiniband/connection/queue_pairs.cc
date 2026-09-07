@@ -22,10 +22,10 @@
 #include <cstring>
 #include <utility>
 
-#include "blockcache/common/flag_decls.h"
 #include "blockcache/infiniband/base/completion_queue.h"
 #include "blockcache/infiniband/base/queue_pair.h"
 #include "blockcache/infiniband/common/protocol.h"
+#include "common/options/cache.h"
 
 namespace dingofs {
 namespace blockcache {

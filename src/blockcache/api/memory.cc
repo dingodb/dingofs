@@ -22,13 +22,13 @@
 #include <cstddef>
 #include <utility>
 
-#include "blockcache/common/flag_decls.h"
 #include "blockcache/core/reactor/coroutine.h"
 #include "blockcache/core/runtime/bootstrap.h"
 #include "blockcache/core/runtime/smp.h"
 #include "blockcache/core/runtime/worker_pool.h"
 #include "blockcache/infiniband/base/memory_region.h"
 #include "blockcache/infiniband/client/context.h"
+#include "common/options/cache.h"
 
 namespace dingofs {
 namespace blockcache {
@@ -36,7 +36,7 @@ namespace blockcache {
 Status RegisterMemoryForRDMA(void* base, size_t bytes) {
   if (base == nullptr || bytes == 0) {
     return Status::OK();
-  } else if (!FLAGS_remote_rdma || FLAGS_cache_group.empty()) {
+  } else if (!FLAGS_use_rdma || FLAGS_cache_group.empty()) {
     return Status::OK();  // no rdma, nothing to register with
   }
 

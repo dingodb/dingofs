@@ -43,9 +43,6 @@ Status BlockCacheCleanupTask::Clean() {
   if (block_store == nullptr || !block_store->EnableCache())
     return Status::OK();
 
-  auto* block_cache = block_store->GetBlockCache();
-  if (block_cache == nullptr) return Status::OK();
-
   const uint32_t chunk_count =
       (length_ / chunk_size) + (length_ % chunk_size != 0 ? 1 : 0);
 
@@ -78,13 +75,16 @@ Status BlockCacheCleanupTask::Clean() {
           slice.id(), slice.size(), chunk.block_size());
 
       for (const auto& key : block_keys) {
-        BlockHandle handle(fs_id_, key);
-        Status status = block_cache->Delete(handle);
-        if (!status.ok()) {
-          LOG(ERROR) << fmt::format(
-              "[meta.cleanup.{}] clean block cache fail, block({}) status({}).",
-              ino_, key.Filename(), status.ToString());
-        }
+        block_store->DeleteAsync(
+            ctx, DeleteReq{BlockHandle(fs_id_, key)},
+            [ino = ino_, key](Status s) {
+              if (!s.ok()) {
+                LOG(ERROR) << fmt::format(
+                    "[meta.cleanup.{}] clean block cache fail, block({}) "
+                    "status({}).",
+                    ino, key.Filename(), s.ToString());
+              }
+            });
       }
     }
   }

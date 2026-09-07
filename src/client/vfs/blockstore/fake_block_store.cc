@@ -18,15 +18,12 @@
 
 #include <google/protobuf/descriptor.pb.h>
 
-#include "cache/api/block_cache.h"
 #include "client/common/const.h"
 #include "client/vfs/hub/vfs_hub.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
-
-#define METHOD_NAME() ("FakeBlockStore::" + std::string(__FUNCTION__))
 
 FakeBlockStore::FakeBlockStore(VFSHub* hub, std::string uuid)
     : hub_(hub), uuid_(std::move(uuid)) {}
@@ -70,8 +67,7 @@ void FakeBlockStore::RangeAsync(ContextSPtr ctx, RangeReq req,
     cb(s);
   };
 
-  DoRangeAsync(req.handle, req.offset, req.length, req.dst,
-               std::move(wrapper));
+  DoRangeAsync(req.handle, req.offset, req.length, req.dst, std::move(wrapper));
 }
 void FakeBlockStore::PutAsync(ContextSPtr ctx, PutReq req,
                               StatusCallback callback) {
@@ -100,9 +96,22 @@ void FakeBlockStore::PrefetchAsync(ContextSPtr ctx, PrefetchReq req,
   wrapper(Status::OK());
 }
 
+void FakeBlockStore::DeleteAsync(ContextSPtr ctx, DeleteReq req,
+                                 StatusCallback callback) {
+  (void)req;
+
+  auto span = hub_->GetTraceManager()->StartChildSpan(
+      "FakeBlockStore::DeleteAsync", ctx->GetTraceSpan());
+  auto wrapper = [this, cb = std::move(callback), span](Status s) {
+    SpanScope::End(span);
+    cb(s);
+  };
+
+  wrapper(Status::OK());
+}
+
 // utility
 bool FakeBlockStore::EnableCache() const { return false; }
-cache::BlockCache* FakeBlockStore::GetBlockCache() const { return nullptr; }
 
 }  // namespace vfs
 }  // namespace client

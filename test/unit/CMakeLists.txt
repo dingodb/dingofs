@@ -35,6 +35,7 @@ set(TEST_DEPS_WITHOUT_MAIN
 )
 
 add_subdirectory(coverage)
+add_subdirectory(blockcache)
 add_subdirectory(cache)
 add_subdirectory(client)
 add_subdirectory(common)

@@ -39,8 +39,10 @@ class MockBlockStore : public BlockStore {
   MOCK_METHOD(void, PrefetchAsync,
               (ContextSPtr ctx, PrefetchReq req, StatusCallback callback),
               (override));
+  MOCK_METHOD(void, DeleteAsync,
+              (ContextSPtr ctx, DeleteReq req, StatusCallback callback),
+              (override));
   MOCK_METHOD(bool, EnableCache, (), (const, override));
-  MOCK_METHOD(cache::BlockCache*, GetBlockCache, (), (const, override));
 };
 
 }  // namespace test

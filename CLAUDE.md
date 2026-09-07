@@ -68,7 +68,8 @@ mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_EXPOR
 |------|------|-----------|------|
 | MDS | `src/mds/` | `dingo-mds` | 元数据服务 |
 | Client | `src/client/` | `dingo-client` | 基于 FUSE 的文件系统客户端 |
-| Cache | `src/cache/` | `dingo-cache` | 多级缓存层 |
+| BlockCache | `src/blockcache/` | `dingo-cache`（`build/bin/blockcache/`） | 客户端缓存层 + 分布式缓存节点 |
+| Cache | `src/cache/` | `dingo-cache` | 老缓存服务端，客户端已不再对接 |
 | Common | `src/common/` | — | 共享工具库 |
 
 ### MDS 内部结构

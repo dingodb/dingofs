@@ -24,12 +24,12 @@
 #include <ostream>
 #include <utility>
 
-#include "blockcache/common/flag_decls.h"
 #include "blockcache/common/route.h"
 #include "blockcache/core/runtime/smp.h"
 #include "blockcache/infiniband/client/channel.h"
 #include "blockcache/net/brpc/brpc_channel.h"
 #include "blockcache/net/controller.h"
+#include "common/options/cache.h"
 
 namespace dingofs {
 namespace blockcache {
@@ -104,7 +104,7 @@ Future<Status> NodeProber::GetNodeInfo() {
   }
 
   remote_shard_count_ = std::max(1U, response.shards());
-  use_rdma_ = FLAGS_remote_rdma && response.rdma_enabled();
+  use_rdma_ = FLAGS_use_rdma && response.rdma_enabled();
 
   const unsigned shard = ThisShardId();
   if (use_rdma_) {

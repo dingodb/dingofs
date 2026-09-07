@@ -381,7 +381,7 @@ Status ClientSession::Start(const DingofsConfig& config, int upgrade_from_pid) {
 
   // Propagate mds_addrs to the cache layer's own MDS client so that
   // remote cache peer discovery works when remote cache is enabled.
-  cache::FLAGS_mds_addrs = config.mds_addrs;
+  blockcache::FLAGS_mds_addrs = config.mds_addrs;
 
   vfs::VFSConfig vfs_conf;
   vfs_conf.mds_addrs = config.mds_addrs;
@@ -1036,10 +1036,12 @@ Status ClientSession::Read(const Context& ctx, Ino ino, DataBuffer* data_buffer,
                            uint64_t* out_rsize) {
   CLIENT_SESSION_OPERATION_GUARD();
   auto span = trace_manager_->StartSpan("ClientSession::Read");
-  std::string session_id = dingofs::SpanScope::GetSessionID(span);
 
-  VLOG(2) << fmt::format("[{}] VFSRead ino: {}, size: {}, offset: {}, fh: {}",
-                         session_id, ino, size, offset, fh);
+  if (VLOG_IS_ON(2)) {
+    VLOG(2) << fmt::format("[{}] VFSRead ino: {}, size: {}, offset: {}, fh: {}",
+                           dingofs::SpanScope::GetSessionID(span), ino, size,
+                           offset, fh);
+  }
 
   Status s;
   AccessLogGuard log(

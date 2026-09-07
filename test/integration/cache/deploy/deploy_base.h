@@ -31,8 +31,8 @@
 #include <string>
 #include <thread>
 
+#include "cache/common/flags.h"
 #include "cache/common/mds_client.h"
-#include "common/options/cache.h"
 #include "utils/uuid.h"
 
 namespace dingofs {

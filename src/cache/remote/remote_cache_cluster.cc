@@ -31,10 +31,10 @@
 #include <unordered_set>
 
 #include "cache/common/block_handle_helper.h"
+#include "cache/common/flags.h"
 #include "cache/common/mds_client.h"
 #include "cache/iutil/ketama_con_hash.h"
 #include "cache/iutil/math_util.h"
-#include "common/options/cache.h"
 #include "dingofs/blockcache.pb.h"
 #include "utils/executor/bthread/bthread_executor.h"
 

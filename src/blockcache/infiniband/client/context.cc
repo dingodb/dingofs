@@ -23,12 +23,12 @@
 #include <string>
 #include <utility>
 
-#include "blockcache/common/flag_decls.h"
 #include "blockcache/core/memory/buffer.h"
 #include "blockcache/core/memory/shard_allocator.h"
 #include "blockcache/core/memory/slab_pool.h"
 #include "blockcache/infiniband/common/protocol.h"
 #include "blockcache/infiniband/connection/poller.h"
+#include "common/options/cache.h"
 
 namespace dingofs {
 namespace blockcache {

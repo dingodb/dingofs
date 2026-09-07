@@ -91,6 +91,11 @@ DEFINE_validator(vfs_read_max_retry_block_not_found, brpc::PassValidate);
 
 DEFINE_int64(vfs_read_buffer_total_mb, 8192, "total read buffer size in MB");
 
+DEFINE_int64(vfs_compact_buffer_total_mb, 512,
+             "total read buffer size in MB reserved for chunk compaction; "
+             "each compaction holds one chunk-sized slot, pinned and "
+             "RDMA-registered at startup");
+
 DEFINE_double(vfs_read_mempool_readahead_watermark, 0.80,
               "read mempool usage ratio above which readahead is suppressed "
               "and idle readahead buffers are eagerly reclaimed");

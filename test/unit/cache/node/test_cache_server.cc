@@ -24,8 +24,8 @@
 
 #include <string>
 
+#include "cache/common/flags.h"
 #include "cache/node/cache_server.h"
-#include "common/options/cache.h"
 
 namespace dingofs {
 namespace cache {

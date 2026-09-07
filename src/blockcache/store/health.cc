@@ -152,6 +152,10 @@ Future<bool> HealthChecker::CheckDisk() const {
 }
 
 Future<bool> HealthChecker::WriteProbeFile(std::string path) const {
+  if (!(co_await FileSystem::MakeDirs(layout_.ProbeDir())).ok()) {
+    co_return false;
+  }
+
   // open
   StatusOr<File> open =
       co_await FileSystem::Open(path, OpenFlags::kWrite | OpenFlags::kCreate,

@@ -16,7 +16,6 @@
 
 #include "blockcache/node/service.h"
 
-#include "blockcache/common/flag_decls.h"
 #include "blockcache/common/status.h"
 #include "blockcache/core/memory/buffer.h"
 #include "blockcache/core/memory/buffer_view.h"
@@ -24,6 +23,7 @@
 #include "blockcache/net/types.h"
 #include "blockcache/store/local_filesystem.h"
 #include "blockcache/utils/align.h"
+#include "common/options/cache.h"
 
 namespace dingofs {
 namespace blockcache {
@@ -141,7 +141,7 @@ Future<> CacheService::GetNodeInfo(
   response->set_status(pb::error::OK);
   response->set_id(FLAGS_id);
   response->set_shards(ShardCount());
-  response->set_rdma_enabled(FLAGS_rdma);
+  response->set_rdma_enabled(FLAGS_use_rdma);
   co_return;
 }
 

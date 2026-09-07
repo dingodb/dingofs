@@ -29,7 +29,7 @@
 #include <mutex>
 #include <utility>
 
-#include "common/options/cache.h"
+#include "cache/common/flags.h"
 
 namespace dingofs {
 namespace cache {

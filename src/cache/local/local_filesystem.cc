@@ -34,6 +34,7 @@
 #include <memory>
 #include <string>
 
+#include "cache/common/flags.h"
 #include "cache/common/slab_pool.h"
 #include "cache/iutil/file_util.h"
 #include "cache/iutil/inflight_tracker.h"
@@ -43,7 +44,6 @@
 #include "cache/local/disk_health_checker.h"
 #include "common/const.h"
 #include "common/io_buffer.h"
-#include "common/options/cache.h"
 #include "common/status.h"
 
 namespace dingofs {

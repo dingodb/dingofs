@@ -35,6 +35,7 @@
 #include "client/vfs/metasystem/mds/mds_client.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/block/block_key.h"
+#include "common/readmempool/read_mem_pool.h"
 #include "common/status.h"
 #include "common/trace/trace_manager.h"
 #include "mds/filesystem/fs_info.h"
@@ -828,6 +829,82 @@ TEST_F(CompactorTest, SuccessfulCalls_ReplacePrepopulatedOutput) {
                             skipped_out)
                   .ok());
   EXPECT_TRUE(skipped_out.empty());
+}
+
+// The compaction read destination must come from the compaction-private
+// registered pool: an RDMA cache group rejects receive buffers outside
+// registered memory, and the foreground read pool must stay untouched.
+TEST_F(CompactorTest, Compact_ReadsIntoCompactMemPool) {
+  const uint8_t* pool_begin = compact_mem_pool_->BaseAddr();
+  const uint8_t* pool_end = pool_begin + compact_mem_pool_->TotalSize();
+  std::atomic<int> range_calls{0};
+
+  ON_CALL(*mock_block_store_, RangeAsync)
+      .WillByDefault([&](ContextSPtr, RangeReq req, StatusCallback cb) {
+        ++range_calls;
+        EXPECT_GE(req.dst.data(), pool_begin);
+        EXPECT_LE(req.dst.data() + req.length, pool_end);
+        std::memset(req.dst.data(), 0, req.length);
+        cb(Status::OK());
+      });
+  EXPECT_CALL(*mock_block_store_, RangeAsync).Times(AnyNumber());
+  EXPECT_CALL(*mock_block_store_, PutAsync).Times(AnyNumber());
+
+  std::vector<Slice> slices = {dingofs::client::vfs::test::MakeSlice(
+      /*id=*/3, /*pos=*/0, 4 * 1024 * 1024)};
+  std::vector<Slice> out;
+  Status s = compactor_->ForceCompact(ctx_, /*ino=*/300, /*chunk_index=*/0,
+                                      slices, out);
+  EXPECT_TRUE(s.ok()) << s.ToString();
+  EXPECT_GT(range_calls.load(), 0);
+  EXPECT_EQ(read_mem_pool_->OutstandingBytes(), 0);
+  EXPECT_EQ(compact_mem_pool_->OutstandingBytes(), 0);
+}
+
+// An exhausted compaction pool skips the round with NotFit (swallowed by the
+// compact task, retried after the interval) and issues no read or upload.
+TEST_F(CompactorTest, ForceCompact_CompactPoolBusy_SkipsWithNotFit) {
+  ReadMemPool tiny(64 * 1024 * 1024);
+  ReadBuf held = tiny.Allocate(64 * 1024 * 1024);  // occupy the whole arena
+  ASSERT_TRUE(held);
+  ON_CALL(*mock_hub_, GetCompactMemPool()).WillByDefault(Return(&tiny));
+
+  EXPECT_CALL(*mock_block_store_, RangeAsync).Times(0);
+  EXPECT_CALL(*mock_block_store_, PutAsync).Times(0);
+
+  std::vector<Slice> slices = {dingofs::client::vfs::test::MakeSlice(
+      /*id=*/4, /*pos=*/0, 4 * 1024 * 1024)};
+  std::vector<Slice> out;
+  Status s = compactor_->ForceCompact(ctx_, /*ino=*/301, /*chunk_index=*/0,
+                                      slices, out);
+  EXPECT_TRUE(s.IsNotFit()) << s.ToString();
+  EXPECT_TRUE(out.empty());
+  EXPECT_EQ(write_buf_mgr_->GetUsedBytes(), 0);
+}
+
+// SliceWriter::Write copies into write-pool pages, so the compaction slot is
+// handed back before the upload starts. Use a slice smaller than block_size so
+// the only upload comes from FlushAsync, after the release.
+TEST_F(CompactorTest, ForceCompact_ReleasesBufferBeforeFlush) {
+  std::atomic<int64_t> outstanding_at_put{-1};
+  std::atomic<int> put_calls{0};
+  ON_CALL(*mock_block_store_, PutAsync)
+      .WillByDefault([&](ContextSPtr, PutReq, StatusCallback cb) {
+        ++put_calls;
+        outstanding_at_put = compact_mem_pool_->OutstandingBytes();
+        cb(Status::OK());
+      });
+  EXPECT_CALL(*mock_block_store_, RangeAsync).Times(AnyNumber());
+  EXPECT_CALL(*mock_block_store_, PutAsync).Times(AnyNumber());
+
+  std::vector<Slice> slices = {dingofs::client::vfs::test::MakeSlice(
+      /*id=*/5, /*pos=*/0, 1 * 1024 * 1024)};
+  std::vector<Slice> out;
+  Status s = compactor_->ForceCompact(ctx_, /*ino=*/302, /*chunk_index=*/0,
+                                      slices, out);
+  EXPECT_TRUE(s.ok()) << s.ToString();
+  EXPECT_EQ(put_calls.load(), 1);
+  EXPECT_EQ(outstanding_at_put.load(), 0);
 }
 
 }  // namespace vfs

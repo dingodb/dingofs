@@ -26,11 +26,11 @@
 #include <string>
 
 #include "cache/common/block_handle_helper.h"
+#include "cache/common/flags.h"
 #include "cache/infiniband/controller.h"
 #include "cache/node/service.h"
 #include "common/block/block_handle.h"
 #include "common/block/block_key.h"
-#include "common/options/cache.h"
 
 namespace dingofs {
 namespace cache {

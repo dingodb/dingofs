@@ -19,7 +19,6 @@
 
 #include <cstdint>
 
-#include "cache/api/block_cache.h"
 #include "client/vfs/common/read_buf_view.h"
 #include "common/block/block_handle.h"
 #include "common/callback.h"
@@ -35,9 +34,7 @@ struct RangeReq {
   BlockHandle handle;
   int64_t offset{0};
   int64_t length{0};
-  // Window into the request's pool slot to fill. IOBuffer stays out of the read
-  // path above this struct; block_store wraps `dst` as an IOBuffer (meta =
-  // arena base) only at the cache edge (BlockStoreImpl::RangeAsync).
+  // Window into the request's pool slot to fill.
   ReadBufView dst;
 };
 
@@ -48,6 +45,10 @@ struct PutReq {
 };
 
 struct PrefetchReq {
+  BlockHandle handle;
+};
+
+struct DeleteReq {
   BlockHandle handle;
 };
 
@@ -74,9 +75,12 @@ class BlockStore {
   // RangeAsync; no shutdown admission/drain guarantee is made here.
   virtual void PrefetchAsync(ContextSPtr ctx, PrefetchReq req,
                              StatusCallback callback) = 0;
+
+  virtual void DeleteAsync(ContextSPtr ctx, DeleteReq req,
+                           StatusCallback callback) = 0;
+
   // utility
   virtual bool EnableCache() const = 0;
-  virtual cache::BlockCache* GetBlockCache() const = 0;
 };
 
 }  // namespace vfs

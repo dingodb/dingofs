@@ -29,11 +29,11 @@
 #include <thread>
 #include <vector>
 
+#include "cache/common/flags.h"
 #include "cache/common/slab_pool.h"
 #include "cache/local/disk_cache_group.h"
 #include "common/block/block_key.h"
 #include "common/io_buffer.h"
-#include "common/options/cache.h"
 
 namespace dingofs {
 namespace cache {

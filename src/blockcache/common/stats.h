@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_BLOCKCACHE_STORE_STATS_H_
-#define DINGOFS_BLOCKCACHE_STORE_STATS_H_
+#ifndef DINGOFS_BLOCKCACHE_COMMON_STATS_H_
+#define DINGOFS_BLOCKCACHE_COMMON_STATS_H_
 
 #include <algorithm>
 #include <cstdint>
@@ -28,13 +28,19 @@ namespace blockcache {
 enum class DiskHealth : uint8_t { kNormal = 0, kUnstable = 1, kDown = 2 };
 
 struct DiskStats {
+  uint32_t index = 0;
   std::string uuid;
   std::string dir;
   uint64_t capacity_bytes = 0;
   uint64_t used_bytes = 0;
+  uint64_t cached_blocks = 0;
+  uint64_t staged_blocks = 0;
+  uint64_t hits = 0;
+  uint64_t misses = 0;
   DiskHealth health = DiskHealth::kNormal;
   bool stage_full = false;
   bool cache_full = false;
+  bool running = false;
 };
 
 struct CacheStats {
@@ -68,9 +74,14 @@ struct CacheStats {
 
       row->capacity_bytes += d.capacity_bytes;
       row->used_bytes += d.used_bytes;
+      row->cached_blocks += d.cached_blocks;
+      row->staged_blocks += d.staged_blocks;
+      row->hits += d.hits;
+      row->misses += d.misses;
       row->health = std::max(row->health, d.health);
       row->stage_full |= d.stage_full;
       row->cache_full |= d.cache_full;
+      row->running = row->running && d.running;
     }
   }
 
@@ -91,4 +102,4 @@ struct CacheStats {
 }  // namespace blockcache
 }  // namespace dingofs
 
-#endif  // DINGOFS_BLOCKCACHE_STORE_STATS_H_
+#endif  // DINGOFS_BLOCKCACHE_COMMON_STATS_H_

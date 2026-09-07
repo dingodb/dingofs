@@ -28,12 +28,12 @@
 #include <atomic>
 #include <memory>
 
+#include "cache/common/flags.h"
 #include "cache/iutil/file_util.h"
 #include "cache/local/disk_cache_manager.h"
 #include "cache/local/local_filesystem.h"
 #include "common/directory.h"
 #include "common/helper.h"
-#include "common/options/cache.h"
 #include "utils/uuid.h"
 
 namespace dingofs {

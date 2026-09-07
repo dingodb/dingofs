@@ -25,12 +25,12 @@
 #include <span>
 #include <string_view>
 
-#include "blockcache/common/flag_decls.h"
 #include "blockcache/core/memory/buffer_view.h"
 #include "blockcache/infiniband/base/device.h"
 #include "blockcache/infiniband/base/queue_pair.h"
 #include "blockcache/infiniband/base/region.h"
 #include "blockcache/net/types.h"
+#include "common/options/cache.h"
 #include "dingofs/cache.pb.h"
 
 namespace dingofs {

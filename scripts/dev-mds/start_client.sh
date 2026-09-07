@@ -160,8 +160,6 @@ function start() {
         --cache_store=none \
         --fill_group_cache=False \
         --cache_group=cache_test \
-        --enable_stage=True \
-        --enable_cache=True \
         --vfs_block_store_access_log_enable=True \
         --daemonize=true 2>&1 > $log_dir/out
 

@@ -24,6 +24,8 @@
 #include <string_view>
 #include <vector>
 
+#include "blockcache/common/mds_client.h"
+#include "blockcache/common/metrics.h"
 #include "brpc/builtin/common.h"
 #include "brpc/closure_guard.h"
 #include "brpc/controller.h"
@@ -32,6 +34,7 @@
 #include "client/common/client_state.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/metasystem/meta_system.h"
+#include "common/options/cache.h"
 #include "common/version.h"
 #include "fmt/format.h"
 #include "fmt/ranges.h"
@@ -1385,9 +1388,12 @@ static bool RenderRPCPage(const Json::Value& json_value,
   return true;
 }
 
-static bool RenderBlockCachePage(const Json::Value& json_value,
-                                 butil::IOBufBuilder& os,
-                                 std::string& client_name) {
+static void RenderBlockCachePage(
+    const std::vector<blockcache::DiskStats>& disks,
+    const blockcache::Members& members, butil::IOBufBuilder& os,
+    const std::string& client_name) {
+  static constexpr uint64_t kMiB = 1024 * 1024;
+
   os << "<!DOCTYPE html><html>";
 
   os << "<head>" << RenderHead("dingofs block cache") << "</head>";
@@ -1397,12 +1403,6 @@ static bool RenderBlockCachePage(const Json::Value& json_value,
       client_name);
 
   // local block cache
-  const Json::Value& disks = json_value["disks"];
-  const Json::Value& members = json_value["members"];
-  if (!disks.isArray() || !members.isArray()) {
-    LOG(ERROR) << "block cache arrays are invalid.";
-    return false;
-  }
   os << R"(<div style="margin:12px;font-size:smaller;">)";
   os << fmt::format(R"(<h3>Local Block Cache [{}]</h3>)", disks.size());
   os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
@@ -1414,13 +1414,13 @@ static bool RenderBlockCachePage(const Json::Value& json_value,
   os << "<th>Cache Full</th>";
   os << "</tr>";
 
-  for (const auto& disk : disks) {
+  for (const blockcache::DiskStats& disk : disks) {
     os << "<tr>";
-    os << "<td>" << disk["dir"].asString() << "</td>";
-    os << "<td>" << disk["capacity"].asInt64() << "</td>";
-    os << "<td>" << disk["free_space_ratio"].asDouble() << "</td>";
-    os << "<td>" << disk["stage_full"].asDouble() << "</td>";
-    os << "<td>" << disk["cache_full"].asDouble() << "</td>";
+    os << "<td>" << disk.dir << "</td>";
+    os << "<td>" << disk.capacity_bytes / kMiB << "</td>";
+    os << "<td>" << blockcache::FLAGS_free_space_ratio * 100 << "</td>";
+    os << "<td>" << disk.stage_full << "</td>";
+    os << "<td>" << disk.cache_full << "</td>";
 
     os << "</tr>";
   }
@@ -1436,17 +1436,16 @@ static bool RenderBlockCachePage(const Json::Value& json_value,
   os << "<th>Id</th>";
   os << "<th>Endpoint</th>";
   os << "<th>Weight</th>";
-  os << "<th>Connections</th>";
   os << "<th>Healthy</th>";
   os << "</tr>";
 
-  for (const auto& member : members) {
+  for (const blockcache::CacheGroupMember& member : members) {
     os << "<tr>";
-    os << "<td>" << member["id"].asString() << "</td>";
-    os << "<td>" << member["endpoint"].asString() << "</td>";
-    os << "<td>" << member["weight"].asUInt() << "</td>";
-    os << "<td>" << member["connections"].asInt64() << "</td>";
-    os << "<td>" << member["healthy"].asBool() << "</td>";
+    os << "<td>" << member.id << "</td>";
+    os << "<td>" << fmt::format("{}:{}", member.ip, member.port) << "</td>";
+    os << "<td>" << member.weight << "</td>";
+    os << "<td>" << (member.state == blockcache::CacheGroupMemberState::kOnline)
+       << "</td>";
 
     os << "</tr>";
   }
@@ -1456,7 +1455,7 @@ static bool RenderBlockCachePage(const Json::Value& json_value,
 
   // end
   os << "<br>";
-  return true;
+  os << "</body></html>";
 }
 
 static bool RenderUidGidMapperPage(const Json::Value& json_value,
@@ -1723,12 +1722,8 @@ void ClientStatServiceImpl::default_method(
       }
     } else if (api_name == "blockcache") {
       // /ClientStatService/blockcache
-      auto* blockcache = vfs_hub_->GetBlockStore()->GetBlockCache();
-      if (blockcache != nullptr && blockcache->Dump(json_value) &&
-          !RenderBlockCachePage(json_value, os, client_name)) {
-        cntl->SetFailed("invalid block cache dump.");
-        return;
-      }
+      RenderBlockCachePage(blockcache::SnapshotDisks(),
+                           blockcache::SnapshotMembers(), os, client_name);
     } else if (api_name == "uidgidmap") {
       // /ClientStatService/uidgidmap
       vfs_hub_->GetUidGidMapper()->Dump(json_value);
