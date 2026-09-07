@@ -33,11 +33,11 @@
 #include <string>
 #include <unordered_map>
 
+#include "cache/common/flags.h"
+#include "cache/common/memory_pool.h"
 #include "cache/common/slab_pool.h"
 #include "cache/infiniband/infiniband.h"
-#include "common/options/cache.h"
 #include "common/status.h"
-#include "cache/common/memory_pool.h"
 
 namespace dingofs {
 namespace cache {

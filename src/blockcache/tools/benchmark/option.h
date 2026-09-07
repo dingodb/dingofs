@@ -23,7 +23,7 @@ namespace dingofs {
 namespace blockcache {
 
 DECLARE_uint32(threads);
-DECLARE_uint32(iodepth);
+DECLARE_uint32(inflight);
 DECLARE_string(op);
 DECLARE_uint64(fsid);
 DECLARE_uint64(blksize);

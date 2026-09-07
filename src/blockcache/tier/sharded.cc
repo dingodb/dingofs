@@ -20,6 +20,7 @@
 
 #include <utility>
 
+#include "blockcache/common/metrics.h"
 #include "blockcache/core/runtime/smp.h"
 
 namespace dingofs {
@@ -43,6 +44,7 @@ Status ShardedTierCache::Start() {
     tiers_.ShutdownOnAllShards();
     return status;
   }
+  ExposeMetrics();
 
   running_ = true;
   LOG(INFO) << "Successfully start ShardedTierCache{shards=" << ShardCount()
@@ -57,6 +59,7 @@ void ShardedTierCache::Shutdown() {
 
   LOG(INFO) << "ShardedTierCache is shutting down...";
 
+  HideMetrics();
   tiers_.ShutdownOnAllShards();
 
   running_ = false;

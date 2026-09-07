@@ -1002,7 +1002,7 @@ int main(int argc, char** argv) {
   }
 
   // reset gflags
-  dingofs::cache::FLAGS_cache_store = "none";
+  dingofs::blockcache::FLAGS_cache_store = "none";
   // dingofs::client::FLAGS_vfs_dummy_server_port = 10000;
 
   FLAGS_log_dir = FLAGS_replay_log_dir;

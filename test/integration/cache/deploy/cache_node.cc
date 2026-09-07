@@ -29,7 +29,7 @@
 
 #include <filesystem>
 
-#include "common/options/cache.h"
+#include "cache/common/flags.h"
 #include "dingofs/blockcache.pb.h"
 
 namespace dingofs {

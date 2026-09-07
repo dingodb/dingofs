@@ -32,11 +32,11 @@ Worker::Worker(uint64_t idx, char* buffer, TaskFactorySPtr factory,
     : idx_(idx),
       factory_(factory),
       stats_(stats),
-      slots_(FLAGS_iodepth),
-      window_(FLAGS_iodepth),
+      slots_(FLAGS_inflight),
+      window_(FLAGS_inflight),
       done_(1) {
-  std::memset(buffer, 'D', static_cast<size_t>(FLAGS_iodepth) * FLAGS_blksize);
-  for (uint32_t i = 0; i < FLAGS_iodepth; i++) {
+  std::memset(buffer, 'D', static_cast<size_t>(FLAGS_inflight) * FLAGS_blksize);
+  for (uint32_t i = 0; i < FLAGS_inflight; i++) {
     slots_[i].data = buffer + (static_cast<size_t>(i) * FLAGS_blksize);
     free_slots_.push_back(&slots_[i]);
   }
@@ -121,7 +121,7 @@ void Worker::PushSlot(Slot* slot) {
 }
 
 void Worker::Drain() {
-  for (uint32_t i = 0; i < FLAGS_iodepth; i++) {
+  for (uint32_t i = 0; i < FLAGS_inflight; i++) {
     window_.acquire();
   }
 }

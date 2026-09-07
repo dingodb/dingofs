@@ -25,10 +25,10 @@
 #include <atomic>
 #include <memory>
 
+#include "cache/common/flags.h"
 #include "cache/common/macro.h"
 #include "cache/iutil/ketama_con_hash.h"
 #include "cache/iutil/math_util.h"
-#include "common/options/cache.h"
 
 namespace dingofs {
 namespace cache {

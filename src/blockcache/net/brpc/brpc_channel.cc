@@ -28,18 +28,18 @@
 #include <thread>
 #include <utility>
 
-#include "blockcache/common/flag_decls.h"
 #include "blockcache/common/status.h"
 #include "blockcache/core/runtime/smp.h"
 #include "blockcache/core/runtime/worker_pool.h"
 #include "blockcache/net/brpc/brpc_server.h"
+#include "common/options/cache.h"
 
 namespace dingofs {
 namespace blockcache {
 
-DEFINE_int32(remote_rpc_max_retry, 0,
+DEFINE_int32(cache_rpc_max_retry_times, 0,
              "brpc-level retries per cache-node rpc; <=0 disables them");
-DEFINE_validator(remote_rpc_max_retry, brpc::PassValidate);
+DEFINE_validator(cache_rpc_max_retry_times, brpc::PassValidate);
 
 struct NativeClientCall : InboxWork, public google::protobuf::Closure {
   explicit NativeClientCall(BrpcChannel* c) : channel(c) {
@@ -121,9 +121,9 @@ Future<Status> BrpcChannel::Init(ChannelOption option) {
 
   ::brpc::ChannelOptions options;
   options.connect_timeout_ms =
-      static_cast<int32_t>(FLAGS_remote_connect_timeout_ms);
-  options.timeout_ms = static_cast<int32_t>(FLAGS_remote_rpc_timeout_ms);
-  options.max_retry = FLAGS_remote_rpc_max_retry;
+      static_cast<int32_t>(FLAGS_cache_rpc_connect_timeout_ms);
+  options.timeout_ms = static_cast<int32_t>(FLAGS_cache_rpc_timeout_ms);
+  options.max_retry = FLAGS_cache_rpc_max_retry_times;
   options.connection_type = "single";
   options.connection_group = option_.tag;
 

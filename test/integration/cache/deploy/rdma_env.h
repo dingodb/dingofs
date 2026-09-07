@@ -25,8 +25,8 @@
 
 #include <gflags/gflags.h>
 
+#include "cache/common/flags.h"
 #include "cache/common/slab_pool.h"
-#include "common/options/cache.h"
 
 namespace dingofs {
 namespace cache {

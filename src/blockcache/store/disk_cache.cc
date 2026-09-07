@@ -25,11 +25,11 @@
 #include <optional>
 #include <utility>
 
-#include "blockcache/common/flag_decls.h"
 #include "blockcache/core/runtime/smp.h"
 #include "blockcache/utils/align.h"
 #include "blockcache/utils/string.h"
 #include "blockcache/utils/time.h"
+#include "common/options/cache.h"
 #include "utils/uuid.h"
 
 namespace dingofs {
@@ -46,7 +46,7 @@ std::vector<DiskOption> ParseDiskOptions(const std::string& value) {
   std::vector<DiskOption> options;
   for (std::string& item : Split(value, ',')) {
     DiskOption option;
-
+    option.index = options.size();
     option.capacity_bytes = static_cast<uint64_t>(FLAGS_cache_size_mb) * kMiB;
     const size_t colon = item.find(':');
     if (colon != std::string::npos) {
@@ -76,7 +76,13 @@ DiskCache::DiskCache(DiskOption option)
       manager_(std::make_unique<CacheManager>(
           layout_, option_.capacity_bytes / ShardCount())),
       loader_(std::make_unique<DiskCacheLoader>(layout_, manager_.get())),
-      localfs_(std::make_unique<LocalFileSystem>(health_.get())) {}
+      localfs_(std::make_unique<LocalFileSystem>(health_.get())) {
+  vars_.index = option_.index;
+  vars_.dir = option_.dir;
+  vars_.capacity_bytes = option_.capacity_bytes / ShardCount();
+}
+
+DiskCache::~DiskCache() { UnregisterDiskCacheVars(&vars_); }
 
 Future<> DiskCache::Start(UploadFunc uploader) {
   CHECK(!running_) << "disk cache already started";
@@ -94,10 +100,14 @@ Future<> DiskCache::Start(UploadFunc uploader) {
   status = GetOrCreateLockFile();
   CHECK(status.ok()) << "Fail to load or create lock file of cache dir=`"
                      << option_.dir << "': " << status.ToString();
+  vars_.uuid = uuid_;
+  RegisterDiskCacheVars(&vars_);
 
   (void)loader_->Start(std::move(uploader));
   (void)manager_->Start();
   (void)health_->Start();
+  (void)PublishGauges();
+  vars_.running = 1;
 
   LOG(INFO) << "Successfully start DiskCache: dir=" << option_.dir
             << " uuid=" << uuid_ << " shard=" << ThisShardId() << "/"
@@ -110,6 +120,8 @@ Future<> DiskCache::Shutdown() {
   LOG(INFO) << "DiskCache{dir=" << option_.dir << "} is shutting down...";
 
   running_ = false;
+  vars_.running = 0;
+  co_await gate_.Close();
   co_await loader_->Shutdown();
   co_await manager_->Shutdown();
   co_await health_->Shutdown();
@@ -141,6 +153,7 @@ Future<Status> DiskCache::Stage(BlockHandle handle, BufferViews block) {
       << ", status=" << linked.ToString();
 
   manager_->Insert(handle, TimestampSec(), true);
+  ThisLocalCacheVars().stage_bytes += handle.size;
   co_return Status::OK();
 }
 
@@ -178,6 +191,7 @@ Future<Status> DiskCache::Cache(BlockHandle handle, BufferViews block) {
   }
 
   manager_->Insert(handle, TimestampSec(), false);
+  ThisLocalCacheVars().cache_bytes += handle.size;
   co_return Status::OK();
 }
 
@@ -192,7 +206,7 @@ Future<Status> DiskCache::Load(BlockHandle handle, uint64_t offset,
 
   const std::optional<CacheManager::Entry> entry = manager_->Touch(handle);
   if (!entry && !loader_->IsLoading()) {
-    misses_++;
+    vars_.misses += 1;
     co_return Status::NotFound("block not cached");
   }
 
@@ -201,7 +215,10 @@ Future<Status> DiskCache::Load(BlockHandle handle, uint64_t offset,
       staged ? GetStagePath(entry->handle) : GetCachePath(handle);
 
   Status status = co_await localfs_->ReadFile(path, offset, length, buffer);
-  if (status.IsNotExist()) {
+  if (!status.ok()) {
+    LOG_IF(WARNING, !status.IsNotExist())
+        << "Drop unreadable cached block " << handle << " at " << path << ": "
+        << status.ToString();
     if (!staged) {
       manager_->EraseCache(handle);
     }
@@ -209,9 +226,10 @@ Future<Status> DiskCache::Load(BlockHandle handle, uint64_t offset,
   }
 
   if (status.ok()) {
-    hits_++;
+    vars_.hits += 1;
+    ThisLocalCacheVars().load_bytes += length;
   } else {
-    misses_++;
+    vars_.misses += 1;
   }
   co_return status;
 }
@@ -249,16 +267,22 @@ Future<bool> DiskCache::Exists(BlockHandle handle) {
 
 Future<CacheStats> DiskCache::GetStats() {
   CacheStats stats = manager_->GetStats();
-  stats.hits += hits_;
-  stats.misses += misses_;
+  stats.hits += vars_.hits.Get();
+  stats.misses += vars_.misses.Get();
   stats.io_errors += health_->io_errors();
-  stats.disks.push_back(DiskStats{.uuid = uuid_,
+  stats.disks.push_back(DiskStats{.index = option_.index,
+                                  .uuid = uuid_,
                                   .dir = layout_.RootDir(),
                                   .capacity_bytes = stats.capacity_bytes,
                                   .used_bytes = stats.used_bytes,
+                                  .cached_blocks = stats.cached_blocks,
+                                  .staged_blocks = stats.staged_blocks,
+                                  .hits = vars_.hits.Get(),
+                                  .misses = vars_.misses.Get(),
                                   .health = health_->state(),
                                   .stage_full = manager_->StageFull(),
-                                  .cache_full = manager_->CacheFull()});
+                                  .cache_full = manager_->CacheFull(),
+                                  .running = running_});
   return MakeReadyFuture<CacheStats>(std::move(stats));
 }
 
@@ -315,6 +339,22 @@ Status DiskCache::Check(uint8_t want) const {
     return Status::CacheFull("disk cache full");
   }
   return Status::OK();
+}
+
+Future<> DiskCache::PublishGauges() {
+  Gate::Holder holder(gate_);
+  CHECK(holder.ok());
+
+  while (running_) {
+    const CacheStats stats = manager_->GetStats();
+    vars_.used_bytes = stats.used_bytes;
+    vars_.cached_blocks = stats.cached_blocks;
+    vars_.staged_blocks = stats.staged_blocks;
+    vars_.stage_full = manager_->StageFull();
+    vars_.cache_full = manager_->CacheFull();
+    vars_.health = static_cast<uint64_t>(health_->state());
+    co_await SleepWhile([this] { return running_; }, 1000);
+  }
 }
 
 }  // namespace blockcache

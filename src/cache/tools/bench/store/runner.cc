@@ -31,6 +31,7 @@
 #include <utility>
 #include <vector>
 
+#include "cache/common/flags.h"
 #include "cache/common/slab_pool.h"
 #include "cache/common/storage_client.h"
 #include "cache/iutil/string_util.h"
@@ -41,7 +42,6 @@
 #include "cache/tools/bench/common/format.h"
 #include "common/block/block_key.h"
 #include "common/blockaccess/block_accesser.h"
-#include "common/options/cache.h"
 
 namespace dingofs {
 namespace cache {

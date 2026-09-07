@@ -22,9 +22,9 @@
 #include <memory>
 
 #include "blockcache/common/block_handle.h"
+#include "blockcache/common/stats.h"
 #include "blockcache/core/memory/buffer_view.h"
 #include "blockcache/core/reactor/coroutine.h"
-#include "blockcache/store/stats.h"
 #include "common/status.h"
 
 namespace dingofs {

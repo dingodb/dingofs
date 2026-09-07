@@ -3,7 +3,8 @@ FROM dingodatabase/dingo-base:rocky9
 # rdma-core/libibverbs provide libibverbs.so.1, which dingo-client and
 # dingo-cache link dynamically (RDMA cache feature). Installed here so the
 # runtime image can load them even if the base image lacks rdma-core.
-RUN dnf install -y rdma-core libibverbs && dnf clean all
+# numactl-libs provides libnuma.so.1, which dingo-client links dynamically.
+RUN dnf install -y rdma-core libibverbs numactl-libs && dnf clean all
 
 COPY dingofs /dingofs
 RUN mkdir -p /etc/dingofs /core /etc/dingo \

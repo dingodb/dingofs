@@ -25,9 +25,9 @@
 #include <memory>
 #include <utility>
 
-#include "blockcache/common/flag_decls.h"
 #include "blockcache/core/runtime/worker_pool.h"
 #include "blockcache/store/disk_cache_group.h"
+#include "common/options/cache.h"
 
 namespace dingofs {
 namespace blockcache {
@@ -89,7 +89,7 @@ Future<Status> LocalCache::Put(BlockHandle handle, BufferViews block,
   }
 
   const Status status = co_await store_->Stage(handle, block);
-  if (!status.ok()) {
+  if (status.ok()) {
     uploader_->Enqueue(handle);
   }
   co_return status;
@@ -107,7 +107,9 @@ Future<Status> LocalCache::Get(BlockHandle handle, uint64_t offset,
     MarkHit(option.stats);
     co_return status;
   }
-  if (!status.IsNotFound() || !option.retrieve_storage) {
+
+  if (!option.retrieve_storage ||
+      !(status.IsNotFound() || status.IsCacheDown())) {
     co_return status;
   }
 
@@ -141,7 +143,7 @@ Future<Status> LocalCache::GetWhole(BlockHandle handle, uint64_t offset,
 Future<> LocalCache::CacheBlock(BlockHandle handle, SharedBlock block) {
   const BufferView whole = block.view();
   const Status status = co_await store_->Cache(handle, {&whole, 1});
-  LOG_IF(WARNING, !status.ok())
+  LOG_IF_EVERY_N(WARNING, !status.ok(), 100)
       << "Fail to cache block into the cache store: " << status.ToString();
 }
 

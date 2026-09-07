@@ -20,13 +20,16 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
-#include "blockcache/common/flag_decls.h"
 #include "blockcache/utils/string.h"
+#include "common/options/cache.h"
 
 namespace dingofs {
 namespace blockcache {
 
 DEFINE_string(group_name, "default", "cache group to join");
+DEFINE_validator(group_name, [](const char* /*name*/, const std::string& value) {
+  return !value.empty();
+});
 
 DEFINE_uint32(group_weight, 100, "node weight in consistent hash");
 DEFINE_validator(group_weight, brpc::PassValidate);

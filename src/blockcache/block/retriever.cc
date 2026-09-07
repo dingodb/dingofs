@@ -30,12 +30,25 @@ Future<StatusOr<SharedBlock>> InflightTracker::GetOrCreate(BlockHandle handle,
                                                            bool* created) {
   const auto [it, first] = inflight_.try_emplace(handle);
   *created = first;
-  it->second.emplace_back();
-  return it->second.back().GetFuture();
+  if (!it->second.block.empty()) {  // downloaded, still being cached
+    return MakeReadyFuture<StatusOr<SharedBlock>>(it->second.block);
+  }
+  it->second.waiters.emplace_back();
+  return it->second.waiters.back().GetFuture();
 }
 
 bool InflightTracker::Create(BlockHandle handle) {
   return inflight_.try_emplace(handle).second;
+}
+
+InflightTracker::Waiters InflightTracker::Complete(BlockHandle handle,
+                                                   SharedBlock block) {
+  const auto it = inflight_.find(handle);
+  if (it == inflight_.end()) {
+    return {};
+  }
+  it->second.block = std::move(block);
+  return std::move(it->second.waiters);
 }
 
 InflightTracker::Waiters InflightTracker::TakeWaiters(BlockHandle handle) {
@@ -43,10 +56,12 @@ InflightTracker::Waiters InflightTracker::TakeWaiters(BlockHandle handle) {
   if (it == inflight_.end()) {
     return {};
   }
-  Waiters waiters = std::move(it->second);
+  Waiters waiters = std::move(it->second.waiters);
   inflight_.erase(it);
   return waiters;
 }
+
+void InflightTracker::Erase(BlockHandle handle) { inflight_.erase(handle); }
 
 ObjectRetriever::ObjectRetriever(ObjectStorage* storage, CacheFunc cache_func)
     : storage_(CHECK_NOTNULL(storage)), cache_func_(std::move(cache_func)) {
@@ -118,21 +133,20 @@ Future<> ObjectRetriever::RunRetrieval(BlockHandle handle,
     status = co_await storage_->Get(handle, 0, handle.size, block.data());
   }
 
-  InflightTracker::Waiters waiters = inflight_.TakeWaiters(handle);
-
   // failed
   if (!status.ok()) {
-    for (auto& waiter : waiters) {
+    for (auto& waiter : inflight_.TakeWaiters(handle)) {
       waiter.SetValue(status);
     }
     co_return;
   }
 
   // success
-  for (auto& waiter : waiters) {
+  for (auto& waiter : inflight_.Complete(handle, block)) {
     waiter.SetValue(block);
   }
   co_await cache_func_(handle, std::move(block));
+  inflight_.Erase(handle);
 }
 
 }  // namespace blockcache

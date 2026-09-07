@@ -82,7 +82,7 @@ DEFINE_int32(bench_block_size_kb, 4096, "Write block size in KB (default 4MB)");
 DEFINE_bool(bench_fake_blockstore, false,
             "Use FakeBlockStore to bypass BlockStore+Cache+IO entirely");
 DEFINE_bool(bench_fake_access, false,
-            "Use FakeAccesser to bypass IO only, keep TierBlockCache path");
+            "Use FakeAccesser to bypass IO only, keep block cache path");
 DEFINE_bool(bench_cleanup, true, "Remove bench files after completion");
 DEFINE_bool(bench_fsync, false, "Call fsync after each file write");
 DEFINE_bool(bench_flush, true, "Call flush after each file write");
@@ -378,7 +378,7 @@ int main(int argc, char* argv[]) {
               << "\n";
   }
 
-  // FakeAccesser (skip IO only, keep TierBlockCache path)
+  // FakeAccesser (skip IO only, keep block cache path)
   if (FLAGS_bench_fake_access) {
     dingofs_conf_set(h, "use_fake_block_access", "true");
     std::cout << "FakeAccesser: enabled"

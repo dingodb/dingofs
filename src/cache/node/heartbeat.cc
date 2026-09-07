@@ -24,7 +24,7 @@
 
 #include <atomic>
 
-#include "common/options/cache.h"
+#include "cache/common/flags.h"
 #include "utils/executor/bthread/bthread_executor.h"
 
 namespace dingofs {

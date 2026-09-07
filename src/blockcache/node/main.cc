@@ -20,12 +20,12 @@
 #include <string>
 #include <vector>
 
-#include "blockcache/common/flag_decls.h"
 #include "blockcache/core/runtime/bootstrap.h"
 #include "blockcache/node/cli.h"
 #include "blockcache/node/node.h"
 #include "blockcache/utils/flags.h"
 #include "common/logging.h"
+#include "common/options/cache.h"
 #include "utils/daemonize.h"
 
 using dingofs::Logger;

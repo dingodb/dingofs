@@ -31,6 +31,7 @@
 #include <utility>
 
 #include "cache/api/block_cache.h"
+#include "cache/common/flags.h"
 #include "cache/common/macro.h"
 #include "cache/common/slab_pool.h"
 #include "cache/common/storage_client.h"
@@ -39,7 +40,6 @@
 #include "cache/local/local_block_cache.h"
 #include "cache/remote/remote_block_cache.h"
 #include "common/blockaccess/block_accesser.h"
-#include "common/options/cache.h"
 #include "common/status.h"
 
 namespace dingofs {

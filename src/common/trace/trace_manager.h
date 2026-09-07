@@ -20,6 +20,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <string_view>
 
 #include "common/options/common.h"
 #include "common/trace/span_scope.h"
@@ -40,35 +41,37 @@ class TraceManager {
 
   OpenTeleMetryTracer& GetTracer() { return tracer_; }
 
-  inline SpanScopeSPtr StartSpan(const std::string& name) {
+  // Names are string_view so a disabled tracer costs no string construction.
+  inline SpanScopeSPtr StartSpan(std::string_view name) {
     if (!FLAGS_enable_trace) {
       return nullptr;
     }
 
-    auto scope = SpanScope::Create(GetTracer(), name);
+    auto scope = SpanScope::Create(GetTracer(), std::string(name));
     SpanScope::SetTraceSpan(scope);
     return scope;
   }
 
-  inline SpanScopeSPtr StartSpan(const std::string& name,
+  inline SpanScopeSPtr StartSpan(std::string_view name,
                                  const std::string& trace_id,
                                  const std::string& span_id) {
     if (!FLAGS_enable_trace) {
       return nullptr;
     }
 
-    auto scope = SpanScope::Create(GetTracer(), name, trace_id, span_id);
+    auto scope =
+        SpanScope::Create(GetTracer(), std::string(name), trace_id, span_id);
     SpanScope::SetTraceSpan(scope);
     return scope;
   }
 
-  inline SpanScopeSPtr StartChildSpan(const std::string& name,
+  inline SpanScopeSPtr StartChildSpan(std::string_view name,
                                       SpanScopeSPtr parent) {
     if (!FLAGS_enable_trace) {
       return nullptr;
     }
 
-    auto scope = SpanScope::CreateChild(GetTracer(), name, parent);
+    auto scope = SpanScope::CreateChild(GetTracer(), std::string(name), parent);
     SpanScope::SetTraceSpan(scope);
     return scope;
   }

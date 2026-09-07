@@ -76,6 +76,7 @@ Status StorageClient::Create(uint64_t fs_id) {
 
   blockaccess::BlockAccessOptions options;
   FillBlockAccessOption(fs_info, &options);
+  blockaccess::FillThrottleOptionsFromGFlags(&options.throttle_options);
   blockaccess::BlockAccesserUPtr accesser =
       blockaccess::NewPrefixBlockAccesser(fs_info.fs_name(), options);
   status = accesser->Init();

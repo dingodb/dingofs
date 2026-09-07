@@ -22,8 +22,8 @@
 #include <future>
 #include <memory>
 #include <string>
+#include <type_traits>
 
-#include "cache/common/block_handle_helper.h"
 #include "client/vfs/data/slice/common.h"
 #include "client/vfs/data/slice/slice_writer.h"
 #include "common/status.h"
@@ -44,16 +44,18 @@ using ::testing::Return;
 using ::testing::SetArgPointee;
 
 namespace {
-inline uint32_t HandleIndex(const BlockHandle& h) {
-  BlockKey k;
-  CHECK(cache::ParseFromFilename(h.Filename(), &k));
-  return k.index;
+inline BlockKey HandleKey(const BlockHandle& h) {
+  return h.Visit([](const auto& key) -> BlockKey {
+    if constexpr (std::is_same_v<std::decay_t<decltype(key)>, BlockKey>) {
+      return key;
+    } else {
+      CHECK(false) << "not a block key: " << key.Filename();
+      return BlockKey();
+    }
+  });
 }
-inline uint32_t HandleSize(const BlockHandle& h) {
-  BlockKey k;
-  CHECK(cache::ParseFromFilename(h.Filename(), &k));
-  return k.size;
-}
+inline uint32_t HandleIndex(const BlockHandle& h) { return HandleKey(h).index; }
+inline uint32_t HandleSize(const BlockHandle& h) { return HandleKey(h).size; }
 }  // namespace
 
 // Block size: 4 MiB, Chunk size: 64 MiB, page size: 4 KiB

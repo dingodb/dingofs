@@ -24,10 +24,10 @@
 #include <string>
 #include <utility>
 
-#include "blockcache/common/flag_decls.h"
 #include "blockcache/common/status.h"
 #include "blockcache/infiniband/base/memory_registry.h"
 #include "blockcache/infiniband/client/context.h"
+#include "common/options/cache.h"
 
 namespace dingofs {
 namespace blockcache {

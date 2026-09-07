@@ -33,11 +33,11 @@
 #include <thread>
 #include <vector>
 
+#include "cache/common/flags.h"
 #include "cache/local/disk_cache_layout.h"
 #include "cache/local/disk_cache_manager.h"
 #include "common/block/block_handle.h"
 #include "common/block/block_key.h"
-#include "common/options/cache.h"
 
 namespace dingofs {
 namespace cache {

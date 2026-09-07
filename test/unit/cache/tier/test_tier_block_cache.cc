@@ -29,13 +29,13 @@
 #include <string>
 #include <thread>
 
+#include "cache/common/flags.h"
 #include "cache/common/storage_client.h"
 #include "cache/tier/tier_block_cache.h"
 #include "common/block/block_handle.h"
 #include "common/block/block_key.h"
 #include "common/blockaccess/accesser_common.h"
 #include "common/io_buffer.h"
-#include "common/options/cache.h"
 #include "test/unit/common/blockaccess/mock/mock_accesser.h"
 
 namespace dingofs {

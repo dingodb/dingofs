@@ -92,7 +92,7 @@ DEFINE_int32(bench_prefill_settle_sec, 0,
 DEFINE_bool(bench_fake_blockstore, false,
             "Use FakeBlockStore to bypass BlockStore+Cache+IO entirely");
 DEFINE_bool(bench_fake_access, false,
-            "Use FakeAccesser to bypass IO only, keep TierBlockCache path");
+            "Use FakeAccesser to bypass IO only, keep block cache path");
 DEFINE_bool(bench_cleanup, true, "Remove bench files after completion");
 DEFINE_bool(bench_progress, true, "Show live progress during benchmark");
 
@@ -327,7 +327,7 @@ Options:
   --bench_prefill_settle_sec=N  Sleep after prefill (default: 0)
   --bench_dir=PATH        FS directory for bench files (default: /read_bench)
   --bench_fake_blockstore Bypass BlockStore + Cache + IO entirely
-  --bench_fake_access     Bypass IO only, keep TierBlockCache path
+  --bench_fake_access     Bypass IO only, keep block cache path
   --bench_cleanup         Remove files after test (default: true)
 
 Examples:

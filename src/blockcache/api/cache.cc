@@ -25,11 +25,12 @@
 #include <utility>
 
 #include "blockcache/api/task.h"
-#include "blockcache/common/flag_decls.h"
 #include "blockcache/common/route.h"
+#include "blockcache/common/tombstone.h"
 #include "blockcache/core/runtime/shard_inbox.h"
 #include "blockcache/core/runtime/smp.h"
 #include "blockcache/tier/sharded.h"
+#include "common/options/cache.h"
 
 namespace dingofs {
 namespace blockcache {
@@ -48,6 +49,7 @@ Status BlockCacheImpl::Start() {
   CHECK(!ProcessRuntimeStarted()) << "BlockCacheImpl started twice";
 
   LOG(INFO) << "BlockCacheImpl is starting...";
+  LogLegacyFlagsInUse();
 
   StartProcessRuntime();
 
@@ -89,7 +91,7 @@ Status BlockCacheImpl::StartTierCache() {
   const bool with_remote = !FLAGS_cache_group.empty();
   LOG(INFO) << "BlockCacheImpl local=" << (FLAGS_cache_store == "disk")
             << " remote=" << with_remote
-            << " rdma=" << (FLAGS_remote_rdma && with_remote)
+            << " rdma=" << (FLAGS_use_rdma && with_remote)
             << " storage=" << (storage_ != nullptr);
 
   tier_cache_ =

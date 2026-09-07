@@ -44,6 +44,7 @@ class RemoteNodeGroup {
   void Rebuild(MemberGroupSPtr member_group);
 
   const Members& members() const { return member_group_->members(); }
+  const Members& raw_members() const { return member_group_->raw_members(); }
   bool empty() const { return member_group_->empty(); }
 
  private:

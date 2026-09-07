@@ -24,6 +24,7 @@
 #include <utility>
 #include <vector>
 
+#include "blockcache/common/metrics.h"
 #include "blockcache/core/runtime/smp.h"
 
 namespace dingofs {
@@ -34,6 +35,7 @@ Future<> RemoteNodeGroup::Start() {
 
   running_ = true;
   tls_node_group = this;
+  ThisRemoteCacheVars().members = &member_group_->raw_members();
 
   LOG(INFO) << "Successfully start RemoteNodeGroup{shard=" << ThisShardId()
             << "}";
@@ -52,6 +54,7 @@ Future<> RemoteNodeGroup::Shutdown() {
             << "} is shutting down...";
 
   member_group_ = std::make_shared<const MemberGroup>(Members{});
+  ThisRemoteCacheVars().members = nullptr;
 
   std::unordered_map<std::string, RemoteNodeUPtr> nodes = std::move(nodes_);
   nodes_.clear();
@@ -110,6 +113,7 @@ void RemoteNodeGroup::Rebuild(MemberGroupSPtr member_group) {
 
   StartNodes(to_start);
   member_group_ = std::move(member_group);
+  ThisRemoteCacheVars().members = &member_group_->raw_members();
   nodes_ = std::move(nodes);
   ShutdownNodes(std::move(to_shutdown));
 }

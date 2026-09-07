@@ -23,6 +23,7 @@
 #include <vector>
 
 #include "blockcache/common/block_handle.h"
+#include "blockcache/common/metrics.h"
 #include "blockcache/core/reactor/coroutine.h"
 #include "blockcache/store/cache_manager.h"
 #include "blockcache/store/cache_store.h"
@@ -30,12 +31,14 @@
 #include "blockcache/store/health.h"
 #include "blockcache/store/layout.h"
 #include "blockcache/store/local_filesystem.h"
+#include "blockcache/utils/gate.h"
 #include "common/status.h"
 
 namespace dingofs {
 namespace blockcache {
 
 struct DiskOption {
+  uint32_t index = 0;
   std::string dir;
   uint64_t capacity_bytes = 0;
 };
@@ -45,6 +48,7 @@ std::vector<DiskOption> ParseDiskOptions(const std::string& value);
 class DiskCache final : public CacheStore {
  public:
   explicit DiskCache(DiskOption option);
+  ~DiskCache() override;
 
   DiskCache(const DiskCache&) = delete;
   DiskCache& operator=(const DiskCache&) = delete;
@@ -83,6 +87,8 @@ class DiskCache final : public CacheStore {
     return layout_.CachePath(handle);
   }
 
+  Future<> PublishGauges();
+
   bool running_ = false;
   const DiskOption option_;
   const DiskCacheLayout layout_;
@@ -91,9 +97,8 @@ class DiskCache final : public CacheStore {
   CacheManagerUPtr manager_;
   DiskCacheLoaderUPtr loader_;
   LocalFileSystemUPtr localfs_;
-
-  uint64_t hits_ = 0;
-  uint64_t misses_ = 0;
+  Gate gate_;
+  DiskCacheVars vars_;
 };
 
 using DiskCacheUPtr = std::unique_ptr<DiskCache>;

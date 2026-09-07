@@ -25,7 +25,6 @@ target_link_libraries(vfs_hub
     vfs_compaction
     vfs_block_store
     client_options
-    cache_local
     block_accesser
     dingofs_trace
     absl::str_format

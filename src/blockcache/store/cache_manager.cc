@@ -16,6 +16,7 @@
 
 #include "blockcache/store/cache_manager.h"
 
+#include <brpc/reloadable_flags.h>
 #include <fmt/format.h>
 #include <gflags/gflags.h>
 #include <glog/logging.h>
@@ -36,8 +37,10 @@ namespace blockcache {
 
 DEFINE_uint32(cache_expire_s, 259200,
               "expire time of cached blocks (0 means never)");
+DEFINE_validator(cache_expire_s, brpc::PassValidate);
 DEFINE_uint32(cache_cleanup_expire_interval_ms, 1000,
               "interval to evict expired blocks");
+DEFINE_validator(cache_cleanup_expire_interval_ms, brpc::PassValidate);
 DEFINE_double(free_space_ratio, 0.1, "min free space (ratio)");
 
 static uint64_t ShardShare(uint64_t total) { return total / ShardCount(); }
@@ -192,13 +195,23 @@ Future<> CacheManager::CheckFreeSpace() {
     }
 
     const double ratio = FLAGS_free_space_ratio;
-    const double free_bytes = static_cast<double>(sfs.f_bavail) / sfs.f_blocks;
+    const double free_bytes = static_cast<double>(sfs.f_bfree) / sfs.f_blocks;
     const double free_files = static_cast<double>(sfs.f_ffree) / sfs.f_files;
     cache_full_ = free_bytes < ratio || free_files < ratio;
     stage_full_ = free_bytes < ratio / 2 || free_files < ratio / 2;
     if (!cache_full_) {
       continue;
     }
+
+    LOG(WARNING) << fmt::format(
+        "Disk usage is so high: dir({}), space%({:.2f}/{:.2f}), "
+        "inode%({:.2f}/{:.2f}), used({:.2f} MiB vs {:.2f} MiB), "
+        "stop(cache={},stage={})",
+        layout_.RootDir(), (1.0 - free_bytes) * 100, (1.0 - ratio) * 100,
+        (1.0 - free_files) * 100, (1.0 - ratio) * 100, used_bytes_ / 1048576.0,
+        static_cast<double>(sfs.f_blocks - sfs.f_bfree) * sfs.f_bsize /
+            1048576.0,
+        cache_full_ ? "Y" : "N", stage_full_ ? "Y" : "N");
 
     uint64_t want_free_bytes = 0;
     uint64_t want_free_files = 0;
@@ -286,10 +299,11 @@ Future<> CacheManager::DeleteBlocks() {
       deleted++;
       freed_bytes += item.size;
     }
+
     LOG(INFO) << fmt::format(
-        "{} cache blocks deleted for {}, free {:.2f} MiB, costs {:.6f} "
-        "seconds.",
-        deleted, batch.reason, freed_bytes / 1048576.0,
+        "Delete block file success for {}: {} blocks, free {:.2f} MiB, costs "
+        "{:.6f} seconds.",
+        batch.reason, deleted, freed_bytes / 1048576.0,
         (TimestampNs() - began) / 1e9);
   }
 }

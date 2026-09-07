@@ -34,10 +34,10 @@
 #include <memory>
 #include <string>
 
+#include "cache/common/flags.h"
 #include "cache/infiniband/client.h"
 #include "cache/infiniband/controller.h"
 #include "cache/infiniband/memory.h"
-#include "common/options/cache.h"
 #include "dingofs/blockcache.pb.h"
 #include "dingofs/infiniband.pb.h"
 

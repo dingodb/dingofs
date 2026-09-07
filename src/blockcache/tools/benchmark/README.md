@@ -6,8 +6,8 @@ A client-view benchmark for the v2 block cache: it boots the whole
 drives it through the async API the real client uses, so the numbers include
 the inbox hop, the shard work and the worker-pool completion hop.
 
-Each of `--threads` submitting threads keeps `--iodepth` requests in flight;
-total concurrency is `threads * iodepth`. Latency is measured per operation,
+Each of `--threads` submitting threads keeps `--inflight` requests in flight;
+total concurrency is `threads * inflight`. Latency is measured per operation,
 from right before `AsyncPut`/`AsyncGet` to the completion callback.
 
 Quick Start
@@ -22,7 +22,7 @@ cache-bench --flagfile bench.conf
 ```
 --op=put
 --threads=3
---iodepth=8
+--inflight=8
 --fsid=1
 --blksize=4194304
 --blocks=100
@@ -34,7 +34,7 @@ cache-bench --flagfile bench.conf
 --cache_store=disk
 --cache_dir=/mnt/nvme0/cache
 --cache_group=group-2
---remote_rdma=true
+--use_rdma=true
 ```
 
 Run `--op=put` first to populate the keyspace, then `--op=get` with the same
@@ -47,7 +47,7 @@ Flags
 |------|---------|---------|
 | `--op` | put | `put` or `get` |
 | `--threads` | 1 | submitting threads, each with its own key range |
-| `--iodepth` | 1 | in-flight requests per thread |
+| `--inflight` | 1 | in-flight requests per thread |
 | `--fsid` | 1 | fs the blocks belong to |
 | `--blksize` | 4194304 | block size in bytes |
 | `--blocks` | 1 | blocks per thread |
@@ -62,7 +62,7 @@ Output
 ---
 
 ```
-put: threads=3 iodepth=8 fsid=1 blksize=4194304 blocks=100 time_based=false runtime=300
+put: threads=3 inflight=8 fsid=1 blksize=4194304 blocks=100 time_based=false runtime=300
 ...
 Starting 3 workers
 ...

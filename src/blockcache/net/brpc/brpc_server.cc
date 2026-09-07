@@ -16,7 +16,6 @@
 
 #include "blockcache/net/brpc/brpc_server.h"
 
-#include <brpc/reloadable_flags.h>
 #include <brpc/server.h>
 #include <butil/endpoint.h>
 #include <gflags/gflags.h>
@@ -25,12 +24,10 @@
 #include <string>
 #include <utility>
 
+#include "common/options/cache.h"
+
 namespace dingofs {
 namespace blockcache {
-
-DEFINE_int32(brpc_idle_timeout_s, -1,
-             "seconds an idle connection is kept; -1 never reaps");
-DEFINE_validator(brpc_idle_timeout_s, brpc::PassValidate);
 
 DEFINE_int32(brpc_max_concurrency, 0,
              "requests in flight brpc admits; 0 is unlimited");
@@ -69,7 +66,7 @@ Status BrpcServer::Start() {
   }
 
   ::brpc::ServerOptions options;
-  options.idle_timeout_sec = FLAGS_brpc_idle_timeout_s;
+  options.idle_timeout_sec = FLAGS_brpc_idle_timeout_second;
   options.max_concurrency = FLAGS_brpc_max_concurrency;
   if (server_->Start(listen_addr, &options) != 0) {
     return Status::Internal("Fail to start the brpc server");

@@ -22,8 +22,8 @@
 
 #include <chrono>
 
-#include "blockcache/common/flag_decls.h"
 #include "blockcache/utils/thread.h"
+#include "common/options/cache.h"
 
 namespace dingofs {
 namespace blockcache {
@@ -70,6 +70,8 @@ void Heartbeat::Shutdown() {
 }
 
 void Heartbeat::PeriodicSendHeartbeat() {
+  SendHeartbeat();
+
   std::unique_lock<std::mutex> lock(mutex_);
   while (!cv_.wait_for(
       lock, std::chrono::seconds(FLAGS_periodic_heartbeat_interval_s),

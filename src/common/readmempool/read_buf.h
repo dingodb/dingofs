@@ -60,13 +60,15 @@ class ReadBuf {
     return p;
   }
 
+  // Return the slot to the pool now (idempotent); the dtor does the same.
+  void Reset();  // defined in read_buf.cc (needs the complete ReadMemPool type)
+
  private:
   friend class ReadMemPool;
   ReadBuf(ReadMemPool* pool, uint8_t* data, uint64_t off, size_t cap,
             uint32_t meta)
       : pool_(pool), data_(data), off_(off), cap_(cap), meta_(meta) {}
 
-  void Reset();  // defined in read_buf.cc (needs the complete ReadMemPool type)
   void MoveFrom(ReadBuf& o) {
     pool_ = o.pool_;
     data_ = o.data_;

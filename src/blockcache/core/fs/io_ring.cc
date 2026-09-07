@@ -30,8 +30,8 @@ namespace blockcache {
 
 static bool Positive(const char*, uint32_t value) { return value > 0; }
 
-DEFINE_uint32(io_queue_depth, 512, "submission queue entries per shard's ring");
-DEFINE_validator(io_queue_depth, Positive);
+DEFINE_uint32(iodepth, 512, "submission queue entries per shard's ring");
+DEFINE_validator(iodepth, Positive);
 
 struct UringOpcode {
   int op;
@@ -187,7 +187,7 @@ void FixedFiles::Unregister() {
 }
 
 IoRing::IoRing() {
-  Init(FLAGS_io_queue_depth);
+  Init(FLAGS_iodepth);
   CheckOpCodes(&ring_);
   CHECK(tls_io_ring == nullptr) << "one io ring per shard";
   tls_io_ring = this;

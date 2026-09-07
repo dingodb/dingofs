@@ -74,14 +74,17 @@ static std::vector<std::pair<std::string, std::string>> GenConfigs(
         "storage", fmt::format("[local://{}]", options.file_options.path));
   }
   // cache
-  if (!cache::FLAGS_cache_group.empty()) {
-    configs.emplace_back("cache", fmt::format("[{} {}]", cache::FLAGS_mds_addrs,
-                                              cache::FLAGS_cache_group));
-  } else if (cache::FLAGS_cache_store == "disk") {
+  if (!blockcache::FLAGS_cache_group.empty()) {
+    configs.emplace_back("cache",
+                         fmt::format("[{} {}]", blockcache::FLAGS_mds_addrs,
+                                     blockcache::FLAGS_cache_group));
+  } else if (blockcache::FLAGS_cache_store == "disk") {
     configs.emplace_back(
-        "cache", fmt::format("[{} {} {}%(ratio)]", cache::FLAGS_cache_store,
-                             Helper::GenCacheConfigInfo(),
-                             cache::FLAGS_free_space_ratio * 100));
+        "cache",
+        fmt::format("[{} {} {}%(ratio)]", blockcache::FLAGS_cache_store,
+                    Helper::GenCacheConfigInfo(blockcache::FLAGS_cache_dir,
+                                               blockcache::FLAGS_cache_size_mb),
+                    blockcache::FLAGS_free_space_ratio * 100));
   } else {
     configs.emplace_back("cache", "[]");
   }

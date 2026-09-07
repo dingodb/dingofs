@@ -25,12 +25,12 @@
 #include <atomic>
 #include <memory>
 
+#include "cache/common/flags.h"
 #include "cache/infiniband/connection.h"
 #include "cache/infiniband/infiniband.h"
 #include "cache/infiniband/server.h"
 #include "cache/iutil/string_util.h"
 #include "cache/node/service.h"
-#include "common/options/cache.h"
 #include "fmt/format.h"
 
 namespace brpc {

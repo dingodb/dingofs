@@ -25,8 +25,8 @@
 #include <chrono>
 #include <thread>
 
+#include "cache/common/flags.h"
 #include "cache/remote/remote_node_health_checker.h"
-#include "common/options/cache.h"
 
 namespace dingofs {
 namespace cache {

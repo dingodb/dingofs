@@ -69,6 +69,8 @@ class VFSTestBase : public ::testing::Test {
 
     // --- 2. Real stateless objects ---
     read_mem_pool_ = std::make_unique<ReadMemPool>(64 * 1024 * 1024);  // 64MB
+    compact_mem_pool_ =
+        std::make_unique<ReadMemPool>(64 * 1024 * 1024);  // 64MB, one chunk
     write_buf_mgr_ = std::make_unique<WriteMemPool>(64 * 1024 * 1024, 4096);
     file_suffix_watcher_ = std::make_unique<FileSuffixWatcher>("");
 
@@ -120,6 +122,8 @@ class VFSTestBase : public ::testing::Test {
         .WillByDefault(Return(mock_block_store_));
     ON_CALL(*mock_hub_, GetReadMemPool())
         .WillByDefault(Return(read_mem_pool_.get()));
+    ON_CALL(*mock_hub_, GetCompactMemPool())
+        .WillByDefault(Return(compact_mem_pool_.get()));
     ON_CALL(*mock_hub_, GetWriteMemPool())
         .WillByDefault(Return(write_buf_mgr_.get()));
     ON_CALL(*mock_hub_, GetFileSuffixWatcher())
@@ -146,6 +150,7 @@ class VFSTestBase : public ::testing::Test {
     EXPECT_CALL(*mock_hub_, GetWriterTable()).Times(AnyNumber());
     EXPECT_CALL(*mock_hub_, GetBlockStore()).Times(AnyNumber());
     EXPECT_CALL(*mock_hub_, GetReadMemPool()).Times(AnyNumber());
+    EXPECT_CALL(*mock_hub_, GetCompactMemPool()).Times(AnyNumber());
     EXPECT_CALL(*mock_hub_, GetWriteMemPool()).Times(AnyNumber());
     EXPECT_CALL(*mock_hub_, GetFileSuffixWatcher()).Times(AnyNumber());
     EXPECT_CALL(*mock_hub_, GetCompactor()).Times(AnyNumber());
@@ -174,10 +179,15 @@ class VFSTestBase : public ::testing::Test {
         .WillByDefault([](ContextSPtr, PrefetchReq, StatusCallback cb) {
           cb(Status::OK());
         });
+    ON_CALL(*mock_block_store_, DeleteAsync)
+        .WillByDefault([](ContextSPtr, DeleteReq, StatusCallback cb) {
+          cb(Status::OK());
+        });
     ON_CALL(*mock_block_store_, EnableCache()).WillByDefault(Return(false));
     EXPECT_CALL(*mock_block_store_, PutAsync).Times(AnyNumber());
     EXPECT_CALL(*mock_block_store_, RangeAsync).Times(AnyNumber());
     EXPECT_CALL(*mock_block_store_, PrefetchAsync).Times(AnyNumber());
+    EXPECT_CALL(*mock_block_store_, DeleteAsync).Times(AnyNumber());
     EXPECT_CALL(*mock_block_store_, EnableCache()).Times(AnyNumber());
 
     // --- 9. MockMetaSystem defaults ---
@@ -241,6 +251,7 @@ class VFSTestBase : public ::testing::Test {
   std::unique_ptr<ReaderRegistry> reader_registry_;
   std::unique_ptr<WriterTable> writer_table_;
   std::unique_ptr<ReadMemPool> read_mem_pool_;
+  std::unique_ptr<ReadMemPool> compact_mem_pool_;
   std::unique_ptr<WriteMemPool> write_buf_mgr_;
   std::unique_ptr<FileSuffixWatcher> file_suffix_watcher_;
 

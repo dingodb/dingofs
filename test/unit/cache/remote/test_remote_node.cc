@@ -27,8 +27,8 @@
 #include <string>
 
 #include "cache/common/block_handle_helper.h"
+#include "cache/common/flags.h"
 #include "cache/remote/remote_node.h"
-#include "common/options/cache.h"
 #include "dingofs/blockcache.pb.h"
 
 namespace dingofs {

@@ -24,7 +24,6 @@
 #include <utility>
 #include <vector>
 
-#include "blockcache/common/flag_decls.h"
 #include "blockcache/common/status.h"
 #include "blockcache/core/memory/buffer.h"
 #include "blockcache/core/memory/shard_allocator.h"
@@ -36,6 +35,7 @@
 #include "blockcache/infiniband/connection/poller.h"
 #include "blockcache/net/brpc/brpc_bridge.h"
 #include "blockcache/net/brpc/brpc_server.h"
+#include "common/options/cache.h"
 #include "dingofs/cache.pb.h"
 
 namespace dingofs {

@@ -44,6 +44,7 @@ class MockVFSHub : public VFSHub {
   MOCK_METHOD(Executor*, GetCBExecutor, (), (override));
   MOCK_METHOD(WriteMemPool*, GetWriteMemPool, (), (override));
   MOCK_METHOD(ReadMemPool*, GetReadMemPool, (), (override));
+  MOCK_METHOD(ReadMemPool*, GetCompactMemPool, (), (override));
   MOCK_METHOD(FileSuffixWatcher*, GetFileSuffixWatcher, (), (override));
   MOCK_METHOD(PrefetchManager*, GetPrefetchManager, (), (override));
   MOCK_METHOD(WarmupManager*, GetWarmupManager, (), (override));

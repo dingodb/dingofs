@@ -29,6 +29,7 @@
 #include <memory>
 #include <utility>
 
+#include "cache/common/flags.h"
 #include "cache/common/macro.h"
 #include "cache/common/storage_client.h"
 #include "cache/common/storage_client_pool.h"
@@ -42,7 +43,6 @@
 #include "cache/local/mem_cache.h"
 #include "common/helper.h"
 #include "common/io_buffer.h"
-#include "common/options/cache.h"
 #include "common/status.h"
 
 namespace dingofs {

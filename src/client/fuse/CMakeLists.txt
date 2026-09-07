@@ -29,7 +29,6 @@ target_link_libraries(fuse_client_lib
     dingofs_metrics
     dingofs_common
     client_options
-    cache_tier
     jsoncpp
     ${FUSE3_LIBRARY}
 )

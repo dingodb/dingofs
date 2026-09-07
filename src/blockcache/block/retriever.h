@@ -116,10 +116,16 @@ class InflightTracker {
 
   Future<StatusOr<SharedBlock>> GetOrCreate(BlockHandle handle, bool* created);
   bool Create(BlockHandle handle);
+  Waiters Complete(BlockHandle handle, SharedBlock block);
   Waiters TakeWaiters(BlockHandle handle);
+  void Erase(BlockHandle handle);
 
  private:
-  absl::flat_hash_map<BlockHandle, Waiters, BlockHandleHash> inflight_;
+  struct Entry {
+    Waiters waiters;
+    SharedBlock block;  // set once the download succeeded
+  };
+  absl::flat_hash_map<BlockHandle, Entry, BlockHandleHash> inflight_;
 };
 
 using CacheFunc =

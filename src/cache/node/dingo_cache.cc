@@ -26,13 +26,13 @@
 
 #include <iostream>
 
+#include "cache/common/flags.h"
 #include "cache/common/slab_pool.h"
 #include "cache/infiniband/memory.h"
 #include "cache/node/cache_server.h"
 #include "common/flag.h"
 #include "common/helper.h"
 #include "common/logging.h"
-#include "common/options/cache.h"
 #include "common/options/common.h"
 #include "common/version.h"
 #include "utils/daemonize.h"
@@ -68,10 +68,11 @@ static void PrintShortInfo() {
   configs.emplace_back("mds", fmt::format("[{}]", FLAGS_mds_addrs));
   // cache
   if (FLAGS_enable_cache) {
-    configs.emplace_back("cache",
-                         fmt::format("[{} {} {}%(ratio)]", FLAGS_cache_store,
-                                     Helper::GenCacheConfigInfo(),
-                                     FLAGS_free_space_ratio * 100));
+    configs.emplace_back(
+        "cache", fmt::format("[{} {} {}%(ratio)]", FLAGS_cache_store,
+                             Helper::GenCacheConfigInfo(FLAGS_cache_dir,
+                                                        FLAGS_cache_size_mb),
+                             FLAGS_free_space_ratio * 100));
   }
 
   Helper::PrintConfigInfo(configs);
@@ -144,7 +145,8 @@ int DingoCache::Run(int argc, char** argv) {
   // Daemonize before any heavy initialization. DaemonizeExec re-execs the same
   // binary, so slab pool allocation and RDMA memory registration must happen in
   // the re-exec'd process, not the parent: otherwise fork() runs while ~1GB of
-  // RDMA-pinned memory is held and fails with ENOMEM under heuristic overcommit.
+  // RDMA-pinned memory is held and fails with ENOMEM under heuristic
+  // overcommit.
   if (FLAGS_daemonize) {
     if (!utils::DaemonizeExec(orig_args)) {
       std::cerr << "failed to daemonize process.\n";

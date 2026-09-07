@@ -24,12 +24,12 @@
 #include <cstdint>
 #include <utility>
 
-#include "blockcache/common/flag_decls.h"
 #include "blockcache/common/status.h"
 #include "blockcache/core/reactor/timer.h"
 #include "blockcache/infiniband/base/completion_queue.h"
 #include "blockcache/infiniband/base/device.h"
 #include "blockcache/infiniband/common/protocol.h"
+#include "common/options/cache.h"
 
 namespace dingofs {
 namespace blockcache {

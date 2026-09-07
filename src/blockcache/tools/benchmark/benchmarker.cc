@@ -100,7 +100,7 @@ Status Benchmarker::InitBlockCache() {
 
 Status Benchmarker::InitBuffers() {
   size_t bytes =
-      static_cast<size_t>(FLAGS_threads) * FLAGS_iodepth * FLAGS_blksize;
+      static_cast<size_t>(FLAGS_threads) * FLAGS_inflight * FLAGS_blksize;
   bytes = (bytes + 4095) & ~size_t{4095};
   buffers_ = static_cast<char*>(std::aligned_alloc(4096, bytes));
   if (buffers_ == nullptr) {
@@ -117,7 +117,7 @@ void Benchmarker::InitWorkers() {
   CHECK_EQ(thread_pool_->Start(static_cast<int>(FLAGS_threads)), 0);
   for (uint32_t i = 0; i < FLAGS_threads; i++) {
     char* buffer =
-        buffers_ + (static_cast<size_t>(i) * FLAGS_iodepth * FLAGS_blksize);
+        buffers_ + (static_cast<size_t>(i) * FLAGS_inflight * FLAGS_blksize);
     workers_.emplace_back(
         std::make_unique<Worker>(i, buffer, factory_, collector_->SlotAt(i)));
   }
