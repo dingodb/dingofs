@@ -840,6 +840,7 @@ Status VFSImpl::Fsync(ContextSPtr ctx, Ino ino, int datasync, uint64_t fh) {
   if (handle->resources.writer != nullptr) {
     Status s = handle->resources.writer->Flush();
     if (!s.ok()) {
+      RollbackFile(ctx, ino, fh);
       return s;
     }
   }

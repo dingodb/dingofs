@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
+#include "bvar/bvar.h"
 #include "client/vfs/vfs_meta.h"
 #include "json/value.h"
 #include "utils/shards.h"
@@ -33,6 +34,50 @@ namespace vfs {
 namespace meta {
 
 static constexpr uint32_t kWindowSize = 4;
+
+// Lock-free sliding window counter over the last kWindowSize seconds.
+// Replaces bvar::WindowEx: no per-instance sampler thread, no heap, no
+// thread-local combiner. Each bucket packs (second timestamp << 32 | count).
+// ponytail: cross-bucket sums are approximate during concurrent updates; add
+// a snapshot lock if exact accounting becomes necessary.
+class SlidingWindow {
+ public:
+  SlidingWindow() {
+    for (auto& bucket : buckets_) bucket.store(0, std::memory_order_relaxed);
+  }
+
+  // Increments the current second's bucket, returns the window sum.
+  uint64_t Inc(uint64_t now_s = utils::SteadyTimestamp()) {
+    auto& bucket = buckets_[now_s % kWindowSize];
+    uint64_t old = bucket.load(std::memory_order_relaxed);
+    while (TimestampOf(old) <= now_s) {
+      const uint64_t next = TimestampOf(old) == now_s
+                                ? Pack(now_s, CountOf(old) + 1)
+                                : Pack(now_s, 1);
+      if (bucket.compare_exchange_weak(old, next, std::memory_order_relaxed)) {
+        break;
+      }
+    }
+
+    uint64_t sum = 0;
+    const uint64_t oldest = now_s + 1 - kWindowSize;
+    for (const auto& b : buckets_) {
+      uint64_t v = b.load(std::memory_order_relaxed);
+      uint64_t ts = TimestampOf(v);
+      if (ts >= oldest && ts <= now_s) sum += CountOf(v);
+    }
+    return sum;
+  }
+
+ private:
+  static uint64_t Pack(uint64_t ts, uint32_t count) {
+    return (ts << 32) | count;
+  }
+  static uint64_t TimestampOf(uint64_t v) { return v >> 32; }
+  static uint32_t CountOf(uint64_t v) { return static_cast<uint32_t>(v); }
+
+  std::atomic<uint64_t> buckets_[kWindowSize];
+};
 
 class DirAccessStats;
 using DirAccessStatsSPtr = std::shared_ptr<DirAccessStats>;
@@ -74,11 +119,7 @@ class DirAccessStats {
   }
 
   void IncCount(DirAccessEvent event) {
-    auto& counter = counters_[static_cast<size_t>(event)];
-    counter.total_count << 1;
-    counter.window_count << 1;
-
-    uint64_t count = counter.window_count.get_value();
+    uint64_t count = counters_[static_cast<size_t>(event)].Inc();
     for (const auto& watcher : watchers_) {
       watcher->OnWindowCountChanged(event, ino_, count);
     }
@@ -92,14 +133,9 @@ class DirAccessStats {
   }
 
  private:
-  struct Counter {
-    bvar::Adder<uint64_t> total_count;
-    bvar::WindowEx<bvar::Adder<uint32_t>, kWindowSize> window_count;
-  };
-
   const Ino ino_;
 
-  Counter counters_[static_cast<size_t>(DirAccessEvent::kEventNum)];
+  SlidingWindow counters_[static_cast<size_t>(DirAccessEvent::kEventNum)];
 
   const std::vector<AccessStatsWatcherUPtr>& watchers_;
 

@@ -40,6 +40,11 @@ TEST(TimeTest, TimestampsAreMonotonicAndConsistentAcrossUnits) {
   EXPECT_GE(ns2, ns);
 }
 
+TEST(TimeTest, SteadyTimestampIsMonotonic) {
+  const uint64_t before = SteadyTimestamp();
+  EXPECT_GE(SteadyTimestamp(), before);
+}
+
 TEST(TimeTest, FormatTimeProducesExpectedLayout) {
   // 2021-01-01 00:00:00 UTC
   const int64_t ts = 1609459200;

@@ -14,17 +14,12 @@
 
 #include "client/vfs/metasystem/mds/statistics.h"
 
-#include "brpc/reloadable_flags.h"
 #include "common/options/client.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
 namespace meta {
-
-DEFINE_uint32(vfs_meta_dir_stats_interval_s, 10,
-              "Interval for dir stats window, in seconds.");
-DEFINE_validator(vfs_meta_dir_stats_interval_s, brpc::PassValidate);
 
 DirAccessStatsSPtr AccessStatsMap::GetOrCreate(Ino ino) {
   DirAccessStatsSPtr stats;
@@ -49,7 +44,10 @@ DirAccessStatsSPtr AccessStatsMap::GetOrCreate(Ino ino) {
 }
 
 void AccessStatsMap::CleanExpired(uint64_t expire_s) {
-  if (Size() < FLAGS_vfs_meta_clean_threshold_count) return;
+  const uint32_t kShrinkRatio = 32;
+  const size_t trigger_size =
+      FLAGS_vfs_meta_clean_threshold_count / kShrinkRatio;
+  if (Size() < trigger_size) return;
 
   shard_map_.withWLock([&](Map& map) {
     for (auto it = map.begin(); it != map.end();) {

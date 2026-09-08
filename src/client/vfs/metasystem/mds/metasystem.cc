@@ -579,9 +579,6 @@ Status MDSMetaSystem::Lookup(ContextSPtr ctx, Ino parent,
     modify_time_memo_.UpdateKernelMtime(attr->ino, attr->mtime);
   }
 
-  // dir stats
-  IncLookupCount(parent, attr->ino);
-
   return Status::OK();
 }
 
@@ -1186,9 +1183,6 @@ Status MDSMetaSystem::OpenDir(ContextSPtr, Ino ino, uint64_t fh,
           need_cache = true;
         }
       });
-
-  // dir stats
-  IncOpenDirCount(ino);
 
   return Status::OK();
 }
