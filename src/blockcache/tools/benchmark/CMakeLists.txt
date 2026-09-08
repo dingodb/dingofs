@@ -37,6 +37,6 @@ target_link_libraries(blockcache-cb
 )
 set_target_properties(blockcache-cb PROPERTIES
     OUTPUT_NAME cb
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin/blockcache
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )
 blockcache_tune(blockcache-cb)

@@ -40,6 +40,6 @@ target_link_libraries(blockcache-node
 )
 set_target_properties(blockcache-node PROPERTIES
     OUTPUT_NAME dingo-cache
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin/blockcache
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )
 blockcache_tune(blockcache-node)
