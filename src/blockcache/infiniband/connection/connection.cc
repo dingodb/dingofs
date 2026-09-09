@@ -36,7 +36,7 @@
 namespace dingofs {
 namespace blockcache {
 
-DEFINE_uint32(rdma_max_inflight_rpcs, 128, "max in-flight rpcs per connection");
+DEFINE_uint32(rdma_max_inflight_rpcs, 256, "max in-flight rpcs per connection");
 DEFINE_validator(rdma_max_inflight_rpcs,
                  [](const char* /*name*/, uint32_t value) {
                    return infiniband::Protocol::IsValidInflightRpcs(value);
@@ -229,8 +229,9 @@ Status Connection::RDMASend(SendBuffer* buffer) {
 
   const uint16_t credits_to_return =
       credit_flow_control_->TakeCreditsToReturn();
-  Protocol::SetCredit(MessageBuffer{buffer->data, buffer->length},
-                      credits_to_return);
+  Protocol::SetCredit(
+      MessageBuffer{.data = buffer->data, .capacity = buffer->length},
+      credits_to_return);
 
   const Status status = msg_sender_->Send(buffer, buffer->length);
   if (status.ok()) {
