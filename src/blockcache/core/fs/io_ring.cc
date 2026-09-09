@@ -30,7 +30,7 @@ namespace blockcache {
 
 static bool Positive(const char*, uint32_t value) { return value > 0; }
 
-DEFINE_uint32(iodepth, 512, "submission queue entries per shard's ring");
+DEFINE_uint32(iodepth, 1024, "submission queue entries per shard's ring");
 DEFINE_validator(iodepth, Positive);
 
 struct UringOpcode {
