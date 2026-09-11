@@ -217,6 +217,11 @@ Status CleanDelFileTask::CleanDelFile(const AttrEntry& attr) {
   // delete data from s3
   std::list<std::string> keys;
   for (const auto& chunk : chunks) {
+    if (chunk.block_size() == 0) {
+      LOG(ERROR) << fmt::format("[gc.delfile.{}] chunk block size is 0, chunk index({}).", attr.ino(), chunk.index());
+      continue;
+    }
+
     uint64_t chunk_offset = chunk.index() * chunk.chunk_size();
     for (const auto& slice : chunk.slices()) {
       auto range = CalBlockIndex(chunk.block_size(), chunk_offset, slice);
