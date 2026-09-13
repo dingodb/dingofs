@@ -42,12 +42,17 @@ int DaemonizeAndWait(const std::vector<std::string>& args) {
   const pid_t pid = fork();
   if (pid < 0) {
     perror("fork() failed");
+    close(fds[0]);
+    close(fds[1]);
     return -1;
   }
   if (pid == 0) {
     close(fds[0]);
     setenv(kReadyFdEnv, std::to_string(fds[1]).c_str(), 1);
-    _exit(utils::DaemonizeExec(args) ? 0 : 1);  // only returns on failure
+    auto child_args = args;
+    // Override daemonize even when it comes from the configuration file.
+    child_args.emplace_back("--nodaemonize");
+    _exit(utils::DaemonizeExec(child_args) ? 0 : 1);  // only returns on failure
   }
   close(fds[1]);
   int wstatus = 0;
@@ -60,13 +65,13 @@ int DaemonizeAndWait(const std::vector<std::string>& args) {
   char byte = 0;
   const ssize_t n = rc > 0 ? read(fds[0], &byte, 1) : 0;
   close(fds[0]);
-  if (n == 1) {
+  if (n == 1 && byte == '1') {
     return 0;
   }
   if (rc == 0) {
     std::cerr << "dingo-cache is still starting after "
-              << kReadyTimeoutMs / 1000 << " s, left running\n";
-    return 0;
+              << kReadyTimeoutMs / 1000 << " s, readiness timed out\n";
+    return -1;
   }
   std::cerr << "dingo-cache failed to start, see " << ::FLAGS_log_dir << "\n";
   return -1;

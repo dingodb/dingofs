@@ -36,7 +36,9 @@ namespace blockcache {
 // called from outside -- Sharded drives them on the owning shard.
 template <typename S>
 concept Startable = requires(S s) {
-  { s.Start() } -> std::same_as<Future<>>;
+  s.Start();
+  requires std::same_as<decltype(s.Start()), Future<>> ||
+               std::same_as<decltype(s.Start()), Future<Status>>;
 };
 
 template <typename S>
@@ -172,7 +174,11 @@ class Sharded {
   static Future<Status> StartInstance(T** slot, T* instance) {
     *slot = instance;
     if constexpr (Startable<T>) {
-      co_await instance->Start();
+      if constexpr (std::same_as<decltype(instance->Start()), Future<Status>>) {
+        co_return co_await instance->Start();
+      } else {
+        co_await instance->Start();
+      }
     }
     co_return Status::OK();
   }

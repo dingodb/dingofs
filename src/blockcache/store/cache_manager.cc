@@ -184,12 +184,12 @@ Future<> CacheManager::CheckFreeSpace() {
 
     struct statfs sfs{};
     if (::statfs(layout_.RootDir().c_str(), &sfs) != 0) {
-      LOG(ERROR) << "Fail to statfs, dir=`" << layout_.RootDir()
+      LOG(ERROR) << "Fail to stat cache dir=`" << layout_.RootDir()
                  << "': " << std::strerror(errno);
       continue;
     } else if (sfs.f_blocks == 0 || sfs.f_files == 0) {
-      LOG(WARNING) << "Skip free space check, dir=`" << layout_.RootDir()
-                   << "': f_blocks=" << sfs.f_blocks
+      LOG(WARNING) << "Skip free space check for cache dir=`"
+                   << layout_.RootDir() << "': f_blocks=" << sfs.f_blocks
                    << " f_files=" << sfs.f_files;
       continue;
     }

@@ -54,11 +54,24 @@ class ObjectStorage {
                              ObjectGetOption option = {});
 
  private:
+  static constexpr uint64_t kPutBackoffCapMs = 60 * 1000;
+  static constexpr uint64_t kGetBackoffCapMs = 10 * 1000;
+  static constexpr uint64_t kBackoffSliceMs = 200;
+
   Future<Status> PutOnce(uint64_t fs_id, const std::string& key,
                          const blockaccess::PutPayload& payload);
   Future<Status> GetOnce(uint64_t fs_id, const std::string& key,
                          uint64_t offset, uint32_t length, char* buffer);
 
+  template <typename Context, typename Submit>
+  Future<Status> SubmitAsync(uint64_t fs_id, std::shared_ptr<Context> context,
+                             Submit submit);
+
+  blockaccess::PutPayload PayloadOf(BufferViews block);
+  bool IsRetriable(const Status& status);
+  uint64_t PutBackoffMs(uint32_t tried);
+  uint64_t GetBackoffMs(uint32_t tried);
+  uint64_t NotFoundBackoffMs(uint32_t tried);
   Future<bool> WaitBackoff(uint64_t backoff_ms);
 
   StorageClient* client_;

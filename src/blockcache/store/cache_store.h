@@ -40,7 +40,7 @@ class CacheStore {
   CacheStore(const CacheStore&) = delete;
   CacheStore& operator=(const CacheStore&) = delete;
 
-  virtual Future<> Start(UploadFunc uploader) = 0;
+  virtual Future<Status> Start(UploadFunc uploader) = 0;
   virtual Future<> Shutdown() = 0;
 
   virtual Future<Status> Stage(BlockHandle handle, BufferViews block) = 0;

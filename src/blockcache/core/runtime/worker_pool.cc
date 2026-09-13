@@ -30,7 +30,7 @@
 namespace dingofs {
 namespace blockcache {
 
-// Workers block inside sync S3/MDS calls: this count IS backend concurrency.
+// Workers handle blocking preparation/admission; S3 completion is asynchronous.
 DEFINE_uint32(offload_threads, 32,
               "worker threads for offloaded blocking work");
 DEFINE_uint32(offload_queue_capacity, 4096,

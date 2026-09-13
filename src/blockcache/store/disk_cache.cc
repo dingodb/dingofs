@@ -84,7 +84,7 @@ DiskCache::DiskCache(DiskOption option)
 
 DiskCache::~DiskCache() { UnregisterDiskCacheVars(&vars_); }
 
-Future<> DiskCache::Start(UploadFunc uploader) {
+Future<Status> DiskCache::Start(UploadFunc uploader) {
   CHECK(!running_) << "disk cache already started";
   CHECK(uploader != nullptr) << "a disk cache needs somewhere to send staged "
                                 "blocks";
@@ -94,12 +94,18 @@ Future<> DiskCache::Start(UploadFunc uploader) {
   LOG(INFO) << "DiskCache{dir=" << option_.dir << "} is starting...";
 
   Status status = CreateDirs();
-  CHECK(status.ok()) << "Fail to prepare cache dir=`" << option_.dir
-                     << "': " << status.ToString();
+  if (!status.ok()) {
+    LOG(ERROR) << "Fail to create cache dir=`" << option_.dir
+               << "': " << status.ToString();
+    co_return status;
+  }
 
   status = GetOrCreateLockFile();
-  CHECK(status.ok()) << "Fail to load or create lock file of cache dir=`"
-                     << option_.dir << "': " << status.ToString();
+  if (!status.ok()) {
+    LOG(ERROR) << "Fail to load or create lock file of cache dir=`"
+               << option_.dir << "': " << status.ToString();
+    co_return status;
+  }
   vars_.uuid = uuid_;
   RegisterDiskCacheVars(&vars_);
 
@@ -113,7 +119,7 @@ Future<> DiskCache::Start(UploadFunc uploader) {
             << " uuid=" << uuid_ << " shard=" << ThisShardId() << "/"
             << ShardCount()
             << " capacity_mb=" << (option_.capacity_bytes / kMiB);
-  co_return;
+  co_return Status::OK();
 }
 
 Future<> DiskCache::Shutdown() {
@@ -139,17 +145,19 @@ Future<Status> DiskCache::Stage(BlockHandle handle, BufferViews block) {
     co_return check;
   }
 
-  const Status status =
-      co_await localfs_->WriteFile(GetStagePath(handle), block);
+  const std::string stage_path = GetStagePath(handle);
+  const std::string cache_path = GetCachePath(handle);
+  const Status status = co_await localfs_->WriteFile(stage_path, block);
   if (!status.ok()) {
+    LOG(ERROR) << "Fail to write stage file: path=" << stage_path
+               << ", status=" << status.ToString();
     co_return status;
   }
 
-  const Status linked =
-      co_await localfs_->Link(GetStagePath(handle), GetCachePath(handle));
+  const Status linked = co_await localfs_->Link(stage_path, cache_path);
   LOG_IF(ERROR, !linked.ok())
       << "Fail to link stage file to cache file, ignore error: stage_path="
-      << GetStagePath(handle) << ", cache_path=" << GetCachePath(handle)
+      << stage_path << ", cache_path=" << cache_path
       << ", status=" << linked.ToString();
 
   manager_->Insert(handle, TimestampSec(), true);

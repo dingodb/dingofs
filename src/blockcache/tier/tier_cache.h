@@ -32,7 +32,7 @@ class TierCache final : public BlockCache {
   TierCache(const TierCache&) = delete;
   TierCache& operator=(const TierCache&) = delete;
 
-  Future<> Start() override;
+  Future<Status> Start() override;
   Future<> Shutdown() override;
 
   Future<Status> Put(BlockHandle handle, BufferViews block,
