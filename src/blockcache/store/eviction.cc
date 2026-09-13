@@ -32,7 +32,7 @@ static uint64_t NextRandom() {
   return rng();
 }
 
-DEFINE_string(cache_eviction, "lru",
+DEFINE_string(cache_eviction, "2random",
               "eviction: lru | 2random | s3fifo | sieve | none");
 
 static bool ValidateEviction(const char*, const std::string& value) {
