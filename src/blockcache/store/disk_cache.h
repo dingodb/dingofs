@@ -53,7 +53,7 @@ class DiskCache final : public CacheStore {
   DiskCache(const DiskCache&) = delete;
   DiskCache& operator=(const DiskCache&) = delete;
 
-  Future<> Start(UploadFunc uploader) override;
+  Future<Status> Start(UploadFunc uploader) override;
   Future<> Shutdown() override;
 
   Future<Status> Stage(BlockHandle handle, BufferViews block) override;

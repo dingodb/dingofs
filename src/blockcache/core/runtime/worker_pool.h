@@ -43,10 +43,10 @@ namespace blockcache {
 // that blocks or moves bulk bytes has to leave, and this is where it goes.
 //
 // Two lanes, because the two kinds of work must not queue behind each other:
-// a blocking worker sits inside an S3 retry for seconds, and a memcpy parked
-// behind it is a memcpy wasted.
+// admission throttles and MDS calls may wait for seconds; bulk copies must
+// not queue behind them.
 enum class Lane : uint8_t {
-  kBlocking,  // S3 / MDS: the thread blocks. --offload_threads
+  kBlocking,  // admission / MDS: the thread may block. --offload_threads
   kCpu,       // bulk memcpy and completion callbacks: never blocks
 };
 

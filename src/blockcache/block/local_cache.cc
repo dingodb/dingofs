@@ -48,19 +48,23 @@ LocalCache::~LocalCache() {
   LOG_IF(WARNING, running_) << "LocalCache destroyed without Shutdown()";
 }
 
-Future<> LocalCache::Start() {
+Future<Status> LocalCache::Start() {
   CHECK(!running_) << "LocalCache started twice";
 
   LOG(INFO) << "LocalCache is starting...";
 
+  running_ = true;
   co_await uploader_->Start();
   co_await object_retriever_->Start();
-  co_await store_->Start(
+  const Status status = co_await store_->Start(
       [this](BlockHandle handle) { uploader_->Enqueue(handle); });
 
-  running_ = true;
+  if (!status.ok()) {
+    co_return status;
+  }
   LOG(INFO) << "Successfully start LocalCache{max_range_size_kb="
             << FLAGS_max_range_size_kb << "}";
+  co_return Status::OK();
 }
 
 Future<> LocalCache::Shutdown() {

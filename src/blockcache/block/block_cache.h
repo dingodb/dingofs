@@ -52,7 +52,7 @@ class BlockCache {
   BlockCache(const BlockCache&) = delete;
   BlockCache& operator=(const BlockCache&) = delete;
 
-  virtual Future<> Start() = 0;
+  virtual Future<Status> Start() = 0;
   virtual Future<> Shutdown() = 0;
 
   virtual Future<Status> Put(BlockHandle handle, BufferViews block,

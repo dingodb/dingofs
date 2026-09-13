@@ -92,6 +92,7 @@ class PreallocatedIOStream : public Aws::IOStream {
 template <typename E>
 inline Status S3ErrorToStatus(const Aws::Client::AWSError<E>& error) {
   if (error.GetErrorType() == E::NO_SUCH_KEY ||
+      error.GetErrorType() == E::NO_SUCH_BUCKET ||
       error.GetErrorType() == E::RESOURCE_NOT_FOUND ||
       error.GetResponseCode() == Aws::Http::HttpResponseCode::NOT_FOUND) {
     return Status::NotFound(error.GetMessage());

@@ -47,9 +47,9 @@ RemoteCache::~RemoteCache() {
   LOG_IF(WARNING, running_) << "RemoteCache destroyed without Shutdown()";
 }
 
-Future<> RemoteCache::Start() {
+Future<Status> RemoteCache::Start() {
   if (running_) {
-    co_return;
+    co_return Status::OK();
   }
 
   LOG(INFO) << "RemoteCache{shard=" << ThisShardId() << "} is starting...";
@@ -60,9 +60,13 @@ Future<> RemoteCache::Start() {
   running_ = true;
 
   StartSyncer();
-  co_await WaitForMembersSynced();
+  const Status status = co_await WaitForMembersSynced();
+  if (!status.ok()) {
+    co_return status;
+  }
 
   LOG(INFO) << "Successfully start RemoteCache{shard=" << ThisShardId() << "}";
+  co_return Status::OK();
 }
 
 Future<> RemoteCache::Shutdown() {
@@ -119,18 +123,22 @@ void RemoteCache::ShutdownSyncer() {
   syncer_.reset();
 }
 
-Future<> RemoteCache::WaitForMembersSynced() {
+Future<Status> RemoteCache::WaitForMembersSynced() {
   static constexpr uint64_t kFirstSyncWaitMs = 10000;
   co_await SleepWhile([this] { return nodes_->empty(); }, kFirstSyncWaitMs);
   if (!nodes_->empty()) {
-    co_return;
+    co_return Status::OK();
   }
 
   const Members& members = nodes_->raw_members();
-  LOG_IF(FATAL, members.empty())
-      << "Fail to sync members from mds: cache group=" << FLAGS_cache_group
-      << " has no member after " << kFirstSyncWaitMs
-      << " ms; does the group exist and is the mds alive?";
+  if (members.empty()) {
+    LOG(ERROR) << "Fail to sync members from mds: cache group="
+               << FLAGS_cache_group << " has no member after "
+               << kFirstSyncWaitMs
+               << " ms; does the group exist and is the mds alive?";
+    co_return Status::NotFound("no member in specified cache group");
+  }
+
   LOG(WARNING) << "Cache group=" << FLAGS_cache_group << " has "
                << members.size() << " member(s) but none online after "
                << kFirstSyncWaitMs
@@ -138,6 +146,7 @@ Future<> RemoteCache::WaitForMembersSynced() {
   for (const CacheGroupMember& member : members) {
     LOG(WARNING) << "  " << member;
   }
+  co_return Status::OK();
 }
 
 Future<Status> RemoteCache::Put(BlockHandle handle, BufferViews body,

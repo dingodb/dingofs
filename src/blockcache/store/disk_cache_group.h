@@ -35,7 +35,7 @@ class DiskCacheGroup final : public CacheStore {
   DiskCacheGroup(const DiskCacheGroup&) = delete;
   DiskCacheGroup& operator=(const DiskCacheGroup&) = delete;
 
-  Future<> Start(UploadFunc uploader) override;
+  Future<Status> Start(UploadFunc uploader) override;
   Future<> Shutdown() override;
 
   Future<Status> Stage(BlockHandle handle, BufferViews block) override;

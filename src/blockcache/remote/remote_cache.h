@@ -37,7 +37,7 @@ class RemoteCache final : public BlockCache {
   RemoteCache(const RemoteCache&) = delete;
   RemoteCache& operator=(const RemoteCache&) = delete;
 
-  Future<> Start() override;
+  Future<Status> Start() override;
   Future<> Shutdown() override;
 
   Future<Status> Put(BlockHandle handle, BufferViews body,
@@ -54,7 +54,7 @@ class RemoteCache final : public BlockCache {
   Future<> ShutdownInfiniband();
   void StartSyncer();
   void ShutdownSyncer();
-  Future<> WaitForMembersSynced();
+  Future<Status> WaitForMembersSynced();
 
   bool running_ = false;
   MDSClient* mds_client_;

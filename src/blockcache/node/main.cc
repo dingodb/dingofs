@@ -63,11 +63,12 @@ static bool RunNode() {
 }
 
 int main(int argc, char** argv) {
+  const std::vector<std::string> original_args(argv + 1, argv + argc);
   if (!ParseOptions(argc, argv)) {
     return 0;
   }
   if (FLAGS_daemonize) {
-    return DaemonizeAndWait({argv + 1, argv + argc});
+    return DaemonizeAndWait(original_args);
   }
 
   InitLogger();

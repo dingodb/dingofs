@@ -36,7 +36,7 @@ class LocalCache final : public BlockCache {
   LocalCache(const LocalCache&) = delete;
   LocalCache& operator=(const LocalCache&) = delete;
 
-  Future<> Start() override;
+  Future<Status> Start() override;
   Future<> Shutdown() override;
 
   Future<Status> Put(BlockHandle handle, BufferViews block,

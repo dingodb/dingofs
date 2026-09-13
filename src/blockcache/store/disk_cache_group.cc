@@ -31,12 +31,15 @@ DiskCacheGroup::DiskCacheGroup(const std::vector<DiskOption>& options) {
   }
 }
 
-Future<> DiskCacheGroup::Start(UploadFunc uploader) {
+Future<Status> DiskCacheGroup::Start(UploadFunc uploader) {
   LOG(INFO) << "DiskCacheGroup is starting...";
 
   std::vector<uint64_t> caps;
   for (const DiskCacheUPtr& store : stores_) {
-    co_await store->Start(uploader);
+    const Status status = co_await store->Start(uploader);
+    if (!status.ok()) {
+      co_return status;
+    }
     caps.push_back(store->capacity_bytes());
   }
 
@@ -48,6 +51,7 @@ Future<> DiskCacheGroup::Start(UploadFunc uploader) {
 
   LOG(INFO) << "Successfully start DiskCacheGroup{count=" << stores_.size()
             << "}";
+  co_return Status::OK();
 }
 
 Future<> DiskCacheGroup::Shutdown() {

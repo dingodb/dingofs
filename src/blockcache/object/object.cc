@@ -26,6 +26,7 @@
 #include <utility>
 #include <vector>
 
+#include "blockcache/core/runtime/smp.h"
 #include "blockcache/core/runtime/worker_pool.h"
 
 namespace dingofs {
@@ -48,37 +49,23 @@ DEFINE_uint32(storage_download_retry_backoff_base_ms, 300,
 DEFINE_uint32(storage_download_notfound_retry_backoff_base_ms, 500,
               "first retry delay after a not-found retrieve (ms)");
 
-static constexpr uint64_t kPutBackoffCapMs = 60 * 1000;
-static constexpr uint64_t kGetBackoffCapMs = 10 * 1000;
-static constexpr uint64_t kBackoffSliceMs = 200;
-
-static uint64_t PutBackoffMs(uint32_t tried) {
-  const uint64_t base = FLAGS_storage_upload_retry_backoff_base_ms;
-  return std::min(base * tried * tried, kPutBackoffCapMs);
-}
-
-static uint64_t GetBackoffMs(uint32_t tried) {
-  const uint64_t base = FLAGS_storage_download_retry_backoff_base_ms;
-  return std::min(base * tried, kGetBackoffCapMs);
-}
-
-static uint64_t NotFoundBackoffMs(uint32_t tried) {
-  const uint64_t base = FLAGS_storage_download_notfound_retry_backoff_base_ms;
-  return std::min(base * tried, kGetBackoffCapMs);
-}
-
-static bool IsRetriable(const Status& status) {
-  return !status.IsNotFound() && !status.IsNotSupport() && !status.IsAbort();
-}
-
-static blockaccess::PutPayload PayloadOf(BufferViews block) {
-  std::vector<blockaccess::PayloadSegment> segments;
-  segments.reserve(block.size());
-  for (const BufferView& range : block) {
-    segments.push_back({static_cast<const char*>(range.data), range.size});
+struct ObjectCompletion : InboxWork {
+  ObjectCompletion() : shard(ThisShardId()) {
+    run = [](InboxWork* work) {
+      auto* self = static_cast<ObjectCompletion*>(work);
+      self->promise.SetValue(std::move(self->status));
+    };
   }
-  return blockaccess::PutPayload::Build(std::move(segments));
-}
+
+  void Complete(Status result) {
+    status = std::move(result);
+    CHECK(PostTo(shard, this)) << "Object completion outlived its shard";
+  }
+
+  const unsigned shard;
+  Status status;
+  Promise<Status> promise;
+};
 
 ObjectStorage::ObjectStorage(StorageClient* client)
     : client_(client),
@@ -86,55 +73,6 @@ ObjectStorage::ObjectStorage(StorageClient* client)
       num_download_retry_("dingofs_storage_download_total_retry"),
       num_download_notfound_retry_(
           "dingofs_storage_download_notfound_total_retry") {}
-
-Future<Status> ObjectStorage::PutOnce(uint64_t fs_id, const std::string& key,
-                                      const blockaccess::PutPayload& payload) {
-  return GetGlobalWorkers()->Submit([this, fs_id, &key, &payload]() -> Status {
-    blockaccess::BlockAccesser* accesser = nullptr;
-    Status status = client_->GetOrCreate(fs_id, &accesser);
-    if (!status.ok()) {
-      return status;
-    }
-
-    if (!client_->running()) {
-      return Status::Abort("object storage is shutting down");
-    }
-    return accesser->Put(key, payload);
-  });
-}
-
-Future<Status> ObjectStorage::GetOnce(uint64_t fs_id, const std::string& key,
-                                      uint64_t offset, uint32_t length,
-                                      char* buffer) {
-  return GetGlobalWorkers()->Submit(
-      [this, fs_id, &key, offset, length, buffer]() -> Status {
-        blockaccess::BlockAccesser* accesser = nullptr;
-        Status status = client_->GetOrCreate(fs_id, &accesser);
-        if (!status.ok()) {
-          return status;
-        }
-
-        if (!client_->running()) {
-          return Status::Abort("object storage is shutting down");
-        }
-
-        return accesser->Range(key, static_cast<off_t>(offset),
-                               static_cast<size_t>(length), buffer);
-      });
-}
-
-Future<bool> ObjectStorage::WaitBackoff(uint64_t backoff_ms) {
-  for (uint64_t waited = 0; waited < backoff_ms; waited += kBackoffSliceMs) {
-    if (!client_->running()) {
-      co_return false;
-    }
-
-    auto timeout = std::chrono::milliseconds(
-        std::min(kBackoffSliceMs, backoff_ms - waited));
-    co_await Sleep(timeout);
-  }
-  co_return client_->running();
-}
 
 Future<Status> ObjectStorage::Put(BlockHandle handle, BufferViews block,
                                   ObjectPutOption option) {
@@ -225,6 +163,98 @@ Future<Status> ObjectStorage::Get(BlockHandle handle, uint64_t offset,
       co_return Status::Abort("object storage is shutting down");
     }
   }
+}
+
+Future<Status> ObjectStorage::PutOnce(uint64_t fs_id, const std::string& key,
+                                      const blockaccess::PutPayload& payload) {
+  auto context =
+      std::make_shared<blockaccess::PutObjectAsyncContext>(key, payload);
+  return SubmitAsync(fs_id, std::move(context),
+                     [](auto* accesser, const auto& ctx) {
+                       accesser->AsyncPut(ctx->origin_key, ctx);
+                     });
+}
+
+Future<Status> ObjectStorage::GetOnce(uint64_t fs_id, const std::string& key,
+                                      uint64_t offset, uint32_t length,
+                                      char* buffer) {
+  auto context = std::make_shared<blockaccess::GetObjectAsyncContext>(key);
+  context->offset = static_cast<off_t>(offset);
+  context->len = length;
+  context->buf = buffer;
+  return SubmitAsync(fs_id, std::move(context),
+                     [](auto* accesser, const auto& ctx) {
+                       accesser->AsyncGet(ctx->origin_key, ctx);
+                     });
+}
+
+template <typename Context, typename Submit>
+Future<Status> ObjectStorage::SubmitAsync(uint64_t fs_id,
+                                          std::shared_ptr<Context> context,
+                                          Submit submit) {
+  ObjectCompletion completion;
+  context->cb = [&completion](const std::shared_ptr<Context>& ctx) {
+    completion.Complete(ctx->status);
+  };
+
+  const Status status = co_await GetGlobalWorkers()->Submit(
+      [this, fs_id, &context, &submit]() -> Status {
+        blockaccess::BlockAccesser* accesser = nullptr;
+        Status status = client_->GetOrCreate(fs_id, &accesser);
+        if (!status.ok()) {
+          return status;
+        }
+        if (!client_->running()) {
+          return Status::Abort("object storage is shutting down");
+        }
+        submit(accesser, context);
+        return Status::OK();
+      });
+  if (!status.ok()) {
+    co_return status;
+  }
+  co_return co_await completion.promise.GetFuture();
+}
+
+blockaccess::PutPayload ObjectStorage::PayloadOf(BufferViews block) {
+  std::vector<blockaccess::PayloadSegment> segments;
+  segments.reserve(block.size());
+  for (const BufferView& range : block) {
+    segments.push_back({static_cast<const char*>(range.data), range.size});
+  }
+  return blockaccess::PutPayload::Build(std::move(segments));
+}
+
+bool ObjectStorage::IsRetriable(const Status& status) {
+  return !status.IsNotFound() && !status.IsNotSupport() && !status.IsAbort();
+}
+
+uint64_t ObjectStorage::PutBackoffMs(uint32_t tried) {
+  const uint64_t base = FLAGS_storage_upload_retry_backoff_base_ms;
+  return std::min(base * tried * tried, kPutBackoffCapMs);
+}
+
+uint64_t ObjectStorage::GetBackoffMs(uint32_t tried) {
+  const uint64_t base = FLAGS_storage_download_retry_backoff_base_ms;
+  return std::min(base * tried, kGetBackoffCapMs);
+}
+
+uint64_t ObjectStorage::NotFoundBackoffMs(uint32_t tried) {
+  const uint64_t base = FLAGS_storage_download_notfound_retry_backoff_base_ms;
+  return std::min(base * tried, kGetBackoffCapMs);
+}
+
+Future<bool> ObjectStorage::WaitBackoff(uint64_t backoff_ms) {
+  for (uint64_t waited = 0; waited < backoff_ms; waited += kBackoffSliceMs) {
+    if (!client_->running()) {
+      co_return false;
+    }
+
+    auto timeout = std::chrono::milliseconds(
+        std::min(kBackoffSliceMs, backoff_ms - waited));
+    co_await Sleep(timeout);
+  }
+  co_return client_->running();
 }
 
 }  // namespace blockcache

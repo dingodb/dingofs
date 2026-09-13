@@ -121,11 +121,17 @@ inline bool DaemonizeExec(const std::vector<std::string>& args) {
     self_path[len] = '\0';
     new_args.push_back(std::string(self_path));
 
-    for (const auto& a : args) {
+    for (size_t i = 0; i < args.size(); ++i) {
+      const auto& a = args[i];
       if (a == "--daemonize" || a == "-daemonize") {
+        if (i + 1 < args.size() &&
+            (args[i + 1] == "true" || args[i + 1] == "false" ||
+             args[i + 1] == "1" || args[i + 1] == "0")) {
+          ++i;
+        }
         continue;
       }
-      if (a.rfind("--daemonize", 0) == 0 || a.rfind("-daemonize", 0) == 0) {
+      if (a.rfind("--daemonize=", 0) == 0 || a.rfind("-daemonize=", 0) == 0) {
         continue;
       }
       new_args.push_back(a);

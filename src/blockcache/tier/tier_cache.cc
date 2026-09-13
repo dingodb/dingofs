@@ -61,24 +61,31 @@ TierCache::~TierCache() {
   LOG_IF(WARNING, running_) << "TierCache destroyed without Shutdown()";
 }
 
-Future<> TierCache::Start() {
+Future<Status> TierCache::Start() {
   if (running_) {
-    co_return;
+    co_return Status::OK();
   }
 
   LOG(INFO) << "TierCache{shard=" << ThisShardId() << "} is starting...";
 
+  running_ = true;
+
   if (HasLocal()) {
-    co_await local_cache_->Start();
+    const Status status = co_await local_cache_->Start();
+    if (!status.ok()) {
+      co_return status;
+    }
   }
 
   if (HasRemote()) {
-    co_await remote_cache_->Start();
+    const Status status = co_await remote_cache_->Start();
+    if (!status.ok()) {
+      co_return status;
+    }
   }
 
-  running_ = true;
-
   LOG(INFO) << "Successfully start TierCache{shard=" << ThisShardId() << "}";
+  co_return Status::OK();
 }
 
 Future<> TierCache::Shutdown() {
