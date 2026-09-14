@@ -70,6 +70,7 @@ static bvar::Adder<uint64_t> vfs_read_backpressure_timeout_num(
 
 static const uint64_t kReqValidityTimeoutS = 30;
 static const uint32_t kMaxReadRequests = 64;
+static const uint32_t kMaxReadaheadReqsPerRead = 4;
 
 #define METHOD_NAME() ("FileReader::" + std::string(__FUNCTION__))
 
@@ -136,6 +137,25 @@ void FileReader::Close() {
   }
   closing_.store(true, std::memory_order_release);
   VLOG(9) << fmt::format("{} FileReader closed", uuid_);
+
+  std::vector<ReadRequestSptr> to_delete;
+  std::unique_lock<std::mutex> lock(mutex_);
+  for (auto& [req_id, req] : requests_) {
+    std::lock_guard<std::mutex> req_lock(req->mutex);
+    if (req->readers != 0) {
+      continue;
+    }
+    if (req->state == ReadRequestState::kReady) {
+      req->ToStateUnLock(ReadRequestState::kInvalid,
+                         TransitionReason::kCleanUp);
+    }
+    if (req->state == ReadRequestState::kInvalid) {
+      to_delete.push_back(req);
+    }
+  }
+  for (const auto& req : to_delete) {
+    DeleteReadRequestUnlock(req);
+  }
 }
 
 void FileReader::AcquireRef() {
@@ -546,74 +566,39 @@ void FileReader::MakeReadahead(ContextSPtr ctx, const FileRange& frange) {
     return;
   }
 
-  FileRange ahead = frange;
-
-  for (auto it = requests_.rbegin(); it != requests_.rend(); ++it) {
-    int64_t req_id = it->first;
-    ReadRequest* req = it->second.get();
-
+  std::vector<FileRange> covered;
+  covered.reserve(requests_.size());
+  for (const auto& [req_id, req] : requests_) {
     std::unique_lock<std::mutex> req_lock(req->mutex);
-
-    VLOG(9) << fmt::format("{} MakeReadahead check req: {} for frange: {}",
-                           uuid_, req->ToStringUnlock(), ahead.ToString());
-
-    if (req->state == ReadRequestState::kInvalid) {
-      continue;
+    if (req->state != ReadRequestState::kInvalid &&
+        req->req.frange.Overlaps(frange)) {
+      covered.push_back(req->req.frange);
     }
+  }
 
-    if (req->req.frange.offset <= ahead.offset &&
-        req->req.frange.End() > ahead.offset) {
-      if (req->req.frange.End() < ahead.End()) {
-        // ahead:              |--------|
-        // or existing req:  |---|
-        // NOTE: sequence is important here
-        ahead.len = ahead.End() - req->req.frange.End();
-        ahead.offset = req->req.frange.End();
-      } else {
-        // ahead:              |--------|
-        // existing req:     |------------|
-        ahead.len = 0;
-        break;
+  int64_t s = frange.offset;
+  const int64_t e = frange.End();
+  for (bool extended = true; extended;) {
+    extended = false;
+    for (const FileRange& r : covered) {
+      if (r.offset <= s && r.End() > s) {
+        s = r.End();
+        extended = true;
       }
-    } else {
-      // has overlap
-      // ahead:              |--------|
-      // or existing req:       |---|
-
-      // ahead:              |--------|
-      // or existing req:            |----|
-      // has overlap
-      if (!(ahead.offset >= req->req.frange.End() ||
-            ahead.End() <= req->req.frange.offset)) {
-        ahead.len = 0;
-        break;
-      }
-
-      // others cases, no overlap ,readahead frange
-      // ahead:              |--------|
-      // or existing req:|-|
-
-      // ahead:              |--------|
-      // or existing req:                 |-|
     }
-  };
+  }
 
-  VLOG(9) << fmt::format("{} MakeReadahead: final_ahead: {}, origin_ahead: {}",
-                         uuid_, ahead.ToString(), frange.ToString());
+  VLOG(9) << fmt::format("{} MakeReadahead: uncovered tail [{}-{}), window: {}",
+                         uuid_, s, e, frange.ToString());
 
-  if (ahead.len > 0) {
-    int64_t s = ahead.offset;
-    int64_t e = ahead.End();
+  for (uint32_t n = 0; s < e && n < kMaxReadaheadReqsPerRead; ++n) {
+    VLOG(9) << fmt::format(
+        "{} MakeReadahead create new req for range [{},{}), len: {}", uuid_, s,
+        e, (e - s));
+    auto req = NewReadRequest(s, e);
+    RunReadRequest(req);
 
-    while (s < e) {
-      VLOG(9) << fmt::format(
-          "{} MakeReadahead create new req for range [{},{}), len: {}", uuid_,
-          s, e, (e - s));
-      auto req = NewReadRequest(s, e);
-      RunReadRequest(req);
-
-      s = req->req.frange.End();
-    }
+    s = req->req.frange.End();
   }
 }
 
@@ -635,9 +620,9 @@ void FileReader::CheckReadahead(ContextSPtr ctx, const FileRange& frange,
     int64_t ahead_size = policy_->ReadaheadSize();
     FileRange ahead = {.offset = s, .len = ahead_size};
 
-    if (ahead.End() > flen) {
-      ahead.len = flen - ahead.offset;
-    }
+    const int64_t end =
+        (ahead.End() + block_size_ - 1) / block_size_ * block_size_;
+    ahead.len = std::min<int64_t>(end, flen) - ahead.offset;
 
     VLOG(9) << fmt::format(
         "{} CheckReadahead try make readahead: {} for frange: {}, flen: {}, "
@@ -646,7 +631,7 @@ void FileReader::CheckReadahead(ContextSPtr ctx, const FileRange& frange,
         policy_->ToString());
 
     if (ahead.len > 0) {
-      MakeReadahead(SpanScope::GetContext(span), ahead);
+      MakeReadahead(SpanScope::GetContext(span, ctx), ahead);
     }
   }
 
@@ -692,6 +677,22 @@ std::vector<int64_t> FileReader::SplitRange(ContextSPtr ctx,
   boost::range::sort(ranges);
   return ranges;
 };
+
+ReadRequestSptr FileReader::FindCoveringRequest(const FileRange& frange) {
+  for (const auto& [req_id, req] : requests_) {
+    std::unique_lock<std::mutex> req_lock(req->mutex);
+    if (req->state == ReadRequestState::kInvalid) {
+      continue;
+    }
+    if (req->req.frange.offset <= frange.offset &&
+        req->req.frange.End() >= frange.End()) {
+      req->access_sec = butil::monotonic_time_s();
+      req->IncReaderUnlock();
+      return req;
+    }
+  }
+  return nullptr;
+}
 
 std::vector<PartialReadRequest> FileReader::PrepareRequests(
     ContextSPtr ctx, const std::vector<int64_t>& ranges) {
@@ -872,7 +873,7 @@ Status FileReader::Read(ContextSPtr ctx, DataBuffer* data_buffer, int64_t size,
                                                           ctx->GetTraceSpan());
 
   Attr attr;
-  DINGOFS_RETURN_NOT_OK(GetAttr(SpanScope::GetContext(span), &attr));
+  DINGOFS_RETURN_NOT_OK(GetAttr(SpanScope::GetContext(span, ctx), &attr));
 
   if (offset >= attr.length || size == 0) {
     *out_rsize = 0;
@@ -888,7 +889,7 @@ Status FileReader::Read(ContextSPtr ctx, DataBuffer* data_buffer, int64_t size,
   VLOG(6) << fmt::format("{} FileReader::Read frange: {} ", uuid_,
                          frange.ToString());
 
-  CheckPrefetch(SpanScope::GetContext(span), attr, frange);
+  CheckPrefetch(SpanScope::GetContext(span, ctx), attr, frange);
 
   // Foreground backpressure: above the backpressure watermark, wait a bounded
   // window for in-flight reads to release their slots (and for the periodic
@@ -923,7 +924,11 @@ Status FileReader::Read(ContextSPtr ctx, DataBuffer* data_buffer, int64_t size,
         "FileReader::Read::PreProcess", span);
     std::unique_lock<std::mutex> lock(mutex_);
 
-    CleanUpRequest(SpanScope::GetContext(span), frange);
+    const int64_t now_sec = butil::monotonic_time_s();
+    if (requests_.size() > kMaxReadRequests || now_sec != last_cleanup_sec_) {
+      last_cleanup_sec_ = now_sec;
+      CleanUpRequest(SpanScope::GetContext(span, ctx), frange);
+    }
 
     uint64_t last_bs = 32 << 10;  // 32KB
     if (frange.End() + last_bs > attr.length) {
@@ -938,15 +943,22 @@ Status FileReader::Read(ContextSPtr ctx, DataBuffer* data_buffer, int64_t size,
       VLOG(9) << fmt::format(
           "{} Read MakeReadahead for last bs, last: {}, attr.length: {}", uuid_,
           last.ToString(), attr.length);
-      MakeReadahead(SpanScope::GetContext(span), last);
+      MakeReadahead(SpanScope::GetContext(span, ctx), last);
     }
 
-    std::vector<int64_t> ranges =
-        SplitRange(SpanScope::GetContext(span), frange);
+    if (ReadRequestSptr req = FindCoveringRequest(frange)) {
+      reqs.push_back(
+          PartialReadRequest{.req = req,
+                             .offset = frange.offset - req->req.frange.offset,
+                             .len = frange.len});
+    } else {
+      std::vector<int64_t> ranges =
+          SplitRange(SpanScope::GetContext(span, ctx), frange);
 
-    reqs = PrepareRequests(SpanScope::GetContext(span), ranges);
+      reqs = PrepareRequests(SpanScope::GetContext(span, ctx), ranges);
+    }
 
-    CheckReadahead(SpanScope::GetContext(span), frange, attr.length);
+    CheckReadahead(SpanScope::GetContext(span, ctx), frange, attr.length);
   }
 
   SCOPED_CLEANUP({

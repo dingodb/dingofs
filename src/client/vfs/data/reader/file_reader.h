@@ -103,6 +103,7 @@ class FileReader {
   // Caller must hold mutex_.
   void MakeReadahead(ContextSPtr ctx, const FileRange& frange);
 
+  ReadRequestSptr FindCoveringRequest(const FileRange& frange);
   // Caller must hold mutex_.
   std::vector<int64_t> SplitRange(ContextSPtr ctx, const FileRange& frange);
   // Caller must hold mutex_.
@@ -135,6 +136,7 @@ class FileReader {
   std::atomic<bool> closing_{false};
 
   std::mutex mutex_;
+  int64_t last_cleanup_sec_{0};
   std::unique_ptr<ReadaheadPoclicy> policy_;
   // TODO : use dec/inc refs
   // seq -> ReadRequestSptr
