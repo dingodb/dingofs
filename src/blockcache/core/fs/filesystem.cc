@@ -91,7 +91,9 @@ void RwAwaiter::Arm() { file_->queue_.Admit(this); }
 
 void RwAwaiter::OnResult() noexcept { file_->queue_.OnComplete(); }
 
-void RwAwaiter::Submit() {
+void RwAwaiter::Submit() { ThisIoRing().Admit(this); }
+
+void RwAwaiter::Issue() {
   IoRing& ring = ThisIoRing();
   io_uring_sqe* sqe = ring.GetSqe(this);
   const bool fixed_file = file_->fixed_fd_ >= 0;
@@ -149,7 +151,9 @@ OpenReadCloseAwaiter::OpenReadCloseAwaiter(int file_slot, const char* path,
   close_completion_.owner = this;
 }
 
-void OpenReadCloseAwaiter::Arm() {
+void OpenReadCloseAwaiter::Arm() { ThisIoRing().Admit(this, 3); }
+
+void OpenReadCloseAwaiter::Issue() {
   IoRing& ring = ThisIoRing();
   ring.ReserveSqes(3);
 
