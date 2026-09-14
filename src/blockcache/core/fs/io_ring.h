@@ -135,6 +135,7 @@ class IoRing final : public Poller {
   unsigned peak_inflight() const { return peak_inflight_; }
   unsigned parked() const { return parked_.size(); }
   uint64_t deferred() const { return deferred_; }
+  bool cq_overflowed() const { return overflowed_; }
 
  private:
   static constexpr unsigned kCqBatch = 256;
@@ -151,10 +152,11 @@ class IoRing final : public Poller {
   uint32_t features_ = 0;
   unsigned inflight_ = 0;
   unsigned cq_capacity_ = 0;
+  ParkQueue<RingOp> parked_;
   unsigned peak_inflight_ = 0;
   uint64_t deferred_ = 0;
   bool reaping_ = false;
-  ParkQueue<RingOp> parked_;
+  bool overflowed_ = false;  // sticky: the kernel ever reported CQ overflow
   FixedBuffers buffers_{&ring_};
   FixedFiles files_{&ring_};
 };

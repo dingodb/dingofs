@@ -75,6 +75,7 @@ struct RingStats {
   unsigned inflight;
   unsigned parked;
   uint64_t deferred;
+  bool overflowed;
 };
 
 RingStats Stats() {
@@ -84,7 +85,8 @@ RingStats Stats() {
                         .peak = ring.peak_inflight(),
                         .inflight = ring.inflight(),
                         .parked = ring.parked(),
-                        .deferred = ring.deferred()};
+                        .deferred = ring.deferred(),
+                        .overflowed = ring.cq_overflowed()};
   });
 }
 
@@ -183,6 +185,7 @@ TEST_F(IoRingTest, InflightNeverExceedsCq) {
   EXPECT_GT(s.deferred, before.deferred);
   EXPECT_EQ(s.inflight, 0u);
   EXPECT_EQ(s.parked, 0u);
+  EXPECT_FALSE(s.overflowed) << "the kernel reported a CQ overflow";
   EXPECT_EQ(batch.failures, 0);
   ASSERT_EQ(batch.issued.size(), kOps);
   EXPECT_TRUE(std::ranges::is_sorted(batch.issued))
@@ -202,6 +205,7 @@ TEST_F(IoRingTest, MultiSlotOpsShareTheCap) {
   EXPECT_GT(s.deferred, before.deferred);
   EXPECT_EQ(s.inflight, 0u);
   EXPECT_EQ(s.parked, 0u);
+  EXPECT_FALSE(s.overflowed) << "the kernel reported a CQ overflow";
   EXPECT_EQ(batch.failures, 0);
   ASSERT_EQ(batch.issued.size(), kOps);
   EXPECT_TRUE(std::ranges::is_sorted(batch.issued));
@@ -267,6 +271,7 @@ TEST_F(IoRingTest, FileReadsAreCappedToo) {
   EXPECT_GT(s.deferred, before.deferred);
   EXPECT_EQ(s.inflight, 0u);
   EXPECT_EQ(s.parked, 0u);
+  EXPECT_FALSE(s.overflowed) << "the kernel reported a CQ overflow";
 }
 
 // ---- local-disk read microbenchmark through File::Read ----
