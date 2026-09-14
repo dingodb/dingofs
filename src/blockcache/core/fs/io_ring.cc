@@ -296,6 +296,7 @@ void IoRing::Init(unsigned queue_len) {
 }
 
 void IoRing::SubmitAndCollect() {
+  overflowed_ |= io_uring_cq_has_overflow(&ring_);
   if (io_uring_sq_ready(&ring_) == 0) {
     return;
   }
@@ -316,6 +317,7 @@ unsigned IoRing::Reap() {
     return 0;
   }
   reaping_ = true;
+  overflowed_ |= io_uring_cq_has_overflow(&ring_);
 
   unsigned total = 0;
   io_uring_cqe* cqes[kCqBatch];
