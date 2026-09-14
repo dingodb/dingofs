@@ -150,13 +150,19 @@ bool Inode::IsAttrFresh() const {
 }
 
 InodeSPtr InodeCache::Put(Ino ino, const AttrEntry& attr) {
-  InodeSPtr inode;
+  // fast path
+  InodeSPtr inode = Get(ino);
+  if (inode != nullptr) {
+    inode->PutIf(attr);
+    return inode;
+  }
+
+  // slow path
+  inode = Inode::New(attr);
   shard_map_.withWLock(
       [this, ino, &attr, &inode](Map& map) mutable {
-        auto it = map.find(ino);
-        if (it == map.end()) {
-          inode = Inode::New(attr);
-          map.emplace(ino, inode);
+        auto [it, inserted] = map.try_emplace(ino, inode);
+        if (inserted) {
           total_count_ << 1;
 
         } else {
@@ -180,9 +186,7 @@ InodeSPtr InodeCache::Get(Ino ino) {
   shard_map_.withRLock(
       [ino, &inode](Map& map) {
         auto it = map.find(ino);
-        if (it != map.end()) {
-          inode = it->second;
-        }
+        if (it != map.end()) inode = it->second;
       },
       ino);
 
@@ -197,9 +201,7 @@ std::vector<InodeSPtr> InodeCache::Get(const std::vector<uint64_t>& inos) {
     shard_map_.withRLock(
         [ino, &inodes](Map& map) {
           auto it = map.find(ino);
-          if (it != map.end()) {
-            inodes.push_back(it->second);
-          }
+          if (it != map.end()) inodes.push_back(it->second);
         },
         ino);
   }

@@ -579,9 +579,6 @@ Status MDSMetaSystem::Lookup(ContextSPtr ctx, Ino parent,
     modify_time_memo_.UpdateKernelMtime(attr->ino, attr->mtime);
   }
 
-  // dir stats
-  IncLookupCount(parent, attr->ino);
-
   return Status::OK();
 }
 
@@ -651,7 +648,7 @@ Status MDSMetaSystem::MkNod(ContextSPtr ctx, Ino parent,
   return Status::OK();
 }
 
-Status MDSMetaSystem::DoOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
+Status MDSMetaSystem::DoOpen(ContextSPtr& ctx, Ino ino, int flags, uint64_t fh,
                              const std::string& session_id,
                              FileSessionSPtr file_session, bool is_async) {
   CHECK(file_session != nullptr) << "file_session is null.";
@@ -708,7 +705,7 @@ Status MDSMetaSystem::DoOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
   return Status::OK();
 }
 
-void MDSMetaSystem::AsyncOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
+void MDSMetaSystem::AsyncOpen(ContextSPtr& ctx, Ino ino, int flags, uint64_t fh,
                               const std::string& session_id,
                               FileSessionSPtr file_session) {
   class OpenTask;
@@ -716,7 +713,7 @@ void MDSMetaSystem::AsyncOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
 
   class OpenTask : public TaskRunnable {
    public:
-    OpenTask(MDSMetaSystem& metasystem, ContextSPtr ctx, Ino ino, int flags,
+    OpenTask(MDSMetaSystem& metasystem, ContextSPtr& ctx, Ino ino, int flags,
              uint64_t fh, const std::string& session_id,
              FileSessionSPtr file_session)
         : metasystem_(metasystem),
@@ -728,7 +725,7 @@ void MDSMetaSystem::AsyncOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
           file_session_(file_session) {}
     ~OpenTask() override = default;
 
-    static OpenTaskPtr New(MDSMetaSystem& metasystem, ContextSPtr ctx, Ino ino,
+    static OpenTaskPtr New(MDSMetaSystem& metasystem, ContextSPtr& ctx, Ino ino,
                            int flags, uint64_t fh,
                            const std::string& session_id,
                            FileSessionSPtr file_session) {
@@ -786,7 +783,8 @@ Status MDSMetaSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
   // dir stats
   IncOpenCount(ino, is_readonly);
 
-  const std::string session_id = utils::GenerateUUID();
+  const std::string session_id = utils::GenerateUUIDFastly();
+
   auto file_session = file_session_map_.Put(ino, fh, session_id, flags);
   if (file_session->HasMultipleWriters()) {
     LOG(WARNING) << fmt::format(
@@ -805,6 +803,7 @@ Status MDSMetaSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
 
     if (!(flags & O_TRUNC)) {
       file_session->GetChunkSet()->InitFlushCheckpoint(inode->Length());
+
       // launch async open
       AsyncOpen(ctx, ino, flags, fh, session_id, file_session);
 
@@ -895,7 +894,7 @@ Status MDSMetaSystem::RollbackFile(ContextSPtr ctx, Ino ino, uint64_t fh) {
   return Status::OK();
 }
 
-void MDSMetaSystem::AsyncClose(ContextSPtr ctx, Ino ino, uint64_t fh,
+void MDSMetaSystem::AsyncClose(ContextSPtr& ctx, Ino ino, uint64_t fh,
                                const std::string& session_id) {
   class CloseTask;
   using CloseTaskPtr = std::shared_ptr<CloseTask>;
@@ -1184,9 +1183,6 @@ Status MDSMetaSystem::OpenDir(ContextSPtr, Ino ino, uint64_t fh,
           need_cache = true;
         }
       });
-
-  // dir stats
-  IncOpenDirCount(ino);
 
   return Status::OK();
 }
@@ -1855,7 +1851,7 @@ Status MDSMetaSystem::AsyncFlushSlice(ContextSPtr& ctx, ChunkSetSPtr chunk_set,
   return Status::OK();
 }
 
-Status MDSMetaSystem::FlushSliceAndFile(ContextSPtr ctx, Ino ino) {
+Status MDSMetaSystem::FlushSliceAndFile(ContextSPtr& ctx, Ino ino) {
   auto file_session = file_session_map_.GetSession(ino);
   if (file_session == nullptr || !file_session->HasWriter()) {
     LOG_DEBUG << fmt::format(
@@ -1936,8 +1932,9 @@ void MDSMetaSystem::DeleteChunkFromReadCache(Ino ino) {
   read_chunk_cache_.DeleteByIno(ino);
 }
 
-Status MDSMetaSystem::CorrectAttr(ContextSPtr ctx, uint64_t time_ns, Attr& attr,
-                                  bool& is_amend, const std::string& caller) {
+Status MDSMetaSystem::CorrectAttr(ContextSPtr& ctx, uint64_t time_ns,
+                                  Attr& attr, bool& is_amend,
+                                  const std::string& caller) {
   if (modify_time_memo_.ModifiedSince(attr.ino, time_ns)) {
     LOG_DEBUG << fmt::format("[meta.fs.{}] correct attr, caller({}).", attr.ino,
                              caller);

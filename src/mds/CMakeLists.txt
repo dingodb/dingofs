@@ -12,15 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set(tcmalloc_lib "")
+
 if(USE_TCMALLOC)
   message(STATUS "use tcmalloc")
-  
   add_definitions(-DUSE_TCMALLOC=ON)
-
-  set(tcmalloc_lib "-ltcmalloc")
 endif()
-
 
 add_compile_options(-Wall -Wno-reorder -Wno-overloaded-virtual)
 
@@ -78,6 +74,8 @@ add_executable(dingo-mds main.cc)
 
 target_link_libraries(dingo-mds
   mds_lib
-
-  ${tcmalloc_lib}
 )
+
+if(USE_TCMALLOC)
+  target_link_libraries(dingo-mds tcmalloc unwind::unwind)
+endif()

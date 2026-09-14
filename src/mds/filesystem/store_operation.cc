@@ -1821,6 +1821,7 @@ Status FallocateOperation::CollapseRange(TxnUPtr& txn, BatchSharedParam& shared_
     shifted.chunk.set_index(target_index);
     shifted.chunk.set_version(std::max(shifted.chunk.version(), shifted.target_version) + 1);
 
+    CHECK(shifted.chunk.block_size() > 0) << "chunk block size must be greater than 0.";
     auto status = txn->Put(MetaCodec::EncodeChunkKey(param_.fs_id, param_.ino, target_index),
                            MetaCodec::EncodeChunkValue(shifted.chunk));
     if (!status.ok()) return status;
@@ -2943,6 +2944,7 @@ Status CompactChunkOperation::Run(TxnUPtr& txn) {
   LOG_DEBUG << fmt::format("[operation.{}.{}] update chunk, version({}), value({}).", fs_id, ino_, chunk.version(),
                            chunk.ShortDebugString());
 
+  CHECK(chunk.block_size() > 0) << "chunk block size must be greater than 0.";
   txn->Put(chunk_key, MetaCodec::EncodeChunkValue(chunk));
 
   // save trash slice list
@@ -3276,6 +3278,7 @@ Status CopyFileRangeOperation::Run(TxnUPtr& txn) {
     LOG_DEBUG << fmt::format("[operation.{}.{}] update chunk, version({}), value({}).", fs_id, param_.dst_ino,
                              chunk.version(), chunk.ShortDebugString());
 
+    CHECK(chunk.block_size() > 0) << "chunk block size must be greater than 0.";
     txn->Put(MetaCodec::EncodeChunkKey(fs_id, param_.dst_ino, i), MetaCodec::EncodeChunkValue(chunk));
     result_.effected_chunks.push_back(chunk);
   }
@@ -4760,6 +4763,7 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
       CHECK(it != shared_param.chunk_map.end()) << fmt::format("not found chunk({}/{}/{})", fs_id, ino, chunk_index);
 
       const auto& chunk = it->second;
+      CHECK(chunk.block_size() > 0) << "chunk block size must be greater than 0.";
       txn->Put(MetaCodec::EncodeChunkKey(fs_id, ino, chunk_index), MetaCodec::EncodeChunkValue(chunk));
     }
 

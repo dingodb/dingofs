@@ -56,6 +56,12 @@ inline uint64_t Timestamp() {
       .count();
 }
 
+inline uint64_t SteadyTimestamp() {
+  return std::chrono::duration_cast<std::chrono::seconds>(
+             std::chrono::steady_clock::now().time_since_epoch())
+      .count();
+}
+
 inline std::string FormatMsTime(int64_t timestamp, const std::string& format) {
   std::chrono::time_point<std::chrono::system_clock, std::chrono::milliseconds>
       tp((std::chrono::milliseconds(timestamp)));

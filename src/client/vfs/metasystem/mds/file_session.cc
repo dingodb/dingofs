@@ -226,16 +226,12 @@ FileSessionSPtr FileSessionMap::Put(Ino ino, uint64_t fh,
   FileSessionSPtr file_session;
   shard_map_.withWLock(
       [this, ino, fh, &session_id, &file_session, flags](Map& map) {
-        auto it = map.find(ino);
-        if (it != map.end()) {
-          file_session = it->second;
-          file_session->AddSession(fh, session_id, flags);
-        } else {
-          file_session = FileSession::New(ino, chunk_size_);
-          file_session->AddSession(fh, session_id, flags);
-          map[ino] = file_session;
-          total_count_ << 1;
-        }
+        auto [it, inserted] =
+            map.try_emplace(ino, FileSession::New(ino, chunk_size_));
+
+        file_session = it->second;
+        file_session->AddSession(fh, session_id, flags);
+        if (inserted) total_count_ << 1;
       },
       ino);
 
@@ -271,9 +267,7 @@ std::string FileSessionMap::GetSessionID(Ino ino, uint64_t fh) {
   shard_map_.withRLock(
       [this, ino, fh, &session_id](Map& map) {
         auto it = map.find(ino);
-        if (it != map.end()) {
-          session_id = it->second->GetSessionID(fh);
-        }
+        if (it != map.end()) session_id = it->second->GetSessionID(fh);
       },
       ino);
 
@@ -287,9 +281,7 @@ FileSessionSPtr FileSessionMap::GetSession(Ino ino) {
   shard_map_.withRLock(
       [this, ino, &file_session](Map& map) {
         auto it = map.find(ino);
-        if (it != map.end()) {
-          file_session = it->second;
-        }
+        if (it != map.end()) file_session = it->second;
       },
       ino);
 

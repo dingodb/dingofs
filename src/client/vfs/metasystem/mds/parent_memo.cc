@@ -136,17 +136,13 @@ bool ParentMemo::GetRenameRefCount(Ino ino, int32_t& rename_ref_count) {
   return found;
 }
 
-void ParentMemo::Upsert(Ino ino, Ino parent, uint64_t version,
-                        bool dec_rename_ref_count) {
+void ParentMemo::Upsert(Ino ino, Ino parent, uint64_t version) {
   shard_map_.withWLock(
-      [this, ino, parent, version, dec_rename_ref_count](Map& map) mutable {
+      [this, ino, parent, version](Map& map) mutable {
         auto it = map.find(ino);
         if (it != map.end()) {
           it->second.parent = parent;
           it->second.version = std::max(version, it->second.version);
-          if (dec_rename_ref_count && it->second.rename_ref_count > 0) {
-            --it->second.rename_ref_count;
-          }
 
         } else {
           map[ino] = Entry{.parent = parent, .version = version};

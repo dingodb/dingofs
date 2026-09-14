@@ -39,6 +39,8 @@ namespace utils {
  */
 std::string GenerateUUID();
 
+std::string GenerateUUIDFastly();
+
 /**
  *  @brief 生成uuid
  *  使用全局时钟、MAC地址。有MAC地址泄露风险。为了保证唯一性还使用的时间同步机制，

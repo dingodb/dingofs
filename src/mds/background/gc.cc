@@ -905,6 +905,8 @@ blockaccess::BlockAccesserSPtr GcProcessor::GetOrCreateDataAccesser(const FsInfo
     options.type = blockaccess::AccesserType::kS3;
     options.s3_options.s3_info = blockaccess::S3Info{
         .ak = s3_info.ak(), .sk = s3_info.sk(), .endpoint = s3_info.endpoint(), .bucket_name = s3_info.bucketname()};
+    blockaccess::FillAwsSdkConfigFromGFlags(
+        &options.s3_options.aws_sdk_config);
 
   } else if (fs_info.fs_type() == pb::mds::FsType::RADOS) {
     const auto& rados_info = fs_info.extra().rados_info();
