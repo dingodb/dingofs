@@ -20,6 +20,7 @@
 #include <glog/logging.h>
 #include <sys/uio.h>
 
+#include <algorithm>
 #include <cerrno>
 #include <cstdint>
 #include <mutex>
@@ -194,11 +195,32 @@ IoRing::IoRing() {
 }
 
 IoRing::~IoRing() {
+  DCHECK(parked_.empty()) << "io ring destroyed with parked ops";
   Reap();
   buffers_.Unregister();
   files_.Unregister();
   io_uring_queue_exit(&ring_);
   tls_io_ring = nullptr;
+}
+
+void IoRing::Admit(RingOp* op, unsigned slots) {
+  DCHECK(slots != 0 && slots <= cq_capacity_) << "op wider than the CQ";
+  op->slots = slots;
+  if (parked_.empty() && inflight_ + slots <= cq_capacity_) {
+    Issue(op);
+    return;
+  }
+
+  ++deferred_;
+  parked_.Push(op);
+}
+
+// The CQ room is charged here, before any SQE exists, so a Reap() nested in
+// GetSqe() cannot hand a multi-slot op's room to someone else mid-Issue().
+void IoRing::Issue(RingOp* op) {
+  inflight_ += op->slots;
+  peak_inflight_ = std::max(peak_inflight_, inflight_);
+  op->Issue();
 }
 
 io_uring_sqe* IoRing::GetSqe(IoCompletion* c) {
@@ -214,7 +236,6 @@ io_uring_sqe* IoRing::GetSqe(IoCompletion* c) {
     sqe = io_uring_get_sqe(&ring_);
   }
 
-  ++inflight_;
   io_uring_sqe_set_data(sqe, static_cast<void*>(c));
   return sqe;
 }
@@ -235,12 +256,25 @@ bool IoRing::Poll() {
 }
 
 void IoRing::Init(unsigned queue_len) {
+  // The rings are one physically contiguous kernel allocation: ask for a
+  // wider CQ, but settle for the default (2 x SQ) if that much is not there.
   io_uring_params params{};
   int rc = -EINVAL;
   for (unsigned flags : kSetupLadder) {
-    params = io_uring_params{};
-    params.flags = flags;
-    rc = io_uring_queue_init_params(queue_len, &ring_, &params);
+    for (bool wide_cq : {true, false}) {
+      params = io_uring_params{};
+      params.flags = flags | IORING_SETUP_CLAMP;
+      if (wide_cq) {
+        params.flags |= IORING_SETUP_CQSIZE;
+        params.cq_entries = queue_len < kMaxCqEntries / kCqPerSq
+                                ? queue_len * kCqPerSq
+                                : kMaxCqEntries;
+      }
+      rc = io_uring_queue_init_params(queue_len, &ring_, &params);
+      if (rc != -ENOMEM) {
+        break;
+      }
+    }
     if (rc != -EINVAL) {
       break;
     }
@@ -253,6 +287,9 @@ void IoRing::Init(unsigned queue_len) {
 
   CheckFeatures(&ring_, params);
   features_ = params.features;
+  cq_capacity_ = params.cq_entries;
+  LOG(INFO) << "io ring ready: sq_entries=" << params.sq_entries
+            << " cq_entries=" << params.cq_entries;
 
   (void)io_uring_register_ring_fd(&ring_);
   io_uring_ring_dontfork(&ring_);
@@ -306,8 +343,19 @@ unsigned IoRing::Reap() {
   }
 
   inflight_ -= total;
+  DrainParked();
   reaping_ = false;
   return total;
+}
+
+void IoRing::DrainParked() {
+  while (RingOp* op = parked_.Peek()) {
+    if (inflight_ + op->slots > cq_capacity_) {
+      break;
+    }
+    parked_.Pop();
+    Issue(op);
+  }
 }
 
 }  // namespace blockcache

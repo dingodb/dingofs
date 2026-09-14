@@ -60,7 +60,7 @@ struct OpenOption {
 
 class File;
 
-class RwAwaiter final : public UringAwaiter<RwAwaiter> {
+class RwAwaiter final : public UringAwaiter<RwAwaiter>, public RingOp {
  public:
   RwAwaiter(File* file, bool write, uint64_t pos, void* buffer,
             uint32_t len) noexcept;
@@ -71,9 +71,10 @@ class RwAwaiter final : public UringAwaiter<RwAwaiter> {
 
   void Arm();
   void OnResult() noexcept;
-  void Submit();
+  void Submit();          // admitted by the file queue
+  void Issue() override;  // admitted by the ring
 
-  RwAwaiter* park_next = nullptr;
+  RwAwaiter* park_next = nullptr;  // file queue link; the ring uses RingOp's
 
  private:
   File* file_;
@@ -85,7 +86,8 @@ class RwAwaiter final : public UringAwaiter<RwAwaiter> {
   bool write_;
 };
 
-class OpenReadCloseAwaiter final : public IoAwaiter<OpenReadCloseAwaiter> {
+class OpenReadCloseAwaiter final : public IoAwaiter<OpenReadCloseAwaiter>,
+                                   public RingOp {
  public:
   OpenReadCloseAwaiter(int file_slot, const char* path, uint64_t pos,
                        void* buffer, uint32_t len, int open_flags) noexcept;
@@ -94,6 +96,7 @@ class OpenReadCloseAwaiter final : public IoAwaiter<OpenReadCloseAwaiter> {
 
   void Arm();
   void OnResult() noexcept {}
+  void Issue() override;
 
  private:
   struct OpCompletion final : IoCompletion {

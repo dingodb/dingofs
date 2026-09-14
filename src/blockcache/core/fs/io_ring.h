@@ -29,6 +29,7 @@
 #include "blockcache/core/reactor/io_awaiter.h"
 #include "blockcache/core/reactor/poller.h"
 #include "blockcache/core/reactor/reactor.h"
+#include "blockcache/utils/containers/park_queue.h"
 
 namespace dingofs {
 namespace blockcache {
@@ -85,6 +86,23 @@ class FixedFiles {
   std::vector<int> free_slots_;
 };
 
+// Wants `slots` SQEs; Issue() runs once the ring has CQ room for them and
+// must take exactly that many with GetSqe().
+class RingOp {
+ public:
+  virtual void Issue() = 0;
+
+  RingOp* park_next = nullptr;
+  unsigned slots = 1;
+
+ protected:
+  ~RingOp() = default;
+  RingOp() = default;
+
+  RingOp(const RingOp&) = delete;
+  RingOp& operator=(const RingOp&) = delete;
+};
+
 class IoRing final : public Poller {
  public:
   IoRing();
@@ -93,7 +111,11 @@ class IoRing final : public Poller {
   IoRing(const IoRing&) = delete;
   IoRing& operator=(const IoRing&) = delete;
 
-  io_uring_sqe* GetSqe(IoCompletion* c);
+  // Keeps in-flight requests within the CQ so it can never overflow: an
+  // overflowed CQ stalls completions, and on Ubuntu 5.15.0-178+ kernels it
+  // leaks uring_lock and hangs the shard for good (CVE-2024-50060 backport).
+  void Admit(RingOp* op, unsigned slots = 1);
+  io_uring_sqe* GetSqe(IoCompletion* c);  // only from RingOp::Issue()
   void ReserveSqes(unsigned n);
 
   bool linked_files() const {
@@ -108,17 +130,31 @@ class IoRing final : public Poller {
   FixedBuffers& buffers() { return buffers_; }
   FixedFiles& files() { return files_; }
 
+  unsigned inflight() const { return inflight_; }
+  unsigned cq_capacity() const { return cq_capacity_; }
+  unsigned peak_inflight() const { return peak_inflight_; }
+  unsigned parked() const { return parked_.size(); }
+  uint64_t deferred() const { return deferred_; }
+
  private:
   static constexpr unsigned kCqBatch = 256;
+  static constexpr unsigned kCqPerSq = 4;
+  static constexpr unsigned kMaxCqEntries = 1u << 16;  // kernel ceiling
 
   void Init(unsigned queue_len);
+  void Issue(RingOp* op);
   void SubmitAndCollect();
   unsigned Reap();
+  void DrainParked();
 
   io_uring ring_;
   uint32_t features_ = 0;
   unsigned inflight_ = 0;
+  unsigned cq_capacity_ = 0;
+  unsigned peak_inflight_ = 0;
+  uint64_t deferred_ = 0;
   bool reaping_ = false;
+  ParkQueue<RingOp> parked_;
   FixedBuffers buffers_{&ring_};
   FixedFiles files_{&ring_};
 };
@@ -146,11 +182,13 @@ class UringAwaiter : public IoCompletion, public IoAwaiter<Derived> {
 };
 
 template <typename PrepFn>
-class UringOpAwaiter final : public UringAwaiter<UringOpAwaiter<PrepFn>> {
+class UringOpAwaiter final : public UringAwaiter<UringOpAwaiter<PrepFn>>,
+                             public RingOp {
  public:
   explicit UringOpAwaiter(PrepFn prep) : prep_(std::move(prep)) {}
 
-  void Arm() { prep_(ThisIoRing().GetSqe(this)); }
+  void Arm() { ThisIoRing().Admit(this); }
+  void Issue() override { prep_(ThisIoRing().GetSqe(this)); }
 
   int32_t await_resume() const noexcept { return this->result_; }
 

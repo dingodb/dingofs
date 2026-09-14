@@ -71,6 +71,7 @@ class ParkQueue {
     }
   }
 
+  Node* Peek() const { return head_; }
   bool empty() const { return head_ == nullptr; }
   uint32_t size() const { return size_; }
 

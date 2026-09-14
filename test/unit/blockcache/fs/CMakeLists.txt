@@ -14,6 +14,7 @@
 
 add_executable(test_blockcache_fs
     filesystem_test.cc
+    io_ring_test.cc
 )
 target_compile_features(test_blockcache_fs PRIVATE cxx_std_20)
 target_link_libraries(test_blockcache_fs
