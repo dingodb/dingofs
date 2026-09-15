@@ -30,42 +30,46 @@ namespace dingofs {
 
 DECLARE_int32(executor_impl_bg_thread_num);
 
+// Composes a folly-backed ThreadPoolImpl for immediate tasks with a
+// folly-backed TimerImpl for delayed tasks. The owner serializes Start, Stop
+// and destruction. Stop must not run on this executor's worker or timer
+// thread. Tasks must not throw; violations terminate.
 class ExecutorImpl final : public Executor {
  public:
-  ExecutorImpl(const std::string& name)
-      : ExecutorImpl(name, FLAGS_executor_impl_bg_thread_num) {}
+  explicit ExecutorImpl(const std::string& name);
+  ExecutorImpl(const std::string& name, int thread_num);
+  ~ExecutorImpl() override;
 
-  ExecutorImpl(const std::string& name, int thread_num)
-      : name_(name),
-        thread_num_(thread_num),
-        timer_(nullptr),
-        pool_(nullptr),
-        running_(false) {}
-
-  ~ExecutorImpl() override { Stop(); }
-
+  // thread_num must be positive. Returns false if already started.
   bool Start() override;
 
+  // Closes admission, discards undispatched delayed tasks via Timer::Stop,
+  // then drains accepted ready work via ThreadPool::Stop. Cancelled captures
+  // are destroyed before returning. A completed Stop permits a subsequent
+  // Start.
   bool Stop() override;
 
+  // Must be called while started. Concurrent submissions are supported.
   bool Execute(std::function<void()> func) override;
 
+  // May race Stop. Rejected tasks are not retained. Accepted tasks run on CPU
+  // workers, no earlier than the deadline measured at entry, or are cancelled
+  // by Stop. A nonpositive delay means ready asynchronously.
   bool Schedule(std::function<void()> func, int delay_ms) override;
 
-  int ThreadNum() const override { return pool_->GetBackgroundThreads(); }
-
-  int TaskNum() const override { return pool_->GetTaskNum(); }
-
+  int ThreadNum() const override { return thread_num_; }
+  int TaskNum() const override;
   std::string Name() const override { return InternalName(); }
-
   static std::string InternalName() { return "ExecutorImpl"; }
 
  private:
   const std::string name_;
   const int thread_num_;
-  std::unique_ptr<Timer> timer_;
+
+  std::atomic<bool> running_{false};
+
   std::unique_ptr<ThreadPool> pool_;
-  std::atomic_bool running_;
+  std::unique_ptr<Timer> timer_;
 };
 
 }  // namespace dingofs

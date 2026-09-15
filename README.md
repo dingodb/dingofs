@@ -87,6 +87,12 @@ We recommend using GCC 13 as the primary compiled language.
 - [Dingo-eureka](https://github.com/dingodb/dingo-eureka): A Necessary Service Components for DingoFS.
 - [Dingo-sdk](https://github.com/dingodb/dingo-sdk): A Unified Software Development Kit (SDK) required for DingoFS.
 
+Dingo-eureka must be built with Folly enabled (`-DWITH_FOLLY=ON`). Rebuild older
+installations that do not provide the Folly CMake package, and set
+`THIRD_PARTY_INSTALL_PATH` to the updated Dingo-eureka installation when configuring DingoFS.
+Folly must also be configured with `FOLLY_NO_EXCEPTION_TRACER=ON` in Dingo-eureka
+to support DingoFS's static libstdc++ linkage; C++ exceptions remain enabled.
+
 ### 2. Install jemalloc
 ```shell
 wget https://github.com/jemalloc/jemalloc/releases/download/5.3.0/jemalloc-5.3.0.tar.bz2

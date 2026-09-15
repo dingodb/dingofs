@@ -15,15 +15,11 @@
 
 #include "utils/executor/timer/timer_impl.h"
 
-#include <sys/stat.h>
+#include <glog/logging.h>
 
-#include <memory>
-#include <mutex>
-
-#include "glog/logging.h"
-
-DEFINE_int32(timer_bg_thread_default_num, 8,
-             "background thread number for timer");
+#include <chrono>
+#include <utility>
+#include <vector>
 
 namespace dingofs {
 
@@ -86,7 +82,14 @@ bool TimerImpl::Add(std::function<void()> func, int delay_ms) {
   }
 
   heap_.push(std::move(fn_info));
-  cv_.notify_all();
+
+  // Run only needs to reconsider its wait when the earliest deadline changes.
+  // This avoids waking the timer thread (and contending its cache lines) for
+  // tasks that do not affect the current minimum.
+  const bool wake = heap_.size() == 1 || next < heap_.top().next_run_time_us;
+  if (wake) {
+    cv_.notify_one();
+  }
   return true;
 }
 
@@ -104,8 +107,13 @@ void TimerImpl::Run() {
             .count();
     if (cur_fn.next_run_time_us <= now) {
       std::function<void()> fn = cur_fn.fn;
-      thread_pool_->Execute(std::move(fn));
       heap_.pop();
+      // Submit to the thread pool without holding mutex_: pool admission may
+      // contend on its own queue, and holding the timer lock here would block
+      // concurrent producers calling Add().
+      lk.unlock();
+      thread_pool_->Execute(std::move(fn));
+      lk.lock();
     } else {
       cv_.wait_for(lk, microseconds(cur_fn.next_run_time_us - now));
     }
