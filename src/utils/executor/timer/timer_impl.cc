@@ -21,6 +21,8 @@
 #include <utility>
 #include <vector>
 
+#include "common/sync_point.h"
+
 namespace dingofs {
 
 using namespace std::chrono;
@@ -81,12 +83,11 @@ bool TimerImpl::Add(std::function<void()> func, int delay_ms) {
     return false;
   }
 
-  heap_.push(std::move(fn_info));
-
   // Run only needs to reconsider its wait when the earliest deadline changes.
   // This avoids waking the timer thread (and contending its cache lines) for
   // tasks that do not affect the current minimum.
-  const bool wake = heap_.size() == 1 || next < heap_.top().next_run_time_us;
+  const bool wake = heap_.empty() || next < heap_.top().next_run_time_us;
+  heap_.push(std::move(fn_info));
   if (wake) {
     cv_.notify_one();
   }
@@ -115,6 +116,7 @@ void TimerImpl::Run() {
       thread_pool_->Execute(std::move(fn));
       lk.lock();
     } else {
+      TEST_SYNC_POINT_CALLBACK("TimerImpl::Run:before_timed_wait", this);
       cv_.wait_for(lk, microseconds(cur_fn.next_run_time_us - now));
     }
   }
