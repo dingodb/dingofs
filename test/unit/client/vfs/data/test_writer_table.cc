@@ -17,10 +17,13 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include <array>
+#include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <future>
 #include <mutex>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -29,6 +32,7 @@
 #include "client/vfs/data/writer_table.h"
 #include "test/unit/client/vfs/test_base.h"
 #include "utils/executor/thread/executor_impl.h"
+#include "utils/scoped_cleanup.h"
 
 namespace dingofs {
 namespace client {
@@ -73,6 +77,41 @@ TEST_F(WriterTableTest, AcquireDedupSameIno) {
 
   table_->ReleaseWriter(w2);
   EXPECT_EQ(table_->Size(), 0u) << "evicted after last holder release";
+}
+
+TEST_F(WriterTableTest, ConcurrentAcquiresShareWriterAndReleaseAfterStop) {
+  constexpr uint64_t kIno = 150;
+  constexpr size_t kThreads = 8;
+  std::array<FileWriter*, kThreads> writers{};
+  std::array<std::thread, kThreads> threads;
+  std::promise<void> begin;
+  auto beginning = begin.get_future().share();
+  auto cleanup = MakeScopedCleanup([&] {
+    for (auto& thread : threads) {
+      if (thread.joinable()) thread.join();
+    }
+    for (auto* writer : writers) table_->ReleaseWriter(writer);
+  });
+  for (size_t i = 0; i < kThreads; ++i) {
+    threads[i] = std::thread([&, i] {
+      beginning.wait();
+      writers[i] = table_->AcquireWriter(kIno);
+    });
+  }
+  begin.set_value();
+  for (auto& thread : threads) thread.join();
+  ASSERT_NE(writers[0], nullptr);
+  for (auto* writer : writers) EXPECT_EQ(writer, writers[0]);
+  EXPECT_EQ(table_->Size(), 1u);
+
+  table_->Stop();
+  EXPECT_EQ(table_->AcquireWriter(kIno), nullptr);
+  EXPECT_EQ(table_->PeekWriter(kIno), nullptr);
+  for (auto& writer : writers) {
+    table_->ReleaseWriter(writer);
+    writer = nullptr;
+  }
+  EXPECT_EQ(table_->Size(), 0u);
 }
 
 // Different inos get different FileWriters.

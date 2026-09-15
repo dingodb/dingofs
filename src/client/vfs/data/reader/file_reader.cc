@@ -45,6 +45,7 @@
 #include "client/vfs/hub/vfs_hub.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/status.h"
+#include "common/sync_point.h"
 #include "common/trace/context.h"
 #include "read_request.h"
 #include "utils/scoped_cleanup.h"
@@ -97,6 +98,7 @@ FileReader::FileReader(VFSHub* hub, uint64_t fh, uint64_t ino)
 FileReader::~FileReader() {
   CHECK(closing_.load(std::memory_order_acquire))
       << uuid_ << " FileReader destructor called without Close";
+  TEST_SYNC_POINT_CALLBACK("FileReader::~FileReader", this);
 
   {
     std::vector<ReadRequestSptr> to_delete;

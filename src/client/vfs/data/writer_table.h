@@ -17,9 +17,12 @@
 #ifndef DINGOFS_CLIENT_VFS_DATA_WRITER_TABLE_H_
 #define DINGOFS_CLIENT_VFS_DATA_WRITER_TABLE_H_
 
+#include <array>
+#include <cstddef>
 #include <cstdint>
 #include <mutex>
 #include <unordered_map>
+#include <vector>
 
 #include "common/callback.h"
 #include "common/status.h"
@@ -30,6 +33,7 @@ namespace vfs {
 
 class VFSHub;
 class FileWriter;
+class WriterTableShard;
 
 // WriterTable shares a single FileWriter per inode across all writable fhs.
 //
@@ -61,6 +65,38 @@ class FileWriter;
 //     snapshotted writer before that writer's Flush completes.
 //   - Stop() marks stopped_ to refuse new acquires. It does NOT flush.
 //     Callers that need both should call FlushAll() first.
+// One inode partition: its own writer index and lock. The table owns
+// routing, snapshots, and lifecycle; holders protect against Close while
+// FileWriter refs protect against deletion.
+class alignas(64) WriterTableShard {
+ public:
+  using Lock = std::unique_lock<std::mutex>;
+
+  // Acquire/Peek return one holder; balance every success with Release.
+  FileWriter* Acquire(uint64_t ino, VFSHub* hub);
+  FileWriter* Peek(uint64_t ino);
+  // Erase under the local lock, then Close/ReleaseRef outside it.
+  void Release(FileWriter* writer);
+  size_t Size() const;
+
+  // Locked operations require LockForSnapshot(). Multi-shard callers
+  // acquire locks in ascending order; pinned holders must outlive flushes.
+  Lock LockForSnapshot() { return Lock(mutex_); }
+  size_t SizeLocked() const { return writers_.size(); }
+  void StopLocked() { stopped_ = true; }
+  void AppendPinnedLocked(std::vector<FileWriter*>& out);
+
+ private:
+  struct Entry {
+    FileWriter* writer;
+    int64_t holders;
+  };
+
+  mutable std::mutex mutex_;
+  bool stopped_{false};
+  std::unordered_map<uint64_t, Entry> writers_;
+};
+
 class WriterTable {
  public:
   explicit WriterTable(VFSHub* hub);
@@ -69,15 +105,16 @@ class WriterTable {
   WriterTable(const WriterTable&) = delete;
   WriterTable& operator=(const WriterTable&) = delete;
 
-  // Lifecycle.
+  // Lifecycle. The owner must drain users/callbacks before destruction.
   Status Start();
   void Stop();  // refuse new acquires; does not flush
 
-  // Synchronously flush all live writers; idempotent.
+  // Pin a consistent table-membership snapshot, then flush outside shard locks.
   Status FlushAll();
 
   // Fan-outs all currently dirty writers and invokes cb exactly once after
   // every participant callback and transient holder release completes.
+  // The caller keeps the table and writer dependencies alive until cb finishes.
   void FlushDirtyAsync(StatusCallback cb);
 
   // Get-or-create the FileWriter for ino. Returned pointer has a holder
@@ -98,16 +135,19 @@ class WriterTable {
   size_t Size() const;
 
  private:
-  struct Entry {
-    FileWriter* writer{nullptr};
-    int64_t holders{0};  // external holders + transient WriterTable pins
-  };
+  static constexpr size_t kShardCount = 64;
+
+  using ShardLocks = std::array<WriterTableShard::Lock, kShardCount>;
+
+  WriterTableShard& GetShard(uint64_t ino);
+  ShardLocks LockShards();
+  std::vector<FileWriter*> Snapshot();
 
   VFSHub* vfs_hub_{nullptr};
 
-  mutable std::mutex mutex_;
-  bool stopped_{false};
-  std::unordered_map<uint64_t, Entry> writers_;
+  std::array<WriterTableShard, kShardCount> shards_;
+  std::mutex lifecycle_mutex_;
+  bool stopped_{false};  // Protected by lifecycle_mutex_.
 };
 
 }  // namespace vfs

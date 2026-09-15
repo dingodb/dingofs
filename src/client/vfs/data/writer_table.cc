@@ -23,6 +23,7 @@
 #include <utility>
 #include <vector>
 
+#include "absl/hash/hash.h"
 #include "client/vfs/data/writer/file_writer.h"
 
 namespace dingofs {
@@ -36,8 +37,34 @@ WriterTable::~WriterTable() {
   Stop();
 }
 
+WriterTableShard& WriterTable::GetShard(uint64_t ino) {
+  return shards_[absl::HashOf(ino) & (kShardCount - 1)];
+}
+
+WriterTable::ShardLocks WriterTable::LockShards() {
+  ShardLocks locks;
+  for (size_t i = 0; i < shards_.size(); ++i) {
+    locks[i] = shards_[i].LockForSnapshot();
+  }
+  return locks;
+}
+
+std::vector<FileWriter*> WriterTable::Snapshot() {
+  auto locks = LockShards();
+  size_t count = 0;
+  for (const auto& shard : shards_) {
+    count += shard.SizeLocked();
+  }
+  std::vector<FileWriter*> snapshot;
+  snapshot.reserve(count);
+  for (auto& shard : shards_) {
+    shard.AppendPinnedLocked(snapshot);
+  }
+  return snapshot;
+}
+
 Status WriterTable::Start() {
-  std::lock_guard<std::mutex> lg(mutex_);
+  std::lock_guard<std::mutex> lg(lifecycle_mutex_);
   if (stopped_) {
     return Status::Internal("WriterTable already stopped");
   }
@@ -46,8 +73,14 @@ Status WriterTable::Start() {
 }
 
 void WriterTable::Stop() {
-  std::lock_guard<std::mutex> lg(mutex_);
+  std::lock_guard<std::mutex> lg(lifecycle_mutex_);
   if (stopped_) return;
+  {
+    auto locks = LockShards();
+    for (auto& shard : shards_) {
+      shard.StopLocked();
+    }
+  }
   stopped_ = true;
   LOG(INFO) << "WriterTable stopped";
 }
@@ -56,16 +89,7 @@ Status WriterTable::FlushAll() {
   // Snapshot live writers and pin each entry with a transient holder. A plain
   // FileWriter ref would prevent UAF but would still allow the last external
   // holder to erase the entry and Close() the writer before Flush() starts.
-  std::vector<FileWriter*> snap;
-  {
-    std::lock_guard<std::mutex> lg(mutex_);
-    snap.reserve(writers_.size());
-    for (auto& [ino, e] : writers_) {
-      e.writer->AcquireRef();
-      ++e.holders;
-      snap.push_back(e.writer);
-    }
-  }
+  auto snap = Snapshot();
 
   Status final_status;
   for (auto* w : snap) {
@@ -83,16 +107,7 @@ Status WriterTable::FlushAll() {
 }
 
 void WriterTable::FlushDirtyAsync(StatusCallback cb) {
-  std::vector<FileWriter*> snap;
-  {
-    std::lock_guard<std::mutex> lg(mutex_);
-    snap.reserve(writers_.size());
-    for (auto& [ino, entry] : writers_) {
-      entry.writer->AcquireRef();
-      ++entry.holders;
-      snap.push_back(entry.writer);
-    }
-  }
+  auto snap = Snapshot();
 
   if (snap.empty()) {
     cb(Status::OK());
@@ -134,82 +149,93 @@ void WriterTable::FlushDirtyAsync(StatusCallback cb) {
 }
 
 size_t WriterTable::Size() const {
-  std::lock_guard<std::mutex> lg(mutex_);
-  return writers_.size();
+  size_t count = 0;
+  for (const auto& shard : shards_) {
+    count += shard.Size();
+  }
+  return count;
 }
 
 FileWriter* WriterTable::AcquireWriter(uint64_t ino) {
-  std::lock_guard<std::mutex> lg(mutex_);
-  if (stopped_) {
-    LOG(WARNING) << "AcquireWriter on stopped WriterTable, ino=" << ino;
-    return nullptr;
-  }
-
-  auto it = writers_.find(ino);
-  if (it != writers_.end()) {
-    it->second.writer->AcquireRef();
-    it->second.holders++;
-    return it->second.writer;
-  }
-
-  // First-time create.
-  auto* w = new FileWriter(vfs_hub_, ino);
-  w->AcquireRef();  // ref balance for the AcquireWriter caller
-  Status s = w->Open();
-  if (!s.ok()) {
-    LOG(ERROR) << fmt::format("AcquireWriter Open failed, ino={}, status={}",
-                              ino, s.ToString());
-    // refs=1; ReleaseRef triggers delete-this.
-    w->ReleaseRef();
-    return nullptr;
-  }
-  writers_.emplace(ino, Entry{w, /*holders*/ 1});
-  return w;
+  return GetShard(ino).Acquire(ino, vfs_hub_);
 }
 
 FileWriter* WriterTable::PeekWriter(uint64_t ino) {
-  std::lock_guard<std::mutex> lg(mutex_);
+  return GetShard(ino).Peek(ino);
+}
+
+void WriterTable::ReleaseWriter(FileWriter* writer) {
+  if (writer != nullptr) {
+    GetShard(writer->Ino()).Release(writer);
+  }
+}
+
+FileWriter* WriterTableShard::Acquire(uint64_t ino, VFSHub* hub) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (stopped_) return nullptr;
+  auto it = writers_.find(ino);
+  if (it != writers_.end()) {
+    it->second.writer->AcquireRef();
+    ++it->second.holders;
+    return it->second.writer;
+  }
+
+  auto* writer = new FileWriter(hub, ino);
+  writer->AcquireRef();
+  Status status = writer->Open();
+  if (!status.ok()) {
+    LOG(ERROR) << "AcquireWriter Open failed, ino=" << ino
+               << ", status=" << status.ToString();
+    writer->ReleaseRef();
+    return nullptr;
+  }
+  writers_.emplace(ino, Entry{writer, 1});
+  return writer;
+}
+
+FileWriter* WriterTableShard::Peek(uint64_t ino) {
+  std::lock_guard<std::mutex> lock(mutex_);
   if (stopped_) return nullptr;
   auto it = writers_.find(ino);
   if (it == writers_.end()) return nullptr;
   it->second.writer->AcquireRef();
-  it->second.holders++;
+  ++it->second.holders;
   return it->second.writer;
 }
 
-void WriterTable::ReleaseWriter(FileWriter* writer) {
-  if (writer == nullptr) return;
-
-  uint64_t ino = writer->Ino();
-  bool need_close = false;
+void WriterTableShard::Release(FileWriter* writer) {
+  const uint64_t ino = writer->Ino();
+  bool close = false;
   {
-    std::lock_guard<std::mutex> lg(mutex_);
+    std::lock_guard<std::mutex> lock(mutex_);
     auto it = writers_.find(ino);
     if (it == writers_.end()) {
-      // Defensive: shouldn't happen if Acquire/Release are balanced. Still
-      // call ReleaseRef below so the writer doesn't leak.
       LOG(WARNING) << "ReleaseWriter: ino " << ino << " not in table";
     } else {
       CHECK_EQ(it->second.writer, writer)
           << "ReleaseWriter: pointer mismatch for ino=" << ino;
-      it->second.holders--;
-      CHECK_GE(it->second.holders, 0);
-      if (it->second.holders == 0) {
+      CHECK_GT(it->second.holders, 0);
+      if (--it->second.holders == 0) {
         writers_.erase(it);
-        need_close = true;
+        close = true;
       }
     }
   }
+  if (close) writer->Close();
+  writer->ReleaseRef();
+}
 
-  // Close + ReleaseRef are intentionally outside the table mutex:
-  //   - Close drains any inflight flush task; if held under mutex_ it
-  //     would block all other Acquire/Release.
-  //   - ReleaseRef may transitively call delete-this; doing it outside
-  //     also keeps the table mutex's critical section short.
-  if (need_close) {
-    writer->Close();  // flips closed_ so SchedulePeriodicFlush stops arming
+size_t WriterTableShard::Size() const {
+  std::lock_guard<std::mutex> lock(mutex_);
+  return writers_.size();
+}
+
+void WriterTableShard::AppendPinnedLocked(std::vector<FileWriter*>& out) {
+  for (auto& [ino, entry] : writers_) {
+    entry.writer->AcquireRef();
+    ++entry.holders;
+    out.push_back(entry.writer);
   }
-  writer->ReleaseRef();  // may delete-this once refs_ reaches 0
 }
 
 }  // namespace vfs
