@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_BLOCKCACHE_CORE_RUNTIME_WORKER_POOL_H_
-#define DINGOFS_BLOCKCACHE_CORE_RUNTIME_WORKER_POOL_H_
+#ifndef DINGOFS_BLOCKCACHE_CORE_RUNTIME_THREAD_POOL_H_
+#define DINGOFS_BLOCKCACHE_CORE_RUNTIME_THREAD_POOL_H_
 
 #include <atomic>
 #include <condition_variable>
@@ -82,13 +82,13 @@ class CpuWorker {
   std::thread thread_;
 };
 
-class WorkerPool {
+class ThreadPool {
  public:
-  WorkerPool();
-  ~WorkerPool();
+  ThreadPool();
+  ~ThreadPool();
 
-  WorkerPool(const WorkerPool&) = delete;
-  WorkerPool& operator=(const WorkerPool&) = delete;
+  ThreadPool(const ThreadPool&) = delete;
+  ThreadPool& operator=(const ThreadPool&) = delete;
 
   // External thread only (main); Shutdown MUST finish before the shards stop.
   // `shard_cpus[i]` is the cpu shard i is pinned to (-1 = unpinned); each cpu
@@ -142,7 +142,7 @@ class WorkerPool {
 
  private:
   struct OffloadWorkBase : InboxWork {
-    OffloadWorkBase(WorkerPool* owner, unsigned origin_shard, Lane lane)
+    OffloadWorkBase(ThreadPool* owner, unsigned origin_shard, Lane lane)
         : owner(owner), origin_shard(origin_shard) {
       run = lane == Lane::kCpu ? &OffloadWorkBase::OnCpu
                                : &OffloadWorkBase::OnShard;
@@ -168,13 +168,13 @@ class WorkerPool {
       delete self;
     }
 
-    WorkerPool* owner;
+    ThreadPool* owner;
     unsigned origin_shard;
   };
 
   template <typename T, typename Fn>
   struct OffloadWork final : OffloadWorkBase {
-    OffloadWork(WorkerPool* owner, unsigned origin_shard, Lane lane, Fn fn)
+    OffloadWork(ThreadPool* owner, unsigned origin_shard, Lane lane, Fn fn)
         : OffloadWorkBase(owner, origin_shard, lane), fn(std::move(fn)) {}
 
     void Execute() override { result.emplace(fn()); }
@@ -210,14 +210,14 @@ class WorkerPool {
   unsigned cpu_worker_count_ = 0;
 };
 
-using WorkerPoolUPtr = std::unique_ptr<WorkerPool>;
+using ThreadPoolUPtr = std::unique_ptr<ThreadPool>;
 
 // The process's pool, installed by Start() and dropped by Shutdown(). Null is
 // a real answer -- a bench or a test with no pool keeps its copies on the
 // shard -- so callers must handle it, as Mesh::built() is handled.
-WorkerPool* GetGlobalWorkers();
+ThreadPool* GetGlobalThreadPool();
 
 }  // namespace blockcache
 }  // namespace dingofs
 
-#endif  // DINGOFS_BLOCKCACHE_CORE_RUNTIME_WORKER_POOL_H_
+#endif  // DINGOFS_BLOCKCACHE_CORE_RUNTIME_THREAD_POOL_H_

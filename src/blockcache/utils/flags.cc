@@ -26,7 +26,6 @@
 #include <sstream>
 #include <utility>
 
-#include "blockcache/common/tombstone.h"
 #include "blockcache/utils/string.h"
 #include "common/version.h"
 #include "utils/uuid.h"
@@ -152,7 +151,7 @@ std::vector<gflags::CommandLineFlagInfo> FlagParser::Collect(
 
   std::vector<std::pair<size_t, gflags::CommandLineFlagInfo>> ours;
   for (gflags::CommandLineFlagInfo& flag : all) {
-    if (flag.description.empty() || IsLegacyFlag(flag)) {
+    if (flag.description.empty()) {
       continue;
     }
     const size_t rank = SectionRank(usage, flag);

@@ -24,14 +24,14 @@
 
 #include "blockcache/core/memory/buffer.h"
 #include "blockcache/core/runtime/runtime.h"
-#include "blockcache/core/runtime/worker_pool.h"
+#include "blockcache/core/runtime/thread_pool.h"
 #include "common/status.h"
 
 namespace dingofs {
 namespace blockcache {
 
 static RuntimeUPtr g_runtime;
-static WorkerPoolUPtr g_worker_pool;
+static ThreadPoolUPtr g_thread_pool;
 
 void StartProcessRuntime() {
   CHECK(g_runtime == nullptr) << "the process runtime is already up";
@@ -47,8 +47,8 @@ void StartProcessRuntime() {
   for (unsigned shard = 0; shard < shard_cpus.size(); ++shard) {
     shard_cpus[shard] = g_runtime->CpuOf(shard);
   }
-  g_worker_pool = std::make_unique<WorkerPool>();
-  g_worker_pool->Start(std::move(shard_cpus));
+  g_thread_pool = std::make_unique<ThreadPool>();
+  g_thread_pool->Start(std::move(shard_cpus));
 }
 
 void StopProcessRuntime() {
@@ -56,8 +56,8 @@ void StopProcessRuntime() {
     return;
   }
 
-  g_worker_pool->Shutdown();
-  g_worker_pool.reset();
+  g_thread_pool->Shutdown();
+  g_thread_pool.reset();
 
   BufferPool::ShutdownOnAllShards();
 

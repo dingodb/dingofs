@@ -13,7 +13,7 @@
 # limitations under the License.
 
 add_executable(test_blockcache_runtime
-    worker_pool_test.cc
+    thread_pool_test.cc
 )
 target_compile_features(test_blockcache_runtime PRIVATE cxx_std_20)
 

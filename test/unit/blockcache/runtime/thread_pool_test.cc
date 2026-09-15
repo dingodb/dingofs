@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "blockcache/core/runtime/worker_pool.h"
+#include "blockcache/core/runtime/thread_pool.h"
 
 #include <gtest/gtest.h>
 

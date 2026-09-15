@@ -52,6 +52,7 @@ class CacheService : public ProtoService {
     uint64_t offset;
     uint32_t length;
   };
+
   static AlignedRange AlignRequest(uint64_t offset, uint32_t length);
 
   static Status CheckHandle(const pb::blockcache::BlockHandle& handle);

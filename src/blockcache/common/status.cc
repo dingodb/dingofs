@@ -32,6 +32,7 @@ Status ToStatus(int sys_code, const char* what) {
     case EINVAL:
     case EFAULT:
       return Status::InvalidParam(sys_code, message);
+    case ENODEV:
     case ENOENT:
       return Status::NotExist(sys_code, message);
     case EACCES:
@@ -51,7 +52,6 @@ Status ToStatus(int sys_code, const char* what) {
     case EMFILE:
     case ENFILE:
       return Status::IoError(sys_code, message);
-    case ENODEV:
     case ENETDOWN:
     case ENOTCONN:
     case ECONNRESET:

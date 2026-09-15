@@ -56,7 +56,7 @@ function start() {
   ${CACHE_BIN_PATH} \
   --id=${id} \
   --mds_addrs=${FLAGS_mds} \
-  --listen_ip=0.0.0.0 \
+  --listen_ip=127.0.0.1 \
   --listen_port=${listen_port} \
   --group_name=${FLAGS_group} \
   --group_weight=100 \

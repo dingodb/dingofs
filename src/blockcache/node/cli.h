@@ -25,53 +25,69 @@ namespace dingofs {
 namespace blockcache {
 
 inline const std::vector<FlagSection> kNodeSections = {
+    // node
     {"NODE OPTIONS",
-     {"id",
-      "listen_ip",
-      "listen_port",
-      "bind_ip",
-      "public_address",
-      "shards",
-      "cpuset",
-      "pin_cpu",
-      "poll_mode",
-      "idle_poll_us",
-      "task_quota_us",
-      "iodepth",
-      "buffer_pool_mb",
-      "daemonize",
-      "conf",
-      "group_name",
-      "group_weight",
+     {"bind_all",
       "brpc_idle_timeout_second",
       "brpc_max_concurrency",
-      "brpc_reply_on_bthread"}},
+      "brpc_reply_on_bthread",
+      "buffer_pool_mb",
+      "conf",
+      "cpuset",
+      "daemonize",
+      "group_name",
+      "group_weight",
+      "heartbeat_interval_s",
+      "id",
+      "idle_poll_us",
+      "iodepth",
+      "listen_ip",
+      "listen_port",
+      "pin_cpu",
+      "poll_mode",
+      "shards",
+      "task_quota_us"}},
+
+    // rdma
     {"RDMA OPTIONS",
-     {"use_rdma", "cache_rdma_device", "cache_rdma_port_num", "rdma_gid_idx",
-      "rdma_max_connections", "rdma_cq_entries", "rdma_max_inflight_rpcs",
-      "rdma_message_bytes", "rdma_max_inline_data", "rdma_bulk_send_wr",
-      "rdma_bulk_qps", "rdma_heartbeat_interval_s", "rdma_idle_timeout_s"}},
+     {"cache_rdma_device", "cache_rdma_port_num", "rdma_bulk_qps",
+      "rdma_bulk_send_wr", "rdma_cq_entries", "rdma_gid_idx",
+      "rdma_heartbeat_interval_s", "rdma_idle_timeout_s",
+      "rdma_max_connections", "rdma_max_inflight_rpcs", "rdma_max_inline_data",
+      "rdma_message_bytes", "use_rdma"}},
+
+    // mds
     {"MDS OPTIONS",
-     {"mds_addrs", "cache_mds_rpc_timeout_ms", "cache_mds_rpc_retry_times",
-      "cache_mds_request_retry_times", "periodic_heartbeat_interval_s"}},
+     {"cache_mds_request_retry_times", "cache_mds_rpc_retry_times",
+      "cache_mds_rpc_timeout_ms", "mds_addrs"}},
+
+    // store
     {"CACHE STORE OPTIONS",
-     {"cache_dir", "cache_dir_uuid", "cache_size_mb", "cache_expire_s",
-      "cache_cleanup_expire_interval_ms", "cache_eviction", "free_space_ratio",
-      "disk_state_check_duration_ms", "disk_state_probe_timeout_ms",
-      "disk_state_tick_duration_s", "disk_state_normal2unstable_error_num",
-      "disk_state_unstable2normal_succ_num", "disk_state_unstable2down_s"}},
+     {"cache_cleanup_expire_interval_ms", "cache_dir", "cache_dir_uuid",
+      "cache_eviction", "cache_expire_s", "cache_size_mb",
+      "disk_state_check_duration_ms", "disk_state_normal2unstable_error_num",
+      "disk_state_probe_timeout_ms", "disk_state_tick_duration_s",
+      "disk_state_unstable2down_s", "disk_state_unstable2normal_succ_num",
+      "free_space_ratio"}},
+
+    // storage
     {"STORAGE OPTIONS",
-     {"storage_upload_max_tries", "storage_download_max_tries",
+     {"max_range_size_kb", "storage_download_max_tries",
       "storage_download_notfound_max_tries",
-      "storage_upload_retry_backoff_base_ms",
-      "storage_download_retry_backoff_base_ms",
       "storage_download_notfound_retry_backoff_base_ms",
-      "upload_stage_max_inflights", "upload_stage_max_tries",
-      "upload_stage_retry_delay_s", "max_range_size_kb"}},
+      "storage_download_retry_backoff_base_ms", "storage_upload_max_tries",
+      "storage_upload_retry_backoff_base_ms", "upload_stage_max_inflights",
+      "upload_stage_max_tries", "upload_stage_retry_delay_s"}},
+
+    // offload
     {"OFFLOAD OPTIONS",
-     {"offload_threads", "offload_queue_capacity", "offload_cpu_min_bytes",
-      "offload_cpu_spin_us"}},
+     {"offload_cpu_min_bytes", "offload_cpu_spin_us", "offload_queue_capacity",
+      "offload_threads"}},
+
+    // s3
     {"S3 SDK OPTIONS", {}, "options/blockaccess"},
+
+    // logging
     {"LOGGING OPTIONS", {"log_dir", "log_level", "log_v"}},
 };
 

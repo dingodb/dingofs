@@ -20,16 +20,16 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
-#include "blockcache/utils/string.h"
 #include "common/options/cache.h"
 
 namespace dingofs {
 namespace blockcache {
 
 DEFINE_string(group_name, "default", "cache group to join");
-DEFINE_validator(group_name, [](const char* /*name*/, const std::string& value) {
-  return !value.empty();
-});
+DEFINE_validator(group_name,
+                 [](const char* /*name*/, const std::string& value) {
+                   return !value.empty();
+                 });
 
 DEFINE_uint32(group_weight, 100, "node weight in consistent hash");
 DEFINE_validator(group_weight, brpc::PassValidate);
@@ -42,21 +42,8 @@ GroupMembership::~GroupMembership() { Shutdown(); }
 Status GroupMembership::Start() {
   LOG(INFO) << "GroupMembership is starting...";
 
-  FLAGS_listen_ip = TrimWhitespace(FLAGS_listen_ip);
-  if (FLAGS_listen_ip.empty()) {
-    LOG(ERROR) << "Fail to start GroupMembership: --listen_ip is required";
-    return Status::InvalidParam("--listen_ip is required");
-  }
-
-  Status status = mds_client_->Start();
+  Status status = JoinGroup();
   if (!status.ok()) {
-    LOG(ERROR) << "Fail to start MDSClient: " << status.ToString();
-    return status;
-  }
-
-  status = JoinGroup();
-  if (!status.ok()) {
-    mds_client_->Shutdown();
     return status;
   }
 
@@ -73,7 +60,6 @@ void GroupMembership::Shutdown() {
   LOG(INFO) << "GroupMembership is shutting down...";
 
   LeaveGroup();
-  mds_client_->Shutdown();
 
   running_ = false;
   LOG(INFO) << "Successfully shutdown GroupMembership";
@@ -107,6 +93,7 @@ void GroupMembership::LeaveGroup() {
 
   LOG(INFO) << "Successfully leave node{id=" << FLAGS_id
             << " ip=" << FLAGS_listen_ip << " port=" << FLAGS_listen_port
+            << " weight=" << FLAGS_group_weight
             << "} from cache group=" << FLAGS_group_name;
 }
 

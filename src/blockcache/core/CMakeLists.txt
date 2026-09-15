@@ -13,7 +13,7 @@
 # limitations under the License.
 
 # The share-nothing runtime: one reactor, one io_uring and one arena per
-# pinned core, plus the WorkerPool -- the one way OFF a reactor. It lives here
+# pinned core, plus the ThreadPool -- the one way OFF a reactor. It lives here
 # rather than a layer up because every layer needs it: the transports have
 # bulk copies to get off the shard just as much as the block cache has S3
 # calls, and a facility they all reach cannot sit above any of them.

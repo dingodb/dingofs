@@ -40,8 +40,7 @@ static bool NonEmptyString(const char* /*name*/, const std::string& value) {
   return !value.empty();
 }
 
-DEFINE_string(mds_addrs, "127.0.0.1:7400",
-              "mds addresses used by cache group member management rpcs");
+DEFINE_string(mds_addrs, "127.0.0.1:7400", "mds addresses");
 DEFINE_validator(mds_addrs, NonEmptyString);
 
 DEFINE_int64(cache_mds_rpc_timeout_ms, 3000,
@@ -70,11 +69,14 @@ Status MDSClientImpl::Start() {
   auto status = rpc_.Init();
   if (!status.ok()) {
     LOG(ERROR) << "Fail to start RPC: " << status.ToString();
+    running_ = false;
     return status;
   }
 
   if (!mds_discovery_.Init()) {
     LOG(ERROR) << "Fail to start MDSDiscovery";
+    rpc_.Stop();
+    running_ = false;
     return Status::Internal("init mds discovery failed");
   }
 

@@ -29,8 +29,7 @@ namespace blockcache {
 DECLARE_string(id);
 DECLARE_string(listen_ip);
 DECLARE_uint32(listen_port);
-DECLARE_string(bind_ip);
-DECLARE_bool(public_address);
+DECLARE_bool(bind_all);
 DECLARE_bool(daemonize);
 
 // blockcache/infiniband/base/device.cc -- rdma transport switch and device,
@@ -77,8 +76,6 @@ DECLARE_uint64(buffer_pool_mb);
 // blockcache/net/brpc/brpc_server.cc
 DECLARE_int32(brpc_max_concurrency);
 DECLARE_bool(brpc_reply_on_bthread);
-
-// blockcache/common/tombstone.cc -- not legacy, see the note there
 DECLARE_int32(brpc_idle_timeout_second);
 
 // blockcache/node/membership.cc
@@ -86,7 +83,7 @@ DECLARE_string(group_name);
 DECLARE_uint32(group_weight);
 
 // blockcache/node/heartbeat.cc
-DECLARE_uint32(periodic_heartbeat_interval_s);
+DECLARE_uint32(heartbeat_interval_s);
 
 // blockcache/common/mds_client.cc
 DECLARE_string(mds_addrs);
@@ -94,7 +91,7 @@ DECLARE_int64(cache_mds_rpc_timeout_ms);
 DECLARE_int32(cache_mds_rpc_retry_times);
 DECLARE_uint32(cache_mds_request_retry_times);
 
-// blockcache/core/runtime/worker_pool.cc
+// blockcache/core/runtime/thread_pool.cc
 DECLARE_uint32(offload_threads);
 DECLARE_uint32(offload_queue_capacity);
 DECLARE_uint32(offload_cpu_min_bytes);
