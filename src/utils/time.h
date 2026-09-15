@@ -168,13 +168,21 @@ class Duration {
   int64_t StartMs() const { return start_time_ns_ / 1000000; }
 
   // Get elapsed time in nanoseconds
-  int64_t ElapsedNs() const { return TimestampNs() - start_time_ns_; }
-  int64_t ElapsedUs() const { return (TimestampNs() - start_time_ns_) / 1000; }
-  int64_t ElapsedMs() const {
-    return (TimestampNs() - start_time_ns_) / 1000000;
+  int64_t ElapsedNs(bool is_reset = false) {
+    int64_t now_ns = TimestampNs();
+    int64_t elapsed = now_ns - start_time_ns_;
+    if (is_reset) start_time_ns_ = now_ns;
+
+    return elapsed;
   }
-  int64_t ElapsedS() const {
-    return (TimestampNs() - start_time_ns_) / 1000000000;
+  int64_t ElapsedUs(bool is_reset = false) {
+    return ElapsedNs(is_reset) / 1000;
+  }
+  int64_t ElapsedMs(bool is_reset = false) {
+    return ElapsedNs(is_reset) / 1000000;
+  }
+  int64_t ElapsedS(bool is_reset = false) {
+    return ElapsedNs(is_reset) / 1000000000;
   }
 
   void Reset() { start_time_ns_ = TimestampNs(); }

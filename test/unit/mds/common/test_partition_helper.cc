@@ -159,6 +159,30 @@ TEST_F(HashPartitionHelperTest, AdjustDistribution) {
     EXPECT_FALSE(IsContain(distributions, 1002));
     EXPECT_FALSE(IsContain(distributions, 1003));
   }
+
+  {
+    // expect_mds_num is greater than the mds num of the partition, the new
+    // added mds should not get an empty bucket set.
+    PartitionPolicy partition_policy =
+        GenPartitionPolicy(1024, {1001, 1002, 1003}, 5);
+    std::set<uint64_t> online_mds_ids = {1001, 1002, 1004, 1005, 1006};
+    std::set<uint64_t> offline_mds_ids = {1003};
+
+    auto distributions = HashPartitionHelper::AdjustDistribution(
+        partition_policy, online_mds_ids, offline_mds_ids);
+
+    HashPartitionEntry hash;
+    hash.set_bucket_num(1024);
+    for (const auto& [mds_id, bucket_set] : distributions) {
+      hash.mutable_distributions()->insert({mds_id, bucket_set});
+    }
+
+    EXPECT_TRUE(HashPartitionHelper::CheckHashPartition(hash));
+    EXPECT_EQ(5, GetMdsNum(distributions));
+    for (const auto& [mds_id, bucket_set] : distributions) {
+      EXPECT_FALSE(bucket_set.bucket_ids().empty());
+    }
+  }
 }
 
 }  // namespace unit_test
