@@ -35,7 +35,6 @@ namespace client {
 namespace vfs {
 
 using dingofs::client::vfs::test::VFSTestBase;
-using ::testing::AnyNumber;
 using ::testing::Return;
 
 class WriterTableTest : public VFSTestBase {
@@ -218,6 +217,8 @@ TEST_F(WriterTableTest, PressureFlushSeesPartialChunkBeforeNextAdmission) {
   constexpr uint64_t kChunk = 2 * kPage;
   ON_CALL(*mock_hub_, GetFsInfo())
       .WillByDefault(Return(test::MakeTestFsInfo(kChunk, kChunk)));
+  ON_CALL(*mock_hub_, GetChunkSize()).WillByDefault(Return(kChunk));
+  ON_CALL(*mock_hub_, GetBlockSize()).WillByDefault(Return(kChunk));
 
   WriteMemPool tiny_pool(kChunk, kPage);
   ON_CALL(*mock_hub_, GetWriteMemPool()).WillByDefault(Return(&tiny_pool));

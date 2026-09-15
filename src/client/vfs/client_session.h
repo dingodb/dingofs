@@ -181,7 +181,7 @@ class ClientSession {
  private:
   friend class ClientSessionLifecycleTest;
 
-  enum class LifecycleState {
+  enum class LifecycleState : uint8_t {
     kCreated,
     kStarting,
     kRunning,
