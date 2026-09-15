@@ -22,6 +22,7 @@ add_library(dingofs_executor
     
 target_link_libraries(dingofs_executor
     brpc::brpc
+    Folly::folly
     glog::glog
     gflags::gflags
 )
