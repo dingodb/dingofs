@@ -88,8 +88,8 @@ FileReader::FileReader(VFSHub* hub, uint64_t fh, uint64_t ino)
       fh_(fh),
       ino_(ino),
       uuid_(fmt::format("file_reader-{}-{}", ino, fh)),
-      chunk_size_(hub->GetFsInfo().chunk_size),
-      block_size_(hub->GetFsInfo().block_size),
+      chunk_size_(hub->GetChunkSize()),
+      block_size_(hub->GetBlockSize()),
       policy_(new ReadaheadPoclicy(fh)) {}
 
 // when file reader destructor called,

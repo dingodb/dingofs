@@ -213,9 +213,7 @@ Status FileWriter::Write(ContextSPtr ctx, const char* buf, uint64_t size,
   return s;
 }
 
-int32_t FileWriter::GetChunkSize() const {
-  return vfs_hub_->GetFsInfo().chunk_size;
-}
+int32_t FileWriter::GetChunkSize() const { return vfs_hub_->GetChunkSize(); }
 
 ChunkWriter* FileWriter::GetOrCreateChunkWriter(int64_t chunk_index) {
   std::lock_guard<std::mutex> lock(mutex_);
