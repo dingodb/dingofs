@@ -29,7 +29,6 @@
 #include <thread>
 #include <utility>
 
-#include "blockcache/common/tombstone.h"
 #include "blockcache/core/runtime/smp.h"
 #include "blockcache/utils/string.h"
 #include "common/options/cache.h"
@@ -45,18 +44,24 @@ DEFINE_string(id, "", "cache node id");
 DEFINE_validator(id, [](const char* /*name*/, const std::string& value) {
   return !value.empty();
 });
+
 DEFINE_string(listen_ip, "", "ip to listen on");
 DEFINE_validator(listen_ip, [](const char* /*name*/, const std::string& value) {
   const std::string ip = TrimWhitespace(value);
   in_addr addr{};
-  return !ip.empty() && ::inet_pton(AF_INET, ip.c_str(), &addr) == 1;
+  return !ip.empty() && ::inet_pton(AF_INET, ip.c_str(), &addr) == 1 &&
+         addr.s_addr != htonl(INADDR_ANY);
 });
+
 DEFINE_uint32(listen_port, 9300, "port to listen on");
-DEFINE_string(bind_ip, "0.0.0.0", "ip to bind");
-DEFINE_bool(public_address, true,
-            "listen on 0.0.0.0 instead of --listen_ip so remote clients can "
-            "reach the node");
+
+DEFINE_bool(bind_all, true, "bind 0.0.0.0 instead of listen_ip");
+
 DEFINE_bool(daemonize, false, "run in background");
+
+static std::string BindIp() {
+  return FLAGS_bind_all ? "0.0.0.0" : FLAGS_listen_ip;
+}
 
 CacheNode::CacheNode() : CacheNode(std::make_unique<MDSClientImpl>()) {}
 
@@ -68,14 +73,11 @@ CacheNode::CacheNode(MDSClientUPtr mds_client)
       heartbeat_(std::make_unique<Heartbeat>(mds_client_.get())) {
   FLAGS_cache_dir_uuid = FLAGS_id;
   FLAGS_listen_ip = TrimWhitespace(FLAGS_listen_ip);
-  if (!FLAGS_public_address && FLAGS_bind_ip == "0.0.0.0") {
-    FLAGS_bind_ip = FLAGS_listen_ip;
-  }
 
   // brpc server
   {
     BrpcServer::Option option;
-    option.listen_ip = FLAGS_bind_ip;
+    option.listen_ip = BindIp();
     option.listen_port = static_cast<uint16_t>(FLAGS_listen_port);
     brpc_server_ = std::make_unique<BrpcServer>(option);
   }
@@ -86,21 +88,19 @@ CacheNode::CacheNode(MDSClientUPtr mds_client)
       return;
     }
     CHECK(FLAGS_rdma_idle_timeout_s >= 3 * FLAGS_rdma_heartbeat_interval_s)
-        << "--rdma_idle_timeout_s must be at least 3x "
-           "--rdma_heartbeat_interval_s";
+        << "rdma_idle_timeout_s must be at least 3x rdma_heartbeat_interval_s";
 
-    infiniband::ServerOption server_option;
-    server_option.device_name = FLAGS_cache_rdma_device;
-    server_option.brpc_server = brpc_server_.get();
+    infiniband::ServerOption option;
+    option.device_name = FLAGS_cache_rdma_device;
+    option.brpc_server = brpc_server_.get();
     infiniband_server_ =
-        std::make_unique<infiniband::Server>(std::move(server_option));
+        std::make_unique<infiniband::Server>(std::move(option));
   }
 }
 
 CacheNode::~CacheNode() { Shutdown(); }
 
 Status CacheNode::Start() {
-  LogLegacyFlagsInUse();
   CHECK(!running_) << "CacheNode started twice";
   CHECK(ShardCount() > 0) << "the runtime must be up before CacheNode::Start";
 
@@ -113,6 +113,11 @@ Status CacheNode::Start() {
       Shutdown();
     }
   };
+
+  status = mds_client_->Start();
+  if (!status.ok()) {
+    return status;
+  }
 
   status = block_cache_->Start();
   if (!status.ok()) {
@@ -132,9 +137,9 @@ Status CacheNode::Start() {
   heartbeat_->Start();
 
   LOG(INFO) << "Successfully start CacheNode{id=" << FLAGS_id
+            << " listen_address=" << FLAGS_listen_ip << ":" << FLAGS_listen_port
             << " shards=" << ShardCount()
-            << " rdma=" << (FLAGS_use_rdma ? "on" : "off")
-            << " listen_port=" << FLAGS_listen_port << "}";
+            << " rdma=" << (FLAGS_use_rdma ? "on" : "off") << "}";
   return Status::OK();
 }
 
@@ -149,6 +154,7 @@ void CacheNode::Shutdown() {
   membership_->Shutdown();
   ShutdownServers();
   block_cache_->Shutdown();
+  mds_client_->Shutdown();
 
   running_ = false;
   LOG(INFO) << "Successfully shutdown CacheNode";
@@ -189,7 +195,9 @@ Status CacheNode::StartInfinibandServer() {
   infiniband_server_->AddService(&cache_service_);
   Status status = infiniband_server_->Start();
   if (!status.ok()) {
-    LOG(ERROR) << "Fail to start the infiniband server: " << status.ToString();
+    LOG(ERROR) << "Fail to start infiniband server at "
+               << FLAGS_cache_rdma_device << ":" << FLAGS_cache_rdma_port_num
+               << ": " << status.ToString();
   }
   return status;
 }
@@ -199,7 +207,7 @@ Status CacheNode::StartBrpcServer() {
       std::make_unique<RawCacheService>(brpc_server_.get(), &cache_service_));
   Status status = brpc_server_->Start();
   if (!status.ok()) {
-    LOG(ERROR) << "Fail to start the brpc server at " << FLAGS_bind_ip << ":"
+    LOG(ERROR) << "Fail to start brpc server at " << BindIp() << ":"
                << FLAGS_listen_port << ": " << status.ToString();
   }
   return status;

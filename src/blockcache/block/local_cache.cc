@@ -25,7 +25,7 @@
 #include <memory>
 #include <utility>
 
-#include "blockcache/core/runtime/worker_pool.h"
+#include "blockcache/core/runtime/thread_pool.h"
 #include "blockcache/store/disk_cache_group.h"
 #include "common/options/cache.h"
 
@@ -154,17 +154,16 @@ Future<> LocalCache::CacheBlock(BlockHandle handle, SharedBlock block) {
 Future<> LocalCache::CopyBlock(SharedBlock block, uint64_t offset,
                                uint32_t length, char* buffer) {
   const char* from = block.data() + offset;
-  WorkerPool* workers = GetGlobalWorkers();
-  if (workers == nullptr || !WorkerPool::ShouldOffload(length)) {
+  ThreadPool* pool = GetGlobalThreadPool();
+  if (pool == nullptr || !ThreadPool::ShouldOffload(length)) {
     std::memcpy(buffer, from, length);
     co_return;
   }
-  workers->CountCopy(length);
-  (void)co_await workers->Submit(Lane::kCpu,
-                                 [from, buffer, length]() -> Status {
-                                   std::memcpy(buffer, from, length);
-                                   return Status::OK();
-                                 });
+  pool->CountCopy(length);
+  (void)co_await pool->Submit(Lane::kCpu, [from, buffer, length]() -> Status {
+    std::memcpy(buffer, from, length);
+    return Status::OK();
+  });
 }
 
 Future<Status> LocalCache::Prefetch(BlockHandle handle,

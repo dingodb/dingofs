@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_executable(blockcache-cb
+add_executable(cb
     benchmarker.cc
     collector.cc
     factory.cc
@@ -21,8 +21,9 @@ add_executable(blockcache-cb
     reporter.cc
     worker.cc
 )
-target_compile_features(blockcache-cb PRIVATE cxx_std_20)
-target_link_libraries(blockcache-cb
+target_compile_features(cb PRIVATE cxx_std_20)
+target_link_libraries(cb
+    # Keep first, see node/CMakeLists.txt.
     ibverbs::ibverbs
 
     blockcache_api
@@ -35,8 +36,4 @@ target_link_libraries(blockcache-cb
     gflags::gflags
     glog::glog
 )
-set_target_properties(blockcache-cb PROPERTIES
-    OUTPUT_NAME cb
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
-)
-blockcache_tune(blockcache-cb)
+blockcache_tune(cb)

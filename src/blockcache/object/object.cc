@@ -27,7 +27,7 @@
 #include <vector>
 
 #include "blockcache/core/runtime/smp.h"
-#include "blockcache/core/runtime/worker_pool.h"
+#include "blockcache/core/runtime/thread_pool.h"
 
 namespace dingofs {
 namespace blockcache {
@@ -197,7 +197,7 @@ Future<Status> ObjectStorage::SubmitAsync(uint64_t fs_id,
     completion.Complete(ctx->status);
   };
 
-  const Status status = co_await GetGlobalWorkers()->Submit(
+  const Status status = co_await GetGlobalThreadPool()->Submit(
       [this, fs_id, &context, &submit]() -> Status {
         blockaccess::BlockAccesser* accesser = nullptr;
         Status status = client_->GetOrCreate(fs_id, &accesser);

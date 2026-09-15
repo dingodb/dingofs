@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "blockcache/core/runtime/worker_pool.h"
+#include "blockcache/core/runtime/thread_pool.h"
 
 #include <gflags/gflags.h>
 #include <glog/logging.h>
@@ -108,20 +108,20 @@ bool CpuWorker::SpinForWork(uint64_t spin_ns) {
 }
 
 // Set by Start(), cleared by Shutdown(); both run on the external thread.
-static WorkerPool* g_workers = nullptr;
+static ThreadPool* g_thread_pool = nullptr;
 
-WorkerPool* GetGlobalWorkers() { return g_workers; }
+ThreadPool* GetGlobalThreadPool() { return g_thread_pool; }
 
-WorkerPool::WorkerPool()
+ThreadPool::ThreadPool()
     : thread_count_(FLAGS_offload_threads),
       capacity_(FLAGS_offload_queue_capacity) {}
 
-WorkerPool::~WorkerPool() { Shutdown(); }
+ThreadPool::~ThreadPool() { Shutdown(); }
 
-void WorkerPool::Start(std::vector<int> shard_cpus) {
-  CHECK(closed_.load(std::memory_order_relaxed)) << "WorkerPool started twice";
+void ThreadPool::Start(std::vector<int> shard_cpus) {
+  CHECK(closed_.load(std::memory_order_relaxed)) << "ThreadPool started twice";
 
-  LOG(INFO) << "WorkerPool is starting...";
+  LOG(INFO) << "ThreadPool is starting...";
 
   // One cpu worker per shard, fixed to it. Up before the lane opens. A pinned
   // shard gets its worker on the SMT sibling of its core: the completion
@@ -139,8 +139,8 @@ void WorkerPool::Start(std::vector<int> shard_cpus) {
     }
   }
 
-  CHECK(g_workers == nullptr) << "a second WorkerPool in this process";
-  g_workers = this;
+  CHECK(g_thread_pool == nullptr) << "a second ThreadPool in this process";
+  g_thread_pool = this;
 
   closed_.store(false, std::memory_order_release);
   workers_.reserve(thread_count_);
@@ -150,17 +150,17 @@ void WorkerPool::Start(std::vector<int> shard_cpus) {
       WorkerLoop();
     });
   }
-  LOG(INFO) << "Successfully start WorkerPool: threads=" << thread_count_
+  LOG(INFO) << "Successfully start ThreadPool: threads=" << thread_count_
             << " queue_capacity=" << capacity_
             << " cpu_workers=" << cpu_worker_count_;
 }
 
-void WorkerPool::Shutdown() {
+void ThreadPool::Shutdown() {
   if (closed_.exchange(true, std::memory_order_acq_rel)) {
     return;
   }
 
-  LOG(INFO) << "WorkerPool is shutting down...";
+  LOG(INFO) << "ThreadPool is shutting down...";
 
   cv_.notify_all();
   for (std::thread& worker : workers_) {
@@ -191,14 +191,14 @@ void WorkerPool::Shutdown() {
   while (inflight_.load(std::memory_order_acquire) != 0) {
     std::this_thread::yield();
   }
-  if (g_workers == this) {
-    g_workers = nullptr;
+  if (g_thread_pool == this) {
+    g_thread_pool = nullptr;
   }
-  LOG(INFO) << "Successfully shutdown WorkerPool: cpu lane moved "
+  LOG(INFO) << "Successfully shutdown ThreadPool: cpu lane moved "
             << cpu_copied_bytes() << " bytes";
 }
 
-void WorkerPool::Post(InboxWork* work) {
+void ThreadPool::Post(InboxWork* work) {
   DCHECK(HasReactor()) << "Post is shard-only";
   if (closed_.load(std::memory_order_acquire)) {
     // Unreachable under the teardown DAG: the caller drains its own in-flight
@@ -212,11 +212,11 @@ void WorkerPool::Post(InboxWork* work) {
   cpu_workers_[ThisShardId()].Post(work);
 }
 
-bool WorkerPool::ShouldOffload(size_t bytes) {
+bool ThreadPool::ShouldOffload(size_t bytes) {
   return bytes >= FLAGS_offload_cpu_min_bytes;
 }
 
-Status WorkerPool::Enqueue(OffloadWorkBase* job, Lane lane) {
+Status ThreadPool::Enqueue(OffloadWorkBase* job, Lane lane) {
   if (lane == Lane::kCpu) {
     // No queue and no cap: the node is the work, so posting cannot fail, and
     // a copy has nowhere else to go.
@@ -241,7 +241,7 @@ Status WorkerPool::Enqueue(OffloadWorkBase* job, Lane lane) {
   return Status::OK();
 }
 
-void WorkerPool::WorkerLoop() {
+void ThreadPool::WorkerLoop() {
   for (;;) {
     OffloadWorkBase* job = nullptr;
     {
@@ -260,7 +260,7 @@ void WorkerPool::WorkerLoop() {
   }
 }
 
-void WorkerPool::Complete(OffloadWorkBase* job) {
+void ThreadPool::Complete(OffloadWorkBase* job) {
   job->run =
       &OffloadWorkBase::OnShard;  // whatever lane it came from, this is home
   if (PostTo(job->origin_shard, job)) {

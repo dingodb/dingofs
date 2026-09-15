@@ -25,7 +25,7 @@
 #include "blockcache/core/reactor/coroutine.h"
 #include "blockcache/core/runtime/bootstrap.h"
 #include "blockcache/core/runtime/smp.h"
-#include "blockcache/core/runtime/worker_pool.h"
+#include "blockcache/core/runtime/thread_pool.h"
 #include "blockcache/infiniband/base/memory_region.h"
 #include "blockcache/infiniband/client/context.h"
 #include "common/options/cache.h"
@@ -48,7 +48,7 @@ Status RegisterMemoryForRDMA(void* base, size_t bytes) {
 
     ibv_pd* pd = context->device->pd();
     StatusOr<infiniband::MemoryRegion> mr =
-        co_await GetGlobalWorkers()->Submit([pd, base, bytes] {
+        co_await GetGlobalThreadPool()->Submit([pd, base, bytes] {
           return infiniband::MemoryRegion::Register(pd, base, bytes);
         });
     if (!mr.ok()) {

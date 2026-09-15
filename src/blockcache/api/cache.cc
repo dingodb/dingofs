@@ -26,7 +26,6 @@
 
 #include "blockcache/api/task.h"
 #include "blockcache/common/route.h"
-#include "blockcache/common/tombstone.h"
 #include "blockcache/core/runtime/shard_inbox.h"
 #include "blockcache/core/runtime/smp.h"
 #include "blockcache/tier/sharded.h"
@@ -49,7 +48,6 @@ Status BlockCacheImpl::Start() {
   CHECK(!ProcessRuntimeStarted()) << "BlockCacheImpl started twice";
 
   LOG(INFO) << "BlockCacheImpl is starting...";
-  LogLegacyFlagsInUse();
 
   StartProcessRuntime();
 
@@ -236,7 +234,7 @@ Future<> BlockCacheImpl::AwaitTask(InboxTask* context, Future<Status> future) {
 void BlockCacheImpl::FinishTask(InboxTask* context, Status status) {
   context->status = std::move(status);
   context->run = &BlockCacheImpl::CompleteTask;
-  GetGlobalWorkers()->Post(context);
+  GetGlobalThreadPool()->Post(context);
 }
 
 void BlockCacheImpl::CompleteTask(InboxWork* base) {

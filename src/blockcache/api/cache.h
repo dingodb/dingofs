@@ -28,7 +28,7 @@
 #include "blockcache/common/mds_client.h"
 #include "blockcache/core/memory/buffer_view.h"
 #include "blockcache/core/runtime/bootstrap.h"
-#include "blockcache/core/runtime/worker_pool.h"
+#include "blockcache/core/runtime/thread_pool.h"
 #include "blockcache/object/object.h"
 #include "blockcache/tier/sharded.h"
 #include "common/status.h"

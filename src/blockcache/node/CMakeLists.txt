@@ -25,21 +25,17 @@ target_link_libraries(blockcache_node
     blockcache_common
     blockcache_object
     blockcache_store
+    blockcache_flags
     PROTO_OBJS
     gflags::gflags
     glog::glog
 )
 blockcache_tune(blockcache_node)
 
-add_executable(blockcache-node main.cc)
-target_compile_features(blockcache-node PRIVATE cxx_std_20)
-target_link_libraries(blockcache-node
+add_executable(dingo-cache main.cc)
+target_compile_features(dingo-cache PRIVATE cxx_std_20)
+target_link_libraries(dingo-cache
     ibverbs::ibverbs
     blockcache_node
-    blockcache_flags
 )
-set_target_properties(blockcache-node PROPERTIES
-    OUTPUT_NAME dingo-cache
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
-)
-blockcache_tune(blockcache-node)
+blockcache_tune(dingo-cache)

@@ -33,7 +33,7 @@
 #include "blockcache/core/reactor/reactor.h"
 #include "blockcache/core/runtime/shard_inbox.h"
 #include "blockcache/core/runtime/smp.h"
-#include "blockcache/core/runtime/worker_pool.h"
+#include "blockcache/core/runtime/thread_pool.h"
 #include "common/options/cache.h"
 #include "dingofs/cache.pb.h"
 
@@ -57,7 +57,7 @@ Future<Status> Handshaker::Handshake(
     pb::blockcache::HandshakeResponse* response) {
   auto* call = new Handshaker(ThisShardId(), option, request, response);
   Future<Status> done = call->promise_.GetFuture();
-  CHECK_NOTNULL(GetGlobalWorkers())->Post(call);
+  CHECK_NOTNULL(GetGlobalThreadPool())->Post(call);
   return done;
 }
 

@@ -28,9 +28,8 @@
 namespace dingofs {
 namespace blockcache {
 
-DEFINE_uint32(periodic_heartbeat_interval_s, 3,
-              "heartbeat interval in seconds");
-DEFINE_validator(periodic_heartbeat_interval_s, brpc::PassValidate);
+DEFINE_uint32(heartbeat_interval_s, 3, "heartbeat interval in seconds");
+DEFINE_validator(heartbeat_interval_s, brpc::PassValidate);
 
 Heartbeat::Heartbeat(MDSClient* mds_client) : mds_client_(mds_client) {}
 
@@ -49,7 +48,7 @@ void Heartbeat::Start() {
   });
 
   LOG(INFO) << "Successfully start Heartbeat{interval="
-            << FLAGS_periodic_heartbeat_interval_s << "s}";
+            << FLAGS_heartbeat_interval_s << "s}";
 }
 
 void Heartbeat::Shutdown() {
@@ -73,9 +72,8 @@ void Heartbeat::PeriodicSendHeartbeat() {
   SendHeartbeat();
 
   std::unique_lock<std::mutex> lock(mutex_);
-  while (!cv_.wait_for(
-      lock, std::chrono::seconds(FLAGS_periodic_heartbeat_interval_s),
-      [this] { return !running_; })) {
+  while (!cv_.wait_for(lock, std::chrono::seconds(FLAGS_heartbeat_interval_s),
+                       [this] { return !running_; })) {
     lock.unlock();
     SendHeartbeat();
     lock.lock();
@@ -90,9 +88,9 @@ void Heartbeat::SendHeartbeat() {
                << " ip=" << FLAGS_listen_ip << " port=" << FLAGS_listen_port
                << "} to mds: " << status.ToString();
   } else {
-    LOG_EVERY_N(INFO, 60) << "Successfully send heartbeat{id=" << FLAGS_id
-                          << " ip=" << FLAGS_listen_ip
-                          << " port=" << FLAGS_listen_port << "} to mds";
+    LOG(INFO) << "Successfully send heartbeat{id=" << FLAGS_id
+              << " ip=" << FLAGS_listen_ip << " port=" << FLAGS_listen_port
+              << "} to mds";
   }
 }
 

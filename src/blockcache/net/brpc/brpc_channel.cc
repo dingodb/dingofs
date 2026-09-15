@@ -30,7 +30,7 @@
 
 #include "blockcache/common/status.h"
 #include "blockcache/core/runtime/smp.h"
-#include "blockcache/core/runtime/worker_pool.h"
+#include "blockcache/core/runtime/thread_pool.h"
 #include "blockcache/net/brpc/brpc_server.h"
 #include "common/options/cache.h"
 
@@ -65,15 +65,15 @@ struct NativeClientCall : InboxWork, public google::protobuf::Closure {
     const butil::IOBuf& attachment = self->cntl.response_attachment();
     self->copy_bytes = attachment.size() < self->recv.size ? attachment.size()
                                                            : self->recv.size;
-    WorkerPool* workers = GetGlobalWorkers();
-    if (workers == nullptr || !WorkerPool::ShouldOffload(self->copy_bytes)) {
+    ThreadPool* pool = GetGlobalThreadPool();
+    if (pool == nullptr || !ThreadPool::ShouldOffload(self->copy_bytes)) {
       attachment.copy_to(self->recv.data, self->copy_bytes);
       self->Finish();
       return;
     }
-    workers->CountCopy(self->copy_bytes);
+    pool->CountCopy(self->copy_bytes);
     self->run = &NativeClientCall::OnCopied;
-    workers->Post(self);
+    pool->Post(self);
   }
 
   static void OnCopied(InboxWork* base) {

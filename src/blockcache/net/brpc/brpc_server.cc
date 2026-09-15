@@ -21,6 +21,7 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
+#include <cstring>
 #include <string>
 #include <utility>
 
@@ -35,6 +36,10 @@ DEFINE_validator(brpc_max_concurrency, brpc::NonNegativeInteger);
 
 DEFINE_bool(brpc_reply_on_bthread, false,
             "run brpc's done on a bthread instead of on the owning shard");
+
+DEFINE_int32(brpc_idle_timeout_second, -1,
+             "seconds an idle connection is kept; -1 never reaps");
+DEFINE_validator(brpc_idle_timeout_second, brpc::PassValidate);
 
 BrpcServer::BrpcServer(Option option) : option_(std::move(option)) {}
 
@@ -69,7 +74,7 @@ Status BrpcServer::Start() {
   options.idle_timeout_sec = FLAGS_brpc_idle_timeout_second;
   options.max_concurrency = FLAGS_brpc_max_concurrency;
   if (server_->Start(listen_addr, &options) != 0) {
-    return Status::Internal("Fail to start the brpc server");
+    return Status::Internal(strerror(errno));
   }
 
   started_ = true;

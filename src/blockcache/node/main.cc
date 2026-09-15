@@ -52,7 +52,7 @@ static bool RunNode() {
   CacheNode node;
   const Status status = node.Start();
   if (!status.ok()) {
-    LOG(ERROR) << "Fail to start cache node: " << status.ToString();
+    LOG(ERROR) << "Fail to start cache node";
     return false;
   }
 
