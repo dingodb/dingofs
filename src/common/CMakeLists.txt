@@ -47,6 +47,7 @@ target_link_libraries(dingofs_common
     brpc::brpc
     protobuf::libprotobuf
     fmt::fmt
+    Folly::folly
     gflags::gflags
     glog::glog
     dingofs_open_trace

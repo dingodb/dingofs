@@ -63,6 +63,7 @@ find_package(AWSSDK            REQUIRED CONFIG COMPONENTS s3 s3-crt)  # → aws-
 find_package(spdlog            REQUIRED CONFIG)  # → spdlog::spdlog
 find_package(jsoncpp           REQUIRED CONFIG)  # → JsonCpp::JsonCpp
 find_package(Threads           REQUIRED)         # → Threads::Threads (CMake built-in)
+find_package(folly             REQUIRED CONFIG)  # → Folly::folly
 
 # uuid: cmake config at non-standard location; resolve via find_library instead
 if(NOT TARGET uuid::uuid_static)
@@ -101,6 +102,7 @@ aws-cpp-sdk-s3-crt;\
 aws-cpp-sdk-s3;\
 spdlog::spdlog;\
 JsonCpp::JsonCpp;\
+Folly::folly;\
 uring::uring;\
 uuid::uuid_static;\
 -Wl,--end-group;\

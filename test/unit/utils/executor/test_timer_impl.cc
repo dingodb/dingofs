@@ -15,37 +15,21 @@
 #include <unistd.h>
 
 #include <atomic>
-#include <chrono>
-#include <condition_variable>
+#include <chrono>              // NOLINT
+#include <condition_variable>  // NOLINT
+#include <future>
 #include <memory>
-#include <mutex>
-#include <thread>
+#include <mutex>   // NOLINT
+#include <thread>  // NOLINT
 
+#include "common/sync_point.h"
 #include "glog/logging.h"
 #include "gtest/gtest.h"
 #include "utils/executor/thread/thread_pool_impl.h"
 #include "utils/executor/timer/timer_impl.h"
+#include "utils/scoped_cleanup.h"
 
 namespace dingofs {
-class TimerImplTestPeer {
- public:
-  static bool CanAcquireMutex(TimerImpl* timer) {
-    std::atomic<bool> acquired{false};
-    std::thread checker([&] {
-      for (int i = 0; i < 100; ++i) {
-        if (timer->mutex_.try_lock()) {
-          acquired.store(true, std::memory_order_release);
-          timer->mutex_.unlock();
-          return;
-        }
-        std::this_thread::yield();
-      }
-    });
-    checker.join();
-    return acquired.load(std::memory_order_acquire);
-  }
-};
-
 namespace utils {
 namespace unit_test {
 
@@ -56,26 +40,9 @@ class TimerImplTest : public ::testing::Test {
     pool->Start();
   }
 
-  ~TimerImplTest() override = default;
+  ~TimerImplTest() override { pool->Stop(); }
 
   std::unique_ptr<ThreadPoolImpl> pool{nullptr};
-};
-struct TimerCaptureProbe {
-  TimerImpl* timer;
-  std::atomic<bool>* destroyed;
-  std::atomic<bool>* destroyed_outside_mutex;
-
-  TimerCaptureProbe(TimerImpl* timer, std::atomic<bool>* destroyed,
-                    std::atomic<bool>* destroyed_outside_mutex)
-      : timer(timer),
-        destroyed(destroyed),
-        destroyed_outside_mutex(destroyed_outside_mutex) {}
-
-  ~TimerCaptureProbe() {
-    destroyed_outside_mutex->store(TimerImplTestPeer::CanAcquireMutex(timer),
-                                   std::memory_order_release);
-    destroyed->store(true, std::memory_order_release);
-  }
 };
 
 TEST_F(TimerImplTest, BaseTest) {
@@ -119,6 +86,50 @@ TEST_F(TimerImplTest, Add) {
   }
 
   EXPECT_EQ(count.load(), 0);
+  timer->Stop();
+}
+
+TEST_F(TimerImplTest, EarlierDeadlineInterruptsTimedWait) {
+#ifdef NDEBUG
+  GTEST_SKIP() << "Deterministic timer waiting requires TEST_SYNC_POINT; "
+                  "run this regression in a Debug build.";
+#else
+  std::promise<void> waiting;
+  auto waiting_future = waiting.get_future();
+  std::once_flag waiting_once;
+  std::promise<void> earlier_ran;
+  auto earlier_future = earlier_ran.get_future();
+  std::atomic<bool> later_ran{false};
+  auto timer = std::make_unique<TimerImpl>(pool.get());
+
+  auto cleanup = MakeScopedCleanup([&] {
+    timer->Stop();
+    pool->Stop();
+    SyncPoint::GetInstance()->DisableProcessing();
+    SyncPoint::GetInstance()->ClearAllCallBacks();
+  });
+  SyncPoint::GetInstance()->SetCallBack(
+      "TimerImpl::Run:before_timed_wait", [&](void* arg) {
+        if (arg == timer.get()) {
+          std::call_once(waiting_once, [&] { waiting.set_value(); });
+        }
+      });
+  SyncPoint::GetInstance()->EnableProcessing();
+
+  ASSERT_TRUE(timer->Start());
+  ASSERT_TRUE(timer->Add([&] { later_ran.store(true); }, 60 * 60 * 1000));
+  ASSERT_EQ(waiting_future.wait_for(std::chrono::seconds(5)),
+            std::future_status::ready)
+      << "Timer did not reach the wait for the distant deadline";
+
+  // The sync point runs with the timer mutex held. Add cannot acquire it until
+  // wait_for atomically registers its waiter and releases that mutex.
+  ASSERT_TRUE(timer->Add([&] { earlier_ran.set_value(); }, 10));
+  EXPECT_EQ(earlier_future.wait_for(std::chrono::seconds(5)),
+            std::future_status::ready)
+      << "The earlier deadline did not interrupt the existing timed wait";
+  EXPECT_FALSE(later_ran.load());
+#endif
 }
 
 TEST_F(TimerImplTest, StopDestroysPendingFunctionsOutsideMutex) {
@@ -127,17 +138,15 @@ TEST_F(TimerImplTest, StopDestroysPendingFunctionsOutsideMutex) {
 
   std::atomic<bool> ran{false};
   std::atomic<bool> destroyed{false};
-  std::atomic<bool> destroyed_outside_mutex{false};
-  auto probe = std::make_shared<TimerCaptureProbe>(timer.get(), &destroyed,
-                                                   &destroyed_outside_mutex);
-
+  auto probe = std::make_shared<int>(1);
+  std::weak_ptr<int> weak_probe = probe;
   ASSERT_TRUE(timer->Add([probe, &ran] { ran.store(true); }, 60 * 60 * 1000));
   probe.reset();
 
+  ASSERT_FALSE(weak_probe.expired());
   ASSERT_TRUE(timer->Stop());
   EXPECT_FALSE(ran.load());
-  EXPECT_TRUE(destroyed.load(std::memory_order_acquire));
-  EXPECT_TRUE(destroyed_outside_mutex.load(std::memory_order_acquire));
+  EXPECT_TRUE(weak_probe.expired());
 }
 
 }  // namespace unit_test

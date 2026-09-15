@@ -102,6 +102,12 @@ class VFSHub {
 
   virtual FsInfo GetFsInfo() = 0;
 
+  // Hot-path accessors that avoid copying the full FsInfo (which contains
+  // multiple std::string members). Safe to call concurrently after Start().
+  virtual int32_t GetChunkSize() = 0;
+  virtual int32_t GetBlockSize() = 0;
+  virtual uint32_t GetFsId() = 0;
+
   virtual blockaccess::BlockAccessOptions GetBlockAccesserOptions() = 0;
 
   virtual UidGidMapper* GetUidGidMapper() = 0;
@@ -210,6 +216,21 @@ class VFSHubImpl : public VFSHub {
   FsInfo GetFsInfo() override {
     CHECK(started_.load(std::memory_order_relaxed)) << "not started";
     return fs_info_;
+  }
+
+  int32_t GetChunkSize() override {
+    CHECK(started_.load(std::memory_order_relaxed)) << "not started";
+    return fs_info_.chunk_size;
+  }
+
+  int32_t GetBlockSize() override {
+    CHECK(started_.load(std::memory_order_relaxed)) << "not started";
+    return fs_info_.block_size;
+  }
+
+  uint32_t GetFsId() override {
+    CHECK(started_.load(std::memory_order_relaxed)) << "not started";
+    return fs_info_.id;
   }
 
   TraceManager* GetTraceManager() override { return &trace_manager_; }

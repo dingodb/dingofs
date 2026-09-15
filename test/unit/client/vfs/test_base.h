@@ -140,6 +140,15 @@ class VFSTestBase : public ::testing::Test {
     ON_CALL(*mock_hub_, GetCBExecutor())
         .WillByDefault(Return(cb_executor_.get()));
     ON_CALL(*mock_hub_, GetFsInfo()).WillByDefault(Return(MakeTestFsInfo()));
+    // Delegate to GetFsInfo so a test that overrides the geometry with a
+    // custom MakeTestFsInfo(chunk, block) keeps all three accessors
+    // consistent without overriding each one separately.
+    ON_CALL(*mock_hub_, GetChunkSize())
+        .WillByDefault([this]() { return mock_hub_->GetFsInfo().chunk_size; });
+    ON_CALL(*mock_hub_, GetBlockSize())
+        .WillByDefault([this]() { return mock_hub_->GetFsInfo().block_size; });
+    ON_CALL(*mock_hub_, GetFsId())
+        .WillByDefault([this]() { return mock_hub_->GetFsInfo().id; });
     // Null mapper => uid/gid translation passthrough. Tests that exercise the
     // enabled-mapper path override this with their own real mapper.
     ON_CALL(*mock_hub_, GetUidGidMapper()).WillByDefault(Return(nullptr));
@@ -161,6 +170,9 @@ class VFSTestBase : public ::testing::Test {
     EXPECT_CALL(*mock_hub_, GetCBExecutor()).Times(AnyNumber());
     EXPECT_CALL(*mock_hub_, GetFsInfo()).Times(AnyNumber());
     EXPECT_CALL(*mock_hub_, GetUidGidMapper()).Times(AnyNumber());
+    EXPECT_CALL(*mock_hub_, GetChunkSize()).Times(AnyNumber());
+    EXPECT_CALL(*mock_hub_, GetBlockSize()).Times(AnyNumber());
+    EXPECT_CALL(*mock_hub_, GetFsId()).Times(AnyNumber());
 
     // --- 8. MockBlockStore: synchronous success by default ---
     // Callbacks invoked inline (no async) to eliminate timing non-determinism.

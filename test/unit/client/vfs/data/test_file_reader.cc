@@ -788,6 +788,9 @@ TEST_F(FileReaderTest, Invalidate_ReadyRequestWithReader_Rereads) {
   InstallFullSlice(mock_meta_system_);
   ON_CALL(*mock_hub_, GetFsInfo())
       .WillByDefault(Return(test::MakeTestFsInfo(4 * 1024 * 1024, 4096)));
+  ON_CALL(*mock_hub_, GetChunkSize())
+      .WillByDefault(Return(4 * 1024 * 1024));
+  ON_CALL(*mock_hub_, GetBlockSize()).WillByDefault(Return(4096));
 
   auto first_gate = std::make_shared<RangeGate>();
   auto second_block_calls = std::make_shared<std::atomic<int>>(0);
@@ -855,6 +858,10 @@ TEST_F(FileReaderTest, ConcurrentReadInvalidateClose_Chaos) {
   InstallFullSlice(mock_meta_system_);
   ON_CALL(*mock_hub_, GetFsInfo())
       .WillByDefault(Return(test::MakeTestFsInfo(4 * 1024 * 1024, 64 * 1024)));
+  ON_CALL(*mock_hub_, GetChunkSize())
+      .WillByDefault(Return(4 * 1024 * 1024));
+  ON_CALL(*mock_hub_, GetBlockSize())
+      .WillByDefault(Return(64 * 1024));
   ON_CALL(*mock_block_store_, RangeAsync)
       .WillByDefault([](ContextSPtr, RangeReq req, StatusCallback cb) {
         if (req.dst.base != nullptr && req.length > 0) {
@@ -950,6 +957,10 @@ TEST_F(FileReaderTest, ManySmallReads_EvictionBounded) {
   // always cover offset 0, so nothing could ever be evicted.
   ON_CALL(*mock_hub_, GetFsInfo())
       .WillByDefault(Return(test::MakeTestFsInfo(4 * 1024 * 1024, 64 * 1024)));
+  ON_CALL(*mock_hub_, GetChunkSize())
+      .WillByDefault(Return(4 * 1024 * 1024));
+  ON_CALL(*mock_hub_, GetBlockSize())
+      .WillByDefault(Return(64 * 1024));
 
   // Count fetches of the file-offset-0 request only: slice 1 block 0 at
   // in-block offset 0 (strided reads below alias in-block offset 0 in OTHER

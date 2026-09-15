@@ -15,51 +15,36 @@
 #ifndef DINGOFS_UITLS_THREAD_POOL_IMPL_H_
 #define DINGOFS_UITLS_THREAD_POOL_IMPL_H_
 
-#include <butil/compiler_specific.h>
+#include <folly/executors/CPUThreadPoolExecutor.h>
 
-#include <condition_variable>
-#include <mutex>
-#include <queue>
+#include <memory>
 #include <string>
-#include <thread>
 
 #include "utils/executor/thread_pool.h"
 
 namespace dingofs {
 
-class ThreadPoolImpl : public ThreadPool {
+// Fixed-size thread pool backed by folly CPUThreadPoolExecutor. Execute
+// enqueues immediately; Stop drains all accepted work via join().
+class ThreadPoolImpl final : public ThreadPool {
  public:
-  ThreadPoolImpl(const std::string& name, int num_threads)
-      : name_(name), thread_num_(num_threads) {}
+  ThreadPoolImpl(const std::string& name, int num_threads);
 
-  ~ThreadPoolImpl() override { Stop(); }
+  ~ThreadPoolImpl() override;
 
   void Start() override;
-
   void Stop() override;
 
   int GetBackgroundThreads() override;
-
-  // Get the number of task scheduled in the ThreadPoolImpl
   int GetTaskNum() const override;
 
-  // Submit a fire and forget jobs
-  // This allows to submit the same job multiple times
-  void Execute(const std::function<void()>&) override;
-
-  // This moves the function in for efficiency
-  void Execute(std::function<void()>&&) override;
+  void Execute(const std::function<void()>& task) override;
+  void Execute(std::function<void()>&& task) override;
 
  private:
-  void ThreadProc(size_t thread_id);
-
-  mutable std::mutex mutex_;
   const std::string name_;
-  int thread_num_{0};
-  bool running_{false};
-  std::condition_variable condition_;
-  std::vector<std::thread> threads_;
-  std::queue<std::function<void()>> tasks_;
+  const int thread_num_;
+  std::unique_ptr<folly::CPUThreadPoolExecutor> pool_;
 };
 
 }  // namespace dingofs
