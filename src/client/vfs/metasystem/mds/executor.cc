@@ -44,9 +44,6 @@ bool Executor::ExecuteByHash(uint64_t hash_id, TaskRunnablePtr task,
       return true;
     }
 
-    // Retrying a stopped worker set would spin until the process exits.
-    // if (worker_set_->IsStopped()) return false;
-
     LOG(WARNING) << fmt::format(
         "[meta.executor] commit task fail, type({}) key({}).", task->Type(),
         task->Key());
@@ -81,7 +78,13 @@ bool FastExecutor::ExecuteByHash(uint64_t hash_id, TaskRunnablePtr task,
     }
 
     // Retrying a stopped worker set would spin until the process exits.
-    if (worker_set_->IsStopped()) return false;
+    if (worker_set_->IsStopped()) {
+      LOG(WARNING) << fmt::format(
+          "[meta.fast_executor] commit task fail, worker set is stopped, "
+          "type({}) key({}).",
+          task->Type(), task->Key());
+      return false;
+    }
 
     LOG(WARNING) << fmt::format(
         "[meta.fast_executor] commit task fail, type({}) key({}).",
