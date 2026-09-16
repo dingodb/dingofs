@@ -17,10 +17,14 @@
 #ifndef DINGOFS_SRC_TRACE_CONTEXT_H_
 #define DINGOFS_SRC_TRACE_CONTEXT_H_
 
+#include <absl/container/inlined_vector.h>
 #include <absl/strings/str_format.h>
 #include <butil/time.h>
 
+#include <cstdint>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "utils/time.h"
 
@@ -47,6 +51,8 @@ struct Context {
 
   std::string reason;  // reason for the request, used for log and trace
 
+  absl::InlinedVector<std::pair<const char*, uint64_t>, 8> latency_trace;
+
   std::weak_ptr<SpanScope> trace_span;
 
   const std::string& SessionID() const { return session_id; }  // session id
@@ -55,6 +61,18 @@ struct Context {
 
   void SetTraceSpan(SpanScopeSPtr trace_span_ptr) {
     trace_span = trace_span_ptr;
+  }
+
+  void AddLatencyTrace(const char* label, uint64_t latency_us) {
+    latency_trace.emplace_back(label, latency_us);
+  }
+  std::string ToLatencyTraceStr() const {
+    std::string result;
+    result.reserve(latency_trace.size() * 32);
+    for (const auto& entry : latency_trace) {
+      result += absl::StrFormat("%s:%llu; ", entry.first, entry.second);
+    }
+    return result;
   }
 
   Context(const std::string& session) {
