@@ -24,10 +24,22 @@
 #include "blockcache/common/status.h"
 #include "blockcache/core/memory/slab_pool.h"
 #include "blockcache/infiniband/base/memory_registry.h"
+#include "blockcache/infiniband/common/protocol.h"
+#include "common/options/cache.h"
 
 namespace dingofs {
 namespace blockcache {
 namespace infiniband {
+
+inline size_t MessagePoolSuperblockCount() {
+  const size_t bytes_per_connection =
+      2 * size_t{Protocol::MessageBudget()} *
+      SlabPool::SizeOf(FLAGS_rdma_message_bytes);
+  const size_t total_bytes = bytes_per_connection * FLAGS_rdma_max_connections;
+  return ((total_bytes + SlabPool::kSuperblockSize - 1) /
+          SlabPool::kSuperblockSize) +
+         1;
+}
 
 class BufferPool {
  public:

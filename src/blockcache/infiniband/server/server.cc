@@ -42,15 +42,6 @@ namespace dingofs {
 namespace blockcache {
 namespace infiniband {
 
-static size_t MessagePoolSuperblockCount() {
-  const size_t bytes_per_connection =
-      2 * size_t{Protocol::MessageBudget()} * size_t{FLAGS_rdma_message_bytes};
-  const size_t total_bytes = bytes_per_connection * FLAGS_rdma_max_connections;
-  return ((total_bytes + SlabPool::kSuperblockSize - 1) /
-          SlabPool::kSuperblockSize) +
-         1;
-}
-
 class InfinibandServiceImpl final : public pb::blockcache::InfinibandService {
  public:
   InfinibandServiceImpl(BrpcServer* server,

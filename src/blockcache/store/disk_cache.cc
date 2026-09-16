@@ -29,15 +29,15 @@
 #include "blockcache/utils/align.h"
 #include "blockcache/utils/string.h"
 #include "blockcache/utils/time.h"
+#include "common/directory.h"
 #include "common/options/cache.h"
 #include "utils/uuid.h"
 
 namespace dingofs {
 namespace blockcache {
 
-DEFINE_string(cache_dir, "/tmp/dingofs-cache",
-              "directory list for stage and cached blocks; use comma-separated "
-              "path[:size_mb] entries, e.g. /mnt/cache1:1024,/mnt/cache2");
+DEFINE_string(cache_dir, GetDefaultDir(kCacheDir),
+              "cache directories, comma-separated path[:size_mb]");
 DEFINE_string(cache_dir_uuid, "",
               "uuid suffix appended to each cache directory; set internally");
 DEFINE_uint32(cache_size_mb, 102400, "cache size in mb");

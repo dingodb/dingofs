@@ -42,7 +42,8 @@ DEFINE_validator(rdma_max_inflight_rpcs,
                    return infiniband::Protocol::IsValidInflightRpcs(value);
                  });
 
-DEFINE_uint32(rdma_message_bytes, 16 << 10, "bytes in one message");
+DEFINE_uint32(rdma_message_bytes, 4 << 10,
+              "bytes in one message; both ends must agree");
 DEFINE_validator(rdma_message_bytes, [](const char* /*name*/, uint32_t value) {
   return value >= infiniband::Protocol::MessageSize(
                       infiniband::Protocol::kMaxRegions, 0) &&

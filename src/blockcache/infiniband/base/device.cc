@@ -34,7 +34,7 @@
 namespace dingofs {
 namespace blockcache {
 
-DEFINE_bool(use_rdma, false, "use rdma for the cache group transport");
+DEFINE_bool(use_rdma, false, "use rdma transport");
 DEFINE_string(cache_rdma_device, "", "rdma device; empty picks the first");
 DEFINE_uint32(cache_rdma_port_num, 1, "hca port to use");
 DEFINE_validator(cache_rdma_port_num, [](const char* /*name*/, uint32_t value) {
