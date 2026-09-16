@@ -14,7 +14,11 @@
 
 #include <gtest/gtest.h>
 
+#include <memory>
+#include <vector>
+
 #include "client/vfs/metasystem/mds/statistics.h"
+#include "utils/time.h"
 
 namespace dingofs {
 namespace client {
@@ -50,6 +54,65 @@ TEST(SlidingWindowTest, IgnoresDelayedIncrementAfterBucketReuse) {
   EXPECT_EQ(1, window.Inc(new_time_s));
   EXPECT_EQ(0, window.Inc(old_time_s));
   EXPECT_EQ(2, window.Inc(new_time_s));
+}
+
+class RecordingWatcher : public AccessStatsWatcher {
+ public:
+  void OnWindowCountChanged(DirAccessEvent event, Ino ino,
+                            uint64_t count) override {
+    last_event = event;
+    last_ino = ino;
+    counts.push_back(count);
+  }
+
+  DirAccessEvent last_event{};
+  Ino last_ino{0};
+  std::vector<uint64_t> counts;
+};
+
+TEST(AccessStatsMapTest, GetOrCreateIsStableAndHitsShareOneEntry) {
+  AccessStatsMap map;
+  auto* watcher = new RecordingWatcher();
+  map.RegisterWatcher(std::unique_ptr<AccessStatsWatcher>(watcher));
+
+  auto first = map.GetOrCreate(100);
+  ASSERT_NE(nullptr, first);
+  EXPECT_EQ(1u, map.Size());
+
+  // same directory -> same object, no new entry
+  EXPECT_EQ(first, map.GetOrCreate(100));
+  EXPECT_EQ(1u, map.Size());
+
+  // different directory -> distinct entry
+  EXPECT_NE(first, map.GetOrCreate(200));
+  EXPECT_EQ(2u, map.Size());
+}
+
+TEST(AccessStatsMapTest, IncCountReportsPerDirectoryWindowCount) {
+  AccessStatsMap map;
+  auto* watcher = new RecordingWatcher();
+  map.RegisterWatcher(std::unique_ptr<AccessStatsWatcher>(watcher));
+
+  auto stats = map.GetOrCreate(100);
+  ASSERT_NE(nullptr, stats);
+  EXPECT_LE(utils::Timestamp() - 1, stats->GetLastActiveTimeS());
+
+  stats->IncCount(DirAccessEvent::kOpenSubfileRead);
+  stats->IncCount(DirAccessEvent::kOpenSubfileRead);
+  stats->IncCount(DirAccessEvent::kOpenSubfileRead);
+
+  ASSERT_EQ(3u, watcher->counts.size());
+  EXPECT_EQ(1u, watcher->counts[0]);
+  EXPECT_EQ(2u, watcher->counts[1]);
+  EXPECT_EQ(3u, watcher->counts[2]);
+  EXPECT_EQ(DirAccessEvent::kOpenSubfileRead, watcher->last_event);
+  EXPECT_EQ(100u, watcher->last_ino);
+  EXPECT_LE(utils::Timestamp() - 1, stats->GetLastActiveTimeS());
+
+  // a different event on the same directory keeps its own counter
+  stats->IncCount(DirAccessEvent::kOpenDir);
+  ASSERT_EQ(4u, watcher->counts.size());
+  EXPECT_EQ(1u, watcher->counts[3]);
 }
 
 }  // namespace test

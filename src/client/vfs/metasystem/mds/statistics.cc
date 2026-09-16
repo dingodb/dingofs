@@ -22,23 +22,32 @@ namespace vfs {
 namespace meta {
 
 DirAccessStatsSPtr AccessStatsMap::GetOrCreate(Ino ino) {
+  // Fast path: hits only read, so concurrent accessors of the same directory
+  // (or of the same shard) no longer serialize on a write lock per call.
   DirAccessStatsSPtr stats;
-  shard_map_.withWLock(
-      [this, ino, &stats](Map& map) {
+  shard_map_.withRLock(
+      [&stats, ino](Map& map) {
         auto it = map.find(ino);
-        if (it == map.end()) {
-          stats = DirAccessStats::New(ino, watchers_);
-          map.emplace(ino, stats);
-
-          total_count_ << 1;
-
-        } else {
-          stats = it->second;
-        }
+        if (it != map.end()) stats = it->second;
       },
       ino);
 
-  stats->UpdateLastActiveTimeS();
+  if (stats == nullptr) {
+    // Slow path: only the first access to a directory takes the write lock.
+    shard_map_.withWLock(
+        [this, ino, &stats](Map& map) {
+          auto [it, inserted] = map.try_emplace(ino);
+          if (inserted) {
+            it->second = DirAccessStats::New(ino, watchers_);
+            total_count_ << 1;
+          }
+          stats = it->second;
+        },
+        ino);
+
+    // Cover the window where the entry exists but no counter bumped it yet.
+    stats->UpdateLastActiveTimeS();
+  }
 
   return stats;
 }
@@ -49,7 +58,7 @@ void AccessStatsMap::CleanExpired(uint64_t expire_s) {
       FLAGS_vfs_meta_clean_threshold_count / kShrinkRatio;
   if (Size() < trigger_size) return;
 
-  shard_map_.withWLock([&](Map& map) {
+  shard_map_.iterateWLock([&](Map& map) {
     for (auto it = map.begin(); it != map.end();) {
       if (it->second->GetLastActiveTimeS() < expire_s) {
         auto temp = it++;
@@ -65,7 +74,7 @@ void AccessStatsMap::CleanExpired(uint64_t expire_s) {
 
 size_t AccessStatsMap::Size() {
   size_t total_size = 0;
-  shard_map_.withRLock([&](const Map& map) { total_size = map.size(); });
+  shard_map_.iterate([&](Map& map) { total_size += map.size(); });
   return total_size;
 }
 
