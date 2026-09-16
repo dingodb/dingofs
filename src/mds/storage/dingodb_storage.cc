@@ -14,10 +14,13 @@
 
 #include "mds/storage/dingodb_storage.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <vector>
 
+#include "brpc/reloadable_flags.h"
 #include "common/helper.h"
 #include "common/logging.h"
 #include "dingofs/error.pb.h"
@@ -33,6 +36,12 @@ namespace mds {
 DEFINE_int32(mds_storage_dingodb_replica_num, 3, "backend store replicas");
 
 DEFINE_int32(mds_storage_dingodb_scan_batch_size, 100000, "dingodb scan batch size");
+
+// dingo-store rejects a batch get whose key count exceeds its own
+// max_batch_get_count (4096 by default), and the sdk splits keys by region
+// only, never by count. Keep every request we send under our own cap.
+DEFINE_uint32(mds_batch_get_size, 1024, "max key num of one batch get request");
+DEFINE_validator(mds_batch_get_size, brpc::PositiveInteger);
 
 DECLARE_uint32(mds_scan_batch_size);
 DECLARE_uint32(mds_txn_max_retry_times);
@@ -241,6 +250,28 @@ static inline Status TransformStatus(const dingodb::sdk::Status& status) {
   }
 }
 
+// Batch get in requests of at most mds_batch_get_size keys.
+// Callers size their batches by what they are reading (inodes, chunks, ...),
+// which says nothing about the key count: one directory inode alone expands
+// into 1 + kDirAttrMutationNum keys.
+static Status SdkBatchGet(dingodb::sdk::Transaction& txn, const std::vector<std::string>& keys,
+                          std::vector<KeyValue>& kvs) {
+  const size_t batch_key_num = FLAGS_mds_batch_get_size;
+  for (size_t offset = 0; offset < keys.size(); offset += batch_key_num) {
+    const size_t end = std::min(offset + batch_key_num, keys.size());
+    std::vector<std::string> sub_keys(keys.begin() + offset, keys.begin() + end);
+
+    // sdk BatchGet assigns to its output, so collect per request and append.
+    std::vector<dingodb::sdk::KVPair> kv_pairs;
+    auto status = txn.BatchGet(sub_keys, kv_pairs);
+    if (!status.ok()) return TransformStatus(status);
+
+    KvPairsToKeyValues(kv_pairs, kvs);
+  }
+
+  return Status::OK();
+}
+
 Status DingodbStorage::Get(const std::string& key, std::string& value) {
   auto txn = NewSdkTxn();
   if (txn == nullptr) {
@@ -266,18 +297,13 @@ Status DingodbStorage::BatchGet(const std::vector<std::string>& keys, std::vecto
     return Status(pb::error::EBACKEND_STORE, "new transaction fail");
   }
 
-  std::vector<dingodb::sdk::KVPair> kv_pairs;
-  auto status = txn->BatchGet(keys, kv_pairs);
-  if (!status.ok()) {
-    return TransformStatus(status);
-  }
+  auto status = SdkBatchGet(*txn, keys, kvs);
+  if (!status.ok()) return status;
 
-  status = txn->Commit();
-  if (!status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, status.ToString());
+  auto sdk_status = txn->Commit();
+  if (!sdk_status.ok()) {
+    return Status(pb::error::EBACKEND_STORE, sdk_status.ToString());
   }
-
-  KvPairsToKeyValues(kv_pairs, kvs);
 
   return Status::OK();
 }
@@ -394,13 +420,7 @@ Status DingodbTxn::BatchGet(const std::vector<std::string>& keys, std::vector<Ke
   uint64_t start_time = utils::TimestampUs();
   ON_SCOPE_EXIT([&]() { txn_trace_.read_time_us += (utils::TimestampUs() - start_time); });
 
-  std::vector<dingodb::sdk::KVPair> kv_pairs;
-  auto status = txn_->BatchGet(keys, kv_pairs);
-  if (!status.ok()) return TransformStatus(status);
-
-  KvPairsToKeyValues(kv_pairs, kvs);
-
-  return Status::OK();
+  return SdkBatchGet(*txn_, keys, kvs);
 }
 
 Status DingodbTxn::Scan(const Range& range, uint64_t limit, std::vector<KeyValue>& kvs) {
