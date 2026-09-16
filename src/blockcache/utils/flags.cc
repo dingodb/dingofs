@@ -73,9 +73,11 @@ static size_t SectionRank(const FlagParser::Usage& usage,
                           const gflags::CommandLineFlagInfo& flag) {
   for (size_t i = 0; i < usage.sections.size(); ++i) {
     const FlagSection& section = usage.sections[i];
+    const auto under = [&flag](std::string_view dir) {
+      return flag.filename.find(dir) != std::string::npos;
+    };
     if (Contains(section.flags, flag.name) ||
-        (!section.file.empty() &&
-         flag.filename.find(section.file) != std::string::npos)) {
+        std::ranges::any_of(section.dirs, under)) {
       return i;
     }
   }

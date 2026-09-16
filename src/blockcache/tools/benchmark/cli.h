@@ -61,7 +61,7 @@ inline const std::vector<FlagSection> kBenchSections = {
       "storage_download_notfound_retry_backoff_base_ms",
       "upload_stage_max_inflights", "upload_stage_max_tries",
       "upload_stage_retry_delay_s", "max_range_size_kb"}},
-    {"S3 SDK OPTIONS", {}, "options/blockaccess"},
+    {"S3 SDK OPTIONS", {}, {"options/blockaccess"}},
     {"LOGGING OPTIONS", {"log_dir", "log_level", "log_v"}},
 };
 

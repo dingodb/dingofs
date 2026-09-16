@@ -148,9 +148,8 @@ Future<> CacheService::GetNodeInfo(
 CacheService::AlignedRange CacheService::AlignRequest(uint64_t offset,
                                                       uint32_t length) {
   const uint64_t start = AlignDown<uint64_t>(offset, kBlockAlign);
-  return {.offset = start,
-          .length = static_cast<uint32_t>(
-              AlignUp<uint64_t>(offset - start + length, kBlockAlign))};
+  const uint64_t end = AlignUp<uint64_t>(offset + length, kBlockAlign);
+  return {.offset = start, .length = static_cast<uint32_t>(end - start)};
 }
 
 Status CacheService::CheckHandle(const pb::blockcache::BlockHandle& handle) {

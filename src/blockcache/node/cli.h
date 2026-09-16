@@ -25,70 +25,17 @@ namespace dingofs {
 namespace blockcache {
 
 inline const std::vector<FlagSection> kNodeSections = {
-    // node
+    {"RUNTIME OPTIONS", {}, {"blockcache/core/"}},
     {"NODE OPTIONS",
-     {"bind_all",
-      "brpc_idle_timeout_second",
-      "brpc_max_concurrency",
-      "brpc_reply_on_bthread",
-      "buffer_pool_mb",
-      "conf",
-      "cpuset",
-      "daemonize",
-      "group_name",
-      "group_weight",
-      "heartbeat_interval_s",
-      "id",
-      "idle_poll_us",
-      "iodepth",
-      "listen_ip",
-      "listen_port",
-      "pin_cpu",
-      "poll_mode",
-      "shards",
-      "task_quota_us"}},
-
-    // rdma
-    {"RDMA OPTIONS",
-     {"cache_rdma_device", "cache_rdma_port_num", "rdma_bulk_qps",
-      "rdma_bulk_send_wr", "rdma_cq_entries", "rdma_gid_idx",
-      "rdma_heartbeat_interval_s", "rdma_idle_timeout_s",
-      "rdma_max_connections", "rdma_max_inflight_rpcs", "rdma_max_inline_data",
-      "rdma_message_bytes", "use_rdma"}},
-
-    // mds
-    {"MDS OPTIONS",
-     {"cache_mds_request_retry_times", "cache_mds_rpc_retry_times",
-      "cache_mds_rpc_timeout_ms", "mds_addrs"}},
-
-    // store
-    {"CACHE STORE OPTIONS",
-     {"cache_cleanup_expire_interval_ms", "cache_dir", "cache_dir_uuid",
-      "cache_eviction", "cache_expire_s", "cache_size_mb",
-      "disk_state_check_duration_ms", "disk_state_normal2unstable_error_num",
-      "disk_state_probe_timeout_ms", "disk_state_tick_duration_s",
-      "disk_state_unstable2down_s", "disk_state_unstable2normal_succ_num",
-      "free_space_ratio"}},
-
-    // storage
-    {"STORAGE OPTIONS",
-     {"max_range_size_kb", "storage_download_max_tries",
-      "storage_download_notfound_max_tries",
-      "storage_download_notfound_retry_backoff_base_ms",
-      "storage_download_retry_backoff_base_ms", "storage_upload_max_tries",
-      "storage_upload_retry_backoff_base_ms", "upload_stage_max_inflights",
-      "upload_stage_max_tries", "upload_stage_retry_delay_s"}},
-
-    // offload
-    {"OFFLOAD OPTIONS",
-     {"offload_cpu_min_bytes", "offload_cpu_spin_us", "offload_queue_capacity",
-      "offload_threads"}},
-
-    // s3
-    {"S3 SDK OPTIONS", {}, "options/blockaccess"},
-
-    // logging
-    {"LOGGING OPTIONS", {"log_dir", "log_level", "log_v"}},
+     {"conf"},
+     {"blockcache/node/", "blockcache/common/mds_client"}},
+    {"NETWORK OPTIONS", {}, {"blockcache/net/", "blockcache/infiniband/"}},
+    {"BLOCK CACHE OPTIONS", {}, {"blockcache/block/"}},
+    {"CACHE STORE OPTIONS", {}, {"blockcache/store/"}},
+    {"OBJECT STORAGE OPTIONS",
+     {},
+     {"blockcache/object/", "common/options/blockaccess"}},
+    {"OTHER OPTIONS", {"log_dir", "log_level", "log_v"}},
 };
 
 inline const FlagParser::Usage kNodeUsage = {
@@ -98,9 +45,12 @@ inline const FlagParser::Usage kNodeUsage = {
         "  $ dingo-cache --id=85a4b352-... --listen_ip=10.0.0.2\n"
         "  $ dingo-cache --conf cache.conf --daemonize\n",
     .sections = kNodeSections,
-    .essential = {"id", "listen_ip", "listen_port", "use_rdma", "daemonize",
+    .essential = {"id", "listen_ip", "listen_port", "use_rdma",
+                  "cache_rdma_device", "cache_rdma_port_num",
+                  "rdma_message_bytes", "rdma_max_inflight_rpcs",
+                  "rdma_max_connections", "shards", "pin_cpu", "daemonize",
                   "conf", "mds_addrs", "group_name", "cache_dir",
-                  "cache_size_mb", "log_dir"},
+                  "cache_size_mb", "buffer_pool_mb", "log_dir"},
     .required = {"id", "listen_ip"},
     .uuid_flag = "id",
 };

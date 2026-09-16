@@ -29,7 +29,7 @@ namespace blockcache {
 struct FlagSection {
   std::string_view name;
   std::vector<std::string_view> flags;
-  std::string_view file;
+  std::vector<std::string_view> dirs;
 };
 
 class FlagParser {
