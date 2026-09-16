@@ -981,10 +981,10 @@ Status ClientSession::Open(const Context& ctx, Ino ino, int flags, uint64_t* fh,
   Status s;
   AccessLogGuard log(
       [&]() {
-        return absl::StrFormat(
-            "[%s] open (%llu): %d %s %s [fh:%d] %s %s", ctx.ToShortString(),
-            ino, flags, Helper::DescOpenFlags(flags), s.ToString(), *fh,
-            *keep_cache ? "true" : "false", span_ctx->ToLatencyTraceStr());
+        return absl::StrFormat("[%s] open (%llu): %d %s %s [fh:%d] %s",
+                               ctx.ToShortString(), ino, flags,
+                               Helper::DescOpenFlags(flags), s.ToString(), *fh,
+                               *keep_cache ? "true" : "false");
       },
       !dingofs::IsInternalIno(ino));
 
@@ -1107,9 +1107,8 @@ Status ClientSession::Flush(const Context& ctx, Ino ino, uint64_t fh) {
   Status s;
   AccessLogGuard log(
       [&]() {
-        return absl::StrFormat("[%s] flush (%llu): %s [fh:%llu] %s",
-                               ctx.ToShortString(), ino, s.ToString(), fh,
-                               span_ctx->ToLatencyTraceStr());
+        return absl::StrFormat("[%s] flush (%llu): %s [fh:%llu]",
+                               ctx.ToShortString(), ino, s.ToString(), fh);
       },
       !dingofs::IsInternalIno(ino));
 
@@ -1133,9 +1132,8 @@ Status ClientSession::Release(const Context& ctx, Ino ino, uint64_t fh) {
   Status s;
   AccessLogGuard log(
       [&]() {
-        return absl::StrFormat("[%s] release (%llu): %s [fh:%llu] %s",
-                               ctx.ToShortString(), ino, s.ToString(), fh,
-                               span_ctx->ToLatencyTraceStr());
+        return absl::StrFormat("[%s] release (%llu): %s [fh:%llu]",
+                               ctx.ToShortString(), ino, s.ToString(), fh);
       },
       !dingofs::IsInternalIno(ino));
 

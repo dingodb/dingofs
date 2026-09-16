@@ -63,8 +63,6 @@ const std::string kSliceIdCacheName = "slice";
 const std::string kExecutorWorkerSetName = "meta_executor";
 
 DEFINE_uint32(vfs_meta_executor_worker_num, 64, "number of meta workers");
-DEFINE_uint32(vfs_meta_executor_max_pending_num, 1048576,
-              "deprecated, ignored: the fast executor has no backpressure");
 
 const std::string kBgExecutorWorkerSetName = "meta_bg_executor";
 
