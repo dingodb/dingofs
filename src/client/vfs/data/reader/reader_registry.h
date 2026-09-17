@@ -47,6 +47,11 @@ class alignas(64) ReaderRegistryShard {
   // Every returned reader owns one pin. Invalidate and ReleaseRef happen
   // after this function releases the lock, including after removal.
   std::vector<FileReader*> Snapshot(Ino ino);
+  // Background single-shard snapshot across all inodes of this shard: every
+  // returned reader owns one reference pin taken under the shard lock. The
+  // caller releases refs outside any registry lock. Closed readers may
+  // appear; their maintenance entry re-checks the closing flag.
+  std::vector<FileReader*> SnapshotAll();
   size_t Size() const;
 
  private:
@@ -57,17 +62,25 @@ class alignas(64) ReaderRegistryShard {
 
 class ReaderRegistry {
  public:
+  // Shard count for background single-shard scans (see SnapshotShard).
+  static constexpr size_t kShardCount = 64;
+
   void Register(FileReader* reader);
   void Unregister(FileReader* reader);
 
   void InvalidateByIno(Ino ino, int64_t offset, int64_t size);
 
+  // Background single-shard snapshot (shard_index < kShardCount): pins every
+  // reader of that shard with a reference under the shard's lock only. The
+  // caller owns releasing the refs outside any registry lock. A round is not
+  // a consistent whole-table snapshot; readers registered after the shard was
+  // visited are seen on the next round.
+  std::vector<FileReader*> SnapshotShard(size_t shard_index);
+
   // Best-effort number of registered readers, not inode entries.
   size_t Size() const;
 
  private:
-  static constexpr size_t kShardCount = 64;
-
   ReaderRegistryShard& GetShard(Ino ino);
 
   std::array<ReaderRegistryShard, kShardCount> shards_;

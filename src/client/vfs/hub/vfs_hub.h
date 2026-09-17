@@ -48,6 +48,7 @@ namespace vfs {
 
 class WriterTable;  // forward decl; full include lives in vfs_hub.cc
 class WritePressureController;
+class MaintenanceManager;
 class ReaderRegistry;
 
 class VFSHub {
@@ -83,6 +84,12 @@ class VFSHub {
   virtual Executor* GetFlushExecutor() = 0;
 
   virtual Executor* GetCBExecutor() = 0;
+
+  // Independent cleanup executor ("vfs_cleanup"): runs possibly-blocking
+  // background writer holder releases (pressure rounds and periodic
+  // maintenance) off callback/scan threads. Producers must drain before it
+  // is stopped; see the CleanupExecutor design contract in writer_table.h.
+  virtual Executor* GetCleanupExecutor() = 0;
 
   virtual WriteMemPool* GetWriteMemPool() = 0;
 
@@ -171,6 +178,11 @@ class VFSHubImpl : public VFSHub {
   Executor* GetFlushExecutor() override {
     CHECK_NOTNULL(flush_executor_);
     return flush_executor_.get();
+  }
+
+  Executor* GetCleanupExecutor() override {
+    CHECK_NOTNULL(cleanup_executor_);
+    return cleanup_executor_.get();
   }
 
   Executor* GetCBExecutor() override {
@@ -286,23 +298,39 @@ class VFSHubImpl : public VFSHub {
   std::unique_ptr<BlockStore> block_store_;
   std::unique_ptr<Executor> read_executor_;
 
-  // Reader-local cleanup only: periodic shrink and read-request cleanup.
-  // It must not issue block_store I/O.  Keep it alive until after
-  // block_store_->Shutdown(), because cache bthread read completions can still
-  // schedule cleanup work while block_store is draining.
+  // Reader-local cleanup only: read-request cleanup and the reader leg of
+  // periodic maintenance. It must not issue block_store I/O. Keep it alive
+  // until after block_store_->Shutdown(), because cache bthread read
+  // completions can still schedule cleanup work while block_store is
+  // draining.
   std::unique_ptr<Executor> read_cleanup_executor_;
 
-  // Writer-side background work: periodic flush scheduling and slice-id
-  // pre-allocation.  These tasks may touch flush_executor, block_store, and
-  // meta_system, so Stop() must drain this executor before those dependencies
-  // are torn down.
+  // Writer-side background work: periodic maintenance scans and slice-id
+  // pre-allocation. These tasks may touch flush_executor, block_store, and
+  // meta_system, so Stop() must drain this executor before those
+  // dependencies are torn down.
   std::unique_ptr<Executor> write_background_executor_;
 
   std::unique_ptr<Executor> flush_executor_;
   std::unique_ptr<Executor> cb_executor_;
   std::unique_ptr<Executor> write_pressure_executor_;
+
+  // "vfs_cleanup": independent executor for possibly-blocking background
+  // writer holder releases (pressure rounds and periodic maintenance).
+  // Started after every producer dependency; stopped only after
+  // MaintenanceManager and WritePressureController have drained, so their
+  // cleanups can run until then, and before HandleManager's final
+  // synchronous flush so that flush produces no new cleanup tasks.
+  std::unique_ptr<Executor> cleanup_executor_;
+
   std::unique_ptr<WriteMemPool> write_buffer_manager_;
   std::unique_ptr<WritePressureController> write_pressure_controller_;
+
+  // Unified periodic maintenance: scans ReaderRegistry/WriterTable and
+  // publishes writer holder cleanup to cleanup_executor_. Armed last in
+  // Start (after started_ is set), drained first in Stop.
+  std::unique_ptr<MaintenanceManager> maintenance_manager_;
+
   std::unique_ptr<ReadMemPool> read_mem_pool_;
   std::unique_ptr<ReadMemPoolVars>
       read_mem_pool_vars_;  // after pool: dtor first

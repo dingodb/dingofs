@@ -51,6 +51,11 @@ void ReaderRegistry::InvalidateByIno(Ino ino, int64_t offset, int64_t size) {
   }
 }
 
+std::vector<FileReader*> ReaderRegistry::SnapshotShard(size_t shard_index) {
+  CHECK_LT(shard_index, kShardCount);
+  return shards_[shard_index].SnapshotAll();
+}
+
 size_t ReaderRegistry::Size() const {
   size_t size = 0;
   for (const auto& shard : shards_) {
@@ -87,6 +92,19 @@ std::vector<FileReader*> ReaderRegistryShard::Snapshot(Ino ino) {
   for (auto* reader : it->second) {
     reader->AcquireRef();
     readers.push_back(reader);
+  }
+  return readers;
+}
+
+std::vector<FileReader*> ReaderRegistryShard::SnapshotAll() {
+  std::vector<FileReader*> readers;
+  std::lock_guard<std::mutex> lock(mutex_);
+  readers.reserve(reader_count_);
+  for (const auto& [ino, reader_set] : readers_) {
+    for (FileReader* reader : reader_set) {
+      reader->AcquireRef();
+      readers.push_back(reader);
+    }
   }
   return readers;
 }

@@ -78,11 +78,10 @@ class FileReaderTest : public test::VFSTestBase {
     EXPECT_CALL(*mock_meta_system_, GetAttr(_, kIno, _)).Times(AnyNumber());
   }
 
-  // Creates, acquires ref, and opens a FileReader.
+  // Creates and acquires a ref on a FileReader.
   FileReader* MakeOpenReader(uint64_t ino = kIno, uint64_t fh = kFh) {
     auto* r = new FileReader(mock_hub_, fh, ino);
     r->AcquireRef();
-    CHECK(r->Open().ok());
     return r;
   }
 
@@ -128,20 +127,6 @@ class FileReaderTestPeer {
     return false;
   }
 };
-
-TEST_F(FileReaderTest, StopReleasesPendingPeriodicTaskRef) {
-  gflags::FlagSaver flag_saver;
-  FLAGS_vfs_periodic_flush_interval_ms = 60 * 60 * 1000;
-
-  auto* reader = MakeOpenReader();
-  ASSERT_EQ(FileReaderTestPeer::RefCount(reader), 2);
-
-  reader->Close();
-  ASSERT_TRUE(read_cleanup_executor_->Stop());
-  EXPECT_EQ(FileReaderTestPeer::RefCount(reader), 1);
-
-  reader->ReleaseRef();
-}
 
 // 1. Read() of a zero-length range returns 0 bytes.
 TEST_F(FileReaderTest, Read_ZeroSize_ReturnsZero) {
@@ -602,8 +587,6 @@ struct RangeGate {
 }  // namespace
 
 TEST_F(FileReaderTest, RegistryInvalidatesAllFhsWithoutCrossingInodes) {
-  gflags::FlagSaver flags;
-  FLAGS_vfs_periodic_flush_interval_ms = 60 * 60 * 1000;
   InstallFullSlice(mock_meta_system_);
   constexpr Ino kOtherIno = kIno + 1;
   ON_CALL(*mock_meta_system_, GetAttr(_, kOtherIno, _))
@@ -652,12 +635,9 @@ TEST_F(FileReaderTest, RegistrySnapshotPinsReaderAcrossUnregisterAndClose) {
 #ifdef NDEBUG
   GTEST_SKIP() << "Deterministic snapshot staging requires TEST_SYNC_POINT.";
 #else
-  gflags::FlagSaver flags;
-  FLAGS_vfs_periodic_flush_interval_ms = 60 * 60 * 1000;
   auto* reader = MakeOpenReader();
-  // Remove the periodic task's self-reference so only the owner and snapshot
-  // can keep this reader alive.
-  ASSERT_TRUE(read_cleanup_executor_->Stop());
+  // No per-object periodic task holds a reference anymore: only the owner
+  // and a registry snapshot can keep this reader alive.
   reader_registry_->Register(reader);
   auto gate = std::make_shared<RangeGate>();
   std::atomic<bool> destroyed{false};

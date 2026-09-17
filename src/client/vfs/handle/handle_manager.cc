@@ -179,11 +179,10 @@ Handle* HandleManager::NewHandle(uint64_t fh, Ino ino, int flags) {
   handle->ino = ino;
   handle->flags = flags;
 
-  // Reader is always per-fh.
+  // Reader is always per-fh. Creation registers nothing: periodic
+  // maintenance discovers readers through ReaderRegistry snapshots.
   handle->resources.reader = new FileReader(vfs_hub_, fh, ino);
   handle->resources.reader->AcquireRef();
-  CHECK(handle->resources.reader->Open().ok())
-      << "FileReader::Open is currently infallible";
   // Writer only for writable opens. Borrowed from WriterTable.
   if ((flags & O_ACCMODE) != O_RDONLY) {
     handle->resources.writer = vfs_hub_->GetWriterTable()->AcquireWriter(ino);

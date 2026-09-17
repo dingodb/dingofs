@@ -22,7 +22,6 @@
 #include <unistd.h>
 
 #include <atomic>
-#include <boost/intrusive_ptr.hpp>
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -55,16 +54,9 @@ size_t PageNeed(uint64_t offset, uint64_t size, uint64_t page_size) {
 
 FileWriter::~FileWriter() { Close(); }
 
-Status FileWriter::Open() {
-  VLOG(9) << fmt::format("{} FileWriter opened", uuid_);
-  SchedulePeriodicFlush();
-  return Status::OK();
-}
-
 void FileWriter::Close() {
   std::unique_lock<std::mutex> lg(mutex_);
   if (closed_) {
-    LOG(INFO) << fmt::format("{} FileWriter already closed", uuid_);
     return;
   }
 
@@ -323,14 +315,17 @@ void FileWriter::AsyncFlush(StatusCallback cb) {
     ReleaseRef();
   });
 }
+
 void FileWriter::FlushDirtyAsync(StatusCallback cb) {
   bool dirty = false;
   bool closed = false;
+
   {
     std::lock_guard<std::mutex> lock(mutex_);
     closed = closed_;
     dirty = write_generation_ > flushed_generation_;
   }
+
   if (closed) {
     cb(Status::BadFd("file already closed"));
   } else if (!dirty) {
@@ -359,42 +354,6 @@ void FileWriter::SetStatusIfBroken(const Status& s) {
   if (file_status_.ok()) {
     file_status_ = s;
   }
-}
-
-void FileWriter::SchedulePeriodicFlush() {
-  {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (closed_) {
-      LOG(INFO) << fmt::format("{} ScheduleFlush skipped because closed",
-                               uuid_);
-      return;
-    }
-  }
-
-  boost::intrusive_ptr<FileWriter> self(this);
-  vfs_hub_->GetWriteBackgroundExecutor()->Schedule(
-      [self = std::move(self)] { self->RunPeriodicFlush(); },
-      FLAGS_vfs_periodic_flush_interval_ms);
-}
-
-void FileWriter::RunPeriodicFlush() {
-  {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (closed_) {
-      LOG(INFO) << fmt::format("{} RunPeriodicFlush skipped because closed",
-                               uuid_);
-      return;
-    }
-  }
-
-  AsyncFlush([this](Status s) {
-    if (!s.ok()) {
-      LOG(ERROR) << fmt::format("{} RunPeriodicFlush failed, status: {}", uuid_,
-                                s.ToString());
-    }
-  });
-
-  SchedulePeriodicFlush();
 }
 
 }  // namespace vfs

@@ -127,12 +127,6 @@ FileReader::~FileReader() {
   }
 }
 
-Status FileReader::Open() {
-  VLOG(9) << fmt::format("{} FileReader opened", uuid_);
-  SchedulePeriodicShrink();
-  return Status::OK();
-}
-
 void FileReader::Close() {
   if (closing_.load(std::memory_order_acquire)) {
     return;
@@ -236,29 +230,13 @@ void FileReader::ShrinkMem() {
   }
 }
 
-void FileReader::SchedulePeriodicShrink() {
+void FileReader::ShrinkIfOpen() {
   if (closing_.load(std::memory_order_acquire)) {
-    VLOG(8) << fmt::format("{} SchedulePeriodicShrink skipped because closed",
-                           uuid_);
-    return;
-  }
-
-  boost::intrusive_ptr<FileReader> self(this);
-  vfs_hub_->GetReadCleanupExecutor()->Schedule(
-      [self = std::move(self)] { self->RunPeriodicShrink(); },
-      FLAGS_vfs_periodic_flush_interval_ms);
-}
-
-void FileReader::RunPeriodicShrink() {
-  if (closing_.load(std::memory_order_acquire)) {
-    VLOG(8) << fmt::format("{} RunPeriodicShrink skipped because closed",
-                           uuid_);
+    VLOG(8) << fmt::format("{} ShrinkIfOpen skipped because closed", uuid_);
     return;
   }
 
   ShrinkMem();
-
-  SchedulePeriodicShrink();
 }
 
 void FileReader::Invalidate(int64_t offset, int64_t size) {
@@ -895,8 +873,9 @@ Status FileReader::Read(ContextSPtr ctx, DataBuffer* data_buffer, int64_t size,
 
   // Foreground backpressure: above the backpressure watermark, wait a bounded
   // window for in-flight reads to release their slots (and for the periodic
-  // RunPeriodicShrink to reclaim idle readahead) before proceeding. Reclaim is
-  // intentionally NOT driven from the read path -- it runs on its own timer.
+  // ShrinkIfOpen maintenance to reclaim idle readahead) before proceeding.
+  // Reclaim is intentionally NOT driven from the read path -- the hub-level
+  // registered ReaderRegistryTask owns it.
   // The per-request pool Allocate still hard-fails -> ENOMEM if truly exhausted
   // (pool-only, no malloc). Step-3 follow-up may turn this into a bounded
   // cv-wait.

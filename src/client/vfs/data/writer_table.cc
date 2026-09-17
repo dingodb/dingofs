@@ -25,6 +25,8 @@
 
 #include "absl/hash/hash.h"
 #include "client/vfs/data/writer/file_writer.h"
+#include "client/vfs/hub/vfs_hub.h"
+#include "utils/executor/executor.h"
 
 namespace dingofs {
 namespace client {
@@ -114,38 +116,68 @@ void WriterTable::FlushDirtyAsync(StatusCallback cb) {
     return;
   }
 
+  Executor* cleanup_executor = CHECK_NOTNULL(vfs_hub_->GetCleanupExecutor());
+
   struct FlushGroup {
     std::mutex mutex;
     size_t remaining{0};
     Status status;
     StatusCallback done;
+
+    // Called only after the member's holder has actually been released.
+    void CompleteMember(const Status& member_status) {
+      StatusCallback callback;
+      Status final_status;
+      {
+        std::lock_guard<std::mutex> lock(mutex);
+        if (!member_status.ok() && status.ok()) {
+          status = member_status;
+        }
+        CHECK_GT(remaining, 0);
+        if (--remaining == 0) {
+          final_status = status;
+          callback = std::move(done);
+        }
+      }
+      if (callback) callback(std::move(final_status));
+    }
   };
+
   auto group = std::make_shared<FlushGroup>();
   group->remaining = snap.size();
   group->done = std::move(cb);
 
   for (FileWriter* writer : snap) {
-    writer->FlushDirtyAsync([this, writer, group](Status status) {
-      // Holder release is part of round completion: it may be the last holder
-      // and synchronously close the writer.
-      ReleaseWriter(writer);
-
-      StatusCallback done;
-      Status final_status;
-      {
-        std::lock_guard<std::mutex> lock(group->mutex);
-        if (!status.ok() && group->status.ok()) {
-          group->status = status;
-        }
-        CHECK_GT(group->remaining, 0);
-        if (--group->remaining == 0) {
-          final_status = group->status;
-          done = std::move(group->done);
-        }
-      }
-      if (done) done(std::move(final_status));
-    });
+    writer->FlushDirtyAsync(
+        [this, cleanup_executor, writer, group](Status status) {
+          // Member completion only transfers responsibility: the holder release
+          // below may be the last holder and synchronously Close the writer,
+          // which can block on flush/CB/storage progress. Running that on this
+          // completion thread (possibly a CBExecutor worker) self-deadlocks, so
+          // it must happen on the independent cleanup executor.
+          if (!cleanup_executor->Execute(
+                  [this, writer, group, status = std::move(status)] {
+                    ReleaseWriter(writer);
+                    group->CompleteMember(status);
+                  })) {
+            // A live ExecutorImpl never rejects; rejection means the "cleanup
+            // executor outlives every producer" lifecycle invariant is broken.
+            // Leak-free fallbacks (inline Close, drop the holder, fake success)
+            // are all forbidden by the interface contract.
+            LOG(FATAL) << "WriterTable::FlushDirtyAsync: cleanup executor "
+                          "rejected the member cleanup task";
+          }
+        });
   }
+}
+
+std::vector<FileWriter*> WriterTable::SnapshotShard(size_t shard_index) {
+  CHECK_LT(shard_index, kShardCount);
+  std::vector<FileWriter*> out;
+  auto& shard = shards_[shard_index];
+  auto lock = shard.LockForSnapshot();
+  shard.AppendPinnedLocked(out);
+  return out;
 }
 
 size_t WriterTable::Size() const {
@@ -182,13 +214,6 @@ FileWriter* WriterTableShard::Acquire(uint64_t ino, VFSHub* hub) {
 
   auto* writer = new FileWriter(hub, ino);
   writer->AcquireRef();
-  Status status = writer->Open();
-  if (!status.ok()) {
-    LOG(ERROR) << "AcquireWriter Open failed, ino=" << ino
-               << ", status=" << status.ToString();
-    writer->ReleaseRef();
-    return nullptr;
-  }
   writers_.emplace(ino, Entry{writer, 1});
   return writer;
 }
