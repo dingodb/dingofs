@@ -40,8 +40,8 @@ using DirShardSPtr = std::shared_ptr<DirShard>;
 
 class DirShard {
  public:
-  DirShard(uint64_t id, const Range& range, uint64_t version, const std::vector<Dentry>& dentries)
-      : id_(id), range_{range}, version_(version) {
+  DirShard(uint64_t id, const Range& range, const AttrVersionVec& version_vec, const std::vector<Dentry>& dentries)
+      : id_(id), range_{range}, version_vec_(version_vec) {
     // ingest dentries to map
     for (const auto& dentry : dentries) {
       CHECK(Contains(dentry.Name())) << fmt::format("dentry name({}) out of shard range{}.", dentry.Name(),
@@ -51,21 +51,23 @@ class DirShard {
     last_active_time_s_ = utils::Timestamp();
     last_refresh_time_s_ = utils::Timestamp();
   }
-  DirShard(uint64_t id, const Range& range, uint64_t version, absl::btree_map<std::string, Dentry>&& dentries)
-      : id_(id), range_{range}, version_(version) {
+  DirShard(uint64_t id, const Range& range, const AttrVersionVec& version_vec,
+           absl::btree_map<std::string, Dentry>&& dentries)
+      : id_(id), range_{range}, version_vec_(version_vec) {
     // ingest dentries to map
     children_ = std::move(dentries);
     last_active_time_s_ = utils::Timestamp();
     last_refresh_time_s_ = utils::Timestamp();
   }
 
-  static DirShardSPtr New(uint64_t id, const Range& range, uint64_t version, const std::vector<Dentry>& dentries) {
-    return std::make_shared<DirShard>(id, range, version, dentries);
+  static DirShardSPtr New(uint64_t id, const Range& range, const AttrVersionVec& version_vec,
+                          const std::vector<Dentry>& dentries) {
+    return std::make_shared<DirShard>(id, range, version_vec, dentries);
   }
 
-  static DirShardSPtr New(uint64_t id, const Range& range, uint64_t version,
+  static DirShardSPtr New(uint64_t id, const Range& range, const AttrVersionVec& version_vec,
                           absl::btree_map<std::string, Dentry>&& dentries) {
-    return std::make_shared<DirShard>(id, range, version, std::move(dentries));
+    return std::make_shared<DirShard>(id, range, version_vec, std::move(dentries));
   }
 
   uint64_t ID() const { return id_; }
@@ -96,7 +98,8 @@ class DirShard {
   void UpdateLastRefreshTime() { last_refresh_time_s_.store(utils::Timestamp(), std::memory_order_relaxed); }
   uint64_t LastRefreshTimeS() { return last_refresh_time_s_.load(std::memory_order_relaxed); }
 
-  uint64_t Version() const { return version_; }
+  const AttrVersionVec& VersionVec() { return version_vec_; }
+  std::string VersionString() const { return version_vec_.ToString(); }
 
   std::pair<DirShardSPtr, DirShardSPtr> Split(const std::string& key, uint64_t left_id, uint64_t right_id);
 
@@ -112,7 +115,8 @@ class DirShard {
  private:
   const uint64_t id_;
   const Range range_;  // [start, end)
-  const uint64_t version_;
+
+  const AttrVersionVec version_vec_;
 
   mutable utils::RWLock lock_;
   absl::btree_map<std::string, Dentry> children_;
@@ -126,13 +130,21 @@ using PartitionPtr = std::shared_ptr<ShardPartition>;
 
 class ShardPartition {
  public:
-  ShardPartition(OperationProcessorSPtr operation_processor, const AttrEntry& attr)
+  ShardPartition(OperationProcessorSPtr operation_processor, const AttrEntry attr)
       : fs_id_(attr.fs_id()),
         ino_(attr.ino()),
-        base_version_(attr.version()),
-        delta_version_(base_version_),
+        version_vec_(attr.version()),
         operation_processor_(operation_processor) {
     for (const auto& boundary : attr.shard_boundaries()) {
+      shard_boundaries_.push_back(boundary);
+    }
+  }
+  ShardPartition(OperationProcessorSPtr operation_processor, const AttrWithMutation& attr_with_mutation)
+      : fs_id_(attr_with_mutation.attr.fs_id()),
+        ino_(attr_with_mutation.attr.ino()),
+        version_vec_(attr_with_mutation),
+        operation_processor_(operation_processor) {
+    for (const auto& boundary : attr_with_mutation.attr.shard_boundaries()) {
       shard_boundaries_.push_back(boundary);
     }
   }
@@ -143,11 +155,16 @@ class ShardPartition {
     return std::make_shared<ShardPartition>(operation_processor, attr);
   }
 
+  static PartitionPtr New(OperationProcessorSPtr operation_processor, const AttrWithMutation& attr_with_mutation) {
+    return std::make_shared<ShardPartition>(operation_processor, attr_with_mutation);
+  }
+
   uint32_t FsId() const { return fs_id_; }
   Ino INo() const { return ino_; }
 
   uint64_t BaseVersion();
-  uint64_t DeltaVersion();
+  uint64_t CompleteVersion();
+  AttrVersionVec VersionVec();
 
   Status Get(const std::string& name, Dentry& out);
   std::vector<Dentry> GetAll();
@@ -155,14 +172,19 @@ class ShardPartition {
   Status Scan(const std::string& trace_id, const std::string& start_name, uint32_t limit, bool is_only_dir,
               std::vector<Dentry>& dentries);
 
-  void Put(const Dentry& dentry, uint64_t version);
-  void Delete(const std::string& name, uint64_t version);
-  void Delete(const std::vector<std::string>& names, uint64_t version);
+  void Put(const Dentry& dentry, const AttrVersion& version);
+  void Delete(const std::string& name, const AttrVersion& version);
+  void Delete(const std::vector<std::string>& names, const AttrVersion& version);
   // refresh partition with latest version, for SetAttr/SetXAttr/RemoveXAttr
-  void RefreshDeltaVersion(uint64_t version);
+  void RefreshVersion(const AttrVersion& version);
 
   // delta dentry op too many may cause performance issue, need compact to reduce the op count.
   bool NeedCompact();
+
+  void TEST_DeleteDirShard() {
+    utils::WriteLockGuard lk(lock_);
+    shard_map_.clear();
+  }
 
   bool Empty() const;
   size_t Size() const;
@@ -180,9 +202,11 @@ class ShardPartition {
 
   struct DentryOp {
     DentryOpType op_type;
-    uint64_t version;
+    AttrVersion version;
     Dentry dentry;
     uint64_t time_s;
+    DentryOp(DentryOpType op_type, const AttrVersion& version, const Dentry& dentry, uint64_t time_s)
+        : op_type(op_type), version(version), dentry(dentry), time_s(time_s) {}
   };
 
   void AddDeltaOpNoLock(DentryOp&& op);
@@ -207,7 +231,7 @@ class ShardPartition {
   Status DoFetchDirShard(const Range& range, const std::string& reason, DirShardSPtr& out_shard);
 
   // refresh partition with latest inode
-  bool Refresh(uint64_t new_version);
+  bool Refresh(const AttrVersionVec& version_vec);
 
   // split dir shard
   Status DoSplitDirShard(const Range& range);
@@ -220,8 +244,8 @@ class ShardPartition {
 
   mutable utils::RWLock lock_;
 
-  uint64_t base_version_{0};
-  uint64_t delta_version_{0};
+  AttrVersionVec version_vec_;
+
   std::list<DentryOp> delta_dentry_ops_;
 
   std::vector<std::string> shard_boundaries_;

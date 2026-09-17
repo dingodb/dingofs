@@ -58,17 +58,12 @@ void Inode::Put(const AttrEntry& attr) {
     xattrs_.emplace(xattr.first, xattr.second);
   }
 
-  base_version_ = attr.version();
-
   last_refresh_time_s_.store(utils::Timestamp(), std::memory_order_relaxed);
 }
 
 void Inode::ApplyMutation(const AttrWithMutation& attr_with_mutation) {
   for (const auto& mutation : attr_with_mutation.mutations) {
-    if (mutation.delta_version() <= delta_versions_[mutation.index()]) continue;
-
-    total_delta_version_ += (mutation.delta_version() - delta_versions_[mutation.index()]);
-    delta_versions_[mutation.index()] = mutation.delta_version();
+    if (!version_vec_.PutIf(mutation)) continue;
 
     ctime_ = std::max(ctime_, mutation.ctime());
     mtime_ = std::max(mtime_, mutation.mtime());
@@ -77,26 +72,24 @@ void Inode::ApplyMutation(const AttrWithMutation& attr_with_mutation) {
 }
 
 void Inode::PutIf(const AttrEntry& attr, const std::string& reason) {
-  LOG_DEBUG << fmt::format("[inode.{}.{}] update attr, version({}-{}) in_base_version({}) reason({}).", fs_id_, ino_,
-                           base_version_, total_delta_version_, attr.version(), reason);
+  LOG_DEBUG << fmt::format("[inode.{}.{}] update attr, version({}) in_base_version({}) reason({}).", fs_id_, ino_,
+                           version_vec_.ToString(), attr.version(), reason);
 
   utils::WriteLockGuard lk(lock_);
 
-  if (attr.version() <= base_version_) return;
-
-  Put(attr);
+  if (version_vec_.PutIf(attr)) Put(attr);
 }
 
 void Inode::PutIf(const AttrWithMutation& attr_with_mutation, const std::string& reason) {
   const auto& attr = attr_with_mutation.attr;
 
-  LOG_DEBUG << fmt::format("[inode.{}.{}] update attr with mutation, version({}-{}) in_version({}-{}) reason({}).",
-                           fs_id_, ino_, base_version_, total_delta_version_, attr_with_mutation.BaseVersion(),
+  LOG_DEBUG << fmt::format("[inode.{}.{}] update attr with mutation, version({}) in_version({}-{}) reason({}).", fs_id_,
+                           ino_, version_vec_.ToString(), attr_with_mutation.BaseVersion(),
                            attr_with_mutation.TotalDeltaVersion(), reason);
 
   utils::WriteLockGuard lk(lock_);
 
-  if (attr.version() > base_version_) Put(attr);
+  if (version_vec_.PutIf(attr)) Put(attr);
 
   ApplyMutation(attr_with_mutation);
 }
@@ -105,21 +98,18 @@ AttrEntry Inode::PutByMutation(const AttrMutationEntry& mutation, const std::str
   CHECK(mutation.index() < kDirAttrMutationNum)
       << fmt::format("invalid mutation index({}), should be less than {}.", mutation.index(), kDirAttrMutationNum);
 
-  LOG_DEBUG << fmt::format("[inode.{}.{}] update attr by mutation, version({}-{}) in_delta_version({}_{}) reason({}).",
-                           fs_id_, ino_, base_version_, total_delta_version_, mutation.index(),
-                           mutation.delta_version(), reason);
+  LOG_DEBUG << fmt::format("[inode.{}.{}] update attr by mutation, version({}) in_delta_version({}_{}) reason({}).",
+                           fs_id_, ino_, version_vec_.ToString(), mutation.index(), mutation.delta_version(), reason);
 
   utils::WriteLockGuard lk(lock_);
 
-  uint64_t& delta_version = delta_versions_[mutation.index()];
-  if (mutation.delta_version() <= delta_version) return ToAttrNoLock();
+  if (mutation.delta_version() <= version_vec_.DeltaVersion(mutation.index())) return ToAttrNoLock();
+
+  version_vec_.PutIf(mutation);
 
   ctime_ = std::max(ctime_, mutation.ctime());
   mtime_ = std::max(mtime_, mutation.mtime());
   atime_ = std::max(atime_, mutation.atime());
-
-  total_delta_version_ += (mutation.delta_version() - delta_version);
-  delta_version = mutation.delta_version();
 
   last_refresh_time_s_.store(utils::Timestamp(), std::memory_order_relaxed);
 
@@ -168,7 +158,7 @@ Inode::AttrEntry Inode::ToAttrNoLock() {
     (*attr.mutable_xattrs())[key] = value;
   }
 
-  attr.set_version(base_version_ + total_delta_version_);
+  attr.set_version(version_vec_.CompleteVersion());
 
   return attr;
 }

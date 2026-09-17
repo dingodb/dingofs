@@ -146,6 +146,8 @@ DingodbStorage::SdkTxnUPtr DingodbStorage::NewSdkTxn(Txn::IsolationLevel isolati
     LOG(ERROR) << fmt::format("[storage] new transaction fail, retry({}) error({}).", retry, status.ToString());
   } while (++retry <= FLAGS_mds_txn_max_retry_times);
 
+  if (txn == nullptr) return nullptr;
+
   return DingodbStorage::SdkTxnUPtr(txn);
 }
 
@@ -374,7 +376,10 @@ Status DingodbStorage::Delete(const std::vector<std::string>& keys) {
 }
 
 TxnUPtr DingodbStorage::NewTxn(Txn::IsolationLevel isolation_level) {
-  return std::make_unique<DingodbTxn>(NewSdkTxn(isolation_level));
+  auto sdk_txn = NewSdkTxn(isolation_level);
+  if (sdk_txn == nullptr) return nullptr;
+
+  return std::make_unique<DingodbTxn>(std::move(sdk_txn));
 }
 
 DingodbTxn::~DingodbTxn() {

@@ -23,6 +23,8 @@ disable-model-invocation: true
 - ** start_mds.sh **: 启动mds服务器的脚本，支持启动多个实例，并且可以选择是否替换配置文件。
 - ** stop_mds.sh **: 停止mds服务器的脚本，支持停止多个实例。
 - ** start_client.sh **: 部署和启动client的脚本
+- ** create_cluster.sh **: 创建集群脚本
+- ** create_fs.sh **: 创建文件系统脚本
 
 ## MDS部署、启动、停止
 **注意**: 必须在脚本目录scripts/dev-mds下执行以下命令，否则会报错。

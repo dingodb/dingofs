@@ -366,6 +366,8 @@ static blockaccess::BlockAccesserSPtr NewBlockAccesser(const S3Info& s3_info) {
                           .sk = s3_info.sk,
                           .endpoint = s3_info.endpoint,
                           .bucket_name = s3_info.bucket_name};
+  blockaccess::FillAwsSdkConfigFromGFlags(
+      &options.s3_options.aws_sdk_config);
 
   auto block_accessor = blockaccess::NewShareBlockAccesser(options);
   auto status = block_accessor->Init();
