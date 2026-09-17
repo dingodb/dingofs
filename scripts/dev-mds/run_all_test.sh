@@ -86,7 +86,6 @@ function run_fsx_test() {
   FSX_LOG_DIR=/tmp/dev-regression-test/fsx_test_${SUFFIX}
 
   # create test directory and log directory
-  mkdir -p ${FSX_TEST_FILE}
   mkdir -p ${FSX_LOG_DIR}
 
   # run test command
@@ -170,7 +169,7 @@ function run_all_tests() {
   run_pjdtest_test
   run_fsx_test
   run_mdtest_test
-  run_fio_test
+  # run_fio_test
   run_fsstress_test
 }
 

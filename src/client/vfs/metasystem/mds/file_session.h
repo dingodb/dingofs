@@ -97,8 +97,15 @@ class FileSession {
 
   // fh -> session_id
   struct SessionInfo {
-    uint32_t flags{0};
     std::string session_id;
+    uint32_t flags{0};
+    bool deleted{false};
+
+    SessionInfo(const std::string& session_id, uint32_t flags,
+                bool deleted = false)
+        : session_id(session_id), flags(flags), deleted(deleted) {}
+
+    bool IsDeleted() const { return deleted; }
   };
   absl::flat_hash_map<uint64_t, SessionInfo> session_id_map_;
 

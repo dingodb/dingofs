@@ -976,6 +976,7 @@ Status ClientSession::Open(const Context& ctx, Ino ino, int flags, uint64_t* fh,
   CHECK(keep_cache != nullptr) << "keep_cache is nullptr";
 
   auto span = trace_manager_->StartSpan("ClientSession::Open");
+  auto span_ctx = dingofs::SpanScope::GetContext(span);
 
   Status s;
   AccessLogGuard log(
@@ -991,7 +992,6 @@ Status ClientSession::Open(const Context& ctx, Ino ino, int flags, uint64_t* fh,
       {&client_metrics_->opOpen, &client_metrics_->opAll},
       !dingofs::IsInternalIno(ino));
 
-  auto span_ctx = dingofs::SpanScope::GetContext(span);
   s = vfs_->Open(span_ctx, ino, flags, fh, keep_cache);
   if (!s.ok()) op_metric.FailOp();
 
@@ -1102,6 +1102,7 @@ Status ClientSession::Flush(const Context& ctx, Ino ino, uint64_t fh) {
   VLOG(2) << "VFSFlush ino: " << ino << " fh: " << fh;
 
   auto span = trace_manager_->StartSpan("ClientSession::Flush");
+  auto span_ctx = dingofs::SpanScope::GetContext(span);
 
   Status s;
   AccessLogGuard log(
@@ -1115,7 +1116,6 @@ Status ClientSession::Flush(const Context& ctx, Ino ino, uint64_t fh) {
       {&client_metrics_->opFlush, &client_metrics_->opAll},
       !dingofs::IsInternalIno(ino));
 
-  auto span_ctx = dingofs::SpanScope::GetContext(span);
   s = vfs_->Flush(span_ctx, ino, fh);
   if (!s.ok()) op_metric.FailOp();
 
@@ -1127,6 +1127,7 @@ Status ClientSession::Release(const Context& ctx, Ino ino, uint64_t fh) {
   VLOG(2) << "VFSRelease ino: " << ino << " fh: " << fh;
 
   auto span = trace_manager_->StartSpan("ClientSession::Release");
+  auto span_ctx = dingofs::SpanScope::GetContext(span);
 
   Status s;
   AccessLogGuard log(
@@ -1140,7 +1141,6 @@ Status ClientSession::Release(const Context& ctx, Ino ino, uint64_t fh) {
       {&client_metrics_->opRelease, &client_metrics_->opAll},
       !dingofs::IsInternalIno(ino));
 
-  auto span_ctx = dingofs::SpanScope::GetContext(span);
   s = vfs_->Release(span_ctx, ino, fh);
   if (!s.ok()) op_metric.FailOp();
 

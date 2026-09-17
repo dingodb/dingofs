@@ -63,16 +63,12 @@ const std::string kSliceIdCacheName = "slice";
 const std::string kExecutorWorkerSetName = "meta_executor";
 
 DEFINE_uint32(vfs_meta_executor_worker_num, 64, "number of meta workers");
-DEFINE_uint32(vfs_meta_executor_max_pending_num, 1048576,
-              "meta worker max pending num");
 
 const std::string kBgExecutorWorkerSetName = "meta_bg_executor";
 
 DEFINE_uint32(vfs_meta_bg_executor_worker_num, 16, "number of compact workers");
 DEFINE_uint32(vfs_meta_bg_executor_max_pending_num, 8192,
               "compact worker max pending num");
-DEFINE_bool(vfs_meta_bg_executor_use_pthread, true,
-            "compact worker use pthread");
 
 DEFINE_uint32(vfs_meta_copy_file_range_max_chunks_per_rpc, 256,
               "Max dst chunks affected by one CopyFileRange RPC window.");
@@ -115,12 +111,10 @@ MDSMetaSystem::MDSMetaSystem(mds::FsInfoEntry fs_info_entry,
     : name_(fs_info_entry.fs_name()),
       client_id_(client_id),
       fs_info_(fs_info_entry),
-      executor_(kExecutorWorkerSetName, FLAGS_vfs_meta_executor_worker_num,
-                FLAGS_vfs_meta_executor_max_pending_num),
+      executor_(kExecutorWorkerSetName, FLAGS_vfs_meta_executor_worker_num),
       bg_executor_(kBgExecutorWorkerSetName,
                    FLAGS_vfs_meta_bg_executor_worker_num,
-                   FLAGS_vfs_meta_bg_executor_max_pending_num,
-                   FLAGS_vfs_meta_bg_executor_use_pthread),
+                   FLAGS_vfs_meta_bg_executor_max_pending_num),
       mds_client_(client_id, fs_info_, std::move(rpc), trace_manager),
       inode_cache_(fs_info_.GetFsId()),
       id_cache_(kSliceIdCacheName, mds_client_),
@@ -146,7 +140,7 @@ Status MDSMetaSystem::Init(bool skip_mount) {
   }
 
   if (!executor_.Init()) {
-    return Status::Internal("init executor fail");
+    return Status::Internal("init fast_executor fail");
   }
 
   if (!bg_executor_.Init()) {
@@ -649,9 +643,16 @@ Status MDSMetaSystem::MkNod(ContextSPtr ctx, Ino parent,
 }
 
 Status MDSMetaSystem::DoOpen(ContextSPtr& ctx, Ino ino, int flags, uint64_t fh,
-                             const std::string& session_id,
                              FileSessionSPtr file_session, bool is_async) {
   CHECK(file_session != nullptr) << "file_session is null.";
+
+  const std::string session_id = file_session->GetSessionID(fh);
+  if (session_id.empty()) {
+    LOG(WARNING) << fmt::format(
+        "[meta.fs.{}.{}] open file skipped, session_id is empty.", ino, fh);
+
+    return Status::OK();
+  }
 
   // check whether prefetch chunk
   // prepare chunk descriptors for expect chunk version
@@ -705,8 +706,7 @@ Status MDSMetaSystem::DoOpen(ContextSPtr& ctx, Ino ino, int flags, uint64_t fh,
   return Status::OK();
 }
 
-void MDSMetaSystem::AsyncOpen(ContextSPtr& ctx, Ino ino, int flags, uint64_t fh,
-                              const std::string& session_id,
+bool MDSMetaSystem::AsyncOpen(ContextSPtr& ctx, Ino ino, int flags, uint64_t fh,
                               FileSessionSPtr file_session) {
   class OpenTask;
   using OpenTaskPtr = std::shared_ptr<OpenTask>;
@@ -714,23 +714,21 @@ void MDSMetaSystem::AsyncOpen(ContextSPtr& ctx, Ino ino, int flags, uint64_t fh,
   class OpenTask : public TaskRunnable {
    public:
     OpenTask(MDSMetaSystem& metasystem, ContextSPtr& ctx, Ino ino, int flags,
-             uint64_t fh, const std::string& session_id,
-             FileSessionSPtr file_session)
+             uint64_t fh, FileSessionSPtr file_session)
         : metasystem_(metasystem),
           ctx_(ctx),
           ino_(ino),
           flags_(flags),
           fh_(fh),
-          session_id_(session_id),
           file_session_(file_session) {}
     ~OpenTask() override = default;
 
     static OpenTaskPtr New(MDSMetaSystem& metasystem, ContextSPtr& ctx, Ino ino,
                            int flags, uint64_t fh,
-                           const std::string& session_id,
+
                            FileSessionSPtr file_session) {
       return std::make_shared<OpenTask>(metasystem, ctx, ino, flags, fh,
-                                        session_id, file_session);
+                                        file_session);
     }
 
     std::string Type() override { return "OPEN"; }
@@ -745,8 +743,8 @@ void MDSMetaSystem::AsyncOpen(ContextSPtr& ctx, Ino ino, int flags, uint64_t fh,
         return;
       }
 
-      auto status = metasystem_.DoOpen(ctx_, ino_, flags_, fh_, session_id_,
-                                       file_session_, true);
+      auto status =
+          metasystem_.DoOpen(ctx_, ino_, flags_, fh_, file_session_, true);
       if (!status.ok()) {
         LOG(ERROR) << fmt::format(
             "[meta.fs.{}.{}] async open file fail, error({}).", ino_, fh_,
@@ -761,13 +759,11 @@ void MDSMetaSystem::AsyncOpen(ContextSPtr& ctx, Ino ino, int flags, uint64_t fh,
     const Ino ino_;
     const int flags_;
     const uint64_t fh_;
-    const std::string session_id_;
     FileSessionSPtr file_session_;
   };
 
-  executor_.ExecuteByHash(
-      ino, OpenTask::New(*this, ctx, ino, flags, fh, session_id, file_session),
-      true);
+  return executor_.ExecuteByHash(
+      ino, OpenTask::New(*this, ctx, ino, flags, fh, file_session), true);
 }
 
 Status MDSMetaSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
@@ -786,10 +782,6 @@ Status MDSMetaSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
   const std::string session_id = utils::GenerateUUIDFastly();
 
   auto file_session = file_session_map_.Put(ino, fh, session_id, flags);
-  if (file_session->HasMultipleWriters()) {
-    LOG(WARNING) << fmt::format(
-        "[meta.fs.{}.{}] open file has multiple writers.", ino, fh);
-  }
 
   auto inode = GetInodeFromCache(ino);
   if (inode != nullptr) {
@@ -805,7 +797,11 @@ Status MDSMetaSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
       file_session->GetChunkSet()->InitFlushCheckpoint(inode->Length());
 
       // launch async open
-      AsyncOpen(ctx, ino, flags, fh, session_id, file_session);
+      if (!AsyncOpen(ctx, ino, flags, fh, file_session)) {
+        LOG(ERROR) << fmt::format("[meta.fs.{}.{}] async open file fail.", ino,
+                                  fh);
+        return Status::Internal("submit async open task fail");
+      }
 
       if (inode->Mtime() > modify_time_memo_.GetKernelMtime(ino)) {
         *keep_cache = false;
@@ -815,7 +811,7 @@ Status MDSMetaSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
     }
   }
 
-  auto status = DoOpen(ctx, ino, flags, fh, session_id, file_session, false);
+  auto status = DoOpen(ctx, ino, flags, fh, file_session, false);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format("[meta.fs.{}.{}] open file fail, error({}).", ino,
                               fh, status.ToString());
@@ -845,8 +841,11 @@ Status MDSMetaSystem::Flush(ContextSPtr ctx, Ino ino, uint64_t fh) {
       << fmt::format("file session is nullptr, ino({}) fh({}).", ino, fh);
 
   uint32_t flags = file_session->GetFlags(fh);
+  if ((flags & O_ACCMODE) == O_RDONLY) return Status::OK();
 
-  return FlushSliceAndFile(ctx, ino);
+  Status status = FlushSliceAndFile(ctx, ino);
+
+  return status;
 }
 
 Status MDSMetaSystem::RollbackFile(ContextSPtr ctx, Ino ino, uint64_t fh) {
@@ -894,7 +893,7 @@ Status MDSMetaSystem::RollbackFile(ContextSPtr ctx, Ino ino, uint64_t fh) {
   return Status::OK();
 }
 
-void MDSMetaSystem::AsyncClose(ContextSPtr& ctx, Ino ino, uint64_t fh,
+bool MDSMetaSystem::AsyncClose(ContextSPtr& ctx, Ino ino, uint64_t fh,
                                const std::string& session_id) {
   class CloseTask;
   using CloseTaskPtr = std::shared_ptr<CloseTask>;
@@ -949,7 +948,7 @@ void MDSMetaSystem::AsyncClose(ContextSPtr& ctx, Ino ino, uint64_t fh,
     const std::string session_id_;
   };
 
-  executor_.ExecuteByHash(
+  return executor_.ExecuteByHash(
       ino, CloseTask::New(*this, mds_client_, ctx, ino, fh, session_id), true);
 }
 
@@ -969,7 +968,11 @@ Status MDSMetaSystem::Close(ContextSPtr ctx, Ino ino, uint64_t fh) {
   LOG_DEBUG << fmt::format("[meta.fs.{}.{}] close file session_id({}).", ino,
                            fh, session_id);
 
-  AsyncClose(ctx, ino, fh, session_id);
+  if (!AsyncClose(ctx, ino, fh, session_id)) {
+    LOG(ERROR) << fmt::format("[meta.fs.{}.{}] async close file fail.", ino,
+                              fh);
+    return Status::Internal("submit async close task fail");
+  }
 
   return Status::OK();
 }

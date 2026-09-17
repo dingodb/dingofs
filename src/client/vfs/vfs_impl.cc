@@ -751,6 +751,8 @@ Status VFSImpl::Flush(ContextSPtr ctx, Ino ino, uint64_t fh) {
   auto handle = handle_manager_->FindHandlerGuard(fh);
   VFS_CHECK_HANDLE(handle.get(), ino, fh);
 
+  if ((handle->flags & O_ACCMODE) == O_RDONLY) return Status::OK();
+
   // O_RDONLY fh has no writer — nothing to flush at the data layer.
   if (handle->resources.writer != nullptr) {
     s = handle->resources.writer->Flush();

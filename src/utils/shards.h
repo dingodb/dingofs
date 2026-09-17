@@ -29,46 +29,52 @@ namespace utils {
 template <typename T, std::size_t N>
 class Shards {
  public:
-  using Func = std::function<void(T&)>;
-
+  // Passing no key makes HashOf() a constant, which would silently pin every
+  // access to a single shard, so require at least one.
   template <typename... Args>
   auto position(Args&&... args) {
+    static_assert(sizeof...(Args) > 0,
+                  "Shards needs at least one key to choose a shard");
     return absl::HashOf(std::forward<Args>(args)...) % N;
   }
 
-  auto withRLockAt(Func&& f, std::size_t pos) {  // NOLINT
+  template <typename F>
+  auto withRLockAt(F&& f, std::size_t pos) {  // NOLINT
     utils::ReadLockGuard lk(locks_[pos]);
 
     return f(array_[pos]);
   }
 
-  auto withWLockAt(Func&& f, std::size_t pos) {  // NOLINT
+  template <typename F>
+  auto withWLockAt(F&& f, std::size_t pos) {  // NOLINT
     utils::WriteLockGuard lk(locks_[pos]);
 
     return f(array_[pos]);
   }
 
-  template <typename... Args>
-  auto withRLock(Func&& f, Args&&... args) {
-    return withRLockAt(std::move(f), position(std::forward<Args>(args)...));
+  template <typename F, typename... Args>
+  auto withRLock(F&& f, Args&&... args) {  // NOLINT
+    return withRLockAt(std::forward<F>(f),
+                       position(std::forward<Args>(args)...));
   }
 
-  template <typename... Args>
-  auto withWLock(Func&& f, Args&&... args) {
-    return withWLockAt(std::move(f), position(std::forward<Args>(args)...));
+  template <typename F, typename... Args>
+  auto withWLock(F&& f, Args&&... args) {  // NOLINT
+    return withWLockAt(std::forward<F>(f),
+                       position(std::forward<Args>(args)...));
   }
 
-  void iterate(Func&& f) {  // NOLINT
+  template <typename F>
+  void iterate(F&& f) {  // NOLINT
     for (std::size_t idx = 0; idx < N; ++idx) {
-      Func temp_f = f;
-      withRLockAt(std::move(temp_f), idx);
+      withRLockAt(f, idx);
     }
   }
 
-  void iterateWLock(Func&& f) {  // NOLINT
+  template <typename F>
+  void iterateWLock(F&& f) {  // NOLINT
     for (std::size_t idx = 0; idx < N; ++idx) {
-      Func temp_f = f;
-      withWLockAt(std::move(temp_f), idx);
+      withWLockAt(f, idx);
     }
   }
 

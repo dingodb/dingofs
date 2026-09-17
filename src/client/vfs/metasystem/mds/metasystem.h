@@ -261,12 +261,11 @@ class MDSMetaSystem : public vfs::MetaSystem {
   void InvalidateFileSessionReadCache(Ino ino);
 
   Status DoOpen(ContextSPtr& ctx, Ino ino, int flags, uint64_t fh,
-                const std::string& session_id, FileSessionSPtr file_session,
-                bool is_async);
-  void AsyncOpen(ContextSPtr& ctx, Ino ino, int flags, uint64_t fh,
-                 const std::string& session_id, FileSessionSPtr file_session);
+                FileSessionSPtr file_session, bool is_async);
+  bool AsyncOpen(ContextSPtr& ctx, Ino ino, int flags, uint64_t fh,
+                 FileSessionSPtr file_session);
 
-  void AsyncClose(ContextSPtr& ctx, Ino ino, uint64_t fh,
+  bool AsyncClose(ContextSPtr& ctx, Ino ino, uint64_t fh,
                   const std::string& session_id);
 
   // dir stats
@@ -289,7 +288,9 @@ class MDSMetaSystem : public vfs::MetaSystem {
 
   mds::FsInfo fs_info_;
 
-  Executor executor_;
+  // Carries the open/close path: AsyncOpen and AsyncClose must hash by ino
+  // into the same set for the pair to stay ordered.
+  FastExecutor executor_;
   // Background executor for async tasks, such as compaction, block cache
   // cleanup, etc.
   Executor bg_executor_;

@@ -16,6 +16,7 @@
 
 #include <fcntl.h>
 
+#include <atomic>
 #include <cstdint>
 #include <string>
 
@@ -67,7 +68,7 @@ void FileSession::AddSession(uint64_t fh, const std::string& session_id,
                              uint32_t flags) {
   utils::WriteLockGuard lk(lock_);
 
-  session_id_map_[fh] = {flags, session_id};
+  session_id_map_.try_emplace(fh, session_id, flags, false);
 
   IncRef();
 }
@@ -76,11 +77,8 @@ uint32_t FileSession::DeleteSession(uint64_t fh) {
   utils::WriteLockGuard lk(lock_);
 
   auto it = session_id_map_.find(fh);
-  if (it == session_id_map_.end()) {
-    return ref_count_.load();
-  }
-
-  session_id_map_.erase(it);
+  if (it == session_id_map_.end()) return ref_count_.load();
+  it->second.deleted = true;
 
   return DecRef();
 }
@@ -89,6 +87,7 @@ bool FileSession::HasWriter() {
   utils::ReadLockGuard lk(lock_);
 
   for (const auto& [_, session_info] : session_id_map_) {
+    if (session_info.IsDeleted()) continue;
     if ((session_info.flags & O_ACCMODE) != O_RDONLY) {
       return true;
     }
@@ -102,6 +101,7 @@ bool FileSession::HasMultipleWriters() {
 
   uint32_t writer_count = 0;
   for (const auto& [_, session_info] : session_id_map_) {
+    if (session_info.IsDeleted()) continue;
     if ((session_info.flags & O_ACCMODE) != O_RDONLY) {
       if (++writer_count > 1) return true;
     }
@@ -120,6 +120,7 @@ void FileSession::InvalidateReadCache(bool just_readonly) {
 
 bool FileSession::IsAllReadOnly() {
   for (const auto& [_, session_info] : session_id_map_) {
+    if (session_info.IsDeleted()) continue;
     if ((session_info.flags & O_ACCMODE) != O_RDONLY) return false;
   }
 
@@ -151,6 +152,8 @@ bool FileSession::Dump(Json::Value& value) {
   // dump session_id_map
   Json::Value session_id_map = Json::arrayValue;
   for (const auto& [fh, session_info] : session_id_map_) {
+    if (session_info.IsDeleted()) continue;
+
     Json::Value item;
     item["fh"] = fh;
     item["session_id"] = session_info.session_id;
@@ -192,7 +195,7 @@ bool FileSession::Load(const Json::Value& value) {
       uint64_t fh = item["fh"].asUInt64();
       std::string session_id = item["session_id"].asString();
       uint32_t flags = item["flags"].asUInt();
-      session_id_map_[fh] = {flags, session_id};
+      session_id_map_.try_emplace(fh, session_id, flags, false);
     }
   }
 
@@ -225,15 +228,18 @@ FileSessionSPtr FileSessionMap::Put(Ino ino, uint64_t fh,
 
   FileSessionSPtr file_session;
   shard_map_.withWLock(
-      [this, ino, fh, &session_id, &file_session, flags](Map& map) {
-        auto [it, inserted] =
-            map.try_emplace(ino, FileSession::New(ino, chunk_size_));
+      [this, ino, fh, &session_id, &file_session](Map& map) {
+        auto [it, inserted] = map.try_emplace(ino);
+        if (inserted) {
+          it->second = FileSession::New(ino, chunk_size_);
+          total_count_ << 1;
+        }
 
         file_session = it->second;
-        file_session->AddSession(fh, session_id, flags);
-        if (inserted) total_count_ << 1;
       },
       ino);
+
+  file_session->AddSession(fh, session_id, flags);
 
   return file_session;
 }

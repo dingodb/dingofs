@@ -20,8 +20,8 @@ namespace vfs {
 namespace meta {
 
 bool Executor::Init() {
-  worker_set_ = mds::ExecqWorkerSet::NewUnique(
-      name_, worker_num_, worker_max_pending_num_, use_pthread_);
+  worker_set_ = mds::ExecqWorkerSet::NewUnique(name_, worker_num_,
+                                               worker_max_pending_num_, true);
 
   if (!worker_set_->Init()) {
     LOG(ERROR) << "init meta worker set fail.";
@@ -47,6 +47,48 @@ bool Executor::ExecuteByHash(uint64_t hash_id, TaskRunnablePtr task,
     LOG(WARNING) << fmt::format(
         "[meta.executor] commit task fail, type({}) key({}).", task->Type(),
         task->Key());
+
+  } while (retry);
+
+  return false;
+}
+
+bool FastExecutor::Init() {
+  worker_set_ = std::make_unique<mds::RelayWorkerSet>(name_, worker_num_);
+
+  if (!worker_set_->Init()) {
+    LOG(ERROR) << "init fast meta worker set fail.";
+    return false;
+  }
+
+  return true;
+}
+
+void FastExecutor::Stop() { worker_set_->Stop(); }
+
+bool FastExecutor::ExecuteLeastQueue(TaskRunnablePtr task) {
+  return worker_set_->ExecuteLeastQueue(task);
+}
+
+bool FastExecutor::ExecuteByHash(uint64_t hash_id, TaskRunnablePtr task,
+                                 bool retry) {
+  do {
+    if (worker_set_->ExecuteHash(hash_id, task)) {
+      return true;
+    }
+
+    // Retrying a stopped worker set would spin until the process exits.
+    if (worker_set_->IsStopped()) {
+      LOG(WARNING) << fmt::format(
+          "[meta.fast_executor] commit task fail, worker set is stopped, "
+          "type({}) key({}).",
+          task->Type(), task->Key());
+      return false;
+    }
+
+    LOG(WARNING) << fmt::format(
+        "[meta.fast_executor] commit task fail, type({}) key({}).",
+        task->Type(), task->Key());
 
   } while (retry);
 

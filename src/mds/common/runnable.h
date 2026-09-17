@@ -16,17 +16,22 @@
 #define DINGOFS_MDS_COMMON_RUNNABLE_H_
 
 #include <atomic>
+#include <chrono>
+#include <condition_variable>
 #include <cstdint>
 #include <deque>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <queue>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #include "bthread/execution_queue.h"
 #include "bthread/types.h"
+#include "butil/containers/mpsc_queue.h"
 #include "bvar/latency_recorder.h"
 #include "fmt/format.h"
 #include "json/value.h"
@@ -327,6 +332,232 @@ class PriorWorkerSet : public WorkerSet {
   std::vector<Bthread> bthread_workers_;
   std::vector<std::thread> pthread_workers_;
 };
+
+// A cacheline-sized handshake between task submitters and their one consumer.
+// The consumer arms the bell before it sleeps and re-checks its queue after
+// arming; a waker only pays for the mutex and the wake syscall when it claims
+// an armed bell, so a *running* consumer costs a submitter one atomic load.
+class WorkerDoorbell {
+ public:
+  void Arm() { armed_.store(true, std::memory_order_seq_cst); }
+  void Disarm() { armed_.store(false, std::memory_order_relaxed); }
+
+  bool Armed() const { return armed_.load(std::memory_order_seq_cst); }
+
+  // True for exactly one caller of a concurrently armed bell. seq_cst on both
+  // sides is what makes Arm()/Armed() a sound Dekker pair: either the waker
+  // sees the armed bell, or the armed consumer sees the submitted task.
+  bool Claim() { return armed_.exchange(false, std::memory_order_seq_cst); }
+
+ private:
+  alignas(64) std::atomic<bool> armed_{false};
+};
+
+class WorkerParker {
+ public:
+  WorkerParker() = default;
+  WorkerParker(const WorkerParker&) = delete;
+  WorkerParker& operator=(const WorkerParker&) = delete;
+
+  // Blocks until `ready` holds or the timeout expires. `ready` runs under the
+  // same mutex the waker takes, so it must be cheap and must not block.
+  template <typename Ready>
+  void WaitFor(const Ready& ready, uint64_t timeout_ns) {
+    doorbell_.Arm();
+    if (ready()) {
+      doorbell_.Disarm();
+      return;
+    }
+
+    std::unique_lock<std::mutex> lock(mutex_);
+    cv_.wait_for(lock, std::chrono::nanoseconds(timeout_ns), [this, &ready] { return woken_ || ready(); });
+    woken_ = false;
+    doorbell_.Disarm();
+  }
+
+  bool Armed() const { return doorbell_.Armed(); }
+  bool Claim() { return doorbell_.Claim(); }
+
+  // Only call after Claim() returned true.
+  void WakeSleeper() {
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      woken_ = true;
+    }
+    cv_.notify_one();
+  }
+
+  void Wake() {
+    if (Armed() && Claim()) WakeSleeper();
+  }
+
+ private:
+  WorkerDoorbell doorbell_;
+  std::mutex mutex_;
+  std::condition_variable cv_;
+  bool woken_{false};
+};
+
+// A task set optimised for one thing: the cost of submitting a task.
+//
+// It deliberately does not derive from WorkerSet. A WorkerSet pays per task
+// for a shared pending counter, bvar metrics and latency recording; this pays
+// for none of them. What it keeps is the property callers actually depend on:
+// tasks hashed to the same worker run in submission order, which is what makes
+// a per-ino AsyncOpen/AsyncClose pair ordered.
+//
+// Shape: `worker_num` MPSC queues, each with exactly one consumer thread --
+// butil::MPSCQueue allows one consumer per queue and no more. Submitting picks
+// a queue, reserves its pending slot, links the task and wakes that queue's
+// thread only when it is genuinely asleep. That wake is a mutex plus a futex
+// round trip, so a submitter pays several microseconds in full whenever the
+// target worker happens to be idle -- which, with one worker per hash bucket,
+// is most of the time.
+class DoorbellWorkerSet {
+ public:
+  DoorbellWorkerSet(std::string name, uint32_t worker_num, int64_t max_pending_task_count);
+  ~DoorbellWorkerSet();
+
+  DoorbellWorkerSet(const DoorbellWorkerSet&) = delete;
+  DoorbellWorkerSet& operator=(const DoorbellWorkerSet&) = delete;
+
+  bool Init();
+  void Stop();
+
+  bool IsStopped() const { return is_stop_.load(std::memory_order_seq_cst); }
+
+  bool Execute(TaskRunnablePtr task) { return ExecuteLeastQueue(std::move(task)); }
+  bool ExecuteRR(TaskRunnablePtr task);
+  bool ExecuteLeastQueue(TaskRunnablePtr task);
+  bool ExecuteHash(uint64_t id, TaskRunnablePtr task);
+
+  // Sum over workers. O(worker_num) loads: for tests and debug, not a hot path.
+  int64_t PendingTaskCount();
+
+ private:
+  using TaskQueue = butil::MPSCQueue<TaskRunnablePtr, butil::ObjectPoolAllocator<TaskRunnablePtr>>;
+
+  struct Worker {
+    alignas(64) TaskQueue queue;
+    alignas(64) std::atomic<int64_t> pending{0};
+    alignas(64) WorkerParker parker;
+    std::thread thread;
+  };
+
+  bool Submit(Worker& worker, TaskRunnablePtr& task);
+  void Run(Worker& worker);
+  void WorkerLoop(Worker& worker, uint32_t index);
+
+  // Safety net. The doorbell already covers every wakeup, so this only bounds
+  // the damage of a logic error to a timeout instead of a hang.
+  static constexpr uint64_t kParkTimeoutNs = 1000 * 1000;
+
+  const std::string name_;
+  const uint32_t worker_num_;
+  const int64_t max_pending_task_count_;
+
+  std::atomic<bool> is_stop_{false};
+
+  // One seed per producer thread, so a start at low concurrency does not pile
+  // every producer onto worker 0.
+  std::atomic<uint32_t> next_seed_{0};
+
+  std::vector<std::unique_ptr<Worker>> workers_;
+};
+
+using DoorbellWorkerSetSPtr = std::shared_ptr<DoorbellWorkerSet>;
+using DoorbellWorkerSetUPtr = std::unique_ptr<DoorbellWorkerSet>;
+
+// A submission accelerator: one MPSC queue, one relay thread, and an internal
+// ExecqWorkerSet that does the actual running.
+//
+// Why this exists: bthread::execution_queue_execute costs hundreds of
+// nanoseconds and ExecqWorkerSet pays it on the caller's thread -- for an
+// AsyncOpen, the FUSE request thread. Here the caller only reserves a slot and
+// appends to an MPSC queue (no futex, no wake); the single relay thread then
+// pays the execution-queue cost off the request path. The
+// submitter finds the task on the relay's next poll, at most kHotWaitNs after a
+// busy pass and kColdWaitNs after an idle one, and nothing in the client blocks
+// on an async operation, so that delay is invisible to it.
+//
+// One queue, one consumer: the relay dequeues in the MPSC's linearisation order
+// and forwards each task with ExecuteHash(id, ...), so tasks for the same ino
+// still reach the same downstream worker in submission order -- the ordering
+// AsyncOpen/AsyncClose depend on. Parallelism comes from the downstream set,
+// not from the relay.
+//
+// There is no backpressure: neither this queue nor the downstream set caps its
+// length, so Execute() fails only once the set is stopped. Stop() drains in two
+// stages -- the relay forwards everything still queued, then the downstream set
+// stops -- which is what keeps an accepted task from being dropped.
+class RelayWorkerSet {
+ public:
+  RelayWorkerSet(std::string name, uint32_t worker_num);
+  ~RelayWorkerSet();
+
+  RelayWorkerSet(const RelayWorkerSet&) = delete;
+  RelayWorkerSet& operator=(const RelayWorkerSet&) = delete;
+
+  bool Init();
+  void Stop();
+
+  bool IsStopped() const { return is_stop_.load(std::memory_order_seq_cst); }
+
+  bool Execute(TaskRunnablePtr task) { return ExecuteLeastQueue(std::move(task)); }
+  bool ExecuteRR(TaskRunnablePtr task);
+  bool ExecuteLeastQueue(TaskRunnablePtr task);
+  bool ExecuteHash(uint64_t id, TaskRunnablePtr task);
+
+  // Tasks accepted but not yet handed to the downstream set. For tests and
+  // debug, not a hot path.
+  int64_t PendingTaskCount() { return pending_.load(std::memory_order_relaxed); }
+
+ private:
+  // Which downstream entry point a queued task goes to. The relay is a single
+  // thread, so RR and least-queue targets are chosen when the task is
+  // forwarded, not when it is submitted.
+  enum class RouteMode : uint8_t {
+    kHash = 0,
+    kRR = 1,
+    kLeastQueue = 2,
+  };
+
+  struct RelayTask {
+    RouteMode mode;
+    uint64_t route_id;
+    TaskRunnablePtr task;
+  };
+
+  using TaskQueue = butil::MPSCQueue<RelayTask, butil::ObjectPoolAllocator<RelayTask>>;
+
+  bool Submit(RouteMode mode, uint64_t route_id, TaskRunnablePtr& task);
+  bool Run();
+  void WorkerLoop();
+
+  // Wait after a pass that forwarded at least one task: a burst that just
+  // produced work usually has more coming, so stay responsive to it.
+  static constexpr uint64_t kHotWaitNs = 10 * 1000;
+  // Wait after a pass that found nothing. Bounds both the added latency of a
+  // task arriving at an idle relay and the cost of Stop().
+  static constexpr uint64_t kColdWaitNs = 100 * 1000;
+
+  const std::string name_;
+
+  WorkerSetUPtr downstream_;
+
+  TaskQueue queue_;
+
+  // Reservation count: a task is on it from the moment Execute() accepts it
+  // until the relay has forwarded it, so Stop() knows forwarding is done.
+  alignas(64) std::atomic<int64_t> pending_{0};
+
+  std::atomic<bool> is_stop_{false};
+
+  std::thread thread_;
+};
+
+using RelayWorkerSetSPtr = std::shared_ptr<RelayWorkerSet>;
+using RelayWorkerSetUPtr = std::unique_ptr<RelayWorkerSet>;
 
 }  // namespace mds
 }  // namespace dingofs

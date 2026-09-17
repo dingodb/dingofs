@@ -212,7 +212,7 @@ bool WarmupMemo::ShouldTrigger(Ino ino) {
 void WarmupMemo::CleanExpired(uint64_t expire_s) {
   if (Size() < FLAGS_vfs_meta_clean_threshold_count) return;
 
-  shard_map_.withWLock([&](Map& map) {
+  shard_map_.iterateWLock([&](Map& map) {
     for (auto it = map.begin(); it != map.end();) {
       if (it->second.last_time_s < expire_s) {
         auto temp = it++;
@@ -227,7 +227,7 @@ void WarmupMemo::CleanExpired(uint64_t expire_s) {
 
 size_t WarmupMemo::Size() {
   size_t total_size = 0;
-  shard_map_.withRLock([&](const Map& map) { total_size = map.size(); });
+  shard_map_.iterate([&](Map& map) { total_size += map.size(); });
   return total_size;
 }
 

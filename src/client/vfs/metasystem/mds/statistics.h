@@ -47,16 +47,21 @@ class SlidingWindow {
   }
 
   // Increments the current second's bucket, returns the window sum.
-  uint64_t Inc(uint64_t now_s = utils::SteadyTimestamp()) {
+  // now_s is wall-clock seconds, so one clock read can serve both the window
+  // and the owner's last-active timestamp.
+  uint64_t Inc(uint64_t now_s) {
     auto& bucket = buckets_[now_s % kWindowSize];
     uint64_t old = bucket.load(std::memory_order_relaxed);
-    while (TimestampOf(old) <= now_s) {
-      const uint64_t next = TimestampOf(old) == now_s
-                                ? Pack(now_s, CountOf(old) + 1)
-                                : Pack(now_s, 1);
-      if (bucket.compare_exchange_weak(old, next, std::memory_order_relaxed)) {
-        break;
+
+    // Only roll the bucket forward. A delayed increment (one that read an
+    // earlier second and was then preempted) must not rewind a bucket that
+    // already holds a later second; drop it instead.
+    if (TimestampOf(old) <= now_s) {
+      if (TimestampOf(old) < now_s) {
+        bucket.compare_exchange_strong(old, Pack(now_s, 0),
+                                       std::memory_order_relaxed);
       }
+      bucket.fetch_add(1, std::memory_order_relaxed);
     }
 
     uint64_t sum = 0;
@@ -105,9 +110,7 @@ using AccessStatsWatcherUPtr = std::unique_ptr<AccessStatsWatcher>;
 class DirAccessStats {
  public:
   DirAccessStats(Ino ino, const std::vector<AccessStatsWatcherUPtr>& watchers)
-      : ino_(ino),
-        watchers_(watchers),
-        last_active_time_s_(utils::Timestamp()) {}
+      : ino_(ino), watchers_(watchers) {}
   ~DirAccessStats() = default;
 
   DirAccessStats(const DirAccessStats&) = delete;
@@ -119,7 +122,13 @@ class DirAccessStats {
   }
 
   void IncCount(DirAccessEvent event) {
-    uint64_t count = counters_[static_cast<size_t>(event)].Inc();
+    // A single clock read serves both the sliding window and last-active time,
+    // instead of one per concern. A stepping clock can only mis-bucket one
+    // 4s warmup window.
+    const uint64_t now_s = utils::Timestamp();
+    last_active_time_s_.store(now_s, std::memory_order_relaxed);
+
+    uint64_t count = counters_[static_cast<size_t>(event)].Inc(now_s);
     for (const auto& watcher : watchers_) {
       watcher->OnWindowCountChanged(event, ino_, count);
     }

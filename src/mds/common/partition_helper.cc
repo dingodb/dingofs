@@ -13,13 +13,13 @@
 // limitations under the License.
 
 #include "mds/common/partition_helper.h"
-#include "common/helper.h"
 
 #include <gflags/gflags_declare.h>
 
 #include <cstdint>
 #include <vector>
 
+#include "common/helper.h"
 #include "common/logging.h"
 #include "mds/common/helper.h"
 #include "mds/mds/mds_helper.h"
@@ -114,8 +114,26 @@ std::map<uint64_t, BucketSetEntry> HashPartitionHelper::AdjustDistribution(Parti
 
   } else {
     // join online mds is not enough,  so need take mds from other online mds
-    const uint32_t new_mds_num = std::min(expect_mds_num - join_onlines.size(), other_onlines.size());
+    // the mds num can not exceed bucket num, otherwise some mds would get no bucket id
+    const uint32_t mds_num = static_cast<uint32_t>(distributions.size());
+    const uint32_t can_add_mds_num = bucket_num > mds_num ? bucket_num - mds_num : 0;
+    const uint32_t new_mds_num =
+        std::min({expect_mds_num - mds_num, static_cast<uint32_t>(other_onlines.size()), can_add_mds_num});
+
+    // all mds are offline and no other online mds can be used
+    if (mds_num == 0 && new_mds_num == 0) return distributions;
+
     const uint32_t mean_num = bucket_num / (distributions.size() + new_mds_num);
+
+    // reclaim the surplus bucket ids from online mds, otherwise the new added mds may get no bucket id
+    for (auto& [mds_id, bucket_set] : distributions) {
+      auto* bucket_ids = bucket_set.mutable_bucket_ids();
+      if (static_cast<uint32_t>(bucket_ids->size()) > mean_num) {
+        pending_bucket_ids.insert(pending_bucket_ids.end(), bucket_ids->begin() + mean_num, bucket_ids->end());
+        bucket_ids->Resize(mean_num, 0);
+      }
+    }
+
     for (uint32_t i = 0; i < new_mds_num; ++i) {
       uint64_t mds_id = RandomSelectMdsId(other_onlines);
 
@@ -125,7 +143,7 @@ std::map<uint64_t, BucketSetEntry> HashPartitionHelper::AdjustDistribution(Parti
         pending_bucket_ids.pop_back();
       }
 
-      distributions.insert({mds_id, bucket_set});
+      if (!bucket_set.bucket_ids().empty()) distributions.insert({mds_id, bucket_set});
     }
 
     // uniform distribute rest pending bucket ids

@@ -22,18 +22,19 @@ namespace client {
 namespace vfs {
 namespace meta {
 
-using WorkerSetUPtr = mds::WorkerSetUPtr;
 using TaskRunnable = mds::TaskRunnable;
 using TaskRunnablePtr = mds::TaskRunnablePtr;
 
+// Tasks hashed to the same value are serialised, which is what keeps a per-ino
+// AsyncOpen/AsyncClose pair ordered. Executor carries the background tasks
+// (compact, warmup, cleanup), where the doorbell's wake cost does not matter.
 class Executor {
  public:
   Executor(const std::string& name, uint32_t worker_num,
-           uint32_t worker_max_pending_num, bool use_pthread = false)
+           uint32_t worker_max_pending_num)
       : name_(name),
         worker_num_(worker_num),
-        worker_max_pending_num_(worker_max_pending_num),
-        use_pthread_(use_pthread) {}
+        worker_max_pending_num_(worker_max_pending_num) {}
   ~Executor() = default;
 
   bool Init();
@@ -46,9 +47,33 @@ class Executor {
   const std::string name_;
   const uint32_t worker_num_;
   const uint32_t worker_max_pending_num_;
-  const bool use_pthread_;
 
-  WorkerSetUPtr worker_set_;
+  mds::WorkerSetUPtr worker_set_;
+};
+
+// The open/close path. Submitting here runs on the FUSE request thread, so the
+// worker set is the relay flavour: submission is a reservation plus an MPSC
+// append, and a single relay thread pays the execution-queue cost off the
+// request path. Both AsyncOpen and AsyncClose hash by ino into this one set,
+// which is what keeps the pair ordered -- splitting them across two executors
+// would let a close overtake the open that registered the session.
+class FastExecutor {
+ public:
+  FastExecutor(const std::string& name, uint32_t worker_num)
+      : name_(name), worker_num_(worker_num) {}
+  ~FastExecutor() = default;
+
+  bool Init();
+  void Stop();
+
+  bool ExecuteLeastQueue(TaskRunnablePtr task);
+  bool ExecuteByHash(uint64_t hash_id, TaskRunnablePtr task, bool retry);
+
+ private:
+  const std::string name_;
+  const uint32_t worker_num_;
+
+  mds::RelayWorkerSetUPtr worker_set_;
 };
 
 }  // namespace meta
