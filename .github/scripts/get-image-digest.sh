@@ -4,7 +4,7 @@
 #
 # Usage:
 #   bash .github/scripts/get-image-digest.sh dingodatabase/dingo-store latest
-#   bash .github/scripts/get-image-digest.sh minio/minio latest
+#   bash .github/scripts/get-image-digest.sh quay.io/minio/minio latest
 #
 # Output: just the digest line, e.g. sha256:6f15f67daf...
 # Then update docker-compose.yml with image: <repo>@<digest>.
