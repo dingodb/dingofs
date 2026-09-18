@@ -1,13 +1,13 @@
 ---
 name: automate-test
-description: 在开发环境对dingofs进行自动化测试
+description: 开发环境测试闭环：单元测试 / e2e / 重型回归 / xfstests。
 context: fork
 disable-model-invocation: true
 ---
 
-# dingofs自动化测试技能
+# dingofs 自动化测试技能
 
-自动化测试闭环：跑测试 → 定位失败 → 修代码 → 重编译重部署 → 再跑。覆盖单元测试与端到端测试。
+自动化测试闭环：跑测试 → 定位失败 → 修代码 → 重编译重部署 → 再跑。仅限开发环境，不用于生产，不自行 git 提交。
 
 ## 前置：服务就绪
 
@@ -31,7 +31,7 @@ cd build && cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_UNIT_TESTS=ON .. && 
 
 判据：进程退出码为 0，且输出中无 `[  FAILED  ]`。
 
-## 端到端测试
+## 端到端与重型工具
 
 `run_all_test.sh` 封装了 e2e / pjdfstest / fsx / mdtest / fio / fsstress。**`--mountpoint` 必填**，不传直接退出。
 
@@ -40,11 +40,49 @@ cd scripts/dev-mds
 bash run_all_test.sh --mountpoint=$MOUNT_POINT --type=e2e --round=1
 ```
 
-- `--type`: `all`(默认) | `e2e` | `pjdtest` | `fsx` | `mdtest` | `fio` | `fsstress`。日常回归用 `e2e`；`all` 会连带 fsx(默认 1 小时)、fsstress(10000 ops)，只在需要时用。
+| 场景 | `--type` |
+|---|---|
+| 日常回归 | `e2e` |
+| 全量重型（e2e / pjdfstest / fsx / mdtest / fsstress） | `all` |
+| 单个工具 | `pjdtest` \| `fsx` \| `mdtest` \| `fio` \| `fsstress` |
+
+- `--round` 默认 1；只有反复跑找偶发才需要调大。
 - e2e 依赖 `test/e2e` 的 uv 环境；pjdfstest 依赖 `/home/dengzihui/work/dingofs-test/pjdfstest/tests` 存在。
 - `--mds-addr` 在脚本里已定义但未使用，不要传。
 
-判据：每个工具打印的 `### [x] result: PASS` 全部为 PASS（无 FAIL），且脚本退出码为 0。日志在 `/tmp/dev-regression-test/<tool>_<时间戳>_<轮次>/`。
+判据：退出码 0，且输出中没有 `result: FAIL` —— **脚本只对 e2e / pjdfstest / fsx 判定**；mdtest / fio / fsstress 不判定，需自己查日志确认无 error。
+
+日志：`/tmp/dev-regression-test/<tool>_<时间戳>_<轮次>/`。
+
+## xfstests（脚本未覆盖）
+
+适配层的安装、产物、local/MDS 两种模式见仓库 `xfstests/README_CN.md`，不在此重复。
+
+```bash
+# 一次性：安装挂载 helper 并生成配置；meta-url 按需改
+DINGOFS_META_URL_TEMPLATE="mds://<SERVER_HOST>:7801/{fsname}" \
+  bash xfstests/setup.sh /home/dengzihui/work/dingofs-test/xfstests-dev
+```
+
+```bash
+cd /home/dengzihui/work/dingofs-test/xfstests-dev
+sudo ./check $(cat tests/generic/supported)
+```
+
+`<SERVER_HOST>` 从 `scripts/dev-mds/mds_deploy_parameters.local` 取。
+
+判据：`./check` 退出码 0（末行 `Passed all ... tests`）。
+失败证据：`results/generic/NNN.out.bad`（测试侧）、`/mnt/dingofs-xfstests/runtime/<fsname>/log/`（client 侧）。
+
+## vdbench（脚本未覆盖）
+
+```bash
+cd /home/dengzihui/work/dingofs-test/vdbench
+# 先改 config/test-01.vd：anchor= 指到 $MOUNT_POINT 下，elapsed 改成回归可接受的秒数
+./vdbench -f config/test-01.vd
+```
+
+判据：退出码 0 且输出无 error。结果在 `output/logfile.html`、`output/flatfile.html`。
 
 ## 测试对象地址
 
@@ -56,9 +94,9 @@ bash run_all_test.sh --mountpoint=$MOUNT_POINT --type=e2e --round=1
 ## 流程
 
 1. **编译**：`cd build && make -j 12` 成功。
-2. **确认服务在跑**：`ps -ef | grep -E 'dingo-mds|dingo-client'` 进程数与 `SERVER_NUM` 一致；不一致先按 `/skill:dev-deploy` 重部署。
-3. **执行测试**：单元测试逐个跑，或 `run_all_test.sh --type=...`。记录到 trace（见下）。
-4. **判定**：全绿 → 跳 6；有失败 → 下一步。
+2. **确认服务在跑**：`pgrep -c -x dingo-mds` 等于 `SERVER_NUM`，且 `mountpoint -q $MOUNT_POINT` 成立；不一致先按 `/skill:dev-deploy` 重部署。（不要用 `ps -ef | grep`：会匹配到自己，且本机可能另有部署的 client。）
+3. **执行测试**：单元测试逐个跑，或 `run_all_test.sh --type=...`；需要时加 xfstests / vdbench。记录到 trace（见下）。
+4. **判定**：按各自判据全绿 → 跳 6；有失败 → 下一步。
 5. **定位并修复**：e2e 失败看对应 `result` 上方的日志目录，单元测试看 stderr，结合 `dist/*/log/` 里的服务日志定位根因，改代码后回到 1。
    **同一个测试连续 3 轮仍不通过就停手**，把已定位的根因、试过的改法、日志路径汇报给用户，不要继续盲改。
 6. **报告**：给出变更清单与测试结论。**不要自行 git 提交**，提交交给用户或 `/skill:git-commit`。
