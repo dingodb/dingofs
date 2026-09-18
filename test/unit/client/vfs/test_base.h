@@ -223,7 +223,7 @@ class VFSTestBase : public ::testing::Test {
     FLAGS_vfs_meta_access_logging = false;
 
     // Default context for tests
-    ctx_ = std::make_shared<Context>("test");
+    ctx_ = std::make_shared<::dingofs::Context>("test");
   }
 
   ~VFSTestBase() override {
