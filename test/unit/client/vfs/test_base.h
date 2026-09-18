@@ -103,11 +103,13 @@ class VFSTestBase : public ::testing::Test {
     write_background_executor_ =
         std::make_unique<ExecutorImpl>("test_write_bg", 1);
     cb_executor_ = std::make_unique<ExecutorImpl>("test_cb", 1);
+    cleanup_executor_ = std::make_unique<ExecutorImpl>("test_cleanup", 1);
     CHECK(read_executor_->Start());
     CHECK(flush_executor_->Start());
     CHECK(read_cleanup_executor_->Start());
     CHECK(write_background_executor_->Start());
     CHECK(cb_executor_->Start());
+    CHECK(cleanup_executor_->Start());
 
     // --- 7. MockVFSHub defaults (ON_CALL + AnyNumber pattern) ---
     ON_CALL(*mock_hub_, GetMetaSystem())
@@ -131,15 +133,29 @@ class VFSTestBase : public ::testing::Test {
     ON_CALL(*mock_hub_, GetCompactor()).WillByDefault(Return(mock_compactor_));
     ON_CALL(*mock_hub_, GetReadExecutor())
         .WillByDefault(Return(read_executor_.get()));
-    ON_CALL(*mock_hub_, GetFlushExecutor())
-        .WillByDefault(Return(flush_executor_.get()));
     ON_CALL(*mock_hub_, GetReadCleanupExecutor())
         .WillByDefault(Return(read_cleanup_executor_.get()));
+    ON_CALL(*mock_hub_, GetFlushExecutor())
+        .WillByDefault(Return(flush_executor_.get()));
     ON_CALL(*mock_hub_, GetWriteBackgroundExecutor())
         .WillByDefault(Return(write_background_executor_.get()));
     ON_CALL(*mock_hub_, GetCBExecutor())
         .WillByDefault(Return(cb_executor_.get()));
+    ON_CALL(*mock_hub_, GetCleanupExecutor())
+        .WillByDefault(Return(cleanup_executor_.get()));
     ON_CALL(*mock_hub_, GetFsInfo()).WillByDefault(Return(MakeTestFsInfo()));
+    // Delegate to GetFsInfo so a test that overrides the geometry with a
+    // custom MakeTestFsInfo(chunk, block) keeps all three accessors
+    // consistent without overriding each one separately.
+    ON_CALL(*mock_hub_, GetChunkSize()).WillByDefault([this]() {
+      return mock_hub_->GetFsInfo().chunk_size;
+    });
+    ON_CALL(*mock_hub_, GetBlockSize()).WillByDefault([this]() {
+      return mock_hub_->GetFsInfo().block_size;
+    });
+    ON_CALL(*mock_hub_, GetFsId()).WillByDefault([this]() {
+      return mock_hub_->GetFsInfo().id;
+    });
     // Null mapper => uid/gid translation passthrough. Tests that exercise the
     // enabled-mapper path override this with their own real mapper.
     ON_CALL(*mock_hub_, GetUidGidMapper()).WillByDefault(Return(nullptr));
@@ -152,15 +168,16 @@ class VFSTestBase : public ::testing::Test {
     EXPECT_CALL(*mock_hub_, GetReadMemPool()).Times(AnyNumber());
     EXPECT_CALL(*mock_hub_, GetCompactMemPool()).Times(AnyNumber());
     EXPECT_CALL(*mock_hub_, GetWriteMemPool()).Times(AnyNumber());
-    EXPECT_CALL(*mock_hub_, GetFileSuffixWatcher()).Times(AnyNumber());
-    EXPECT_CALL(*mock_hub_, GetCompactor()).Times(AnyNumber());
-    EXPECT_CALL(*mock_hub_, GetReadExecutor()).Times(AnyNumber());
+    EXPECT_CALL(*mock_hub_, GetCBExecutor()).Times(AnyNumber());
+    EXPECT_CALL(*mock_hub_, GetCleanupExecutor()).Times(AnyNumber());
     EXPECT_CALL(*mock_hub_, GetFlushExecutor()).Times(AnyNumber());
     EXPECT_CALL(*mock_hub_, GetReadCleanupExecutor()).Times(AnyNumber());
     EXPECT_CALL(*mock_hub_, GetWriteBackgroundExecutor()).Times(AnyNumber());
-    EXPECT_CALL(*mock_hub_, GetCBExecutor()).Times(AnyNumber());
     EXPECT_CALL(*mock_hub_, GetFsInfo()).Times(AnyNumber());
     EXPECT_CALL(*mock_hub_, GetUidGidMapper()).Times(AnyNumber());
+    EXPECT_CALL(*mock_hub_, GetChunkSize()).Times(AnyNumber());
+    EXPECT_CALL(*mock_hub_, GetBlockSize()).Times(AnyNumber());
+    EXPECT_CALL(*mock_hub_, GetFsId()).Times(AnyNumber());
 
     // --- 8. MockBlockStore: synchronous success by default ---
     // Callbacks invoked inline (no async) to eliminate timing non-determinism.
@@ -234,6 +251,7 @@ class VFSTestBase : public ::testing::Test {
     read_executor_->Stop();
     read_cleanup_executor_->Stop();
     cb_executor_->Stop();
+    cleanup_executor_->Stop();
   }
 
  protected:
@@ -261,6 +279,7 @@ class VFSTestBase : public ::testing::Test {
   std::unique_ptr<ExecutorImpl> read_cleanup_executor_;
   std::unique_ptr<ExecutorImpl> write_background_executor_;
   std::unique_ptr<ExecutorImpl> cb_executor_;
+  std::unique_ptr<ExecutorImpl> cleanup_executor_;
 
   ContextSPtr ctx_;
 };

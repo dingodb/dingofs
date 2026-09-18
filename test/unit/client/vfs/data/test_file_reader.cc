@@ -19,6 +19,7 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -28,11 +29,13 @@
 #include <memory>
 #include <mutex>
 #include <random>
+#include <string>
 #include <thread>
 
 #include "client/vfs/data/reader/file_reader.h"
 #include "client/vfs/data_buffer.h"
 #include "common/options/client.h"
+#include "common/sync_point.h"
 #include "common/trace/trace_manager.h"
 #include "test/unit/client/vfs/test_base.h"
 #include "utils/scoped_cleanup.h"
@@ -75,11 +78,10 @@ class FileReaderTest : public test::VFSTestBase {
     EXPECT_CALL(*mock_meta_system_, GetAttr(_, kIno, _)).Times(AnyNumber());
   }
 
-  // Creates, acquires ref, and opens a FileReader.
+  // Creates and acquires a ref on a FileReader.
   FileReader* MakeOpenReader(uint64_t ino = kIno, uint64_t fh = kFh) {
     auto* r = new FileReader(mock_hub_, fh, ino);
     r->AcquireRef();
-    CHECK(r->Open().ok());
     return r;
   }
 
@@ -125,20 +127,6 @@ class FileReaderTestPeer {
     return false;
   }
 };
-
-TEST_F(FileReaderTest, StopReleasesPendingPeriodicTaskRef) {
-  gflags::FlagSaver flag_saver;
-  FLAGS_vfs_periodic_flush_interval_ms = 60 * 60 * 1000;
-
-  auto* reader = MakeOpenReader();
-  ASSERT_EQ(FileReaderTestPeer::RefCount(reader), 2);
-
-  reader->Close();
-  ASSERT_TRUE(read_cleanup_executor_->Stop());
-  EXPECT_EQ(FileReaderTestPeer::RefCount(reader), 1);
-
-  reader->ReleaseRef();
-}
 
 // 1. Read() of a zero-length range returns 0 bytes.
 TEST_F(FileReaderTest, Read_ZeroSize_ReturnsZero) {
@@ -598,6 +586,110 @@ struct RangeGate {
 
 }  // namespace
 
+TEST_F(FileReaderTest, RegistryInvalidatesAllFhsWithoutCrossingInodes) {
+  InstallFullSlice(mock_meta_system_);
+  constexpr Ino kOtherIno = kIno + 1;
+  ON_CALL(*mock_meta_system_, GetAttr(_, kOtherIno, _))
+      .WillByDefault(DoAll(SetArgPointee<2>(MakeAttr(kOtherIno, file_length_)),
+                           Return(Status::OK())));
+  EXPECT_CALL(*mock_meta_system_, GetAttr(_, kOtherIno, _)).Times(AnyNumber());
+  auto payload = std::make_shared<std::atomic<char>>('a');
+  ON_CALL(*mock_block_store_, RangeAsync)
+      .WillByDefault([payload](ContextSPtr, RangeReq req, StatusCallback cb) {
+        std::memset(req.dst.data(), payload->load(), req.length);
+        cb(Status::OK());
+      });
+
+  std::array<FileReader*, 3> readers{MakeOpenReader(kIno, kFh),
+                                     MakeOpenReader(kIno, kFh + 1),
+                                     MakeOpenReader(kOtherIno, kFh + 2)};
+  for (auto* reader : readers) reader_registry_->Register(reader);
+  auto cleanup = MakeScopedCleanup([&] {
+    for (auto* reader : readers) {
+      reader_registry_->Unregister(reader);
+      CloseAndRelease(reader);
+    }
+  });
+  auto read_bytes = [&](FileReader* reader) {
+    DataBuffer buffer;
+    uint64_t size = 0;
+    EXPECT_TRUE(reader->Read(ctx_, &buffer, 4096, 0, &size).ok());
+    EXPECT_EQ(size, 4096u);
+    std::string bytes;
+    for (const auto& iov : buffer.GatherIOVecs()) {
+      bytes.append(static_cast<const char*>(iov.iov_base), iov.iov_len);
+    }
+    return bytes;
+  };
+  EXPECT_EQ(reader_registry_->Size(), 3u);
+  for (auto* reader : readers)
+    EXPECT_EQ(read_bytes(reader), std::string(4096, 'a'));
+  payload->store('b');
+  reader_registry_->InvalidateByIno(kIno, 0, 4096);
+  EXPECT_EQ(read_bytes(readers[0]), std::string(4096, 'b'));
+  EXPECT_EQ(read_bytes(readers[1]), std::string(4096, 'b'));
+  EXPECT_EQ(read_bytes(readers[2]), std::string(4096, 'a'));
+}
+
+TEST_F(FileReaderTest, RegistrySnapshotPinsReaderAcrossUnregisterAndClose) {
+#ifdef NDEBUG
+  GTEST_SKIP() << "Deterministic snapshot staging requires TEST_SYNC_POINT.";
+#else
+  auto* reader = MakeOpenReader();
+  // No per-object periodic task holds a reference anymore: only the owner
+  // and a registry snapshot can keep this reader alive.
+  reader_registry_->Register(reader);
+  auto gate = std::make_shared<RangeGate>();
+  std::atomic<bool> destroyed{false};
+  std::promise<void> retired;
+  auto retired_future = retired.get_future();
+  std::thread invalidator;
+  std::thread retirer;
+  bool retirement_started = false;
+  auto cleanup = MakeScopedCleanup([&] {
+    gate->Release();
+    if (retirer.joinable()) retirer.join();
+    if (invalidator.joinable()) invalidator.join();
+    if (!retirement_started) {
+      reader_registry_->Unregister(reader);
+      CloseAndRelease(reader);
+    }
+    SyncPoint::GetInstance()->DisableProcessing();
+    SyncPoint::GetInstance()->ClearAllCallBacks();
+  });
+  SyncPoint::GetInstance()->SetCallBack(
+      "ReaderRegistry::InvalidateByIno:after_snapshot", [&](void* arg) {
+        if (arg == reader_registry_.get()) gate->EnterAndWait();
+      });
+  SyncPoint::GetInstance()->SetCallBack("FileReader::~FileReader",
+                                        [&](void* arg) {
+                                          if (arg == reader)
+                                            destroyed.store(true);
+                                        });
+  SyncPoint::GetInstance()->EnableProcessing();
+  invalidator =
+      std::thread([&] { reader_registry_->InvalidateByIno(kIno, 0, 4096); });
+  ASSERT_TRUE(gate->WaitEntered());
+  retirer = std::thread([&] {
+    reader_registry_->Unregister(reader);
+    CloseAndRelease(reader);
+    retired.set_value();
+  });
+  retirement_started = true;
+  const bool retired_without_waiting =
+      retired_future.wait_for(std::chrono::seconds(5)) ==
+      std::future_status::ready;
+  EXPECT_TRUE(retired_without_waiting)
+      << "Unregister must not wait for an already-pinned invalidation";
+  if (retired_without_waiting) EXPECT_FALSE(destroyed.load());
+  gate->Release();
+  retirer.join();
+  invalidator.join();
+  EXPECT_TRUE(destroyed.load());
+  EXPECT_EQ(reader_registry_->Size(), 0u);
+#endif
+}
+
 // 15. Regression for the request birth-window race: a request must not become
 // runnable before its creator registered a reference. With an inline-error
 // BlockStore the completion path fires as early as possible; pre-fix this
@@ -788,6 +880,8 @@ TEST_F(FileReaderTest, Invalidate_ReadyRequestWithReader_Rereads) {
   InstallFullSlice(mock_meta_system_);
   ON_CALL(*mock_hub_, GetFsInfo())
       .WillByDefault(Return(test::MakeTestFsInfo(4 * 1024 * 1024, 4096)));
+  ON_CALL(*mock_hub_, GetChunkSize()).WillByDefault(Return(4 * 1024 * 1024));
+  ON_CALL(*mock_hub_, GetBlockSize()).WillByDefault(Return(4096));
 
   auto first_gate = std::make_shared<RangeGate>();
   auto second_block_calls = std::make_shared<std::atomic<int>>(0);
@@ -855,6 +949,8 @@ TEST_F(FileReaderTest, ConcurrentReadInvalidateClose_Chaos) {
   InstallFullSlice(mock_meta_system_);
   ON_CALL(*mock_hub_, GetFsInfo())
       .WillByDefault(Return(test::MakeTestFsInfo(4 * 1024 * 1024, 64 * 1024)));
+  ON_CALL(*mock_hub_, GetChunkSize()).WillByDefault(Return(4 * 1024 * 1024));
+  ON_CALL(*mock_hub_, GetBlockSize()).WillByDefault(Return(64 * 1024));
   ON_CALL(*mock_block_store_, RangeAsync)
       .WillByDefault([](ContextSPtr, RangeReq req, StatusCallback cb) {
         if (req.dst.base != nullptr && req.length > 0) {
@@ -950,6 +1046,8 @@ TEST_F(FileReaderTest, ManySmallReads_EvictionBounded) {
   // always cover offset 0, so nothing could ever be evicted.
   ON_CALL(*mock_hub_, GetFsInfo())
       .WillByDefault(Return(test::MakeTestFsInfo(4 * 1024 * 1024, 64 * 1024)));
+  ON_CALL(*mock_hub_, GetChunkSize()).WillByDefault(Return(4 * 1024 * 1024));
+  ON_CALL(*mock_hub_, GetBlockSize()).WillByDefault(Return(64 * 1024));
 
   // Count fetches of the file-offset-0 request only: slice 1 block 0 at
   // in-block offset 0 (strided reads below alias in-block offset 0 in OTHER

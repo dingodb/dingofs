@@ -39,9 +39,8 @@ namespace {
 bvar::Adder<uint64_t> vfs_block_rreq_inflighting("vfs_block_rreq_inflighting");
 
 Chunk MakeChunk(VFSHub* hub, const ChunkReq& req) {
-  const FsInfo fs_info = hub->GetFsInfo();
-  return Chunk(fs_info.id, req.ino, req.index, fs_info.chunk_size,
-               fs_info.block_size);
+  return Chunk(hub->GetFsId(), req.ino, req.index, hub->GetChunkSize(),
+               hub->GetBlockSize());
 }
 
 }  // namespace

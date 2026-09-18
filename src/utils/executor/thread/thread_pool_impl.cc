@@ -14,94 +14,49 @@
 
 #include "utils/executor/thread/thread_pool_impl.h"
 
-#include <cassert>
+#include <folly/executors/CPUThreadPoolExecutor.h>
 
-#include "glog/logging.h"
+#include <utility>
 
 namespace dingofs {
 
-void ThreadPoolImpl::ThreadProc(size_t thread_id) {
-  VLOG(12) << "Thread " << thread_id << " started.";
+ThreadPoolImpl::ThreadPoolImpl(const std::string& name, int num_threads)
+    : name_(name), thread_num_(num_threads) {}
 
-  pthread_setname_np(pthread_self(), name_.substr(0, 15).c_str());
-
-  while (true) {
-    std::function<void()> task;
-
-    {
-      std::unique_lock<std::mutex> lock(mutex_);
-      condition_.wait(lock, [this] { return !tasks_.empty() || !running_; });
-
-      if (!running_ && tasks_.empty()) {
-        break;
-      }
-
-      if (!tasks_.empty()) {
-        task = std::move(tasks_.front());
-        tasks_.pop();
-      }
-    }  // end lock scope
-
-    CHECK(task);
-    (task)();
-  }  // end of while loop
-
-  VLOG(12) << "Thread " << thread_id << " exit.";
-}
+ThreadPoolImpl::~ThreadPoolImpl() { Stop(); }
 
 void ThreadPoolImpl::Start() {
-  std::unique_lock<std::mutex> lg(mutex_);
-  if (running_) {
+  if (pool_) {
     return;
   }
 
-  running_ = true;
-
-  threads_.resize(thread_num_);
-  for (size_t i = 0; i < thread_num_; i++) {
-    threads_[i] = std::thread([this, i] { ThreadProc(i); });
-  }
+  pool_ = std::make_unique<folly::CPUThreadPoolExecutor>(
+      std::make_pair(thread_num_, thread_num_),
+      folly::CPUThreadPoolExecutor::makeLifoSemQueue(),
+      std::make_shared<folly::NamedThreadFactory>(name_));
 }
 
 void ThreadPoolImpl::Stop() {
-  {
-    std::unique_lock<std::mutex> lock(mutex_);
-    if (!running_) {
-      return;
-    }
-
-    running_ = false;
-    condition_.notify_all();
+  if (!pool_) {
+    return;
   }
 
-  for (auto& thread : threads_) {
-    if (thread.joinable()) {
-      thread.join();
-    }
-  }
+  pool_->join();
+  pool_.reset();
 }
 
-int ThreadPoolImpl::GetBackgroundThreads() {
-  std::lock_guard<std::mutex> lock(mutex_);
-  return thread_num_;
-}
+int ThreadPoolImpl::GetBackgroundThreads() { return thread_num_; }
 
 int ThreadPoolImpl::GetTaskNum() const {
-  std::lock_guard<std::mutex> lock(mutex_);
-  return tasks_.size();
+  return pool_ ? static_cast<int>(pool_->getTaskQueueSize()) : 0;
 }
 
 void ThreadPoolImpl::Execute(const std::function<void()>& task) {
-  auto cp(task);
-  std::lock_guard<std::mutex> lock(mutex_);
-  tasks_.push(std::move(cp));
-  condition_.notify_one();
+  pool_->add([task]() { task(); });
 }
 
 void ThreadPoolImpl::Execute(std::function<void()>&& task) {
-  std::lock_guard<std::mutex> lock(mutex_);
-  tasks_.push(std::move(task));
-  condition_.notify_one();
+  pool_->add([task = std::move(task)]() mutable noexcept { task(); });
 }
 
 }  // namespace dingofs

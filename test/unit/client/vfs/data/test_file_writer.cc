@@ -14,20 +14,19 @@
  * limitations under the License.
  */
 
-#include <gflags/gflags.h>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include <chrono>
 #include <cstdint>
 #include <future>
+#include <memory>
 #include <mutex>
 #include <thread>
 #include <unordered_set>
 #include <vector>
 
 #include "client/vfs/data/writer/file_writer.h"
-#include "common/options/client.h"
 #include "common/trace/trace_manager.h"
 #include "common/writemempool/write_mem_pool.h"
 #include "test/unit/client/vfs/test_base.h"
@@ -60,14 +59,12 @@ class FileWriterTest : public VFSTestBase {
 
   std::unique_ptr<TraceManager> trace_manager_;
 
-  // Creates, acquires a ref on, and opens a FileWriter.
-  // The caller owns the writer; ReleaseRef() destroys it.
-  // (`fh` arg kept for legacy test call sites; ignored under the per-inode
-  // shared writer model.)
+  // Creates and acquires a ref on a FileWriter. The caller owns the writer;
+  // ReleaseRef() destroys it. (`fh` arg kept for legacy test call sites;
+  // ignored under the per-inode shared writer model.)
   FileWriter* MakeOpenWriter(uint64_t ino = 200, uint64_t /*fh*/ = 2) {
     auto* w = new FileWriter(mock_hub_, ino);
     w->AcquireRef();
-    CHECK(w->Open().ok());
     return w;
   }
 
@@ -77,20 +74,6 @@ class FileWriterTest : public VFSTestBase {
     w->ReleaseRef();
   }
 };
-
-TEST_F(FileWriterTest, StopReleasesPendingPeriodicTaskRef) {
-  gflags::FlagSaver flag_saver;
-  FLAGS_vfs_periodic_flush_interval_ms = 60 * 60 * 1000;
-
-  auto* writer = MakeOpenWriter();
-  ASSERT_EQ(FileWriterTestPeer::RefCount(writer), 2);
-
-  writer->Close();
-  ASSERT_TRUE(write_background_executor_->Stop());
-  EXPECT_EQ(FileWriterTestPeer::RefCount(writer), 1);
-
-  writer->ReleaseRef();
-}
 
 // 1. Write() for a simple in-chunk write succeeds and returns the correct
 //    written size.
@@ -417,20 +400,12 @@ TEST_F(FileWriterTest, Flush_AfterClose_ReturnsBadFd) {
   w->ReleaseRef();
 }
 
-TEST_F(FileWriterTest, PeriodicFlushErrorBecomesStickyAndBlocksWrites) {
-  gflags::FlagSaver flag_saver;
-  FLAGS_vfs_periodic_flush_interval_ms = 1;
-
-  std::mutex mutex;
-  std::condition_variable cv;
-  bool write_slice_called = false;
+// Background dirty flush reports failures and preserves sticky-error semantics.
+TEST_F(FileWriterTest, FlushDirtyAsyncReportsErrorAndSticks) {
+  int write_slice_calls = 0;
   ON_CALL(*mock_meta_system_, WriteSlice)
       .WillByDefault([&](auto, auto, auto, auto, auto) {
-        {
-          std::lock_guard<std::mutex> lock(mutex);
-          write_slice_called = true;
-        }
-        cv.notify_all();
+        ++write_slice_calls;
         return Status::Internal("periodic flush failed");
       });
 
@@ -439,18 +414,24 @@ TEST_F(FileWriterTest, PeriodicFlushErrorBecomesStickyAndBlocksWrites) {
   uint64_t wsize = 0;
   ASSERT_TRUE(w->Write(ctx_, buf, sizeof(buf), 0, &wsize).ok());
 
+  std::mutex mutex;
+  std::condition_variable cv;
+  Status reported;
+  bool done = false;
+  w->FlushDirtyAsync([&](Status s) {
+    std::lock_guard<std::mutex> lock(mutex);
+    reported = s;
+    done = true;
+    cv.notify_all();
+  });
   {
     std::unique_lock<std::mutex> lock(mutex);
-    ASSERT_TRUE(cv.wait_for(lock, std::chrono::seconds(5),
-                            [&] { return write_slice_called; }));
+    ASSERT_TRUE(
+        cv.wait_for(lock, std::chrono::seconds(5), [&] { return done; }));
   }
-
-  const auto deadline =
-      std::chrono::steady_clock::now() + std::chrono::seconds(5);
-  while (w->GetStatus().ok() && std::chrono::steady_clock::now() < deadline) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(1));
-  }
-  ASSERT_FALSE(w->GetStatus().ok());
+  EXPECT_FALSE(reported.ok());
+  EXPECT_EQ(write_slice_calls, 1);
+  ASSERT_FALSE(w->GetStatus().ok()) << "failure must be sticky";
 
   wsize = 12345;
   Status s = w->Write(ctx_, buf, sizeof(buf), 4096, &wsize);
@@ -459,6 +440,71 @@ TEST_F(FileWriterTest, PeriodicFlushErrorBecomesStickyAndBlocksWrites) {
 
   w->Close();
   w->ReleaseRef();
+}
+
+// Empty and closed writers complete inline, exactly once.
+TEST_F(FileWriterTest, FlushDirtyAsyncExactlyOnce_EmptyAndClosed) {
+  auto* empty_writer = MakeOpenWriter(211);
+  int calls = 0;
+  empty_writer->FlushDirtyAsync([&](Status s) {
+    ++calls;
+    EXPECT_TRUE(s.ok()) << "empty writer has nothing to flush";
+  });
+  EXPECT_EQ(calls, 1) << "empty writer completes inline";
+
+  auto* closed_writer = MakeOpenWriter(212);
+  closed_writer->Close();
+  int closed_calls = 0;
+  closed_writer->FlushDirtyAsync([&](Status s) {
+    ++closed_calls;
+    EXPECT_TRUE(s.IsBadFd()) << s.ToString();
+  });
+  EXPECT_EQ(closed_calls, 1) << "closed writer reports BadFd exactly once";
+
+  empty_writer->ReleaseRef();
+  closed_writer->ReleaseRef();
+}
+
+TEST_F(FileWriterTest, FlushDirtyAsyncSkipsCleanAndFlushesNewWrites) {
+  int write_slice_calls = 0;
+  ON_CALL(*mock_meta_system_, WriteSlice)
+      .WillByDefault([&](auto, auto, auto, auto, auto) {
+        ++write_slice_calls;
+        return Status::OK();
+      });
+
+  auto* w = MakeOpenWriter();
+  const auto caller = std::this_thread::get_id();
+  const char buf[] = "dirty again";
+  int expected_commits = 0;
+  // Exercise dirty -> clean -> dirty on the same writer with retained chunks.
+  for (uint64_t offset : {0u, 4096u}) {
+    uint64_t wsize = 0;
+    ASSERT_TRUE(w->Write(ctx_, buf, sizeof(buf), offset, &wsize).ok());
+    ASSERT_EQ(wsize, sizeof(buf));
+
+    auto flushed = std::make_shared<std::promise<Status>>();
+    auto flush_result = flushed->get_future();
+    w->FlushDirtyAsync(
+        [flushed](Status status) { flushed->set_value(std::move(status)); });
+    ASSERT_EQ(flush_result.wait_for(std::chrono::seconds(5)),
+              std::future_status::ready);
+    EXPECT_TRUE(flush_result.get().ok());
+    EXPECT_EQ(write_slice_calls, ++expected_commits);
+
+    auto clean = std::make_shared<std::promise<Status>>();
+    auto clean_result = clean->get_future();
+    w->FlushDirtyAsync([clean, caller](Status status) {
+      EXPECT_EQ(std::this_thread::get_id(), caller)
+          << "a clean writer must complete inline without a flush task";
+      clean->set_value(std::move(status));
+    });
+    ASSERT_EQ(clean_result.wait_for(std::chrono::seconds(5)),
+              std::future_status::ready);
+    EXPECT_TRUE(clean_result.get().ok());
+    EXPECT_EQ(write_slice_calls, expected_commits);
+  }
+  FlushCloseAndRelease(w);
 }
 
 // A successful explicit Flush owns all writeback. Close must not submit a

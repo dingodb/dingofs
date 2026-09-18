@@ -45,6 +45,7 @@
 #include "client/vfs/hub/vfs_hub.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/status.h"
+#include "common/sync_point.h"
 #include "common/trace/context.h"
 #include "read_request.h"
 #include "utils/scoped_cleanup.h"
@@ -88,8 +89,8 @@ FileReader::FileReader(VFSHub* hub, uint64_t fh, uint64_t ino)
       fh_(fh),
       ino_(ino),
       uuid_(fmt::format("file_reader-{}-{}", ino, fh)),
-      chunk_size_(hub->GetFsInfo().chunk_size),
-      block_size_(hub->GetFsInfo().block_size),
+      chunk_size_(hub->GetChunkSize()),
+      block_size_(hub->GetBlockSize()),
       policy_(new ReadaheadPoclicy(fh)) {}
 
 // when file reader destructor called,
@@ -97,6 +98,7 @@ FileReader::FileReader(VFSHub* hub, uint64_t fh, uint64_t ino)
 FileReader::~FileReader() {
   CHECK(closing_.load(std::memory_order_acquire))
       << uuid_ << " FileReader destructor called without Close";
+  TEST_SYNC_POINT_CALLBACK("FileReader::~FileReader", this);
 
   {
     std::vector<ReadRequestSptr> to_delete;
@@ -123,12 +125,6 @@ FileReader::~FileReader() {
     LOG(INFO) << fmt::format("{} FileReader done, readahead_stats: {}", uuid_,
                              policy_->readahead_stats.ToString());
   }
-}
-
-Status FileReader::Open() {
-  VLOG(9) << fmt::format("{} FileReader opened", uuid_);
-  SchedulePeriodicShrink();
-  return Status::OK();
 }
 
 void FileReader::Close() {
@@ -234,29 +230,13 @@ void FileReader::ShrinkMem() {
   }
 }
 
-void FileReader::SchedulePeriodicShrink() {
+void FileReader::ShrinkIfOpen() {
   if (closing_.load(std::memory_order_acquire)) {
-    VLOG(8) << fmt::format("{} SchedulePeriodicShrink skipped because closed",
-                           uuid_);
-    return;
-  }
-
-  boost::intrusive_ptr<FileReader> self(this);
-  vfs_hub_->GetReadCleanupExecutor()->Schedule(
-      [self = std::move(self)] { self->RunPeriodicShrink(); },
-      FLAGS_vfs_periodic_flush_interval_ms);
-}
-
-void FileReader::RunPeriodicShrink() {
-  if (closing_.load(std::memory_order_acquire)) {
-    VLOG(8) << fmt::format("{} RunPeriodicShrink skipped because closed",
-                           uuid_);
+    VLOG(8) << fmt::format("{} ShrinkIfOpen skipped because closed", uuid_);
     return;
   }
 
   ShrinkMem();
-
-  SchedulePeriodicShrink();
 }
 
 void FileReader::Invalidate(int64_t offset, int64_t size) {
@@ -893,8 +873,9 @@ Status FileReader::Read(ContextSPtr ctx, DataBuffer* data_buffer, int64_t size,
 
   // Foreground backpressure: above the backpressure watermark, wait a bounded
   // window for in-flight reads to release their slots (and for the periodic
-  // RunPeriodicShrink to reclaim idle readahead) before proceeding. Reclaim is
-  // intentionally NOT driven from the read path -- it runs on its own timer.
+  // ShrinkIfOpen maintenance to reclaim idle readahead) before proceeding.
+  // Reclaim is intentionally NOT driven from the read path -- the hub-level
+  // registered ReaderRegistryTask owns it.
   // The per-request pool Allocate still hard-fails -> ENOMEM if truly exhausted
   // (pool-only, no malloc). Step-3 follow-up may turn this into a bounded
   // cv-wait.

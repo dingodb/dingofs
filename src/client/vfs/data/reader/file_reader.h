@@ -44,12 +44,17 @@ class FileReader {
 
   ~FileReader();
 
-  Status Open();
-
   void Close();
 
   Status Read(ContextSPtr ctx, DataBuffer* data_buffer, int64_t size,
               int64_t offset, uint64_t* out_rsize);
+
+  // Single-shot maintenance entry for the hub-level periodic scanner: runs
+  // the idle readahead reclaim (ShrinkMem) once if the reader is still open.
+  // Unlike the removed per-object periodic task, it never re-arms itself.
+  // Safe to call concurrently with Close/Read; snapshot holders keep the
+  // object alive, and the closing flag makes this a no-op after Close.
+  void ShrinkIfOpen();
 
   // NOTE: if we manage filehandle by ino,
   // then write/commit_slice/fallocate/truncate/copyfile_range should call this
@@ -64,9 +69,12 @@ class FileReader {
 
  private:
   friend class FileReaderTestPeer;
+  friend class ReaderRegistryTaskTestPeer;
+
   friend void intrusive_ptr_add_ref(FileReader* reader) {
     reader->AcquireRef();
   }
+
   friend void intrusive_ptr_release(FileReader* reader) {
     reader->ReleaseRef();
   }
@@ -77,8 +85,6 @@ class FileReader {
                      const FileRange& frange);
 
   void ShrinkMem();
-  void SchedulePeriodicShrink();
-  void RunPeriodicShrink();
 
   int64_t TotalMem() const;
   int64_t UsedMem() const;

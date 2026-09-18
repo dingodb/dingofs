@@ -20,12 +20,17 @@
 
 #include <atomic>
 #include <chrono>
+#include <future>
+#include <mutex>
 #include <thread>
+#include <vector>
 
 #include "client/vfs/data/writer/file_writer.h"
 #include "client/vfs/data/writer_table.h"
 #include "client/vfs/handle/handle_manager.h"
+#include "common/sync_point.h"
 #include "test/unit/client/vfs/test_base.h"
+#include "utils/scoped_cleanup.h"
 
 namespace dingofs {
 namespace client {
@@ -357,6 +362,95 @@ TEST_F(HandleManagerTest, ReleaseHandler_AfterStop_Idempotent) {
   EXPECT_EQ(writer_table_->Size(), 0u);
   EXPECT_FALSE(handle_manager_->FindHandlerForRelease(54))
       << "identity removed after late release";
+}
+
+TEST_F(HandleManagerTest, ConcurrentGuardsSurviveTableRemoval) {
+  constexpr uint64_t kFh = 600;
+  constexpr Ino kIno = 1600;
+  constexpr int kThreads = 8;
+  ASSERT_NE(handle_manager_->NewHandle(kFh, kIno, O_RDONLY), nullptr);
+
+  std::promise<void> ready;
+  auto ready_future = ready.get_future();
+  std::promise<void> release;
+  auto released = release.get_future().share();
+  std::atomic<int> acquired{0};
+  std::atomic<int> errors{0};
+  std::vector<std::thread> threads;
+  bool released_threads = false;
+  auto cleanup = MakeScopedCleanup([&] {
+    if (!released_threads) release.set_value();
+    for (auto& thread : threads) {
+      if (thread.joinable()) thread.join();
+    }
+    handle_manager_->ReleaseHandler(kFh);
+  });
+  for (int i = 0; i < kThreads; ++i) {
+    threads.emplace_back([&] {
+      auto guard = handle_manager_->FindHandlerGuard(kFh);
+      if (acquired.fetch_add(1) + 1 == kThreads) ready.set_value();
+      released.wait();
+      if (!guard || guard->fh != kFh || guard->ino != kIno ||
+          guard->resources.reader == nullptr) {
+        ++errors;
+      }
+    });
+  }
+  ASSERT_EQ(ready_future.wait_for(std::chrono::seconds(5)),
+            std::future_status::ready);
+  handle_manager_->ReleaseHandler(kFh);
+  EXPECT_FALSE(handle_manager_->FindHandlerGuard(kFh));
+  EXPECT_EQ(reader_registry_->Size(), 1u);
+  release.set_value();
+  released_threads = true;
+  for (auto& thread : threads) thread.join();
+  EXPECT_EQ(errors.load(), 0);
+  EXPECT_EQ(reader_registry_->Size(), 0u);
+}
+
+TEST_F(HandleManagerTest, StopWakesWhenTableReferenceIsReleased) {
+#ifdef NDEBUG
+  GTEST_SKIP() << "Deterministic Stop staging requires TEST_SYNC_POINT.";
+#else
+  constexpr uint64_t kFh = 601;
+  ASSERT_NE(handle_manager_->NewHandle(kFh, 1601, O_WRONLY), nullptr);
+  auto guard = handle_manager_->FindHandlerGuard(kFh);
+  ASSERT_TRUE(guard);
+  auto* waiting_handle = guard.get();
+  std::promise<void> waiting;
+  auto waiting_future = waiting.get_future();
+  std::once_flag waiting_once;
+  std::promise<Status> stopped;
+  auto stopped_future = stopped.get_future();
+  std::thread stopper;
+  auto cleanup = MakeScopedCleanup([&] {
+    guard = HandleGuard{};
+    if (stopper.joinable()) stopper.join();
+    SyncPoint::GetInstance()->DisableProcessing();
+    SyncPoint::GetInstance()->ClearAllCallBacks();
+  });
+  SyncPoint::GetInstance()->SetCallBack(
+      "HandleManagerShard::Drain:waiting_for_guard", [&](void* arg) {
+        if (arg == waiting_handle) {
+          std::call_once(waiting_once, [&] { waiting.set_value(); });
+        }
+      });
+  SyncPoint::GetInstance()->EnableProcessing();
+  stopper = std::thread([&] { stopped.set_value(handle_manager_->Stop()); });
+  ASSERT_EQ(waiting_future.wait_for(std::chrono::seconds(5)),
+            std::future_status::ready);
+
+  // Erasing the entry changes Stop's predicate even while this guard stays
+  // alive. The map-reference release, not only guard destruction, must notify.
+  handle_manager_->ReleaseHandler(kFh);
+  const bool finished = stopped_future.wait_for(std::chrono::seconds(5)) ==
+                        std::future_status::ready;
+  EXPECT_TRUE(finished);
+  if (finished) EXPECT_TRUE(stopped_future.get().ok());
+  guard = HandleGuard{};
+  stopper.join();
+  EXPECT_EQ(writer_table_->Size(), 0u);
+#endif
 }
 
 // Core of the N1 fix: Stop() must wait for an outstanding HandleGuard (an

@@ -115,6 +115,7 @@ DECLARE_bool(vfs_meta_warmup_small_file_enable);
 DECLARE_int32(vfs_read_cleanup_executor_thread);
 DECLARE_int32(vfs_write_background_executor_thread);
 DECLARE_int32(vfs_periodic_flush_interval_ms);
+DECLARE_int32(vfs_cleanup_executor_thread);
 DECLARE_int32(vfs_periodic_trim_mem_ms);
 
 // vfs meta

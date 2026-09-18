@@ -27,11 +27,13 @@
 #include "client/vfs/blockstore/fake_block_store.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/compaction/compactor_impl.h"
+#include "client/vfs/components/maintenance_manager.h"
 #include "client/vfs/components/prefetch_manager.h"
-#include "client/vfs/components/warmup_manager.h"
 #include "client/vfs/data/reader/reader_registry.h"
+#include "client/vfs/data/reader/reader_registry_task.h"
 #include "client/vfs/data/write_pressure_controller.h"
 #include "client/vfs/data/writer_table.h"
+#include "client/vfs/data/writer_table_task.h"
 #include "client/vfs/metasystem/local/metasystem.h"
 #include "client/vfs/metasystem/mds/metasystem.h"
 #include "client/vfs/metasystem/memory/metasystem.h"
@@ -58,7 +60,7 @@ static const std::string kReadCleanupExecutorName = "vfs_read_cleanup";
 static const std::string kWriteBackgroundExecutorName = "vfs_write_bg";
 static const std::string kCBExecutorName = "vfs_callback";
 static const std::string kWritePressureExecutorName = "vfs_write_pressure";
-
+static const std::string kCleanupExecutorName = "vfs_cleanup";
 static MetaSystemUPtr BuildMetaSystem(const VFSConfig& vfs_conf,
                                       const ClientId& client_id,
                                       TraceManager& trace_manager,
@@ -105,6 +107,10 @@ VFSHubImpl::~VFSHubImpl() {
   // override it.
   Stop(/*skip_unmount=*/false);
 
+  if (maintenance_manager_ != nullptr) {
+    maintenance_manager_.reset();
+  }
+
   if (handle_manager_ != nullptr) {
     handle_manager_.reset();
   }
@@ -135,6 +141,10 @@ VFSHubImpl::~VFSHubImpl() {
 
   if (write_pressure_executor_ != nullptr) {
     write_pressure_executor_.reset();
+  }
+
+  if (cleanup_executor_ != nullptr) {
+    cleanup_executor_.reset();
   }
 
   if (warmup_manager_ != nullptr) {
@@ -366,6 +376,18 @@ Status VFSHubImpl::Start(bool skip_mount) {
     }
   }
 
+  {
+    if (FLAGS_vfs_cleanup_executor_thread <= 0) {
+      return Status::InvalidParam(
+          "vfs_cleanup_executor_thread must be positive");
+    }
+    cleanup_executor_ = std::make_unique<ExecutorImpl>(
+        kCleanupExecutorName, FLAGS_vfs_cleanup_executor_thread);
+    if (!cleanup_executor_->Start()) {
+      return Status::Internal("cleanup executor start fail");
+    }
+  }
+
   write_buffer_manager_ = std::make_unique<WriteMemPool>(
       write_buffer_total_bytes, FLAGS_vfs_write_buffer_page_size);
   write_pressure_controller_ = std::make_unique<WritePressureController>(
@@ -457,6 +479,27 @@ Status VFSHubImpl::Start(bool skip_mount) {
 
   started_.store(true, std::memory_order_relaxed);
 
+  // Arm the unified periodic maintenance last. Its first tick is at least
+  // one positive interval away, so by the time any maintenance callback
+  // runs, every started_-gated accessor is available. A failure here fails
+  // Start; the armed teardown gate rolls everything back via Stop().
+  {
+    maintenance_manager_ = std::make_unique<MaintenanceManager>();
+    DINGOFS_RETURN_NOT_OK(maintenance_manager_->RegisterTask(
+        "reader-shrink",
+        std::make_shared<ReaderRegistryTask>(reader_registry_.get()),
+        read_cleanup_executor_.get(), FLAGS_vfs_periodic_flush_interval_ms));
+    DINGOFS_RETURN_NOT_OK(maintenance_manager_->RegisterTask(
+        "writer-flush",
+        std::make_shared<WriterTableTask>(writer_table_.get(),
+                                          cleanup_executor_.get()),
+        write_background_executor_.get(),
+        FLAGS_vfs_periodic_flush_interval_ms));
+    // Keep accessor readiness until Stop drains all previously started users,
+    // including when maintenance startup fails.
+    DINGOFS_RETURN_NOT_OK(maintenance_manager_->Start());
+  }
+
   return Status::OK();
 }
 
@@ -493,14 +536,29 @@ Status VFSHubImpl::Stop(bool skip_unmount) {
     compactor_->Stop();
   }
 
+  // Drain the unified periodic maintenance (both streams and every cleanup
+  // it published) before the pressure round. CleanupExecutor, flush/CB/
+  // storage dependencies all stay alive throughout this drain.
+  if (maintenance_manager_ != nullptr) {
+    maintenance_manager_->StopAndDrain();
+  }
+
   // Drain the event-driven flush round before HandleManager performs the final
   // synchronous writer flush. This prevents overlapping pressure and shutdown
-  // flush ownership.
+  // flush ownership. Completion includes every member holder release on the
+  // cleanup executor.
   if (write_pressure_controller_ != nullptr) {
     write_pressure_controller_->StopAndDrain();
   }
   if (write_pressure_executor_ != nullptr) {
     write_pressure_executor_->Stop();
+  }
+
+  // Both cleanup producers (periodic maintenance and pressure rounds) have
+  // drained; join the cleanup executor before HandleManager's final
+  // synchronous flush, which no longer publishes cleanup tasks.
+  if (cleanup_executor_ != nullptr) {
+    cleanup_executor_->Stop();
   }
 
   Status handle_stop_status;

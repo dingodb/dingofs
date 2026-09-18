@@ -42,6 +42,7 @@ class MockVFSHub : public VFSHub {
   MOCK_METHOD(Executor*, GetWriteBackgroundExecutor, (), (override));
   MOCK_METHOD(Executor*, GetFlushExecutor, (), (override));
   MOCK_METHOD(Executor*, GetCBExecutor, (), (override));
+  MOCK_METHOD(Executor*, GetCleanupExecutor, (), (override));
   MOCK_METHOD(WriteMemPool*, GetWriteMemPool, (), (override));
   MOCK_METHOD(ReadMemPool*, GetReadMemPool, (), (override));
   MOCK_METHOD(ReadMemPool*, GetCompactMemPool, (), (override));
@@ -51,6 +52,9 @@ class MockVFSHub : public VFSHub {
   MOCK_METHOD(Compactor*, GetCompactor, (), (override));
   MOCK_METHOD(TraceManager*, GetTraceManager, (), (override));
   MOCK_METHOD(FsInfo, GetFsInfo, (), (override));
+  MOCK_METHOD(int32_t, GetChunkSize, (), (override));
+  MOCK_METHOD(int32_t, GetBlockSize, (), (override));
+  MOCK_METHOD(uint32_t, GetFsId, (), (override));
   MOCK_METHOD(UidGidMapper*, GetUidGidMapper, (), (override));
   MOCK_METHOD(blockaccess::BlockAccessOptions, GetBlockAccesserOptions, (),
               (override));

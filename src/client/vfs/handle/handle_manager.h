@@ -17,12 +17,16 @@
 #ifndef DINGOFS_CLIENT_VFS_HANDLE_MANAGER_H
 #define DINGOFS_CLIENT_VFS_HANDLE_MANAGER_H
 
+#include <array>
 #include <atomic>
 #include <condition_variable>
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <string>
 #include <unordered_map>
+#include <vector>
 
 #include "bvar/reducer.h"
 #include "client/vfs/vfs_meta.h"
@@ -37,6 +41,7 @@ class VFSHub;
 class FileReader;
 class FileWriter;
 class HandleManager;
+class HandleManagerShard;
 
 // temporary store .stats file data
 struct FileBuffer {
@@ -46,7 +51,7 @@ struct FileBuffer {
 
 struct HandleResources {
   FileReader* reader{nullptr};
-  FileWriter* writer{nullptr};  // nullptr for O_RDONLY
+  FileWriter* writer{nullptr};
 };
 
 // Handle is a pure-data per-fh value object: identity (fh/ino/flags), the
@@ -95,6 +100,54 @@ class HandleGuard {
   Handle* handle_{nullptr};
 };
 
+// One fh partition: its own index and lock. Handles are added and looked up
+// here; HandleManager owns routing, drain, and resource return.
+class alignas(64) HandleManagerShard {
+ public:
+  using Lock = std::unique_lock<std::mutex>;
+  using HandleMap = std::unordered_map<uint64_t, Handle*>;
+  struct Identity {
+    Ino ino;
+    uint64_t fh;
+    int32_t flags;
+  };
+
+  bool Add(Handle* handle);
+  Handle* Find(uint64_t fh, bool for_release);
+  Handle* Remove(uint64_t fh);
+  size_t Size() const;
+  HandleMap ExtractAll();
+
+  // Locked operations require LockForSnapshot(). Multi-shard callers acquire
+  // locks in ascending shard order and release them before any callback or
+  // I/O.
+  Lock LockForSnapshot() { return Lock(mutex_); }
+  size_t SizeLocked() const { return handles_.size(); }
+  void CloseAdmissionLocked();
+  void AppendIdentitiesLocked(std::vector<Identity>& out) const;
+
+  // After admission closes, wait for table-resident guards, then pin and
+  // detach. Callers retain every returned holder until the final flush.
+  void Drain(std::vector<HandleResources>& resources,
+             std::vector<Handle*>& stop_refs);
+  HandleResources Detach(Handle* handle);
+  void NotifyRefReleased();
+
+ private:
+  static void Ref(Handle* handle);
+  static HandleResources DetachLocked(Handle* handle);
+
+  // Guard release reads only this cold line during normal operation.
+  struct alignas(64) DrainState {
+    std::atomic<bool> closing{false};
+    std::condition_variable cv;
+  };
+
+  mutable std::mutex mutex_;
+  HandleMap handles_;
+  DrainState drain_;
+};
+
 class HandleManager {
  public:
   HandleManager(VFSHub* hub) : vfs_hub_(hub){};
@@ -103,6 +156,9 @@ class HandleManager {
 
   Status Start();
 
+  // The owner drains public operations before Stop and keeps this manager alive
+  // through every guard release. Stop drains table-resident guards, flushes
+  // writers, and detaches resources; erased handles remain the owner's concern.
   Status Stop();
 
   // Build a new Handle for (fh, ino, flags). Allocates FileReader
@@ -110,15 +166,15 @@ class HandleManager {
   // writable open mode.  Returns nullptr on failure.
   Handle* NewHandle(uint64_t fh, Ino ino, int flags);
 
-  // Used by NewHandle and the .stats path. Returns false after Stop() starts;
-  // ownership stays with the caller in that case.
+  // Used by NewHandle and the .stats path. fh must be unique. Returns false
+  // after stop admission closes; ownership stays with the caller on rejection.
   bool AddHandle(Handle* handle);
 
-  // Data-path lookup: returns empty after Stop() starts.
+  // Data-path lookup: returns empty after stop admission closes.
   HandleGuard FindHandlerGuard(uint64_t fh);
 
-  // Release-path lookup: FUSE_RELEASE must be allowed after Stop() starts so
-  // the fh identity can be removed from handles_.
+  // Release-path lookup remains available during/after Stop so a late release
+  // can remove the fh identity.
   HandleGuard FindHandlerForRelease(uint64_t fh);
 
   void ReleaseHandler(uint64_t fh);
@@ -127,39 +183,39 @@ class HandleManager {
   // is O(1): a single PeekWriter lookup + Flush.
   Status FlushByIno(Ino ino);
 
+  // Best-effort count; Dump captures a consistent identity snapshot.
   void Summary(Json::Value& value);
   bool Dump(Json::Value& value);
   bool Load(const Json::Value& value);
 
  private:
   friend class HandleGuard;
+  static constexpr size_t kShardCount = 64;
 
-  // Atomic refs ops on Handle::refs. Caller must use these instead of
-  // touching Handle::refs directly.
-  void AcquireRefHandle(Handle* h);
+  using ShardLocks = std::array<HandleManagerShard::Lock, kShardCount>;
+
+  HandleManagerShard& GetShard(uint64_t fh);
+  ShardLocks LockShards();
+  size_t Size() const;
 
   // Drop one ref on `h`; if it was the last ref, close the reader, return
   // the writer to WriterTable, and delete the handle.
-  void ReleaseRefHandle(Handle* h);
+  void ReleaseRefHandle(Handle* h, HandleManagerShard& shard);
 
   // Internal cleanup: closes reader, returns writer, deletes the handle.
   // Called from ReleaseRefHandle when refs hit 0.
-  void DestroyHandle(Handle* h);
+  void DestroyHandle(Handle* h, HandleManagerShard& shard);
 
   void ReleaseGuard(Handle* h);
 
-  // Detach resources from the handle identity. Caller must hold mutex_.
-  HandleResources DetachHandleResourcesLocked(Handle* h);
-
-  // Release detached resources without holding mutex_.
+  // No index lock may be held while releasing resources.
   void ReleaseHandleResources(HandleResources resources);
 
   VFSHub* vfs_hub_{nullptr};
 
-  std::mutex mutex_;
-  std::condition_variable cv_;
+  std::array<HandleManagerShard, kShardCount> shards_;
+  std::mutex stop_mutex_;  // Lifecycle only; never on the lookup/release path.
   bool stopped_{false};
-  std::unordered_map<uint64_t, Handle*> handles_;
 
   // metrics
   bvar::Adder<uint64_t> total_count_{"vfs_handle_total_count"};

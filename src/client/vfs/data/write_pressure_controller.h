@@ -39,6 +39,8 @@ class WriterTable;
 // to fan out dirty writers. It does not rate-limit backend PUT traffic.
 class WritePressureController final : public WritePressureObserver {
  public:
+  // The table owns flush/cleanup coordination. Both dependencies and the
+  // table's cleanup executor must remain alive until StopAndDrain returns.
   WritePressureController(WriterTable* writer_table, Executor* executor);
   ~WritePressureController() override;
 
@@ -49,9 +51,9 @@ class WritePressureController final : public WritePressureObserver {
   // only mutates the small controller state and submits work to executor.
   void OnWritePressure() override;
 
-  // Rejects new events and waits for the active round, its writer callbacks,
-  // and any bounded submit retry to finish. The executor and WriterTable must
-  // remain alive until this returns.
+  // Rejects new events and waits for the active round, including the table's
+  // holder cleanup and any bounded submit retry. All dependencies remain
+  // alive until this returns; do not call from a worker needed by the round.
   void StopAndDrain();
 
  private:
@@ -68,6 +70,7 @@ class WritePressureController final : public WritePressureObserver {
 
   std::mutex mutex_;
   std::condition_variable cv_;
+
   bool running_{false};
   bool pending_{false};
   bool stopped_{false};

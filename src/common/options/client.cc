@@ -138,6 +138,23 @@ DEFINE_int32(vfs_periodic_flush_interval_ms, 5000,
              "periodic flush interval in milliseconds");
 DEFINE_validator(vfs_periodic_flush_interval_ms, brpc::PassValidate);
 
+// vfs_cleanup runs the possibly-blocking holder cleanup for background
+// writer flushes (pressure rounds and periodic maintenance): ReleaseWriter
+// may synchronously Close a FileWriter and wait on flush/CB/storage
+// dependencies. It must never run that on callback or scan threads, and it
+// is not shared with read-cleanup / write-background / write-pressure.
+DEFINE_int32(vfs_cleanup_executor_thread, 4,
+             "number of vfs cleanup executor threads; must be positive");
+DEFINE_validator(vfs_cleanup_executor_thread,
+                 [](const char* /*flag_name*/, int32_t value) -> bool {
+                   if (value <= 0) {
+                     LOG(ERROR)
+                         << "vfs_cleanup_executor_thread must be positive.";
+                     return false;
+                   }
+                   return true;
+                 });
+
 DEFINE_int32(vfs_periodic_trim_mem_ms, 3000,
              "periodic trim mem in milliseconds");
 DEFINE_validator(vfs_periodic_trim_mem_ms, brpc::PassValidate);

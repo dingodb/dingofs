@@ -41,8 +41,6 @@ class FileWriter {
 
   ~FileWriter();
 
-  Status Open();
-
   void Close();
 
   Status Write(ContextSPtr ctx, const char* buf, uint64_t size, uint64_t offset,
@@ -50,8 +48,13 @@ class FileWriter {
 
   Status Flush();
 
-  // Starts a flush only when published writes are not fully flushed. The
-  // callback is invoked exactly once, possibly inline for a clean writer.
+  // Dirty-only flush for pressure and periodic maintenance, not a final Flush.
+  // Completes exactly once: clean/empty writers inline with OK, closed writers
+  // inline with BadFd. Concurrent writes may require a later round.
+  // Callbacks may run inline or on a flush completion thread: transfer holder
+  // release to the independent cleanup executor, never synchronously Close or
+  // drain the callback's executor. Keep the writer and its dependencies alive
+  // through callback completion.
   void FlushDirtyAsync(StatusCallback cb);
 
   void AcquireRef();
@@ -78,9 +81,6 @@ class FileWriter {
   int32_t GetChunkSize() const;
 
   void AsyncFlush(StatusCallback cb);
-
-  void SchedulePeriodicFlush();
-  void RunPeriodicFlush();
 
   ChunkWriter* GetOrCreateChunkWriter(int64_t chunk_index);
 
