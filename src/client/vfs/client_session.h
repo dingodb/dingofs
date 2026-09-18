@@ -26,6 +26,7 @@
 #include <utility>
 #include <vector>
 
+#include "client/vfs/operation_tracker.h"
 #include "client/vfs/vfs.h"
 #include "common/meta.h"
 #include "common/status.h"
@@ -70,8 +71,9 @@ class ClientSession {
  public:
   ClientSession();
 
-  // Blocks until admitted operations and Core teardown complete. The owner
-  // must not destroy this object concurrently with another method call.
+  // Stop drains admitted runtime access, not late rejection/notification tails.
+  // The owner must close external entrypoints and join every caller before
+  // destruction, including callers rejected during or after Stop.
   ~ClientSession();
 
   // Normal start: upgrade_from_pid = 0.
@@ -83,6 +85,8 @@ class ClientSession {
   // Stop the VFS. With handover=true, skip MDS unmount and persist state for
   // the new process. It is idempotent after success, so post-exit teardown does
   // not stop/dump twice.
+  // Never call Stop from an operation/callback holding this session's lease:
+  // it would wait for itself. Stop does not replace the owner's caller join.
   Status Stop(bool handover = false);
 
   Status GetInfo(std::string* info);
@@ -194,21 +198,19 @@ class ClientSession {
     OperationLease(const OperationLease&) = delete;
     OperationLease& operator=(const OperationLease&) = delete;
 
-    OperationLease(OperationLease&& other) noexcept
-        : owner_(std::exchange(other.owner_, nullptr)) {}
+    OperationLease(OperationLease&& other) noexcept = default;
 
     ~OperationLease();
 
    private:
     friend class ClientSession;
-    explicit OperationLease(ClientSession* owner) : owner_(owner) {}
+    explicit OperationLease(OperationTracker::Lease lease)
+        : lease_(std::move(lease)) {}
 
-    ClientSession* owner_;
+    OperationTracker::Lease lease_;
   };
 
   std::optional<OperationLease> TryAcquireOperation();
-
-  void ReleaseOperation();
 
   Status FinishStartFailure(const Status& status);
 
@@ -219,7 +221,7 @@ class ClientSession {
   mutable std::mutex lifecycle_mutex_;
   std::condition_variable lifecycle_cv_;
   LifecycleState lifecycle_state_{LifecycleState::kCreated};
-  uint64_t active_public_operations_{0};
+  OperationTracker operations_;
   Status stop_status_;
   bool stop_handover_{false};
   bool trace_started_{false};

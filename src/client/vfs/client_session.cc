@@ -45,6 +45,7 @@
 #include "common/options/cache.h"
 #include "common/options/client.h"
 #include "common/status.h"
+#include "common/sync_point.h"
 #include "common/trace/trace_manager.h"
 #include "common/types.h"
 #include "fmt/format.h"
@@ -308,35 +309,19 @@ ClientSession::ClientSession() = default;
 ClientSession::~ClientSession() { Stop(/*handover=*/false); }
 
 ClientSession::OperationLease::~OperationLease() {
-  if (owner_ != nullptr) owner_->ReleaseOperation();
+  if (lease_) g_active_public_operations << -1;
 }
 
 std::optional<ClientSession::OperationLease>
 ClientSession::TryAcquireOperation() {
-  {
-    std::lock_guard<std::mutex> lock(lifecycle_mutex_);
-    if (lifecycle_state_ != LifecycleState::kRunning) {
-      g_rejected_public_operations << 1;
-      return std::nullopt;
-    }
-
-    ++active_public_operations_;
+  auto lease = operations_.TryEnter();
+  if (!lease) {
+    g_rejected_public_operations << 1;
+    return std::nullopt;
   }
 
   g_active_public_operations << 1;
-  return OperationLease(this);
-}
-
-void ClientSession::ReleaseOperation() {
-  g_active_public_operations << -1;
-
-  std::lock_guard<std::mutex> lock(lifecycle_mutex_);
-  CHECK_GT(active_public_operations_, 0);
-  --active_public_operations_;
-  if (active_public_operations_ == 0 &&
-      lifecycle_state_ == LifecycleState::kQuiescing) {
-    lifecycle_cv_.notify_all();
-  }
+  return OperationLease(std::move(*lease));
 }
 
 Status ClientSession::FinishStartFailure(const Status& status) {
@@ -371,6 +356,7 @@ Status ClientSession::Start(const DingofsConfig& config, int upgrade_from_pid) {
     }
     lifecycle_state_ = LifecycleState::kStarting;
   }
+  TEST_SYNC_POINT_CALLBACK("ClientSession::Starting", this);
 
   if (config.fs_name.empty()) {
     return FinishStartFailure(Status::InvalidParam("fs_name is empty"));
@@ -467,10 +453,12 @@ Status ClientSession::Start(const DingofsConfig& config, int upgrade_from_pid) {
   uid_ = dingofs::Helper::GetOriginalUid();
   gid_ = dingofs::Helper::GetOriginalGid();
 
+  TEST_SYNC_POINT_CALLBACK("ClientSession::BeforePublishRunning", this);
   {
     std::lock_guard<std::mutex> lock(lifecycle_mutex_);
     lifecycle_state_ = LifecycleState::kRunning;
     stop_status_ = Status::OK();
+    operations_.OpenOnce();
   }
   lifecycle_cv_.notify_all();
   return Status::OK();
@@ -499,6 +487,7 @@ Status ClientSession::Stop(bool handover) {
     if (lifecycle_state_ == LifecycleState::kQuiescing) {
       const bool same_stop_mode = stop_handover_ == handover;
       lifecycle_cv_.wait(lock, [this]() {
+        TEST_SYNC_POINT_CALLBACK("ClientSession::StopWaiting", this);
         return lifecycle_state_ == LifecycleState::kStopped;
       });
       if (!same_stop_mode) {
@@ -509,17 +498,11 @@ Status ClientSession::Stop(bool handover) {
     }
 
     CHECK(lifecycle_state_ == LifecycleState::kRunning);
+    operations_.Close();
     lifecycle_state_ = LifecycleState::kQuiescing;
     stop_handover_ = handover;
-    while (active_public_operations_ != 0) {
-      if (lifecycle_cv_.wait_for(lock, std::chrono::seconds(30)) ==
-          std::cv_status::timeout) {
-        LOG(ERROR) << fmt::format(
-            "VFS Stop still waiting for {} public operation(s) to drain",
-            active_public_operations_);
-      }
-    }
   }
+  operations_.WaitForDrain();
 
   LOG(INFO) << fmt::format("stopping vfs, handover({}).", handover);
 

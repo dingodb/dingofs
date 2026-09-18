@@ -72,6 +72,10 @@ struct OptionInfo {
 
 // BindingClient wraps ClientSession for use from language bindings.
 // It handles gflags/logging setup before delegating to ClientSession.
+// The caller owns concurrency and lifetime: stop submitting calls and join all
+// operation/callback threads before Stop or destruction. Session admission
+// drain does not join rejected callers or protect this wrapper's lifetime;
+// Stop may also shut down the logging runtime owned by this instance.
 class BindingClient {
  public:
   BindingClient();

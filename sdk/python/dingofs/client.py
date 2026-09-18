@@ -270,6 +270,10 @@ class Client:
     def stop(self) -> None:
         """Unmount the filesystem and release all resources.
 
+        Stop submitting operations and join all threads/callbacks using this
+        client before calling stop() or releasing it. Admission drain does not
+        protect callers still entering the wrapper during shutdown.
+
         Raises:
             DingofsError: if unmounting fails.
         """

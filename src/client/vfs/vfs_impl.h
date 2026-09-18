@@ -35,6 +35,7 @@
 
 namespace dingofs {
 namespace client {
+class ClientSessionLifecycleTest;
 namespace vfs {
 
 class VFSImpl : public VFS {
@@ -144,6 +145,7 @@ class VFSImpl : public VFS {
 
  private:
   friend class VFSImplTest;
+  friend class ::dingofs::client::ClientSessionLifecycleTest;
 
   // Test-only constructor: inject a pre-built VFSHub.
   VFSImpl(std::unique_ptr<VFSHub> hub, TraceManager& trace_manager);
