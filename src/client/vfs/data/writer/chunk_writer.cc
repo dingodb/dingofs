@@ -44,8 +44,8 @@ namespace vfs {
 // protected by mutex_
 ChunkWriter::ChunkWriter(VFSHub* hub, uint64_t ino, uint64_t index)
     : hub_(hub),
-      chunk_(hub->GetFsInfo().id, ino, index, hub->GetFsInfo().chunk_size,
-             hub->GetFsInfo().block_size),
+      chunk_(hub->GetFsId(), ino, index, hub->GetChunkSize(),
+             hub->GetBlockSize()),
       page_size_(hub->GetWriteMemPool()->GetPageSize()) {}
 
 ChunkWriter::~ChunkWriter() {

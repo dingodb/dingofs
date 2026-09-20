@@ -17,11 +17,12 @@
 #ifndef DINGOFS_CLIENT_VFS_DATA_READER_READER_REGISTRY_H_
 #define DINGOFS_CLIENT_VFS_DATA_READER_READER_REGISTRY_H_
 
+#include <array>
 #include <cstddef>
-#include <cstdint>
 #include <mutex>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 #include "client/vfs/vfs_meta.h"
 
@@ -30,22 +31,59 @@ namespace client {
 namespace vfs {
 
 class FileReader;
+class ReaderRegistryShard;
 
 // Non-owning per-inode index of open FileReaders. HandleResources remains the
-// owner of each reader. Registry snapshots pin readers with their intrusive
-// refcount and never call FileReader methods while holding mutex_.
+// owner of each reader. Snapshots pin readers under their inode's shard lock;
+// Invalidate and pin release run outside that lock. The owner drains callers
+// before destroying the registry.
+// One inode partition: a non-owning reader index with its own lock. The
+// registry owns routing; the reader's owner keeps it alive from before
+// Register until after Unregister, while the shard owns snapshot pins.
+class alignas(64) ReaderRegistryShard {
+ public:
+  void Register(FileReader* reader);
+  void Unregister(FileReader* reader);
+  // Every returned reader owns one pin. Invalidate and ReleaseRef happen
+  // after this function releases the lock, including after removal.
+  std::vector<FileReader*> Snapshot(Ino ino);
+  // Background single-shard snapshot across all inodes of this shard: every
+  // returned reader owns one reference pin taken under the shard lock. The
+  // caller releases refs outside any registry lock. Closed readers may
+  // appear; their maintenance entry re-checks the closing flag.
+  std::vector<FileReader*> SnapshotAll();
+  size_t Size() const;
+
+ private:
+  mutable std::mutex mutex_;
+  size_t reader_count_{0};
+  std::unordered_map<Ino, std::unordered_set<FileReader*>> readers_;
+};
+
 class ReaderRegistry {
  public:
+  // Shard count for background single-shard scans (see SnapshotShard).
+  static constexpr size_t kShardCount = 64;
+
   void Register(FileReader* reader);
   void Unregister(FileReader* reader);
 
   void InvalidateByIno(Ino ino, int64_t offset, int64_t size);
 
+  // Background single-shard snapshot (shard_index < kShardCount): pins every
+  // reader of that shard with a reference under the shard's lock only. The
+  // caller owns releasing the refs outside any registry lock. A round is not
+  // a consistent whole-table snapshot; readers registered after the shard was
+  // visited are seen on the next round.
+  std::vector<FileReader*> SnapshotShard(size_t shard_index);
+
+  // Best-effort number of registered readers, not inode entries.
   size_t Size() const;
 
  private:
-  mutable std::mutex mutex_;
-  std::unordered_map<Ino, std::unordered_set<FileReader*>> readers_;
+  ReaderRegistryShard& GetShard(Ino ino);
+
+  std::array<ReaderRegistryShard, kShardCount> shards_;
 };
 
 }  // namespace vfs

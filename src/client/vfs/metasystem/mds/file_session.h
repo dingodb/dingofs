@@ -122,6 +122,8 @@ class FileSessionMap {
       : inode_cache_(inode_cache), chunk_size_(chunk_size) {}
   ~FileSessionMap() = default;
 
+  // fh must be a new, nonzero handle and session_id must be nonempty.
+  // The session stays indexed until fh is deleted, even if other handles close.
   FileSessionSPtr Put(Ino ino, uint64_t fh, const std::string& session_id,
                       uint32_t flags);
   void Delete(Ino ino, uint64_t fh);

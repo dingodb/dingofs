@@ -410,10 +410,6 @@ TEST_F(VFSImplTest, Write_PressureFlushFails_CrossChunkWriteReturnsShortWrite) {
   constexpr Ino kIno = 601;
   constexpr Ino kInoDonor = 600;
 
-  gflags::FlagSaver flag_saver;
-  FLAGS_vfs_periodic_flush_interval_ms =
-      3600 * 1000;  // keep periodic flush out
-
   // Local table + tiny pool + the real pressure-controller chain.
   auto writer_table = std::make_unique<WriterTable>(mock_hub_);
   ASSERT_TRUE(writer_table->Start().ok());
@@ -424,12 +420,14 @@ TEST_F(VFSImplTest, Write_PressureFlushFails_CrossChunkWriteReturnsShortWrite) {
 
   WriteMemPool tiny_pool(kPoolPages * kPage, kPage);
   ON_CALL(*mock_hub_, GetWriteMemPool()).WillByDefault(Return(&tiny_pool));
-
   ExecutorImpl pressure_executor("test_pressure_flush_fail", 1);
   ASSERT_TRUE(pressure_executor.Start());
+  ExecutorImpl cleanup_executor("test_cleanup_flush_fail", 1);
+  ASSERT_TRUE(cleanup_executor.Start());
+  ON_CALL(*mock_hub_, GetCleanupExecutor())
+      .WillByDefault(Return(&cleanup_executor));
   WritePressureController controller(writer_table.get(), &pressure_executor);
   tiny_pool.SetPressureObserver(&controller);
-
   // Every block upload completes inline with the same error (deterministic,
   // no background timing). The cv turns "the pressure round reached the data
   // plane" into an event the test can wait for.
@@ -472,7 +470,6 @@ TEST_F(VFSImplTest, Write_PressureFlushFails_CrossChunkWriteReturnsShortWrite) {
   // explicitly fails its flush below.
   auto* donor = new FileWriter(mock_hub_, kInoDonor);
   donor->AcquireRef();
-  ASSERT_TRUE(donor->Open().ok());
   std::vector<char> donor_buf(6144, 'd');
   uint64_t donor_wsize = 0;
   ASSERT_TRUE(
@@ -565,6 +562,7 @@ TEST_F(VFSImplTest, Write_PressureFlushFails_CrossChunkWriteReturnsShortWrite) {
   tiny_pool.SetPressureObserver(nullptr);
   controller.StopAndDrain();
   ASSERT_TRUE(pressure_executor.Stop());
+  ASSERT_TRUE(cleanup_executor.Stop());
 }
 
 // --- 5. GetAttr on .stats inode returns virtual attr ---

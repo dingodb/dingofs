@@ -14,6 +14,7 @@
 
 add_library(vfs_components
     file_suffix_watcher.cc
+    maintenance_manager.cc
     prefetch_manager.cc
     warmup_manager.cc
     uid_gid_mapper.cc

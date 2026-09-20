@@ -228,7 +228,7 @@ FileSessionSPtr FileSessionMap::Put(Ino ino, uint64_t fh,
 
   FileSessionSPtr file_session;
   shard_map_.withWLock(
-      [this, ino, fh, &session_id, &file_session](Map& map) {
+      [this, ino, fh, flags, &session_id, &file_session](Map& map) {
         auto [it, inserted] = map.try_emplace(ino);
         if (inserted) {
           it->second = FileSession::New(ino, chunk_size_);
@@ -236,10 +236,10 @@ FileSessionSPtr FileSessionMap::Put(Ino ino, uint64_t fh,
         }
 
         file_session = it->second;
+        // Keep handle registration atomic with the inode's last close.
+        file_session->AddSession(fh, session_id, flags);
       },
       ino);
-
-  file_session->AddSession(fh, session_id, flags);
 
   return file_session;
 }

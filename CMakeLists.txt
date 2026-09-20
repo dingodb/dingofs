@@ -296,6 +296,9 @@ message("Using RocksDB ${RocksDB_VERSION}")
 find_package(rados REQUIRED)
 message("Using rados: ${RADOS_LIBRARIES}")
 
+find_package(folly CONFIG REQUIRED)
+message("Using folly: ${FOLLY_LIBRARIES}, include_dir:${FOLLY_INCLUDE_DIRS}")
+
 find_package(dingosdk REQUIRED)
 message(STATUS "Found dingosdk: ${dingosdk_VERSION}")
 

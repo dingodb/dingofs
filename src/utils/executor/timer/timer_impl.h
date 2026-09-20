@@ -12,22 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef DINGOFS_SRC_BASE_TIMER_TIMER_IMPL_H_
-#define DINGOFS_SRC_BASE_TIMER_TIMER_IMPL_H_
+#ifndef DINGOFS_UTILS_TIMER_TIMER_IMPL_H_
+#define DINGOFS_UTILS_TIMER_TIMER_IMPL_H_
 
 #include <condition_variable>
+#include <cstdint>
+#include <functional>
+#include <memory>
 #include <mutex>
 #include <queue>
 #include <thread>
 
-#include "gflags/gflags_declare.h"
 #include "utils/executor/thread_pool.h"
 #include "utils/executor/timer/timer.h"
 
 namespace dingofs {
-class TimerImplTestPeer;
 
-class TimerImpl : public Timer {
+// Simple priority-queue timer on a dedicated thread. Producers touch only the
+// mutex and heap; the timer thread sleeps when idle, so it does not contend
+// for producer cache lines. Only notifies when the earliest deadline changes.
+class TimerImpl final : public Timer {
  public:
   // caller owns the thread pool
   TimerImpl(ThreadPool* thread_pool);
@@ -35,18 +39,15 @@ class TimerImpl : public Timer {
   ~TimerImpl() override;
 
   bool Start() override;
-
   bool Stop() override;
 
+  // Returns true only when the timer accepts ownership of func. The timer does
+  // not retain a rejected function.
   bool Add(std::function<void()> func, int delay_ms) override;
 
   bool IsStopped() override;
 
  private:
-  friend class TimerImplTestPeer;
-
-  void Run();
-
   struct FunctionInfo {
     std::function<void()> fn;
     uint64_t next_run_time_us;
@@ -62,16 +63,17 @@ class TimerImpl : public Timer {
     }
   };
 
+  void Run();
+
+  ThreadPool* thread_pool_;
   std::mutex mutex_;
   std::condition_variable cv_;
   std::unique_ptr<std::thread> thread_{nullptr};
   std::priority_queue<FunctionInfo, std::vector<FunctionInfo>, RunTimeOrder>
       heap_;
   bool running_{false};
-
-  ThreadPool* thread_pool_;
 };
 
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_BASE_TIMER_TIMER_IMPL_H_
+#endif  // DINGOFS_UTILS_TIMER_TIMER_IMPL_H_

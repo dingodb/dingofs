@@ -24,6 +24,7 @@
 #include <utility>
 #include <vector>
 
+#include "absl/hash/hash.h"
 #include "client/vfs/data/reader/file_reader.h"
 #include "client/vfs/data/reader/reader_registry.h"
 #include "client/vfs/data/writer/file_writer.h"
@@ -31,6 +32,7 @@
 #include "client/vfs/hub/vfs_hub.h"
 #include "client/vfs/vfs_fh.h"
 #include "common/const.h"
+#include "common/sync_point.h"
 #include "fmt/format.h"
 
 namespace dingofs {
@@ -45,24 +47,36 @@ std::string Handle::ToString() const {
   return oss.str();
 }
 
+HandleManagerShard& HandleManager::GetShard(uint64_t fh) {
+  return shards_[absl::HashOf(fh) & (kShardCount - 1)];
+}
+
+HandleManager::ShardLocks HandleManager::LockShards() {
+  ShardLocks locks;
+  for (size_t i = 0; i < shards_.size(); ++i) {
+    locks[i] = shards_[i].LockForSnapshot();
+  }
+  return locks;
+}
+
+size_t HandleManager::Size() const {
+  size_t count = 0;
+  for (const auto& shard : shards_) {
+    count += shard.Size();
+  }
+  return count;
+}
+
 HandleManager::~HandleManager() {
   Status s = Stop();
   if (!s.ok()) {
     LOG(ERROR) << fmt::format("HandleManager destructor flush failed: {}",
                               s.ToString());
   }
-  std::vector<Handle*> handles;
-  {
-    std::unique_lock<std::mutex> lock(mutex_);
-    handles.reserve(handles_.size());
-    for (auto& [fh, handle] : handles_) {
-      handles.push_back(handle);
+  for (auto& shard : shards_) {
+    for (auto& [fh, handle] : shard.ExtractAll()) {
+      ReleaseRefHandle(handle, shard);
     }
-    handles_.clear();
-  }
-
-  for (auto* handle : handles) {
-    ReleaseRefHandle(handle);
   }
 }
 
@@ -89,36 +103,24 @@ void HandleGuard::Reset() {
   }
 }
 
-void HandleManager::AcquireRefHandle(Handle* h) {
-  int64_t orgin = h->refs.fetch_add(1);
-  VLOG(12) << fmt::format("handle-{} AcquireRef origin refs: {}", h->fh, orgin);
-  CHECK_GE(orgin, 0);
-}
-
-void HandleManager::ReleaseRefHandle(Handle* h) {
+void HandleManager::ReleaseRefHandle(Handle* h, HandleManagerShard& shard) {
+  const uint64_t fh = h->fh;
   int64_t orgin = h->refs.fetch_sub(1);
-  VLOG(12) << fmt::format("handle-{} ReleaseRef origin refs: {}", h->fh, orgin);
+  VLOG(12) << fmt::format("handle-{} ReleaseRef origin refs: {}", fh, orgin);
   CHECK_GT(orgin, 0);
   if (orgin == 1) {
-    DestroyHandle(h);
+    DestroyHandle(h, shard);
   }
-  cv_.notify_all();
+  shard.NotifyRefReleased();
 }
 
-void HandleManager::DestroyHandle(Handle* h) {
-  HandleResources resources;
-  {
-    std::lock_guard<std::mutex> lock(mutex_);
-    resources = DetachHandleResourcesLocked(h);
-  }
-  ReleaseHandleResources(resources);
+void HandleManager::DestroyHandle(Handle* h, HandleManagerShard& shard) {
+  ReleaseHandleResources(shard.Detach(h));
   delete h;
 }
 
-void HandleManager::ReleaseGuard(Handle* h) { ReleaseRefHandle(h); }
-
-HandleResources HandleManager::DetachHandleResourcesLocked(Handle* h) {
-  return std::exchange(h->resources, {});
+void HandleManager::ReleaseGuard(Handle* h) {
+  ReleaseRefHandle(h, GetShard(h->fh));
 }
 
 void HandleManager::ReleaseHandleResources(HandleResources resources) {
@@ -136,58 +138,38 @@ void HandleManager::ReleaseHandleResources(HandleResources resources) {
 Status HandleManager::Start() { return Status::OK(); }
 
 Status HandleManager::Stop() {
-  std::vector<HandleResources> resources_to_release;
-  std::vector<Handle*> stop_refs;
+  std::lock_guard<std::mutex> stop_lock(stop_mutex_);
+  if (stopped_) {
+    return Status::OK();
+  }
+  stopped_ = true;
+
+  size_t count = 0;
   {
-    std::unique_lock<std::mutex> lock(mutex_);
-    if (stopped_) {
-      LOG(INFO) << "HandleManager already stopped";
-      return Status::OK();
-    }
-
-    stopped_ = true;
-
-    cv_.wait(lock, [&]() {
-      for (auto& [fh, handle] : handles_) {
-        if (handle->refs.load(std::memory_order_acquire) != 1) {
-          return false;
-        }
-      }
-      return true;
-    });
-
-    for (auto& [fh, handle] : handles_) {
-      if (handle->ino == kStatsIno) {
-        continue;
-      }
-      AcquireRefHandle(handle);
-      stop_refs.push_back(handle);
-
-      auto resources = DetachHandleResourcesLocked(handle);
-      if (resources.reader != nullptr || resources.writer != nullptr) {
-        resources_to_release.push_back(resources);
-      }
+    auto locks = LockShards();
+    for (auto& shard : shards_) {
+      shard.CloseAdmissionLocked();
+      count += shard.SizeLocked();
     }
   }
 
-  // resources_to_release owns the detached writer holders, so every writer is
-  // still present in WriterTable here. Flush while metadata, BlockStore, and
-  // writer executors are alive, before the loop below can drop the last holder
-  // and close the writer. FlushAll deliberately visits every writer and returns
-  // the first error without stopping early.
-  Status flush_status = vfs_hub_->GetWriterTable()->FlushAll();
+  std::vector<HandleResources> resources_to_release;
+  std::vector<Handle*> stop_refs;
+  resources_to_release.reserve(count);
+  stop_refs.reserve(count);
+  for (auto& shard : shards_) {
+    shard.Drain(resources_to_release, stop_refs);
+  }
 
-  // Release resources outside mutex_: dropping the last writer holder may
-  // block while FileWriter::Close() waits for already in-flight tasks and then
-  // destroys nested writer resources.
+  // Detached holders pin every writer until the final flush has completed.
+  // Never release an earlier shard's resources before flushing all writers.
+  Status flush_status = vfs_hub_->GetWriterTable()->FlushAll();
   for (auto& resources : resources_to_release) {
     ReleaseHandleResources(resources);
   }
-
   for (auto* handle : stop_refs) {
-    ReleaseRefHandle(handle);
+    ReleaseGuard(handle);
   }
-
   return flush_status;
 }
 
@@ -197,11 +179,10 @@ Handle* HandleManager::NewHandle(uint64_t fh, Ino ino, int flags) {
   handle->ino = ino;
   handle->flags = flags;
 
-  // Reader is always per-fh.
+  // Reader is always per-fh. Creation registers nothing: periodic
+  // maintenance discovers readers through ReaderRegistry snapshots.
   handle->resources.reader = new FileReader(vfs_hub_, fh, ino);
   handle->resources.reader->AcquireRef();
-  CHECK(handle->resources.reader->Open().ok())
-      << "FileReader::Open is currently infallible";
   // Writer only for writable opens. Borrowed from WriterTable.
   if ((flags & O_ACCMODE) != O_RDONLY) {
     handle->resources.writer = vfs_hub_->GetWriterTable()->AcquireWriter(ino);
@@ -221,69 +202,38 @@ Handle* HandleManager::NewHandle(uint64_t fh, Ino ino, int flags) {
   vfs_hub_->GetReaderRegistry()->Register(handle->resources.reader);
 
   if (!AddHandle(handle)) {
-    DestroyHandle(handle);
+    DestroyHandle(handle, GetShard(fh));
     return nullptr;
   }
   return handle;
 }
 
 bool HandleManager::AddHandle(Handle* handle) {
-  std::lock_guard<std::mutex> lock(mutex_);
-  if (stopped_) {
+  if (!GetShard(handle->fh).Add(handle)) {
     LOG(WARNING) << "AddHandle rejected because HandleManager is stopped, fh: "
                  << handle->fh;
     return false;
   }
-
-  AcquireRefHandle(handle);
-  handles_[handle->fh] = handle;
-
   total_count_ << 1;
   return true;
 }
 
 void HandleManager::ReleaseHandler(uint64_t fh) {
-  Handle* h = nullptr;
-  {
-    std::lock_guard<std::mutex> lock(mutex_);
-    auto iter = handles_.find(fh);
-    if (iter == handles_.end()) {
-      VLOG(1) << "ReleaseHandler ignored, fh not found: " << fh;
-      return;
-    }
-    h = iter->second;
-    handles_.erase(iter);
+  auto& shard = GetShard(fh);
+  auto* handle = shard.Remove(fh);
+  if (handle != nullptr) {
+    ReleaseRefHandle(handle, shard);
   }
-  // Drop the AddHandle-time ref. DestroyHandle (called when refs→0) does
-  // reader Close + writer return + delete; running it outside the table
-  // mutex avoids deadlocks against WriterTable / FileWriter cleanup.
-  ReleaseRefHandle(h);
 }
 
 HandleGuard HandleManager::FindHandlerGuard(uint64_t fh) {
-  std::lock_guard<std::mutex> lock(mutex_);
-  if (stopped_) {
-    return {};
-  }
-
-  auto it = handles_.find(fh);
-  if (it == handles_.end()) {
-    return {};
-  }
-
-  AcquireRefHandle(it->second);
-  return HandleGuard(this, it->second);
+  auto* handle = GetShard(fh).Find(fh, /*for_release=*/false);
+  return handle == nullptr ? HandleGuard{} : HandleGuard(this, handle);
 }
 
 HandleGuard HandleManager::FindHandlerForRelease(uint64_t fh) {
-  std::lock_guard<std::mutex> lock(mutex_);
-  auto it = handles_.find(fh);
-  if (it == handles_.end()) {
-    return {};
-  }
-
-  AcquireRefHandle(it->second);
-  return HandleGuard(this, it->second);
+  auto* handle = GetShard(fh).Find(fh, /*for_release=*/true);
+  return handle == nullptr ? HandleGuard{} : HandleGuard(this, handle);
 }
 
 Status HandleManager::FlushByIno(Ino ino) {
@@ -302,31 +252,35 @@ Status HandleManager::FlushByIno(Ino ino) {
 }
 
 void HandleManager::Summary(Json::Value& value) {
-  std::lock_guard<std::mutex> lock(mutex_);
-
   value["name"] = "handler";
-  value["count"] = handles_.size();
+  value["count"] = Size();
   value["total_count"] = total_count_.get_value();
 }
 
 bool HandleManager::Dump(Json::Value& value) {
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::vector<HandleManagerShard::Identity> snapshot;
+  {
+    auto locks = LockShards();
+    size_t count = 0;
+    for (const auto& shard : shards_) {
+      count += shard.SizeLocked();
+    }
+    snapshot.reserve(count);
+    for (const auto& shard : shards_) {
+      shard.AppendIdentitiesLocked(snapshot);
+    }
+  }
+
   Json::Value handlers = Json::arrayValue;
-
-  for (const auto& handle : handles_) {
-    auto* fileHandle = handle.second;
-
+  for (const auto& handle : snapshot) {
     Json::Value item;
-    item["ino"] = fileHandle->ino;
-    item["fh"] = fileHandle->fh;
-    item["flags"] = fileHandle->flags;
-
+    item["ino"] = handle.ino;
+    item["fh"] = handle.fh;
+    item["flags"] = handle.flags;
     handlers.append(item);
   }
-  value["handlers"] = handlers;
-
-  LOG(INFO) << "successfuly dump " << handles_.size() << " handlers";
-
+  value["handlers"] = std::move(handlers);
+  LOG(INFO) << "successfuly dump " << snapshot.size() << " handlers";
   return true;
 }
 
@@ -356,12 +310,117 @@ bool HandleManager::Load(const Json::Value& value) {
     max_fh = std::max(max_fh, fh);
   }
 
-  vfs::FhGenerator::UpdateNextFh(max_fh + 1);
+  FhGenerator::UpdateNextFh(max_fh + 1);
 
-  LOG(INFO) << "successfuly load " << handles_.size()
-            << " handlers, next fh is:" << vfs::FhGenerator::GetNextFh();
+  LOG(INFO) << "successfuly load " << Size()
+            << " handlers, next fh is:" << FhGenerator::GetNextFh();
 
   return true;
+}
+
+void HandleManagerShard::Ref(Handle* handle) {
+  const int64_t old_refs = handle->refs.fetch_add(1);
+  VLOG(12) << fmt::format("handle-{} AcquireRef origin refs: {}", handle->fh,
+                          old_refs);
+  CHECK_GE(old_refs, 0);
+}
+
+bool HandleManagerShard::Add(Handle* handle) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (drain_.closing.load(std::memory_order_seq_cst)) {
+    return false;
+  }
+  CHECK(handles_.emplace(handle->fh, handle).second)
+      << "Duplicate fh: " << handle->fh;
+  Ref(handle);
+  return true;
+}
+
+Handle* HandleManagerShard::Find(uint64_t fh, bool for_release) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (!for_release && drain_.closing.load(std::memory_order_seq_cst)) {
+    return nullptr;
+  }
+  auto it = handles_.find(fh);
+  if (it == handles_.end()) return nullptr;
+  Ref(it->second);
+  return it->second;
+}
+
+Handle* HandleManagerShard::Remove(uint64_t fh) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  auto it = handles_.find(fh);
+  if (it == handles_.end()) return nullptr;
+  auto* handle = it->second;
+  handles_.erase(it);
+  return handle;
+}
+
+size_t HandleManagerShard::Size() const {
+  std::lock_guard<std::mutex> lock(mutex_);
+  return handles_.size();
+}
+
+HandleManagerShard::HandleMap HandleManagerShard::ExtractAll() {
+  HandleMap handles;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    handles.swap(handles_);
+  }
+  return handles;
+}
+
+void HandleManagerShard::CloseAdmissionLocked() {
+  drain_.closing.store(true, std::memory_order_seq_cst);
+}
+
+void HandleManagerShard::AppendIdentitiesLocked(
+    std::vector<Identity>& out) const {
+  for (const auto& [fh, handle] : handles_) {
+    out.push_back({handle->ino, fh, handle->flags});
+  }
+}
+
+HandleResources HandleManagerShard::DetachLocked(Handle* handle) {
+  return std::exchange(handle->resources, {});
+}
+
+HandleResources HandleManagerShard::Detach(Handle* handle) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  return DetachLocked(handle);
+}
+
+void HandleManagerShard::Drain(std::vector<HandleResources>& resources,
+                               std::vector<Handle*>& stop_refs) {
+  std::unique_lock<std::mutex> lock(mutex_);
+  drain_.cv.wait(lock, [&] {
+    for (auto& [fh, handle] : handles_) {
+      if (handle->refs.load(std::memory_order_seq_cst) != 1) {
+        TEST_SYNC_POINT_CALLBACK("HandleManagerShard::Drain:waiting_for_guard",
+                                 handle);
+        return false;
+      }
+    }
+    return true;
+  });
+  for (auto& [fh, handle] : handles_) {
+    if (handle->ino == kStatsIno) continue;
+    Ref(handle);
+    stop_refs.push_back(handle);
+    auto detached = DetachLocked(handle);
+    if (detached.reader != nullptr || detached.writer != nullptr) {
+      resources.push_back(detached);
+    }
+  }
+}
+
+void HandleManagerShard::NotifyRefReleased() {
+  // SC ordering pairs the preceding ref decrement with closing/predicate.
+  // Taking mutex_ excludes notification between the predicate and wait.
+  if (drain_.closing.load(std::memory_order_seq_cst)) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    drain_.cv.notify_all();
+  }
 }
 
 }  // namespace vfs
