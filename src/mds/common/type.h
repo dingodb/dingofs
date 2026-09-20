@@ -15,8 +15,10 @@
 #ifndef DINGOFS_MDS_COMMON_TYPE_H_
 #define DINGOFS_MDS_COMMON_TYPE_H_
 
+#include <glog/logging.h>
 #include <sys/types.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <string>
 
@@ -168,22 +170,36 @@ struct LocalFileInfo {
   std::string path;
 };
 
+struct AttrVersionVec;
+
 struct AttrWithMutation {
   AttrEntry attr;
   absl::InlinedVector<AttrMutationEntry, kDirAttrMutationNum> mutations;
 
   uint64_t BaseVersion() const { return attr.version(); }
+  uint64_t CompleteVersion() const { return attr.version() + TotalDeltaVersion(); }
+  uint64_t DeltaVersion(uint32_t index) const {
+    CHECK(index < mutations.size()) << "invalid mutation index(" << index << "), should be less than "
+                                    << mutations.size();
+    return mutations[index].delta_version();
+  }
 
+  // Mutations are per-slot absolute counters (see AttrVersionVec::PutIf). Callers
+  // may append them across retries, so dedup per slot instead of summing blindly:
+  // a duplicated slot must not inflate the version.
   uint64_t TotalDeltaVersion() const {
-    uint64_t total_delta_version = 0;
+    CHECK(mutations.size() <= kDirAttrMutationNum) << "too many mutations: " << mutations.size();
+
+    absl::InlinedVector<uint64_t, kDirAttrMutationNum> deltas(kDirAttrMutationNum, 0);
     for (const auto& mutation : mutations) {
-      total_delta_version += mutation.delta_version();
+      deltas[mutation.index()] = std::max(mutation.delta_version(), deltas[mutation.index()]);
     }
+
+    uint64_t total_delta_version = 0;
+    for (uint64_t delta : deltas) total_delta_version += delta;
 
     return total_delta_version;
   }
-
-  uint64_t Version() const { return attr.version() + TotalDeltaVersion(); }
 
   AttrEntry ToCompleteAttr() const {
     AttrEntry latest_attr = attr;
@@ -191,10 +207,144 @@ struct AttrWithMutation {
       latest_attr.set_atime(std::max(latest_attr.atime(), mutation.atime()));
       latest_attr.set_mtime(std::max(latest_attr.mtime(), mutation.mtime()));
       latest_attr.set_ctime(std::max(latest_attr.ctime(), mutation.ctime()));
-      latest_attr.set_version(latest_attr.version() + mutation.delta_version());
     }
+    latest_attr.set_version(attr.version() + TotalDeltaVersion());
+
     return latest_attr;
   }
+};
+
+// Represents a single attribute version, which can be either a base version or a delta version.
+struct AttrVersion {
+  bool is_delta{false};
+  uint32_t index{0};
+  uint64_t version{0};
+  AttrVersion(uint64_t version) : version(version) {}
+  AttrVersion(uint32_t index, uint64_t version) : is_delta(true), index(index), version(version) {}
+
+  std::string ToString() const {
+    if (!is_delta) {
+      return fmt::format("{}", version);
+    } else {
+      return fmt::format("{}-{}", index, version);
+    }
+  }
+};
+
+// Represents a collection of attribute versions, including a base version and multiple delta versions.
+struct AttrVersionVec {
+  // base version
+  uint64_t base_version{0};
+  // delta versions
+  absl::InlinedVector<uint64_t, kDirAttrMutationNum> delta_versions;
+  // sum of delta versions, used for quick check if there is mutation
+  uint64_t total_delta_version{0};
+
+  AttrVersionVec(uint64_t base_version) : base_version(base_version) { delta_versions.resize(kDirAttrMutationNum, 0); }
+  AttrVersionVec(const AttrWithMutation& attr_with_mutation) : base_version(attr_with_mutation.attr.version()) {
+    delta_versions.resize(kDirAttrMutationNum, 0);
+    total_delta_version = 0;
+    for (const auto& mutation : attr_with_mutation.mutations) {
+      PutIf(mutation);
+    }
+  }
+
+  uint64_t BaseVersion() const { return base_version; }
+  uint64_t CompleteVersion() const { return base_version + total_delta_version; }
+  uint64_t DeltaVersion(uint32_t index) const {
+    CHECK(index < kDirAttrMutationNum) << fmt::format("out of range, {}/{}.", index, kDirAttrMutationNum);
+
+    return delta_versions[index];
+  }
+
+  bool PutIf(const AttrMutationEntry& attr_mutation) {
+    uint32_t index = attr_mutation.index();
+    CHECK(index < kDirAttrMutationNum) << fmt::format("out of range, {}/{}.", index, kDirAttrMutationNum);
+
+    uint64_t& delta_version = delta_versions[index];
+    if (attr_mutation.delta_version() <= delta_version) return false;
+
+    total_delta_version += (attr_mutation.delta_version() - delta_version);
+    delta_version = attr_mutation.delta_version();
+
+    return true;
+  }
+
+  bool PutIf(const AttrVersion& attr_version) {
+    if (!attr_version.is_delta) {
+      if (attr_version.version <= base_version) return false;
+      base_version = attr_version.version;
+
+    } else {
+      CHECK(attr_version.index < kDirAttrMutationNum)
+          << fmt::format("out of range, {}/{}.", attr_version.index, kDirAttrMutationNum);
+
+      uint64_t& delta_version = delta_versions[attr_version.index];
+      if (attr_version.version <= delta_version) return false;
+
+      total_delta_version += (attr_version.version - delta_version);
+      delta_version = attr_version.version;
+    }
+
+    return true;
+  }
+
+  bool PutIf(const AttrEntry& attr) {
+    if (attr.version() <= base_version) return false;
+
+    base_version = attr.version();
+
+    return true;
+  }
+
+  bool PutIf(const AttrWithMutation& attr_with_mutation) {
+    bool updated = false;
+    updated |= PutIf(attr_with_mutation.attr);
+    for (const auto& mutation : attr_with_mutation.mutations) {
+      updated |= PutIf(mutation);
+    }
+
+    return updated;
+  }
+
+  bool PutIf(const AttrVersionVec& version_vec) {
+    bool updated = false;
+    if (version_vec.base_version > base_version) {
+      updated = true;
+      base_version = version_vec.base_version;
+    }
+
+    uint32_t size = std::min(delta_versions.size(), version_vec.delta_versions.size());
+    for (uint32_t i = 0; i < size; ++i) {
+      if (version_vec.delta_versions[i] > delta_versions[i]) {
+        updated = true;
+        total_delta_version += (version_vec.delta_versions[i] - delta_versions[i]);
+        delta_versions[i] = version_vec.delta_versions[i];
+      }
+    }
+
+    return updated;
+  }
+
+  // less than or equal
+  bool LessThanOrEqual(const AttrVersion& other) const {
+    if (!other.is_delta) {
+      return base_version <= other.version;
+    } else {
+      return DeltaVersion(other.index) <= other.version;
+    }
+  }
+
+  // greater than or equal
+  bool GreaterThanOrEqual(const AttrVersion& other) const {
+    if (!other.is_delta) {
+      return base_version >= other.version;
+    } else {
+      return DeltaVersion(other.index) >= other.version;
+    }
+  }
+
+  std::string ToString() const { return fmt::format("{} {}", base_version, total_delta_version); }
 };
 
 // AttrOrMutation carries either a full parent inode attr (need_parent_key path)
@@ -207,6 +357,10 @@ struct AttrOrMutation {
   AttrMutationEntry mutation;
 
   bool IsMutation() const { return attr.ino() == 0; }
+
+  AttrVersion ToAttrVersion() const {
+    return !IsMutation() ? AttrVersion(attr.version()) : AttrVersion(mutation.index(), mutation.delta_version());
+  }
 };
 
 enum class ReqType : uint8_t {

@@ -140,15 +140,15 @@ std::pair<DirShardSPtr, DirShardSPtr> DirShard::Split(const std::string& key, ui
   Range left_range{range_.start, key};
   Range right_range{key, range_.end};
 
-  DirShardSPtr left_shard = DirShard::New(left_id, left_range, version_, std::move(left_dentries));
-  DirShardSPtr right_shard = DirShard::New(right_id, right_range, version_, std::move(right_dentries));
+  DirShardSPtr left_shard = DirShard::New(left_id, left_range, version_vec_, std::move(left_dentries));
+  DirShardSPtr right_shard = DirShard::New(right_id, right_range, version_vec_, std::move(right_dentries));
 
   return {left_shard, right_shard};
 }
 
 std::string DirShard::ToString() const {
   return fmt::format("id({}) range[{},{}) version({}) size({})", id_, ::dingofs::Helper::StringToHex(range_.start),
-                     ::dingofs::Helper::StringToHex(range_.end), version_, Size());
+                     ::dingofs::Helper::StringToHex(range_.end), version_vec_.ToString(), Size());
 }
 
 bool DirShard::Empty() const {
@@ -175,7 +175,7 @@ void DirShard::Dump(Json::Value& value) const {
   value["id"] = id_;
   value["start"] = ::dingofs::Helper::StringToHex(range_.start);
   value["end"] = ::dingofs::Helper::StringToHex(range_.end);
-  value["version"] = version_;
+  value["version"] = version_vec_.ToString();
   value["size"] = children_.size();
 }
 
@@ -194,13 +194,19 @@ void DirShard::Snapshot(size_t offset, size_t limit, std::vector<Dentry>& dentri
 uint64_t ShardPartition::BaseVersion() {
   utils::ReadLockGuard lk(lock_);
 
-  return base_version_;
+  return version_vec_.BaseVersion();
 }
 
-uint64_t ShardPartition::DeltaVersion() {
+uint64_t ShardPartition::CompleteVersion() {
   utils::ReadLockGuard lk(lock_);
 
-  return delta_version_;
+  return version_vec_.CompleteVersion();
+}
+
+AttrVersionVec ShardPartition::VersionVec() {
+  utils::ReadLockGuard lk(lock_);
+
+  return version_vec_;
 }
 
 Status ShardPartition::Get(const std::string& name, Dentry& out) {
@@ -272,31 +278,31 @@ Status ShardPartition::Scan(const std::string& trace_id, const std::string& star
   return Status::OK();
 }
 
-void ShardPartition::Put(const Dentry& dentry, uint64_t version) {
+void ShardPartition::Put(const Dentry& dentry, const AttrVersion& version) {
   {
     utils::WriteLockGuard lk(lock_);
 
-    delta_version_ = std::max(version, delta_version_);
-    AddDeltaOpNoLock({DentryOpType::ADD, version, dentry, 0});
+    version_vec_.PutIf(version);
+    AddDeltaOpNoLock(DentryOp(DentryOpType::ADD, version, dentry, 0));
   }
 
   auto shard = GetShard(dentry.Name());
   if (shard) shard->Put(dentry);
 }
 
-void ShardPartition::Delete(const std::string& name, uint64_t version) {
+void ShardPartition::Delete(const std::string& name, const AttrVersion& version) {
   {
     utils::WriteLockGuard lk(lock_);
 
-    delta_version_ = std::max(version, delta_version_);
-    AddDeltaOpNoLock({DentryOpType::DELETE, version, Dentry(name), 0});
+    version_vec_.PutIf(version);
+    AddDeltaOpNoLock(DentryOp(DentryOpType::DELETE, version, Dentry(name), 0));
   }
 
   auto shard = GetShard(name);
   if (shard) shard->Delete(name);
 }
 
-void ShardPartition::Delete(const std::vector<std::string>& names, uint64_t version) {
+void ShardPartition::Delete(const std::vector<std::string>& names, const AttrVersion& version) {
   for (const auto& name : names) {
     auto shard = GetShard(name);
     if (shard) shard->Delete(name);
@@ -305,17 +311,17 @@ void ShardPartition::Delete(const std::vector<std::string>& names, uint64_t vers
   {
     utils::WriteLockGuard lk(lock_);
 
-    delta_version_ = std::max(version, delta_version_);
+    version_vec_.PutIf(version);
     for (const auto& name : names) {
-      AddDeltaOpNoLock({DentryOpType::DELETE, version, Dentry(name), 0});
+      AddDeltaOpNoLock(DentryOp(DentryOpType::DELETE, version, Dentry(name), 0));
     }
   }
 }
 
-void ShardPartition::RefreshDeltaVersion(uint64_t version) {
+void ShardPartition::RefreshVersion(const AttrVersion& version) {
   utils::WriteLockGuard lk(lock_);
 
-  delta_version_ = std::max(version, delta_version_);
+  version_vec_.PutIf(version);
 }
 
 bool ShardPartition::NeedCompact() {
@@ -383,8 +389,7 @@ void ShardPartition::Dump(Json::Value& value, size_t dentry_offset, size_t dentr
 
   value["fs_id"] = fs_id_;
   value["ino"] = ino_;
-  value["base_version"] = base_version_;
-  value["delta_version"] = delta_version_;
+  value["version"] = version_vec_.ToString();
   value["delta_dentry_ops_count"] = delta_dentry_ops_.size();
 
   std::map<std::string, Json::Value> shard_map_value;
@@ -422,7 +427,7 @@ void ShardPartition::Dump(Json::Value& value, size_t dentry_offset, size_t dentr
     auto& shard_value = it->second;
     shard_value["id"] = shard->ID();
     shard_value["size"] = shard->Size();
-    shard_value["version"] = shard->Version();
+    shard_value["version"] = shard->VersionString();
     loaded_shards.push_back(shard);
   }
 
@@ -432,7 +437,7 @@ void ShardPartition::Dump(Json::Value& value, size_t dentry_offset, size_t dentr
   }
   value["shards"] = shards_value;
 
-  std::sort(loaded_shards.begin(), loaded_shards.end(),
+  std::sort(loaded_shards.begin(), loaded_shards.end(),  // NOLINT
             [](const DirShardSPtr& lhs, const DirShardSPtr& rhs) { return lhs->Start() < rhs->Start(); });
   size_t remaining_offset = dentry_offset;
   size_t total_dentries = 0;
@@ -463,7 +468,7 @@ void ShardPartition::Dump(Json::Value& value, size_t dentry_offset, size_t dentr
   for (size_t i = 0; it != delta_dentry_ops_.end() && i < delta_limit; ++it, ++i) {
     Json::Value op_value(Json::objectValue);
     op_value["op"] = it->op_type == DentryOpType::ADD ? "ADD" : "DELETE";
-    op_value["version"] = it->version;
+    op_value["version"] = it->version.ToString();
     op_value["time_s"] = it->time_s;
     DentryToJson(it->dentry, op_value["dentry"]);
     delta_value.append(op_value);
@@ -477,27 +482,11 @@ void ShardPartition::AddDeltaOpNoLock(DentryOp&& op) {
   op.time_s = utils::Timestamp();
 
   delta_dentry_ops_.push_back(std::move(op));
-
-  // keep delta_dentry_ops_ ordered by version, the new op is usually with greater version, so we compare with the last
-  // op first to avoid unnecessary sort
-  if (delta_dentry_ops_.size() > 1) {
-    auto it = delta_dentry_ops_.end();
-    --it;  // last element
-    auto prev = it;
-    --prev;
-    while (true) {
-      if (it->version >= prev->version) break;
-      std::iter_swap(it, prev);
-      if (prev == delta_dentry_ops_.begin()) break;
-      it = prev;
-      --prev;
-    }
-  }
 }
 
 void ShardPartition::ApplyDeltaOpNoLock(DirShardSPtr shard) {
   for (auto& op : delta_dentry_ops_) {
-    if (op.version <= shard->Version()) continue;
+    if (shard->VersionVec().GreaterThanOrEqual(op.version)) continue;
 
     // check shard range contains dentry name, if not, skip this op and let it be applied to next shard after split
     if (!shard->Contains(op.dentry.Name())) continue;
@@ -617,9 +606,9 @@ Status ShardPartition::DoFetchDirShard(const Range& range, const std::string& re
 
   auto& result = operation.GetResult();
 
-  uint64_t version = result.attr_with_mutation.Version();
+  AttrVersionVec version_vec(result.attr_with_mutation);
 
-  out_shard = DirShard::New(NextShardID(), range, version, std::move(dentries));
+  out_shard = DirShard::New(NextShardID(), range, version_vec, std::move(dentries));
 
   PutShard(out_shard);
 
@@ -629,25 +618,24 @@ Status ShardPartition::DoFetchDirShard(const Range& range, const std::string& re
   return Status::OK();
 }
 
-bool ShardPartition::Refresh(uint64_t new_version) {
-  LOG_DEBUG << fmt::format("[partition.{}.{}] refresh partition, version({}->{}) delta_version({}).", fs_id_, ino_,
-                           base_version_, new_version, delta_version_);
+bool ShardPartition::Refresh(const AttrVersionVec& version_vec) {
+  LOG_DEBUG << fmt::format("[partition.{}.{}] refresh partition, version({}->{}).", fs_id_, ino_,
+                           version_vec_.ToString(), version_vec.ToString());
 
   utils::WriteLockGuard lk(lock_);
 
-  if (new_version <= base_version_) return false;
+  if (!version_vec_.PutIf(version_vec)) return false;
 
-  base_version_ = new_version;
-  delta_version_ = std::max(delta_version_, base_version_);
   shard_map_.clear();
 
   for (auto it = delta_dentry_ops_.begin(); it != delta_dentry_ops_.end();) {
-    if (it->version <= base_version_) {
+    if (version_vec_.GreaterThanOrEqual(it->version)) {
       it = delta_dentry_ops_.erase(it);
       continue;
     }
 
-    delta_version_ = std::max(delta_version_, it->version);
+    version_vec_.PutIf(it->version);
+
     ++it;
   }
 
@@ -794,7 +782,7 @@ PartitionPtr PartitionCache::PutIf(const PartitionPtr& partition) {
           total_count_ << 1;
 
         } else {
-          it->second->Refresh(partition->BaseVersion());
+          it->second->Refresh(partition->VersionVec());
           new_partition = it->second;
         }
       },

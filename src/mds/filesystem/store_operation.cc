@@ -2582,6 +2582,11 @@ Status CleanTrashBucketOperation::Run(TxnUPtr& txn) {
 }
 
 Status RenameOperation::Run(TxnUPtr& txn) {
+  // RunAlone retries Run on conflict; result_ must be rebuilt from scratch so
+  // mutations are not appended twice (which would inflate ToCompleteAttr()).
+  result_.old_parent_attr_with_mutation.mutations.clear();
+  result_.new_parent_attr_with_mutation.mutations.clear();
+
   uint64_t time_ns = GetTime();
 
   LOG_DEBUG << fmt::format("[operation.{}] rename old_parent({}), old_name({}), new_parent_ino({}), new_name({}).",
@@ -3854,6 +3859,10 @@ Status ScanTrashDentryOperation::Run(TxnUPtr& txn) {
 }
 
 Status ScanDirShardOperation::Run(TxnUPtr& txn) {
+  // RunAlone retries Run on conflict; clear appended mutations so a retry does
+  // not accumulate duplicate slots.
+  result_.attr_with_mutation.mutations.clear();
+
   const Range complete_range = MetaCodec::GetDentryRange(fs_id_, ino_, false);
 
   Range range;
@@ -4033,6 +4042,10 @@ Status GetAndCompactFsStatsOperation::Run(TxnUPtr& txn) {
 Status GetInodeAttrOperation::Run(TxnUPtr& txn) {
   CHECK(fs_id_ > 0) << "fs_id is 0";
   CHECK(ino_ > 0) << "ino is 0";
+
+  // RunAlone retries Run on conflict; clear appended mutations so a retry does
+  // not accumulate duplicate slots.
+  result_.attr_with_mutation.mutations.clear();
 
   Status status;
   if (IsDir(ino_)) {

@@ -22,10 +22,14 @@
 #include <utility>
 #include <vector>
 
+#include "common/helper.h"
 #include "dingofs/error.pb.h"
+#include "fmt/format.h"
 
 namespace dingofs {
 namespace mds {
+
+static void RandomSleep() { bthread_usleep(dingofs::Helper::GenerateRealRandomInteger(500, 3000)); }
 
 bool DummyStorage::Init(const std::string&) { return true; }
 
@@ -201,7 +205,8 @@ TxnUPtr DummyStorage::NewTxn(Txn::IsolationLevel isolation_level) {
 }
 
 Status DummyStorage::ApplyTxn(const std::map<std::string, KeyValue>& writes,
-                              const std::set<std::string>& if_absent_keys) {
+                              const std::set<std::string>& if_absent_keys,
+                              const std::map<std::string, uint64_t>& read_versions) {
   utils::WriteLockGuard lock(lock_);
 
   // Re-verify if-absent keys atomically with the apply.
@@ -216,12 +221,81 @@ Status DummyStorage::ApplyTxn(const std::map<std::string, KeyValue>& writes,
     }
   }
 
+  // Optimistic concurrency: reject a stale read-modify-write. Only keys the txn
+  // read *and* writes are checked; pure blind writes keep last-write-wins.
+  for (const auto& [key, kv] : writes) {
+    auto rit = read_versions.find(key);
+    if (rit == read_versions.end()) continue;
+
+    uint64_t current_version = VersionNoLock(key);
+    if (current_version != rit->second) {
+      return Status(
+          pb::error::ESTORE_MAYBE_RETRY,
+          fmt::format("write conflict on key, read_version({}) current_version({})", rit->second, current_version));
+    }
+  }
+
+  if (writes.empty()) return Status::OK();
+
+  uint64_t new_version = ++commit_version_;
   for (const auto& [key, kv] : writes) {
     if (kv.opt_type == KeyValue::OpType::kPut) {
       data_[key] = kv.value;
     } else if (kv.opt_type == KeyValue::OpType::kDelete) {
       data_.erase(key);
     }
+    key_versions_[key] = new_version;
+  }
+
+  return Status::OK();
+}
+
+uint64_t DummyStorage::VersionNoLock(const std::string& key) const {
+  // A key that is absent from data_ reads as version 0 even if key_versions_
+  // still holds the version of a since-deleted write; otherwise a
+  // read-absent-then-write (e.g. recreate after delete) would conflict forever.
+  if (data_.find(key) == data_.end()) return 0;
+
+  auto it = key_versions_.find(key);
+  return it == key_versions_.end() ? 0 : it->second;
+}
+
+Status DummyStorage::GetWithVersion(const std::string& key, std::string& value, uint64_t& version) {
+  utils::ReadLockGuard lock(lock_);
+
+  auto it = data_.find(key);
+  if (it == data_.end()) {
+    version = 0;
+    return Status(pb::error::ENOT_FOUND, "key not found");
+  }
+
+  value = it->second;
+  version = VersionNoLock(key);
+  return Status::OK();
+}
+
+Status DummyStorage::BatchGetWithVersion(const std::vector<std::string>& keys, std::vector<KeyValue>& kvs,
+                                         std::map<std::string, uint64_t>& versions) {
+  utils::ReadLockGuard lock(lock_);
+
+  for (const auto& key : keys) {
+    auto it = data_.find(key);
+    if (it == data_.end()) continue;
+
+    kvs.push_back(KeyValue{KeyValue::OpType::kPut, key, it->second});
+    versions[key] = VersionNoLock(key);
+  }
+
+  return Status::OK();
+}
+
+Status DummyStorage::ScanWithVersion(const Range& range, std::vector<KeyValue>& kvs,
+                                     std::map<std::string, uint64_t>& versions) {
+  utils::ReadLockGuard lock(lock_);
+
+  for (auto it = data_.lower_bound(range.start); it != data_.end() && it->first < range.end; ++it) {
+    kvs.push_back(KeyValue{KeyValue::OpType::kPut, it->first, it->second});
+    versions[it->first] = VersionNoLock(it->first);
   }
 
   return Status::OK();
@@ -236,6 +310,8 @@ DummyTxn::DummyTxn(DummyStorage* storage, Txn::IsolationLevel isolation_level)
 int64_t DummyTxn::ID() const { return txn_id_; }
 
 Status DummyTxn::Put(const std::string& key, const std::string& value) {
+  RandomSleep();
+
   if (committed_) return Status(pb::error::EINTERNAL, "txn already committed");
 
   stage_writes_[key] = KeyValue{KeyValue::OpType::kPut, key, value};
@@ -245,6 +321,8 @@ Status DummyTxn::Put(const std::string& key, const std::string& value) {
 }
 
 Status DummyTxn::PutIfAbsent(const std::string& key, const std::string& value) {
+  RandomSleep();
+
   if (committed_) return Status(pb::error::EINTERNAL, "txn already committed");
 
   // A prior staged Put in this txn means the key is already present from the
@@ -270,6 +348,8 @@ Status DummyTxn::PutIfAbsent(const std::string& key, const std::string& value) {
 }
 
 Status DummyTxn::Delete(const std::string& key) {
+  RandomSleep();
+
   if (committed_) return Status(pb::error::EINTERNAL, "txn already committed");
 
   stage_writes_[key] = KeyValue{KeyValue::OpType::kDelete, key, ""};
@@ -278,6 +358,8 @@ Status DummyTxn::Delete(const std::string& key) {
 }
 
 Status DummyTxn::Get(const std::string& key, std::string& value) {
+  RandomSleep();
+
   auto it = stage_writes_.find(key);
   if (it != stage_writes_.end()) {
     if (it->second.opt_type == KeyValue::OpType::kDelete) {
@@ -287,10 +369,17 @@ Status DummyTxn::Get(const std::string& key, std::string& value) {
     return Status::OK();
   }
 
-  return storage_->Get(key, value);
+  uint64_t version = 0;
+  auto status = storage_->GetWithVersion(key, value, version);
+  if (status.ok() || status.error_code() == pb::error::ENOT_FOUND) {
+    read_versions_[key] = version;
+  }
+  return status;
 }
 
 Status DummyTxn::BatchGet(const std::vector<std::string>& keys, std::vector<KeyValue>& kvs) {
+  RandomSleep();
+
   std::vector<std::string> rest_keys;
   rest_keys.reserve(keys.size());
 
@@ -309,11 +398,27 @@ Status DummyTxn::BatchGet(const std::vector<std::string>& keys, std::vector<KeyV
   if (rest_keys.empty()) return Status::OK();
 
   std::vector<KeyValue> rest_kvs;
-  auto status = storage_->BatchGet(rest_keys, rest_kvs);
+  std::map<std::string, uint64_t> versions;
+  auto status = storage_->BatchGetWithVersion(rest_keys, rest_kvs, versions);
   if (!status.ok()) return status;
+
+  // Absent keys are version 0 so a later create is detected as a conflict.
+  for (const auto& key : rest_keys) {
+    auto vit = versions.find(key);
+    read_versions_[key] = (vit == versions.end()) ? 0 : vit->second;
+  }
 
   kvs.insert(kvs.end(), rest_kvs.begin(), rest_kvs.end());
   return Status::OK();
+}
+
+void DummyTxn::RecordReadVersions(const std::map<std::string, uint64_t>& versions) {
+  for (const auto& [key, version] : versions) {
+    // Staged keys are this txn's own view, not storage state; skip them.
+    if (stage_writes_.find(key) != stage_writes_.end()) continue;
+    // Last read wins: the value this txn may build its write on.
+    read_versions_[key] = version;
+  }
 }
 
 // Merges a sorted storage scan result with the txn's staged writes for the
@@ -360,9 +465,14 @@ static void MergeScanWithStage(const Range& range, const std::map<std::string, K
 }
 
 Status DummyTxn::Scan(const Range& range, uint64_t limit, std::vector<KeyValue>& kvs) {
+  RandomSleep();
+
   std::vector<KeyValue> storage_kvs;
-  auto status = storage_->Scan(range, storage_kvs);
+  std::map<std::string, uint64_t> versions;
+  auto status = storage_->ScanWithVersion(range, storage_kvs, versions);
   if (!status.ok()) return status;
+
+  RecordReadVersions(versions);
 
   if (limit == 0) limit = UINT64_MAX;
   MergeScanWithStage(range, stage_writes_, std::move(storage_kvs), limit, kvs);
@@ -370,9 +480,14 @@ Status DummyTxn::Scan(const Range& range, uint64_t limit, std::vector<KeyValue>&
 }
 
 Status DummyTxn::Scan(const Range& range, ScanHandlerType handler) {
+  RandomSleep();
+
   std::vector<KeyValue> storage_kvs;
-  auto status = storage_->Scan(range, storage_kvs);
+  std::map<std::string, uint64_t> versions;
+  auto status = storage_->ScanWithVersion(range, storage_kvs, versions);
   if (!status.ok()) return status;
+
+  RecordReadVersions(versions);
 
   std::vector<KeyValue> merged;
   MergeScanWithStage(range, stage_writes_, std::move(storage_kvs), UINT64_MAX, merged);
@@ -384,9 +499,14 @@ Status DummyTxn::Scan(const Range& range, ScanHandlerType handler) {
 }
 
 Status DummyTxn::Scan(const Range& range, std::function<bool(KeyValue&)> handler) {
+  RandomSleep();
+
   std::vector<KeyValue> storage_kvs;
-  auto status = storage_->Scan(range, storage_kvs);
+  std::map<std::string, uint64_t> versions;
+  auto status = storage_->ScanWithVersion(range, storage_kvs, versions);
   if (!status.ok()) return status;
+
+  RecordReadVersions(versions);
 
   std::vector<KeyValue> merged;
   MergeScanWithStage(range, stage_writes_, std::move(storage_kvs), UINT64_MAX, merged);
@@ -401,9 +521,10 @@ Status DummyTxn::Commit() {
   if (committed_) return Status(pb::error::EINTERNAL, "txn already committed");
   committed_ = true;
 
-  auto status = storage_->ApplyTxn(stage_writes_, if_absent_keys_);
+  auto status = storage_->ApplyTxn(stage_writes_, if_absent_keys_, read_versions_);
   stage_writes_.clear();
   if_absent_keys_.clear();
+  read_versions_.clear();
   return status;
 }
 

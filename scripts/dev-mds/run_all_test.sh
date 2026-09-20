@@ -9,6 +9,7 @@ if [[ ! -d "$mydir" ]]; then mydir="$PWD"; fi
 DEFINE_string type 'all' 'test type'
 DEFINE_string mds_addr '' 'mds address'
 DEFINE_string mountpoint '' 'mount point'
+DEFINE_integer round 1 'test round count'
 
 
 # parse the command-line
@@ -30,7 +31,6 @@ fi
 
 BASE_DIR=$(dirname $(dirname $(cd $(dirname $0); pwd)))
 MOUNTPOINT=${FLAGS_mountpoint}
-SUFFIX=$(date +%Y%m%d%H%M%S)
 
 function run_e2e_test() {
   echo "### [e2e] run test......"
@@ -49,6 +49,15 @@ function run_e2e_test() {
 
   # run test command
   uv run pytest --mount-point=$TEST_ROOT_DIR > $E2E_LOG_DIR/e2e_test.log 2>&1
+
+  # verify result
+  if grep -qE '[0-9]+ passed' $E2E_LOG_DIR/e2e_test.log &&
+     ! grep -qE '[0-9]+ (failed|error)' $E2E_LOG_DIR/e2e_test.log; then
+    echo "### [e2e] result: PASS"
+  else
+    echo "### [e2e] result: FAIL"
+    FAILED=1
+  fi
 
   # uv run pytest quota --mount-point=$TEST_ROOT_DIR -m slow  --mds-addr=${FLAGS_mds_addr} --fs-id=10000 --root-ino=1
 
@@ -73,6 +82,14 @@ function run_pjdtest_test() {
   # run test command
   sudo prove -rv --exec 'bash -x' ${PJD_DIR} > $PJD_LOG_DIR/pjd_test.log 2>&1
 
+  # verify result
+  if grep -q '^Result: PASS' $PJD_LOG_DIR/pjd_test.log; then
+    echo "### [pjdtest] result: PASS"
+  else
+    echo "### [pjdtest] result: FAIL"
+    FAILED=1
+  fi
+
   echo "### [pjdtest] test done, log file: $PJD_LOG_DIR/pjd_test.log"
 }
 
@@ -89,7 +106,15 @@ function run_fsx_test() {
   mkdir -p ${FSX_LOG_DIR}
 
   # run test command
-  fsx -l 1073741824 -o 1048576 -S 0 -p 10000 --duration=3600 --record-ops=$FSX_LOG_DIR/fsx.ops -P $FSX_LOG_DIR $FSX_TEST_FILE
+  fsx -l 1073741824 -o 1048576 -S 0 -p 10000 --duration=3600 --record-ops=$FSX_LOG_DIR/fsx.ops -P $FSX_LOG_DIR $FSX_TEST_FILE > $FSX_LOG_DIR/fsx.log 2>&1
+
+  # verify result
+  if grep -qE '^All [0-9]+ operations completed A-OK' $FSX_LOG_DIR/fsx.log; then
+    echo "### [fsx] result: PASS"
+  else
+    echo "### [fsx] result: FAIL"
+    FAILED=1
+  fi
 
   echo "### [fsx] test done, log file: $FSX_LOG_DIR/fsx.ops"
 }
@@ -173,18 +198,32 @@ function run_all_tests() {
   run_fsstress_test
 }
 
-if [ "$FLAGS_type" = "all" ]; then
-  run_all_tests
-elif [ "$FLAGS_type" = "e2e" ]; then
-  run_e2e_test
-elif [ "$FLAGS_type" = "pjdtest" ]; then
-  run_pjdtest_test
-elif [ "$FLAGS_type" = "fsx" ]; then
-  run_fsx_test
-elif [ "$FLAGS_type" = "mdtest" ]; then
-  run_mdtest_test
-elif [ "$FLAGS_type" = "fio" ]; then
-  run_fio_test
-elif [ "$FLAGS_type" = "fsstress" ]; then
-  run_fsstress_test
+FAILED=0
+
+for ((i = 1; i <= ${FLAGS_round}; i++)); do
+  echo "### ===== round $i/${FLAGS_round} ====="
+  SUFFIX=$(date +%Y%m%d%H%M%S)_${i}
+
+  if [ "$FLAGS_type" == "all" ]; then
+    run_all_tests
+  elif [ "$FLAGS_type" == "e2e" ]; then
+    run_e2e_test
+  elif [ "$FLAGS_type" == "pjdtest" ]; then
+    run_pjdtest_test
+  elif [ "$FLAGS_type" == "fsx" ]; then
+    run_fsx_test
+  elif [ "$FLAGS_type" == "mdtest" ]; then
+    run_mdtest_test
+  elif [ "$FLAGS_type" == "fio" ]; then
+    run_fio_test
+  elif [ "$FLAGS_type" == "fsstress" ]; then
+    run_fsstress_test
+  fi
+
+  sleep 10
+done
+
+if [ ${FAILED} -ne 0 ]; then
+  echo "### some tests FAILED"
+  exit 1
 fi

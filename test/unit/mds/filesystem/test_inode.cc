@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cstdint>
+#include <initializer_list>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -73,7 +74,42 @@ static pb::mds::Inode GenInode(uint32_t fs_id, uint64_t ino,
   return inode;
 }
 
+static AttrMutationEntry GenMutation(uint64_t ino, uint32_t index,
+                                     uint64_t delta_version) {
+  AttrMutationEntry mutation;
+  mutation.set_ino(ino);
+  mutation.set_index(index);
+  mutation.set_delta_version(delta_version);
+
+  auto now_ns = utils::TimestampNs();
+  mutation.set_ctime(now_ns);
+  mutation.set_mtime(now_ns);
+  mutation.set_atime(now_ns);
+
+  return mutation;
+}
+
+static AttrWithMutation GenAttrWithMutation(
+    uint32_t fs_id, uint64_t ino, uint64_t base_version,
+    std::initializer_list<std::pair<uint32_t, uint64_t>> mutations) {
+  AttrWithMutation attr_with_mutation;
+  attr_with_mutation.attr =
+      GenInode(fs_id, ino, pb::mds::FileType::DIRECTORY, base_version);
+  for (const auto& [index, delta_version] : mutations) {
+    attr_with_mutation.mutations.push_back(
+        GenMutation(ino, index, delta_version));
+  }
+
+  return attr_with_mutation;
+}
+
 class InodeCacheTest : public testing::Test {
+ protected:
+  void SetUp() override {}
+  void TearDown() override {}
+};
+
+class InodeTest : public testing::Test {
  protected:
   void SetUp() override {}
   void TearDown() override {}
@@ -118,7 +154,7 @@ TEST_F(InodeCacheTest, Put) {
     ASSERT_EQ(inode->Ino(), ino);
     ASSERT_EQ(inode->Gid(), 1008);
     ASSERT_EQ(inode->Uid(), 1008);
-    ASSERT_EQ(inode->Version(), 1);
+    ASSERT_EQ(inode->CompleteVersion(), 1);
 
     auto attr_entry = GenInode(kFsId, ino, pb::mds::FileType::DIRECTORY);
     attr_entry.set_gid(1234);
@@ -133,7 +169,7 @@ TEST_F(InodeCacheTest, Put) {
     ASSERT_EQ(inode->Gid(), 1234);
     ASSERT_EQ(inode->Uid(), 5678);
     ASSERT_EQ(inode->Length(), 1234567);
-    ASSERT_EQ(inode->Version(), 2);
+    ASSERT_EQ(inode->CompleteVersion(), 2);
   }
 
   {
@@ -188,7 +224,7 @@ TEST_F(InodeCacheTest, Put) {
     ASSERT_EQ(inode->Gid(), 1234);
     ASSERT_EQ(inode->Uid(), 5678);
     ASSERT_EQ(inode->Length(), 1234567);
-    ASSERT_EQ(inode->Version(), 2);
+    ASSERT_EQ(inode->CompleteVersion(), 2);
   }
 
   // put by AttrEntry&&
@@ -202,7 +238,7 @@ TEST_F(InodeCacheTest, Put) {
     auto inode = inode_cache.Get(ino);
     ASSERT_TRUE(inode != nullptr);
     ASSERT_EQ(inode->Ino(), ino);
-    ASSERT_EQ(inode->Version(), 1);
+    ASSERT_EQ(inode->CompleteVersion(), 1);
 
     // update
     auto attr_entry = GenInode(kFsId, ino, pb::mds::FileType::DIRECTORY);
@@ -223,7 +259,7 @@ TEST_F(InodeCacheTest, Put) {
     ASSERT_EQ(inode->Gid(), 1234);
     ASSERT_EQ(inode->Uid(), 5678);
     ASSERT_EQ(inode->Length(), 1234567);
-    ASSERT_EQ(inode->Version(), 2);
+    ASSERT_EQ(inode->CompleteVersion(), 2);
   }
 }
 
@@ -323,6 +359,108 @@ TEST_F(InodeCacheTest, Get) {
   ASSERT_EQ(inodes[2]->Ino(), 4003);
   ASSERT_EQ(inodes[3]->Ino(), 4004);
   ASSERT_EQ(inodes[4]->Ino(), 4005);
+}
+
+TEST_F(InodeTest, BaseVersionPutIfIsMonotonic) {
+  const Ino ino = 6001;
+  auto inode = Inode::New(GenInode(kFsId, ino, pb::mds::FileType::DIRECTORY, 10));
+
+  ASSERT_EQ(inode->BaseVersion(), 10);
+  ASSERT_EQ(inode->CompleteVersion(), 10);
+
+  // stale attr is rejected, neither version nor fields change
+  auto stale = GenInode(kFsId, ino, pb::mds::FileType::DIRECTORY, 5);
+  stale.set_length(999);
+  inode->PutIf(stale, "test");
+  ASSERT_EQ(inode->BaseVersion(), 10);
+  ASSERT_EQ(inode->CompleteVersion(), 10);
+  ASSERT_EQ(inode->Length(), 0);
+
+  // equal version is rejected too
+  inode->PutIf(GenInode(kFsId, ino, pb::mds::FileType::DIRECTORY, 10), "test");
+  ASSERT_EQ(inode->BaseVersion(), 10);
+  ASSERT_EQ(inode->CompleteVersion(), 10);
+
+  // newer attr wins and updates fields
+  auto newer = GenInode(kFsId, ino, pb::mds::FileType::DIRECTORY, 12);
+  newer.set_length(123);
+  inode->PutIf(newer, "test");
+  ASSERT_EQ(inode->BaseVersion(), 12);
+  ASSERT_EQ(inode->CompleteVersion(), 12);
+  ASSERT_EQ(inode->Length(), 123);
+  ASSERT_EQ(inode->ToAttr().version(), 12);
+}
+
+TEST_F(InodeTest, CompleteVersionAccumulatesMutations) {
+  const Ino ino = 6002;
+  auto inode = Inode::New(GenInode(kFsId, ino, pb::mds::FileType::DIRECTORY, 100));
+
+  auto attr_with_mutation = GenAttrWithMutation(kFsId, ino, 110, {{1, 3}, {2, 4}});
+  inode->PutIf(attr_with_mutation, "test");
+  ASSERT_EQ(inode->BaseVersion(), 110);
+  ASSERT_EQ(inode->CompleteVersion(), 117);
+  ASSERT_EQ(inode->ToAttr().version(), 117);
+
+  // replaying the same attr/mutations is a no-op
+  inode->PutIf(attr_with_mutation, "test");
+  ASSERT_EQ(inode->BaseVersion(), 110);
+  ASSERT_EQ(inode->CompleteVersion(), 117);
+
+  // stale base version but newer delta still advances the delta
+  inode->PutIf(GenAttrWithMutation(kFsId, ino, 105, {{1, 5}}), "test");
+  ASSERT_EQ(inode->BaseVersion(), 110);
+  ASSERT_EQ(inode->CompleteVersion(), 119);
+
+  // newer base version keeps already accumulated deltas
+  inode->PutIf(GenInode(kFsId, ino, pb::mds::FileType::DIRECTORY, 120),
+               "test");
+  ASSERT_EQ(inode->BaseVersion(), 120);
+  ASSERT_EQ(inode->CompleteVersion(), 129);
+}
+
+TEST_F(InodeTest, PutByMutationIsMonotonic) {
+  const Ino ino = 6003;
+  auto inode = Inode::New(GenInode(kFsId, ino, pb::mds::FileType::DIRECTORY, 10));
+
+  auto attr = inode->PutByMutation(GenMutation(ino, 1, 5), "test");
+  ASSERT_EQ(attr.version(), 15);
+  ASSERT_EQ(inode->CompleteVersion(), 15);
+
+  // equal and older delta are rejected, current attr is returned unchanged
+  attr = inode->PutByMutation(GenMutation(ino, 1, 5), "test");
+  ASSERT_EQ(attr.version(), 15);
+  attr = inode->PutByMutation(GenMutation(ino, 1, 3), "test");
+  ASSERT_EQ(attr.version(), 15);
+  ASSERT_EQ(inode->CompleteVersion(), 15);
+
+  // newer delta on the same index only adds the difference
+  attr = inode->PutByMutation(GenMutation(ino, 1, 8), "test");
+  ASSERT_EQ(attr.version(), 18);
+  ASSERT_EQ(inode->CompleteVersion(), 18);
+
+  // independent index accumulates
+  attr = inode->PutByMutation(GenMutation(ino, 2, 4), "test");
+  ASSERT_EQ(attr.version(), 22);
+  ASSERT_EQ(inode->CompleteVersion(), 22);
+
+  // base version bump keeps the mutation deltas
+  auto newer = GenInode(kFsId, ino, pb::mds::FileType::DIRECTORY, 30);
+  inode->PutIf(newer, "test");
+  ASSERT_EQ(inode->BaseVersion(), 30);
+  ASSERT_EQ(inode->CompleteVersion(), 42);
+}
+
+TEST_F(InodeTest, ConstructFromAttrWithMutation) {
+  const Ino ino = 6005;
+  auto attr_with_mutation = GenAttrWithMutation(kFsId, ino, 50, {{2, 3}, {5, 7}});
+
+  auto inode = Inode::New(attr_with_mutation);
+
+  ASSERT_EQ(inode->Ino(), ino);
+  ASSERT_EQ(inode->Type(), pb::mds::FileType::DIRECTORY);
+  ASSERT_EQ(inode->BaseVersion(), 50);
+  ASSERT_EQ(inode->CompleteVersion(), 60);
+  ASSERT_EQ(inode->ToAttr().version(), 60);
 }
 
 TEST_F(InodeCacheTest, Benchmark) {

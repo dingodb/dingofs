@@ -23,6 +23,7 @@
 #include <vector>
 
 #include "absl/container/btree_map.h"
+#include "absl/container/flat_hash_map.h"
 #include "mds/storage/storage.h"
 #include "utils/concurrent/concurrent.h"
 
@@ -60,10 +61,25 @@ class DummyStorage : public KVStorage {
  private:
   friend class DummyTxn;
 
-  // Atomically verifies that none of `if_absent_keys` already exist, then
-  // applies `writes` (last-write-wins per key). Used by DummyTxn::Commit to
-  // make PutIfAbsent semantics race-free against concurrent committers.
-  Status ApplyTxn(const std::map<std::string, KeyValue>& writes, const std::set<std::string>& if_absent_keys);
+  // Atomically applies `writes` under the storage lock. Before applying,
+  // re-verifies `if_absent_keys` and, for every key the txn both read and is
+  // about to write, checks that it did not change since the read. A changed key
+  // yields ESTORE_MAYBE_RETRY, mirroring the optimistic concurrency of the
+  // production backends: without it a stale read-modify-write silently loses an
+  // update (last-write-wins).
+  Status ApplyTxn(const std::map<std::string, KeyValue>& writes, const std::set<std::string>& if_absent_keys,
+                  const std::map<std::string, uint64_t>& read_versions);
+
+  // Versioned reads: the version is captured atomically with the value so a
+  // later commit can tell whether the key moved under the transaction. Absent
+  // keys are reported with version 0 (and ENOT_FOUND for the single-key read).
+  Status GetWithVersion(const std::string& key, std::string& value, uint64_t& version);
+  Status BatchGetWithVersion(const std::vector<std::string>& keys, std::vector<KeyValue>& kvs,
+                             std::map<std::string, uint64_t>& versions);
+  Status ScanWithVersion(const Range& range, std::vector<KeyValue>& kvs, std::map<std::string, uint64_t>& versions);
+
+  // Caller must hold lock_. Returns 0 for a key that is absent or never written.
+  uint64_t VersionNoLock(const std::string& key) const;
 
   struct Table {
     std::string name;
@@ -77,6 +93,11 @@ class DummyStorage : public KVStorage {
   std::map<int64_t, Table> tables_;
 
   absl::btree_map<std::string, std::string> data_;
+
+  // Last commit version that wrote each key; the basis for write-conflict
+  // detection. Entries are never evicted (test-scope storage).
+  absl::flat_hash_map<std::string, uint64_t> key_versions_;
+  uint64_t commit_version_{0};
 };
 
 class DummyTxn : public Txn {
@@ -114,7 +135,13 @@ class DummyTxn : public Txn {
   // storage must be re-verified atomically at Commit time.
   std::set<std::string> if_absent_keys_;
 
+  // Version observed the last time each key was read from storage. Commit
+  // rejects the txn if one of these keys changed before we wrote it.
+  std::map<std::string, uint64_t> read_versions_;
+
   bool committed_{false};
+
+  void RecordReadVersions(const std::map<std::string, uint64_t>& versions);
 };
 
 }  // namespace mds

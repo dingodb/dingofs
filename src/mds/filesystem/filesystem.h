@@ -370,6 +370,9 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
 
   Status DescribePartitionShard(Ino ino, Json::Value& value);
 
+  // for unit test
+  void Test_DeletePartitionFromCache(Ino parent) { partition_cache_.Delete(parent); }
+
  private:
   friend class DebugServiceImpl;
   friend class FsStatServiceImpl;
@@ -383,11 +386,11 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   Status GenFileIno(Ino& ino);
   bool CanServe(uint64_t self_mds_id);
 
-  void AddDentryToPartition(Ino parent, const Dentry& dentry, uint64_t version);
-  void DeleteDentryFromPartition(Ino parent, const std::string& name, uint64_t version);
-  void DeleteDentryFromPartition(Ino parent, const std::vector<std::string>& names, uint64_t version);
+  void AddDentryToPartition(Ino parent, const Dentry& dentry, const AttrVersion& version);
+  void DeleteDentryFromPartition(Ino parent, const std::string& name, const AttrVersion& version);
+  void DeleteDentryFromPartition(Ino parent, const std::vector<std::string>& names, const AttrVersion& version);
   // for setattr/setxattr/removexattr, which may update dir attr but not change dentry
-  void RefreshPartitionDeltaVersion(Ino parent, uint64_t version);
+  void RefreshPartitionVersion(Ino parent, const AttrVersion& version);
 
   // get partition
   Status GetPartition(Context& ctx, Ino parent, PartitionPtr& out_partition);

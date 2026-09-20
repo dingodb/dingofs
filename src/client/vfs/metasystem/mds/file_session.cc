@@ -236,7 +236,6 @@ FileSessionSPtr FileSessionMap::Put(Ino ino, uint64_t fh,
         }
 
         file_session = it->second;
-        // Keep handle registration atomic with the inode's last close.
         file_session->AddSession(fh, session_id, flags);
       },
       ino);

@@ -61,12 +61,9 @@ class Inode {
         symlink_(attr.symlink()),
         rdev_(attr.rdev()),
         flags_(attr.flags()),
-        base_version_(attr.version()),
+        version_vec_(attr.version()),
         parents_(attr.parents().begin(), attr.parents().end()) {
     last_active_time_s_ = utils::Timestamp();
-
-    total_delta_version_ = 0;
-    delta_versions_.resize(kDirAttrMutationNum, 0);
 
     for (const auto& xattr : attr.xattrs()) {
       xattrs_.emplace(xattr.first, xattr.second);
@@ -88,17 +85,10 @@ class Inode {
         symlink_(attr_with_mutation.attr.symlink()),
         rdev_(attr_with_mutation.attr.rdev()),
         flags_(attr_with_mutation.attr.flags()),
-        base_version_(attr_with_mutation.attr.version()),
+        version_vec_(attr_with_mutation),
         parents_(attr_with_mutation.attr.parents().begin(), attr_with_mutation.attr.parents().end()) {
     last_active_time_s_ = utils::Timestamp();
     last_refresh_time_s_ = utils::Timestamp();
-
-    total_delta_version_ = 0;
-    delta_versions_.resize(kDirAttrMutationNum, 0);
-    for (const auto& mutation : attr_with_mutation.mutations) {
-      delta_versions_[mutation.index()] = mutation.delta_version();
-      total_delta_version_ += mutation.delta_version();
-    }
 
     for (const auto& xattr : attr_with_mutation.attr.xattrs()) {
       xattrs_.emplace(xattr.first, xattr.second);
@@ -167,11 +157,18 @@ class Inode {
   }
   uint64_t BaseVersion() const {
     utils::ReadLockGuard lk(lock_);
-    return base_version_;
+    return version_vec_.BaseVersion();
   }
-  uint64_t Version() const {
+  uint64_t CompleteVersion() const {
     utils::ReadLockGuard lk(lock_);
-    return base_version_ + total_delta_version_;
+    return version_vec_.CompleteVersion();
+  }
+  // Copy of the full version vector (base + per-bucket deltas). Mirrors
+  // ShardPartition::VersionVec() so callers can compare both sides bucket by
+  // bucket. Returns by value to stay race-free under the read lock.
+  AttrVersionVec VersionVec() const {
+    utils::ReadLockGuard lk(lock_);
+    return version_vec_;
   }
 
   std::vector<mds::Ino> Parents() const {
@@ -239,13 +236,7 @@ class Inode {
   uint64_t mtime_{0};
   uint64_t atime_{0};
 
-  // base version
-  uint64_t base_version_{0};
-
-  // delta versions
-  absl::InlinedVector<uint64_t, kDirAttrMutationNum> delta_versions_;
-  // sum of delta versions, used for quick check if there is mutation
-  uint64_t total_delta_version_{0};
+  AttrVersionVec version_vec_;
 
   std::atomic<uint64_t> last_active_time_s_{0};
   std::atomic<uint64_t> last_refresh_time_s_{0};

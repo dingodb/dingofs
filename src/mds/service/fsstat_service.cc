@@ -681,7 +681,7 @@ static void RenderPartitionCacheListPage(uint32_t fs_id, size_t page, std::vecto
     os << fmt::format(
         R"(<tr><td><a href="/FsStatService/cache/partitioncache/{}?ino={}" target="_blank" rel="noopener">{}</a></td>)"
         R"(<td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>)",
-        fs_id, partition->INo(), partition->INo(), partition->BaseVersion(), partition->DeltaVersion(),
+        fs_id, partition->INo(), partition->INo(), partition->BaseVersion(), partition->CompleteVersion(),
         partition->ShardSize(), partition->Size());
   }
   os << "</table>";
@@ -708,7 +708,7 @@ static void RenderInodeCacheListPage(uint32_t fs_id, size_t page, std::vector<In
     os << fmt::format(
         R"(<tr><td><a href="/FsStatService/cache/inodecache/{}?ino={}" target="_blank" rel="noopener">{}</a></td>)"
         R"(<td>{}</td><td>{}</td><td>{}</td></tr>)",
-        fs_id, inode->Ino(), inode->Ino(), pb::mds::FileType_Name(inode->Type()), inode->Version(),
+        fs_id, inode->Ino(), inode->Ino(), pb::mds::FileType_Name(inode->Type()), inode->CompleteVersion(),
         inode->IsFresh() ? "yes" : "no");
   }
   os << "</table>";
@@ -742,8 +742,7 @@ static void RenderChunkCacheListPage(uint32_t fs_id, size_t page, std::vector<st
 static void RenderPartitionCachePage(uint32_t fs_id, Ino ino, size_t dentry_page, size_t delta_page,
                                      const Json::Value& value, butil::IOBufBuilder& os) {
   RenderCachePageStart("Partition Cache", fs_id, os);
-  os << fmt::format("<h3>Partition ino {}: base version {}, delta version {}</h3>", ino,
-                    value["base_version"].asUInt64(), value["delta_version"].asUInt64());
+  os << fmt::format("<h3>Partition ino {}: version {}</h3>", ino, value["version"].asString());
 
   os << fmt::format(R"(<h3>Shards [{}]</h3><table class="gridtable sortable" border=1><tr><th>Range</th><th>ID</th>)"
                     R"(<th>Size</th><th>Version</th></tr>)",
@@ -797,7 +796,7 @@ static void RenderInodeCachePage(uint32_t fs_id, Ino ino, const InodeSPtr& inode
   std::string attr_json;
   ::dingofs::Helper::ProtoToJson(attr, attr_json);
   os << fmt::format("<h3>Inode {}: base version {}, current version {}, fresh {}</h3>", ino, inode->BaseVersion(),
-                    inode->Version(), inode->IsFresh() ? "yes" : "no");
+                    inode->CompleteVersion(), inode->IsFresh() ? "yes" : "no");
   os << fmt::format("<p>Last active: {}<br>Last refresh: {}</p>", utils::FormatMsTime(inode->LastActiveTimeS() * 1000),
                     utils::FormatMsTime(inode->LastRefreshTimeS() * 1000));
   os << "<h3>Attributes</h3><pre>" << HtmlEscape(attr_json) << "</pre>";

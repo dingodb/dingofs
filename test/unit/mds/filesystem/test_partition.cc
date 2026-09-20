@@ -15,7 +15,9 @@
 #include <algorithm>
 #include <atomic>
 #include <cstdint>
+#include <initializer_list>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "dingofs/mds.pb.h"
@@ -85,6 +87,35 @@ static pb::mds::Dentry GenDentry(uint32_t fs_id, uint64_t parent, uint64_t ino,
   return dentry;
 }
 
+static AttrMutationEntry GenMutation(uint64_t ino, uint32_t index,
+                                     uint64_t delta_version) {
+  AttrMutationEntry mutation;
+  mutation.set_ino(ino);
+  mutation.set_index(index);
+  mutation.set_delta_version(delta_version);
+
+  auto now_ns = utils::TimestampNs();
+  mutation.set_ctime(now_ns);
+  mutation.set_mtime(now_ns);
+  mutation.set_atime(now_ns);
+
+  return mutation;
+}
+
+static AttrWithMutation GenAttrWithMutation(
+    uint32_t fs_id, uint64_t ino, uint64_t base_version,
+    std::initializer_list<std::pair<uint32_t, uint64_t>> mutations) {
+  AttrWithMutation attr_with_mutation;
+  attr_with_mutation.attr =
+      GenInode(fs_id, ino, pb::mds::FileType::DIRECTORY, base_version);
+  for (const auto& [index, delta_version] : mutations) {
+    attr_with_mutation.mutations.push_back(
+        GenMutation(ino, index, delta_version));
+  }
+
+  return attr_with_mutation;
+}
+
 // Mock OperationProcessor for testing
 class MockOperationProcessor : public OperationProcessor {
  public:
@@ -123,7 +154,7 @@ TEST_F(DirShardTest, BasicPutGetDelete) {
 
   ASSERT_TRUE(shard != nullptr);
   ASSERT_EQ(shard->ID(), 1);
-  ASSERT_EQ(shard->Version(), 1);
+  ASSERT_EQ(shard->VersionVec().BaseVersion(), 1);
   ASSERT_TRUE(shard->Empty());
 
   // Put dentry
@@ -334,7 +365,61 @@ TEST_F(DirShardTest, ToString) {
 
   std::string str = shard->ToString();
   ASSERT_NE(str.find("id(1)"), std::string::npos);
-  ASSERT_NE(str.find("version(1)"), std::string::npos);
+  ASSERT_NE(str.find("version(1 0)"), std::string::npos);
+}
+
+TEST_F(DirShardTest, VersionVecFromBaseVersion) {
+  DirShardSPtr shard =
+      DirShard::New(1, Range{"", ""}, 10, std::vector<Dentry>{});
+
+  ASSERT_EQ(shard->VersionVec().BaseVersion(), 10);
+  ASSERT_EQ(shard->VersionVec().CompleteVersion(), 10);
+  ASSERT_EQ(shard->VersionVec().total_delta_version, 0);
+  ASSERT_EQ(shard->VersionVec().DeltaVersion(0), 0);
+  ASSERT_EQ(shard->VersionString(), "10 0");
+}
+
+TEST_F(DirShardTest, VersionVecFromAttrWithMutation) {
+  AttrVersionVec version_vec(
+      GenAttrWithMutation(kFsId, kParentIno, 50, {{2, 3}, {5, 7}}));
+
+  DirShardSPtr shard =
+      DirShard::New(1, Range{"", ""}, version_vec, std::vector<Dentry>{});
+
+  ASSERT_EQ(shard->VersionVec().BaseVersion(), 50);
+  ASSERT_EQ(shard->VersionVec().DeltaVersion(2), 3);
+  ASSERT_EQ(shard->VersionVec().DeltaVersion(5), 7);
+  ASSERT_EQ(shard->VersionVec().CompleteVersion(), 60);
+  ASSERT_EQ(shard->VersionString(), "50 10");
+}
+
+TEST_F(DirShardTest, SplitPreservesVersionVec) {
+  AttrVersionVec version_vec(100);
+  version_vec.PutIf(AttrVersion(1, 5));
+
+  std::vector<Dentry> dentries;
+  for (int i = 0; i < 10; ++i) {
+    dentries.emplace_back(GenDentry(kFsId, kParentIno, 200 + i,
+                                    fmt::format("file{:02d}", i),
+                                    pb::mds::FileType::FILE));
+  }
+  DirShardSPtr shard =
+      DirShard::New(1, Range{"", ""}, version_vec, dentries);
+
+  auto [left, right] = shard->Split("file05", 2, 3);
+
+  // both halves inherit the parent shard version
+  for (const auto& half : {left, right}) {
+    ASSERT_EQ(half->VersionVec().BaseVersion(), 100);
+    ASSERT_EQ(half->VersionVec().DeltaVersion(1), 5);
+    ASSERT_EQ(half->VersionVec().CompleteVersion(), 105);
+  }
+
+  // version vectors are value copies, mutating the source has no effect
+  version_vec.PutIf(AttrVersion(1, 9));
+  ASSERT_EQ(shard->VersionVec().CompleteVersion(), 105);
+  ASSERT_EQ(left->VersionVec().CompleteVersion(), 105);
+  ASSERT_EQ(right->VersionVec().CompleteVersion(), 105);
 }
 
 TEST_F(DirShardTest, UpdateLastActiveTime) {
@@ -655,7 +740,7 @@ TEST_F(ShardPartitionBasicTest, BasicProperties) {
   ASSERT_EQ(partition_->FsId(), kFsId);
   ASSERT_EQ(partition_->INo(), kParentIno);
   ASSERT_EQ(partition_->BaseVersion(), 1);
-  ASSERT_EQ(partition_->DeltaVersion(), 1);
+  ASSERT_EQ(partition_->CompleteVersion(), 1);
 }
 
 TEST_F(ShardPartitionBasicTest, PutWithVersion) {
@@ -756,7 +841,7 @@ TEST_F(ShardPartitionBasicTest, Refresh) {
   // Create new inode with higher version
   auto new_inode =
       Inode::New(GenInode(kFsId, kParentIno, pb::mds::FileType::DIRECTORY, 2));
-  ASSERT_EQ(new_inode->Version(), 2);
+  ASSERT_EQ(new_inode->CompleteVersion(), 2);
 
   // Create new partition with higher version inode
   auto partition2 = ShardPartition::New(
@@ -792,24 +877,24 @@ TEST_F(ShardPartitionBasicTest, PartitionCacheIntegration) {
 }
 
 TEST_F(ShardPartitionBasicTest, DeltaVersionTracking) {
-  ASSERT_EQ(partition_->DeltaVersion(), 1);
+  ASSERT_EQ(partition_->CompleteVersion(), 1);
 
   // Put dentry with version
   Dentry dentry(
       GenDentry(kFsId, kParentIno, 200, "file1", pb::mds::FileType::FILE));
   partition_->Put(dentry, 3);
 
-  ASSERT_EQ(partition_->DeltaVersion(), 3);
+  ASSERT_EQ(partition_->CompleteVersion(), 3);
 
   // Delete with higher version
   partition_->Delete("file1", 5);
 
-  ASSERT_EQ(partition_->DeltaVersion(), 5);
+  ASSERT_EQ(partition_->CompleteVersion(), 5);
 
   // Delete with lower version should not change delta_version
   partition_->Delete("file1", 4);
 
-  ASSERT_EQ(partition_->DeltaVersion(), 5);
+  ASSERT_EQ(partition_->CompleteVersion(), 5);
 }
 
 TEST_F(ShardPartitionBasicTest, DeleteNonExistent) {
@@ -818,6 +903,189 @@ TEST_F(ShardPartitionBasicTest, DeleteNonExistent) {
 
   ASSERT_TRUE(partition_->Empty());
   ASSERT_EQ(partition_->Size(), 0);
+}
+
+class ShardPartitionVersionTest : public testing::Test {
+ protected:
+  void SetUp() override {
+    mock_processor_ = std::make_shared<MockOperationProcessor>();
+  }
+
+  void TearDown() override {}
+
+  PartitionPtr NewPartition(uint64_t version) {
+    return ShardPartition::New(
+        mock_processor_,
+        GenInode(kFsId, kParentIno, pb::mds::FileType::DIRECTORY, version));
+  }
+
+  std::shared_ptr<MockOperationProcessor> mock_processor_;
+};
+
+TEST_F(ShardPartitionVersionTest, BaseVersionFromAttrEntry) {
+  auto partition = NewPartition(10);
+
+  ASSERT_EQ(partition->BaseVersion(), 10);
+  ASSERT_EQ(partition->CompleteVersion(), 10);
+  ASSERT_EQ(partition->VersionVec().total_delta_version, 0);
+  ASSERT_EQ(partition->VersionVec().ToString(), "10 0");
+}
+
+TEST_F(ShardPartitionVersionTest, BaseVersionFromAttrWithMutation) {
+  auto partition = ShardPartition::New(
+      mock_processor_,
+      GenAttrWithMutation(kFsId, kParentIno, 50, {{2, 3}, {5, 7}}));
+
+  ASSERT_EQ(partition->BaseVersion(), 50);
+  ASSERT_EQ(partition->VersionVec().DeltaVersion(2), 3);
+  ASSERT_EQ(partition->VersionVec().DeltaVersion(5), 7);
+  ASSERT_EQ(partition->CompleteVersion(), 60);
+  ASSERT_EQ(partition->VersionVec().ToString(), "50 10");
+}
+
+TEST_F(ShardPartitionVersionTest, PutWithBaseVersionIsMonotonic) {
+  auto partition = NewPartition(10);
+  Dentry dentry(
+      GenDentry(kFsId, kParentIno, 200, "file1", pb::mds::FileType::FILE));
+
+  partition->Put(dentry, 20);
+  ASSERT_EQ(partition->BaseVersion(), 20);
+  ASSERT_EQ(partition->CompleteVersion(), 20);
+
+  // stale and equal base versions are rejected
+  partition->Put(dentry, 15);
+  ASSERT_EQ(partition->BaseVersion(), 20);
+  ASSERT_EQ(partition->CompleteVersion(), 20);
+
+  partition->Put(dentry, 20);
+  ASSERT_EQ(partition->BaseVersion(), 20);
+  ASSERT_EQ(partition->CompleteVersion(), 20);
+}
+
+TEST_F(ShardPartitionVersionTest, PutWithDeltaVersionAccumulates) {
+  auto partition = NewPartition(100);
+  Dentry dentry(
+      GenDentry(kFsId, kParentIno, 200, "file1", pb::mds::FileType::FILE));
+
+  partition->Put(dentry, AttrVersion(1, 5));
+  ASSERT_EQ(partition->BaseVersion(), 100);
+  ASSERT_EQ(partition->VersionVec().DeltaVersion(1), 5);
+  ASSERT_EQ(partition->CompleteVersion(), 105);
+
+  // replaying the same delta is a no-op
+  partition->Put(dentry, AttrVersion(1, 5));
+  ASSERT_EQ(partition->CompleteVersion(), 105);
+
+  // stale delta is rejected
+  partition->Put(dentry, AttrVersion(1, 3));
+  ASSERT_EQ(partition->CompleteVersion(), 105);
+
+  // newer delta on the same index only adds the difference
+  partition->Put(dentry, AttrVersion(1, 8));
+  ASSERT_EQ(partition->CompleteVersion(), 108);
+
+  // independent index accumulates
+  partition->Put(dentry, AttrVersion(2, 4));
+  ASSERT_EQ(partition->VersionVec().DeltaVersion(1), 8);
+  ASSERT_EQ(partition->VersionVec().DeltaVersion(2), 4);
+  ASSERT_EQ(partition->CompleteVersion(), 112);
+}
+
+TEST_F(ShardPartitionVersionTest, DeleteWithDeltaVersionIsMonotonic) {
+  auto partition = NewPartition(100);
+
+  partition->Delete("file1", AttrVersion(1, 5));
+  ASSERT_EQ(partition->BaseVersion(), 100);
+  ASSERT_EQ(partition->CompleteVersion(), 105);
+
+  // stale delta is rejected
+  partition->Delete("file1", AttrVersion(1, 3));
+  ASSERT_EQ(partition->CompleteVersion(), 105);
+
+  // base version bump keeps the accumulated delta
+  partition->Delete("file1", 200);
+  ASSERT_EQ(partition->BaseVersion(), 200);
+  ASSERT_EQ(partition->CompleteVersion(), 205);
+}
+
+TEST_F(ShardPartitionVersionTest, DeleteMultipleWithDeltaVersion) {
+  auto partition = NewPartition(100);
+  std::vector<std::string> names = {"file0", "file1"};
+
+  partition->Delete(names, AttrVersion(2, 4));
+  ASSERT_EQ(partition->BaseVersion(), 100);
+  ASSERT_EQ(partition->VersionVec().DeltaVersion(2), 4);
+  ASSERT_EQ(partition->CompleteVersion(), 104);
+
+  // stale delta is rejected
+  partition->Delete(names, AttrVersion(2, 3));
+  ASSERT_EQ(partition->CompleteVersion(), 104);
+}
+
+TEST_F(ShardPartitionVersionTest, RefreshVersionMerges) {
+  auto partition = NewPartition(10);
+
+  partition->RefreshVersion(AttrVersion(1, 5));
+  ASSERT_EQ(partition->BaseVersion(), 10);
+  ASSERT_EQ(partition->CompleteVersion(), 15);
+
+  // base version bump keeps the delta
+  partition->RefreshVersion(AttrVersion(uint64_t{20}));
+  ASSERT_EQ(partition->BaseVersion(), 20);
+  ASSERT_EQ(partition->CompleteVersion(), 25);
+
+  // stale version is rejected
+  partition->RefreshVersion(AttrVersion(uint64_t{15}));
+  ASSERT_EQ(partition->BaseVersion(), 20);
+  ASSERT_EQ(partition->CompleteVersion(), 25);
+}
+
+TEST_F(ShardPartitionVersionTest, CachePutIfMergesVersionVec) {
+  PartitionCache cache(kFsId);
+
+  auto partition = NewPartition(10);
+  cache.PutIf(partition);
+  ASSERT_EQ(partition->BaseVersion(), 10);
+
+  // stale base but newer delta still advances the delta
+  auto stale_base = ShardPartition::New(
+      mock_processor_,
+      GenAttrWithMutation(kFsId, kParentIno, 5, {{1, 5}}));
+  auto result = cache.PutIf(stale_base);
+  ASSERT_EQ(result.get(), partition.get());
+  ASSERT_EQ(partition->BaseVersion(), 10);
+  ASSERT_EQ(partition->VersionVec().DeltaVersion(1), 5);
+  ASSERT_EQ(partition->CompleteVersion(), 15);
+
+  // newer base is merged, existing delta is kept
+  auto newer_base = ShardPartition::New(
+      mock_processor_,
+      GenAttrWithMutation(kFsId, kParentIno, 20, {{1, 3}}));
+  cache.PutIf(newer_base);
+  ASSERT_EQ(partition->BaseVersion(), 20);
+  ASSERT_EQ(partition->CompleteVersion(), 25);
+}
+
+TEST_F(ShardPartitionVersionTest, CachePutIfCoversDeltaOpsAndPrunes) {
+  PartitionCache cache(kFsId);
+
+  auto partition = cache.PutIf(NewPartition(10));
+  Dentry dentry(
+      GenDentry(kFsId, kParentIno, 200, "file1", pb::mds::FileType::FILE));
+  partition->Put(dentry, AttrVersion(1, 5));
+  ASSERT_EQ(partition->CompleteVersion(), 15);
+
+  auto newer =
+      ShardPartition::New(mock_processor_,
+                          GenAttrWithMutation(kFsId, kParentIno, 10, {{1, 8}}));
+  cache.PutIf(newer);
+
+  ASSERT_EQ(partition->CompleteVersion(), 18);
+
+  // the delta op is covered by the merged version and gets pruned
+  Json::Value value;
+  partition->Dump(value);
+  ASSERT_EQ(value["delta_dentry_ops_total"].asUInt64(), 0);
 }
 
 class ShardPartitionWithBoundariesTest : public testing::Test {
@@ -918,7 +1186,7 @@ TEST(ShardPartitionPerfTest, Put400Million) {
       "avg latency({:.0f}ns)\n",
       total, elapsed_us / 1e6, qps, elapsed_us * 1000.0 / total);
 
-  ASSERT_EQ(partition->DeltaVersion(), total + 1);
+  ASSERT_EQ(partition->CompleteVersion(), total + 1);
 }
 
 class DirShardConstructFromDentriesTest : public testing::Test {

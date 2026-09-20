@@ -425,6 +425,85 @@ TEST_F(DummyStorageTest, TxnPutIfAbsentRaceAtCommit) {
   EXPECT_EQ(v, "v1");
 }
 
+TEST_F(DummyStorageTest, TxnWriteConflictOnStaleReadModifyWrite) {
+  {
+    auto txn = storage_->NewTxn();
+    ASSERT_TRUE(txn->Put("c1", "v0").ok());
+    ASSERT_TRUE(txn->Commit().ok());
+  }
+
+  // Both txns read the same version, then both write it back.
+  auto txn1 = storage_->NewTxn();
+  auto txn2 = storage_->NewTxn();
+  std::string v;
+  ASSERT_TRUE(txn1->Get("c1", v).ok());
+  ASSERT_TRUE(txn2->Get("c1", v).ok());
+  ASSERT_TRUE(txn1->Put("c1", "v1").ok());
+  ASSERT_TRUE(txn2->Put("c1", "v2").ok());
+
+  ASSERT_TRUE(txn1->Commit().ok());
+
+  // txn2's read is stale; its commit must be rejected as retryable.
+  auto status = txn2->Commit();
+  EXPECT_FALSE(status.ok());
+  EXPECT_EQ(status.error_code(), pb::error::ESTORE_MAYBE_RETRY);
+
+  ASSERT_TRUE(storage_->Get("c1", v).ok());
+  EXPECT_EQ(v, "v1");
+
+  // A retry that re-reads the latest value commits cleanly.
+  auto txn3 = storage_->NewTxn();
+  ASSERT_TRUE(txn3->Get("c1", v).ok());
+  ASSERT_TRUE(txn3->Put("c1", "v3").ok());
+  ASSERT_TRUE(txn3->Commit().ok());
+  ASSERT_TRUE(storage_->Get("c1", v).ok());
+  EXPECT_EQ(v, "v3");
+}
+
+TEST_F(DummyStorageTest, TxnRecreateAfterDeleteDoesNotConflict) {
+  // A delete leaves the key absent but keeps its old version in the internal
+  // version map. A later read-then-write (Lookup(miss) -> create) must still
+  // commit -- otherwise recreate after delete livelocks.
+  {
+    auto txn = storage_->NewTxn();
+    ASSERT_TRUE(txn->Put("r1", "v0").ok());
+    ASSERT_TRUE(txn->Commit().ok());
+  }
+  {
+    auto txn = storage_->NewTxn();
+    std::string v;
+    ASSERT_TRUE(txn->Get("r1", v).ok());
+    ASSERT_TRUE(txn->Delete("r1").ok());
+    ASSERT_TRUE(txn->Commit().ok());
+  }
+
+  auto txn = storage_->NewTxn();
+  std::string v;
+  auto status = txn->Get("r1", v);
+  ASSERT_EQ(status.error_code(), pb::error::ENOT_FOUND);
+  ASSERT_TRUE(txn->Put("r1", "v1").ok());
+  status = txn->Commit();
+  EXPECT_TRUE(status.ok()) << status.error_str();
+
+  ASSERT_TRUE(storage_->Get("r1", v).ok());
+  EXPECT_EQ(v, "v1");
+}
+
+TEST_F(DummyStorageTest, TxnBlindWritesDoNotConflict) {
+  // Writes without a preceding read stay last-write-wins: the MDS relies on
+  // this for freshly allocated keys that nobody has read.
+  auto txn1 = storage_->NewTxn();
+  auto txn2 = storage_->NewTxn();
+  ASSERT_TRUE(txn1->Put("b1", "v1").ok());
+  ASSERT_TRUE(txn2->Put("b1", "v2").ok());
+  ASSERT_TRUE(txn1->Commit().ok());
+  ASSERT_TRUE(txn2->Commit().ok());
+
+  std::string v;
+  ASSERT_TRUE(storage_->Get("b1", v).ok());
+  EXPECT_EQ(v, "v2");
+}
+
 TEST_F(DummyStorageTest, ConcurrentTxnsAllCommit) {
   constexpr int kThreads = 8;
   constexpr int kPerThread = 50;

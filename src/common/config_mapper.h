@@ -35,6 +35,11 @@ static inline void FillBlockAccessOption(
     block_access_opt->s3_options.s3_info.sk = s3_info.sk();
     block_access_opt->s3_options.s3_info.endpoint = s3_info.endpoint();
     block_access_opt->s3_options.s3_info.bucket_name = s3_info.bucketname();
+    // S3 backend config (log dir/prefix, crt client, timeouts, ...) comes
+    // from the --s3_* gflags; without this the AWS SDK falls back to an empty
+    // log prefix and writes <cwd>/<YYYY-MM-DD-HH>.log.
+    blockaccess::FillAwsSdkConfigFromGFlags(
+        &block_access_opt->s3_options.aws_sdk_config);
   } else if (fs_info.fs_type() == pb::mds::FsType::RADOS) {
     CHECK(fs_info.extra().has_rados_info())
         << "ilegall storage_info, RADOS info not set";

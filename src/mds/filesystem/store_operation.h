@@ -597,6 +597,7 @@ class MkDirOperation : public Operation {
       : Operation(trace), dentry_(dentry), attr_(attr) {};
   ~MkDirOperation() override = default;
 
+  // no use mutation, because mkdir need update parent nlink
   struct Result {
     AttrEntry parent_attr;
   };
@@ -627,6 +628,7 @@ class BatchMkDirOperation : public Operation {
       : Operation(trace), dentries_(dentries), attrs_(attrs) {};
   ~BatchMkDirOperation() override = default;
 
+  // no use mutation, because mkdir need update parent nlink
   struct Result {
     AttrEntry parent_attr;
   };
@@ -844,6 +846,7 @@ class UpdateAttrOperation : public Operation {
       : Operation(trace), ino_(ino), to_set_(to_set), attr_(attr), extra_param_(extra_param) {};
   ~UpdateAttrOperation() override = default;
 
+  // not use mutation
   struct Result {
     AttrEntry attr;
     int64_t delta_bytes{0};
@@ -881,6 +884,7 @@ class UpdateXAttrOperation : public Operation {
       : Operation(trace), fs_id_(fs_id), ino_(ino), xattrs_(xattrs) {};
   ~UpdateXAttrOperation() override = default;
 
+  // not use mutation
   struct Result {
     AttrEntry attr;
   };
@@ -910,6 +914,7 @@ class RemoveXAttrOperation : public Operation {
       : Operation(trace), fs_id_(fs_id), ino_(ino), name_(name) {};
   ~RemoveXAttrOperation() override = default;
 
+  // not use mutation
   struct Result {
     AttrEntry attr;
   };

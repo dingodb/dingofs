@@ -16,6 +16,10 @@
 
 #include "common/config_mapper.h"
 
+#include <unistd.h>
+
+#include <string>
+
 #include <gtest/gtest.h>
 
 namespace dingofs {
@@ -37,6 +41,11 @@ TEST(ConfigMapperTest, FillsS3OptionsFromS3FsInfo) {
   EXPECT_EQ(options.s3_options.s3_info.sk, "sk-value");
   EXPECT_EQ(options.s3_options.s3_info.endpoint, "http://s3.example.com");
   EXPECT_EQ(options.s3_options.s3_info.bucket_name, "my-bucket");
+  // Regression: the AWS SDK log prefix must come from the --s3_*/--log_dir
+  // gflags. If it stays empty the SDK writes <cwd>/<YYYY-MM-DD-HH>.log.
+  EXPECT_NE(options.s3_options.aws_sdk_config.log_prefix.find(
+                fmt::format("aws_sdk_{}_", getpid())),
+            std::string::npos);
 }
 
 TEST(ConfigMapperTest, FillsRadosOptionsFromRadosFsInfo) {
