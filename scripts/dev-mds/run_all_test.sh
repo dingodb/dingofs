@@ -10,6 +10,7 @@ DEFINE_string type 'all' 'test type'
 DEFINE_string mds_addr '' 'mds address'
 DEFINE_string mountpoint '' 'mount point'
 DEFINE_integer round 1 'test round count'
+DEFINE_boolean clean_log false 'remove all logs under /tmp/dev-regression-test before running'
 
 
 # parse the command-line
@@ -22,7 +23,8 @@ if [ -z "${FLAGS_type}" ]; then
     exit -1
 fi
 
-if [ -z "${FLAGS_mountpoint}" ]; then
+# xfstests brings up its own mounts, so it does not use --mountpoint
+if [ "${FLAGS_type}" != "xfstests" ] && [ -z "${FLAGS_mountpoint}" ]; then
     echo "mountpoint is empty"
     exit -1
 fi
@@ -31,6 +33,12 @@ fi
 
 BASE_DIR=$(dirname $(dirname $(cd $(dirname $0); pwd)))
 MOUNTPOINT=${FLAGS_mountpoint}
+LOG_ROOT_DIR=/tmp/dev-regression-test
+
+if [ "${FLAGS_clean_log}" -eq "${FLAGS_TRUE}" ]; then
+    echo "### cleaning ${LOG_ROOT_DIR} ......"
+    rm -rf "${LOG_ROOT_DIR:?}"
+fi
 
 function run_e2e_test() {
   echo "### [e2e] run test......"
@@ -38,7 +46,7 @@ function run_e2e_test() {
 
   E2E_DIR=$BASE_DIR/test/e2e
   TEST_ROOT_DIR=$MOUNTPOINT/e2e_${SUFFIX}
-  E2E_LOG_DIR=/tmp/dev-regression-test/e2e_test_${SUFFIX}
+  E2E_LOG_DIR=$LOG_ROOT_DIR/e2e_test_${SUFFIX}
 
   # create test directory and log directory
   mkdir -p $TEST_ROOT_DIR
@@ -71,7 +79,7 @@ function run_pjdtest_test() {
   # env information
   PJD_DIR=/home/dengzihui/work/dingofs-test/pjdfstest/tests
   PJD_TEST_DIR=$MOUNTPOINT/pjd_test_${SUFFIX}
-  PJD_LOG_DIR=/tmp/dev-regression-test/pjd_test_${SUFFIX}
+  PJD_LOG_DIR=$LOG_ROOT_DIR/pjd_test_${SUFFIX}
 
   # create test directory and log directory
   mkdir -p ${PJD_TEST_DIR}
@@ -100,7 +108,7 @@ function run_fsx_test() {
 
   # env information
   FSX_TEST_FILE=$MOUNTPOINT/fsx_test_${SUFFIX}
-  FSX_LOG_DIR=/tmp/dev-regression-test/fsx_test_${SUFFIX}
+  FSX_LOG_DIR=$LOG_ROOT_DIR/fsx_test_${SUFFIX}
 
   # create test directory and log directory
   mkdir -p ${FSX_LOG_DIR}
@@ -125,7 +133,7 @@ function run_mdtest_test() {
 
   # env information
   MDTEST_TEST_DIR=$MOUNTPOINT/mdtest_test_${SUFFIX}
-  MDTEST_LOG_DIR=/tmp/dev-regression-test/mdtest_test_${SUFFIX}
+  MDTEST_LOG_DIR=$LOG_ROOT_DIR/mdtest_test_${SUFFIX}
 
   # create test directory and log directory
   mkdir -p ${MDTEST_TEST_DIR}
@@ -143,7 +151,7 @@ function run_fio_test() {
 
   # env information
   FIO_TEST_DIR=$MOUNTPOINT/fio_test_${SUFFIX}
-  FIO_LOG_DIR=/tmp/dev-regression-test/fio_test_${SUFFIX}
+  FIO_LOG_DIR=$LOG_ROOT_DIR/fio_test_${SUFFIX}
 
 
   # create test directory
@@ -173,7 +181,7 @@ function run_fsstress_test() {
 
   # env information
   FSSTRESS_TEST_DIR=$MOUNTPOINT/fsstress_test_${SUFFIX}
-  FSSTRESS_LOG_DIR=/tmp/dev-regression-test/fsstress_test_${SUFFIX}
+  FSSTRESS_LOG_DIR=$LOG_ROOT_DIR/fsstress_test_${SUFFIX}
 
   # create test directory and log directory
   mkdir -p ${FSSTRESS_TEST_DIR}
@@ -186,6 +194,64 @@ function run_fsstress_test() {
   /opt/ltp/testcases/bin/fsstress -d ${FSSTRESS_TEST_DIR} -n 10000 -p 8 -v > ${FSSTRESS_LOG_DIR}/fsstress.log 2>&1
 
   echo "### [fsstress] test done, log file: $FSSTRESS_LOG_DIR/fsstress.log"
+}
+
+
+function run_xfstests_test() {
+  echo "### [xfstests] run test......"
+
+  # env information
+  XFS_DIR=/home/dengzihui/work/dingofs-test/xfstests-dev
+  XFS_CASE_FILE=$BASE_DIR/xfstests/supported
+  XFS_LOG_DIR=$LOG_ROOT_DIR/xfstests_test_${SUFFIX}
+
+  # pre-check: the xfstests adapter is installed out of band, this script only runs it
+  for f in ${XFS_DIR} ${XFS_CASE_FILE} /sbin/mount.fuse.dingofs /etc/dingofs-xfstests.conf; do
+    if [ ! -e "${f}" ]; then
+      echo "### [xfstests] result: FAIL (${f} not found)"
+      echo "### [xfstests] run 'bash ${BASE_DIR}/xfstests/setup.sh ${XFS_DIR}' first"
+      FAILED=1
+      return
+    fi
+  done
+  if ! command -v sudo >/dev/null; then
+    echo "### [xfstests] result: FAIL (sudo not found)"
+    FAILED=1
+    return
+  fi
+
+  # create log directory
+  mkdir -p ${XFS_LOG_DIR}
+
+  # drop stale mounts/clients; in MDS mode remote fs contents are kept
+  if ! bash ${BASE_DIR}/xfstests/reset.sh; then
+    echo "### [xfstests] result: FAIL (reset.sh failed)"
+    FAILED=1
+    return
+  fi
+  echo "### [xfstests] note: reset.sh does not clear remote fs contents in MDS mode"
+
+  # run test command
+  cd ${XFS_DIR}
+  sudo env RESULT_BASE=${XFS_LOG_DIR}/results \
+    ./check $(grep -vE '^[[:space:]]*(#|$)' ${XFS_CASE_FILE}) \
+    > ${XFS_LOG_DIR}/xfstests.log 2>&1
+
+  # ./check runs as root, hand the results back so they can be inspected/cleaned as the user
+  sudo chown -R $(id -u):$(id -g) ${XFS_LOG_DIR}
+
+  # verify result: at least one case really ran, and none failed
+  if grep -qE '^Passed all ([1-9][0-9]*) tests' ${XFS_LOG_DIR}/xfstests.log &&
+     ! grep -qE '^Failures:' ${XFS_LOG_DIR}/xfstests.log; then
+    echo "### [xfstests] result: PASS"
+  else
+    echo "### [xfstests] result: FAIL"
+    grep -E '^(Failures|Not run):' ${XFS_LOG_DIR}/xfstests.log
+    echo "### [xfstests] see ${XFS_LOG_DIR}/results/ for .out.bad"
+    FAILED=1
+  fi
+
+  echo "### [xfstests] test done, log file: ${XFS_LOG_DIR}/xfstests.log"
 }
 
 
@@ -218,6 +284,8 @@ for ((i = 1; i <= ${FLAGS_round}; i++)); do
     run_fio_test
   elif [ "$FLAGS_type" == "fsstress" ]; then
     run_fsstress_test
+  elif [ "$FLAGS_type" == "xfstests" ]; then
+    run_xfstests_test
   fi
 
   sleep 10
