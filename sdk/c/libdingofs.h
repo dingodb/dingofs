@@ -168,6 +168,9 @@ uintptr_t dingofs_new(void);
  * dingofs_delete() — free all memory associated with `h`.
  *
  * Behaviour is undefined if the filesystem is still mounted.
+ * Stop submitting API calls and join all callers before unmount/delete.
+ * Admission drain is not a lifetime barrier for the opaque handle or for
+ * calls rejected during shutdown.
  * Passing 0 is a no-op.
  */
 void dingofs_delete(uintptr_t h);
@@ -299,6 +302,8 @@ int dingofs_mount_nolog(uintptr_t h,
  * dingofs_umount() — flush pending writes and disconnect from the MDS.
  *
  * All open file descriptors are implicitly flushed and closed.
+ * The caller must first stop submitting calls and join all threads using `h`.
+ * Do not call from an operation callback; it would wait for that operation.
  * Returns 0 on success, -errno on failure.
  */
 int dingofs_umount(uintptr_t h);
