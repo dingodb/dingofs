@@ -197,6 +197,65 @@ function run_fsstress_test() {
 }
 
 
+function run_vdbench_test() {
+  echo "### [vdbench] run test......"
+
+  # env information
+  VDB_DIR=/home/dengzihui/work/dingofs-test/vdbench
+  VDB_TEST_DIR=$MOUNTPOINT/vdbench_test_${SUFFIX}
+  VDB_LOG_DIR=$LOG_ROOT_DIR/vdbench_test_${SUFFIX}
+  VDB_PARAM_FILE=$VDB_LOG_DIR/vdbench.params
+
+  # pre-check: vdbench and java are installed out of band, this script only runs them
+  if [ ! -x "${VDB_DIR}/vdbench" ]; then
+    echo "### [vdbench] result: FAIL (${VDB_DIR}/vdbench not found)"
+    FAILED=1
+    return
+  fi
+  if ! command -v java >/dev/null; then
+    echo "### [vdbench] result: FAIL (java not found)"
+    FAILED=1
+    return
+  fi
+
+  # create test directory and log directory
+  mkdir -p ${VDB_TEST_DIR}
+  mkdir -p ${VDB_LOG_DIR}
+
+  # generate parameter file bound to this round's test directory
+  cat > ${VDB_PARAM_FILE} <<EOF
+validate=yes
+data_errors=1
+
+fsd=fsd1,anchor=${VDB_TEST_DIR},depth=1,width=10,files=10,sizes=(100m,0),openflags=o_direct
+
+fwd=fwd1,fsd=fsd1,threads=10,rdpct=50,xfersize=(512,20,4k,20,64k,20,512k,20,1024k,20),fileio=random,fileselect=random
+
+rd=rd1,fwd=fwd*,fwdrate=max,format=yes,elapsed=300,interval=1
+EOF
+
+  # run test command
+  cd ${VDB_TEST_DIR}
+  ${VDB_DIR}/vdbench -f ${VDB_PARAM_FILE} -o ${VDB_LOG_DIR}/output > ${VDB_LOG_DIR}/vdbench.log 2>&1
+  VDB_RC=$?
+
+  # verify result: clean exit, run completed, and no data validation / I/O errors
+  VDB_ERRORS=$(grep -hE 'Data Validation error for|Vdbench terminating due to Data Validation|marked in error: *[1-9]' \
+    ${VDB_LOG_DIR}/vdbench.log ${VDB_LOG_DIR}/output/errorlog.html 2>/dev/null)
+  if [ ${VDB_RC} -eq 0 ] &&
+     grep -q 'Vdbench execution completed successfully' ${VDB_LOG_DIR}/vdbench.log &&
+     [ -z "${VDB_ERRORS}" ]; then
+    echo "### [vdbench] result: PASS"
+  else
+    echo "### [vdbench] result: FAIL"
+    [ -n "${VDB_ERRORS}" ] && echo "${VDB_ERRORS}"
+    FAILED=1
+  fi
+
+  echo "### [vdbench] test done, log file: $VDB_LOG_DIR/vdbench.log"
+}
+
+
 function run_xfstests_test() {
   echo "### [xfstests] run test......"
 
@@ -262,6 +321,7 @@ function run_all_tests() {
   run_mdtest_test
   # run_fio_test
   run_fsstress_test
+  run_vdbench_test
 }
 
 FAILED=0
@@ -284,6 +344,8 @@ for ((i = 1; i <= ${FLAGS_round}; i++)); do
     run_fio_test
   elif [ "$FLAGS_type" == "fsstress" ]; then
     run_fsstress_test
+  elif [ "$FLAGS_type" == "vdbench" ]; then
+    run_vdbench_test
   elif [ "$FLAGS_type" == "xfstests" ]; then
     run_xfstests_test
   fi
