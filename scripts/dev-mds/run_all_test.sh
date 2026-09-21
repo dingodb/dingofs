@@ -10,6 +10,7 @@ DEFINE_string type 'all' 'test type'
 DEFINE_string mds_addr '' 'mds address'
 DEFINE_string mountpoint '' 'mount point'
 DEFINE_integer round 1 'test round count'
+DEFINE_string cases '' 'xfstests cases to run, comma or space separated (default: all in xfstests/supported)'
 DEFINE_boolean clean_log false 'remove all logs under /tmp/dev-regression-test before running'
 
 
@@ -264,6 +265,20 @@ function run_xfstests_test() {
   XFS_CASE_FILE=$BASE_DIR/xfstests/supported
   XFS_LOG_DIR=$LOG_ROOT_DIR/xfstests_test_${SUFFIX}
 
+  # resolve the case list: explicit --cases wins, else the supported file
+  if [ -n "${FLAGS_cases}" ]; then
+    XFS_CASES=$(echo "${FLAGS_cases}" | tr ',' ' ')
+    XFS_CASE_FILE=
+  else
+    XFS_CASES=$(grep -vE '^[[:space:]]*(#|$)' ${XFS_CASE_FILE})
+  fi
+  if [ -z "${XFS_CASES}" ]; then
+    echo "### [xfstests] result: FAIL (no cases to run)"
+    FAILED=1
+    return
+  fi
+  echo "### [xfstests] cases: ${XFS_CASES}"
+
   # pre-check: the xfstests adapter is installed out of band, this script only runs it
   for f in ${XFS_DIR} ${XFS_CASE_FILE} /sbin/mount.fuse.dingofs /etc/dingofs-xfstests.conf; do
     if [ ! -e "${f}" ]; then
@@ -293,7 +308,7 @@ function run_xfstests_test() {
   # run test command
   cd ${XFS_DIR}
   sudo env RESULT_BASE=${XFS_LOG_DIR}/results \
-    ./check $(grep -vE '^[[:space:]]*(#|$)' ${XFS_CASE_FILE}) \
+    ./check ${XFS_CASES} \
     > ${XFS_LOG_DIR}/xfstests.log 2>&1
 
   # ./check runs as root, hand the results back so they can be inspected/cleaned as the user
