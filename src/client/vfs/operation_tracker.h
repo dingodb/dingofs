@@ -28,8 +28,6 @@
 #include <optional>
 #include <utility>
 
-#include "common/sync_point.h"
-
 namespace dingofs {
 namespace client {
 
@@ -83,8 +81,6 @@ class OperationTracker {
 
     void Release() noexcept {
       if (tracker_ != nullptr) {
-        TEST_SYNC_POINT_CALLBACK("OperationTracker::BeforeLeaseRelease",
-                                 tracker_);
         tracker_->Leave(slot_);
         tracker_ = nullptr;
       }
@@ -105,12 +101,10 @@ class OperationTracker {
     if ((before & 1) != 0) return std::nullopt;
 
     const auto slot = ThreadSlot();
-    TEST_SYNC_POINT_CALLBACK("OperationTracker::AfterFirstRead", this);
     const auto old =
         counts_[slot].value.fetch_add(1, std::memory_order_seq_cst);
     CHECK_NE(old, std::numeric_limits<uint64_t>::max())
         << "Operation counter overflow";
-    TEST_SYNC_POINT_CALLBACK("OperationTracker::AfterIncrement", this);
     const auto after = epoch_.load(std::memory_order_seq_cst);
     if (after != before || (after & 1) != 0) {
       // A failed second check owns the same decrement/notification duty as an
@@ -118,7 +112,6 @@ class OperationTracker {
       Leave(slot);
       return std::nullopt;
     }
-    TEST_SYNC_POINT_CALLBACK("OperationTracker::AfterAdmission", this);
     return Lease(this, slot);
   }
 
@@ -128,24 +121,10 @@ class OperationTracker {
   // they never authorize destruction of runtime still protected by a lease.
   void WaitForDrain();
 
-#ifndef NDEBUG
-  // Only this OS thread is affected; production always uses its cached slot.
-  static void SetTestSlot(unsigned slot) {
-    CHECK_LT(slot, kSlotCount);
-    test_slot_ = slot;
-  }
-  static void ClearTestSlot() { test_slot_ = kSlotCount; }
-#endif
-
  private:
-  friend class OperationTrackerTestPeer;
-
   static uint64_t AllocateThreadIndex();
 
   static unsigned ThreadSlot() {
-#ifndef NDEBUG
-    if (test_slot_ != kSlotCount) return test_slot_;
-#endif
     // Shared across tracker instances, allocated once per OS thread, not once
     // per operation. A slot is not a CPU, worker, or bthread identity.
     static thread_local const unsigned slot =
@@ -157,11 +136,9 @@ class OperationTracker {
     const auto old =
         counts_[slot].value.fetch_sub(1, std::memory_order_seq_cst);
     CHECK_GT(old, 0) << "Operation counter underflow or double release";
-    TEST_SYNC_POINT_CALLBACK("OperationTracker::AfterDecrement", this);
     // Read the epoch AFTER decrementing. Reusing a prior open observation can
     // miss the final notification when Close races with this release.
     if (old == 1 && (epoch_.load(std::memory_order_seq_cst) & 1) != 0) {
-      TEST_SYNC_POINT_CALLBACK("OperationTracker::BeforeNotify", this);
       std::lock_guard<std::mutex> lock(drain_mutex_);
       drain_cv_.notify_all();
     }
@@ -180,9 +157,6 @@ class OperationTracker {
   std::mutex drain_mutex_;
   std::condition_variable drain_cv_;
   bool opened_{false};  // Accessed only by the serialized lifecycle owner.
-#ifndef NDEBUG
-  inline static thread_local unsigned test_slot_ = kSlotCount;
-#endif
 };
 
 }  // namespace client

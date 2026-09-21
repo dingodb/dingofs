@@ -54,7 +54,6 @@ void OperationTracker::WaitForDrain() {
   // Accepted operations can only disappear after Close. Late tentative
   // increments need not be frozen: their second epoch check must reject them.
   while (!IsDrained()) {
-    TEST_SYNC_POINT_CALLBACK("OperationTracker::BeforeWait", this);
     if (drain_cv_.wait_for(lock, std::chrono::seconds(30)) ==
             std::cv_status::timeout &&
         !IsDrained()) {
