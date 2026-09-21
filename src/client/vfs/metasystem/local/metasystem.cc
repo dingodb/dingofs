@@ -1964,7 +1964,7 @@ bool LocalMetaSystem::InitCrontab() {
       "CLEAN_DELFILE",
       kCleanDelfileIntervalS * 1000,
       true,
-      [this](void*) { this->CleanDelfile(); },
+      [this]() { this->CleanDelfile(); },
   });
 
   crontab_manager_.AddCrontab(crontab_configs_);

@@ -15,6 +15,8 @@ DEFINE_boolean loop false 'loop restart client'
 DEFINE_boolean clean_log false 'clean log'
 DEFINE_integer port 11000 'dummy server port'
 DEFINE_boolean use_cache false 'use cache'
+DEFINE_string log_level DEBUG 'client log level'
+DEFINE_integer log_v 20 'client log v'
 
 # parse the command-line
 FLAGS "$@" || exit 1
@@ -154,8 +156,8 @@ function start() {
         ${CLIENT_BIN_PATH} ${FLAGS_meta} ${mountpoint_dir} \
         --fuse_subdir=/ \
         --log_dir=${log_dir} \
-        --log_level=DEBUG \
-        --log_v=20 \
+        --log_level=${FLAGS_log_level} \
+        --log_v=${FLAGS_log_v} \
         --vfs_dummy_server_port=${dummy_port} \
         --cache_store=none \
         --fill_group_cache=False \
@@ -169,8 +171,8 @@ function start() {
         ${CLIENT_BIN_PATH} ${FLAGS_meta} ${mountpoint_dir} \
         --fuse_subdir=/ \
         --log_dir=${log_dir} \
-        --log_level=DEBUG \
-        --log_v=20 \
+        --log_level=${FLAGS_log_level} \
+        --log_v=${FLAGS_log_v} \
         --vfs_dummy_server_port=${dummy_port} \
         --cache_store=none \
         --daemonize=true 2>&1 > $log_dir/out

@@ -6,7 +6,7 @@ if [[ ! -d "$mydir" ]]; then mydir="$PWD"; fi
 
 DEFINE_string fs_name '' 'fs name'
 DEFINE_string mds_addr '' 'mds address'
-DEFINE_string parameters 'mds_deploy_parameters.local' 'deploy parameters file'
+DEFINE_string env 'env.local' 'deploy env file'
 DEFINE_boolean use_local_datastore false 'use local datastore'
 
 # parse the command-line
@@ -27,7 +27,7 @@ if [ -z "${FLAGS_mds_addr}" ]; then
     exit -1
 fi
 
-source $mydir/${FLAGS_parameters}
+source $mydir/${FLAGS_env}
 
 BASE_DIR=$(dirname $(dirname $(cd $(dirname $0); pwd)))
 BUILD_DIR=$BASE_DIR/build

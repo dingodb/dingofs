@@ -5,7 +5,7 @@ if [[ ! -d "$mydir" ]]; then mydir="$PWD"; fi
 . $mydir/shflags
 
 DEFINE_integer cluster_id 0 'cluster id'
-DEFINE_string parameters 'mds_deploy_parameters.local' 'deploy parameters file'
+DEFINE_string env 'env.local' 'deploy env file'
 
 
 # parse the command-line
@@ -14,7 +14,7 @@ eval set -- "${FLAGS_ARGV}"
 
 echo "cluster_id: ${FLAGS_cluster_id}"
 
-source $mydir/${FLAGS_parameters}
+source $mydir/${FLAGS_env}
 
 
 #check cluster id is valid
