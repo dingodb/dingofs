@@ -99,7 +99,8 @@ class StoreAutoIncrementIdGenerator : public IdGenerator {
   StoreAutoIncrementIdGenerator(KVStorageSPtr kv_storage, const std::string& name, int64_t start_id, int batch_size);
   ~StoreAutoIncrementIdGenerator() override;
 
-  static IdGeneratorUPtr New(KVStorageSPtr kv_storage, const std::string& name, int64_t start_id, int batch_size) {
+  static std::unique_ptr<StoreAutoIncrementIdGenerator> New(KVStorageSPtr kv_storage, const std::string& name,
+                                                            int64_t start_id, int batch_size) {
     return std::make_unique<StoreAutoIncrementIdGenerator>(kv_storage, name, start_id, batch_size);
   }
 
@@ -108,6 +109,8 @@ class StoreAutoIncrementIdGenerator : public IdGenerator {
   }
 
   bool Init() override;
+  // Stop only marks the generator unusable. It must not delete the persisted
+  // counter, otherwise a restart would re-issue already-used ids.
   bool Stop() override;
 
   bool GenID(uint32_t num, uint64_t& id) override;
@@ -115,13 +118,16 @@ class StoreAutoIncrementIdGenerator : public IdGenerator {
 
   std::string Describe() override;
 
+  // Delete the persisted counter. Only for per-fs generators whose filesystem
+  // is gone; never call it for a global generator on shutdown.
+  Status DestroyId();
+
  private:
   Status GetOrPutAllocId(uint64_t& alloc_id);
   // Reserve a new bundle from storage. Only the elected refiller calls this; on
   // success it publishes next_id_ before last_alloc_id_ (see R6). `floor` is the
   // min_slice_id that triggered the refill, so the new bundle covers it.
   Status AllocateIds(uint32_t bundle_size, uint64_t floor);
-  Status DestroyId();
 
   KVStorageSPtr kv_storage_;
 

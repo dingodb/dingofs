@@ -4521,19 +4521,29 @@ Status FileSystemSet::CreateFs(const CreateFsParam& param, FsInfoEntry& fs_info)
   }
 
   // generate fs id
-  uint32_t fs_id;
+  uint32_t fs_id = 0;
   if (param.fs_id == 0) {
-    status = GenFsId(fs_id);
-    if (BAIDU_UNLIKELY(!status.ok())) {
-      return status;
+    // The generator may hand out an id that is already taken (e.g. its persisted
+    // counter was reset). Skip such ids instead of failing with a misleading
+    // "fs(x) exist.".
+    constexpr int kMaxTryGenFsId = 100;
+    int tries = 0;
+    do {
+      status = GenFsId(fs_id);
+      if (BAIDU_UNLIKELY(!status.ok())) {
+        return status;
+      }
+    } while (IsExistFileSystem(fs_id) && ++tries < kMaxTryGenFsId);
+
+    if (IsExistFileSystem(fs_id)) {
+      return Status(pb::error::EALLOC_ID, fmt::format("gen free fs id fail, fs({})", param.fs_name));
     }
   } else {
     fs_id = param.fs_id;
-  }
-
-  // check fs_id exist
-  if (IsExistFileSystem(fs_id)) {
-    return Status(pb::error::EEXISTED, fmt::format("fs({}) exist.", param.fs_name));
+    // check fs_id exist
+    if (IsExistFileSystem(fs_id)) {
+      return Status(pb::error::EEXISTED, fmt::format("fs id({}) exist.", fs_id));
+    }
   }
 
   // create dentry/inode table

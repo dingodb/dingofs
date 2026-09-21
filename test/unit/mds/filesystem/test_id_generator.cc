@@ -148,6 +148,29 @@ TEST_F(StoreAutoIncrementIdGeneratorTest, ConcurrentMixedNumAndFloor) {
   for (auto& w : workers) w.join();
 }
 
+TEST_F(StoreAutoIncrementIdGeneratorTest, CounterSurvivesStop) {
+  const int64_t kStartId = 1000;
+  uint64_t last = 0;
+  {
+    auto id_generator =
+        StoreAutoIncrementIdGenerator::New(storage_, "store-restart", kStartId, 8);
+    ASSERT_TRUE(id_generator->Init()) << "init id generator fail.";
+    for (int i = 0; i < 20; ++i) {
+      ASSERT_TRUE(id_generator->GenID(1, last));
+    }
+    ASSERT_TRUE(id_generator->Stop()) << "stop id generator fail.";
+  }
+
+  // A graceful stop must not drop the persisted counter, otherwise the next
+  // start re-issues ids that are still in use.
+  auto id_generator =
+      StoreAutoIncrementIdGenerator::New(storage_, "store-restart", kStartId, 8);
+  ASSERT_TRUE(id_generator->Init()) << "init id generator fail.";
+  uint64_t id = 0;
+  ASSERT_TRUE(id_generator->GenID(1, id));
+  ASSERT_GT(id, last) << "counter reset after stop, reused id " << id;
+}
+
 }  // namespace unit_test
 }  // namespace mds
 }  // namespace dingofs

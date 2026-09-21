@@ -232,13 +232,9 @@ bool StoreAutoIncrementIdGenerator::Init() {
 bool StoreAutoIncrementIdGenerator::Stop() {
   BAIDU_SCOPED_LOCK(mutex_);
 
+  // Keep the persisted counter across restarts, otherwise the next start would
+  // re-issue ids that are still in use.
   is_destroyed_.store(true, std::memory_order_release);
-
-  auto status = DestroyId();
-  if (!status.ok()) {
-    LOG(ERROR) << fmt::format("[idalloc.{}] destroy autoincrement table fail, status({}).", name_, status.error_str());
-    return false;
-  }
 
   return true;
 }
@@ -701,7 +697,10 @@ void DestroyInodeIdGenerator(uint32_t fs_id, KVStorageSPtr kv_storage) {
 
   auto id_generator =
       StoreAutoIncrementIdGenerator::New(kv_storage, name, kInoStartId, FLAGS_mds_ino_generator_batch_size);
-  id_generator->Stop();
+  auto status = id_generator->DestroyId();
+  if (!status.ok()) {
+    LOG(ERROR) << fmt::format("[idalloc.{}] destroy inode id counter fail, status({}).", name, status.error_str());
+  }
 }
 
 }  // namespace mds
