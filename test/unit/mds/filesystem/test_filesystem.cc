@@ -1773,6 +1773,48 @@ TEST_F(FileSystemTest, FallocateChargesDirStat) {
   EXPECT_EQ(stat.dirs(), 0);
 }
 
+// Same-file overlapping copy_file_range ranges must be rejected (Linux EINVAL
+// semantics); non-overlapping same-file and cross-file ranges must clear the
+// guard.
+TEST_F(FileSystemTest, CopyFileRangeSameFileOverlapRejected) {
+  auto fs = Fs();
+  Context ctx;
+
+  auto mknod = [&](const std::string& name) -> Ino {
+    FileSystem::MkNodParam p;
+    p.parent = kRootIno;
+    p.name = name;
+    p.mode = 0644;
+    p.uid = 1;
+    p.gid = 1;
+    p.rdev = 0;
+    EntryWithPaOut o;
+    EXPECT_TRUE(fs->MkNod(ctx, p, o).ok());
+    return o.attr.ino();
+  };
+  Ino src = mknod("cfr_src");
+  Ino dst = mknod("cfr_dst");
+
+  auto copy = [&](Ino src_ino, Ino dst_ino, uint64_t src_off, uint64_t dst_off,
+                  uint64_t len) {
+    FileSystem::CopyFileRangeParam param{.src_ino = src_ino,
+                                         .dst_ino = dst_ino,
+                                         .src_off = src_off,
+                                         .dst_off = dst_off,
+                                         .len = len};
+    EntryWithChunkOut out;
+    return fs->CopyFileRange(ctx, param, out).error_code();
+  };
+
+  EXPECT_EQ(pb::error::EILLEGAL_PARAMTETER, copy(src, src, 0, 0, 4096));
+  EXPECT_EQ(pb::error::EILLEGAL_PARAMTETER, copy(src, src, 0, 2048, 4096));
+  EXPECT_EQ(pb::error::EILLEGAL_PARAMTETER, copy(src, src, 2048, 0, 4096));
+  // Adjacent ranges do not overlap (empty file -> out of range, not EINVAL).
+  EXPECT_NE(pb::error::EILLEGAL_PARAMTETER, copy(src, src, 0, 4096, 4096));
+  // Cross-file copy at the same offset is allowed.
+  EXPECT_NE(pb::error::EILLEGAL_PARAMTETER, copy(src, dst, 0, 0, 4096));
+}
+
 // BatchUnLink must apply the aggregated dir-stat delta once (single lock) and
 // account every removed child, not silently drop any.
 TEST_F(FileSystemTest, BatchUnLinkAggregatesDirStatDelta) {

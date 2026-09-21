@@ -2822,6 +2822,16 @@ Status FileSystem::CopyFileRange(Context& ctx, const CopyFileRangeParam& param, 
   if (param.len == 0) {
     return Status(pb::error::EILLEGAL_PARAMTETER, "len is 0");
   }
+  // Same-file ranges must not overlap (Linux copy_file_range semantics).
+  // Compare offset distance against len to stay overflow-safe; ranges of equal
+  // length overlap iff |src_off - dst_off| < len.
+  if (param.src_ino == param.dst_ino) {
+    const uint64_t hi = std::max(param.src_off, param.dst_off);
+    const uint64_t lo = std::min(param.src_off, param.dst_off);
+    if (hi - lo < param.len) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "overlapping ranges in same file");
+    }
+  }
 
   auto& trace = ctx.GetTrace();
   utils::Duration duration;
