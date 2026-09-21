@@ -76,6 +76,8 @@ function deploy_server() {
     sed  -i 's,\$BASE_PATH,'"$dstpath"',g'                        $dist_conf
     sed  -i 's,\$STORAGE_ENGINE,dingo-store,g'                    $dist_conf
     sed  -i 's,\$STORAGE_URL,file://./conf/coor_list,g'           $dist_conf
+    sed  -i 's,\$LOG_LEVEL,INFO,g'                                $dist_conf
+    sed  -i 's,\$LOG_V,0,g'                                       $dist_conf
 
     # coor_list file
     coor_file="${dstpath}/conf/coor_list"

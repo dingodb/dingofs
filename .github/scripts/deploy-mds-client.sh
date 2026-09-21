@@ -18,6 +18,8 @@ CLUSTER_ID=101
 MDS_PORT=8821
 MDS_INSTANCE_ID=1001
 VFS_DUMMY_PORT=10001
+MDS_LOG_LEVEL=DEBUG
+MDS_LOG_V=20
 
 BUILD_DIR="${GITHUB_WORKSPACE}/build/bin"
 TEMPLATE="${GITHUB_WORKSPACE}/scripts/dev-mds/mds.template.conf"
@@ -54,6 +56,8 @@ sed -i "s|\\\$SERVER_PORT|${MDS_PORT}|g"           "${DIST_CONF}"
 sed -i "s|\\\$BASE_PATH|${MDS_DIST}|g"             "${DIST_CONF}"
 sed -i "s|\\\$STORAGE_ENGINE|dingo-store|g"        "${DIST_CONF}"
 sed -i "s|\\\$STORAGE_URL|list://${COORDINATOR_ADDR}|g" "${DIST_CONF}"
+sed -i "s|\\\$LOG_LEVEL|${MDS_LOG_LEVEL}|g"          "${DIST_CONF}"
+sed -i "s|\\\$LOG_V|${MDS_LOG_V}|g"                  "${DIST_CONF}"
 
 echo "${COORDINATOR_ADDR}" > "${MDS_DIST}/conf/coor_list"
 
