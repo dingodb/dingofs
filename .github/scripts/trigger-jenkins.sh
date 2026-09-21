@@ -6,6 +6,8 @@ required=(
   JENKINS_JOB_PATH
   JENKINS_USER
   JENKINS_API_TOKEN
+  PR_NUMBER
+  PR_AUTHOR
   GIT_REF
   GIT_SHA
   GITHUB_RUN_ID
@@ -19,6 +21,14 @@ for name in "${required[@]}"; do
   fi
 done
 
+if [[ ! "${PR_NUMBER}" =~ ^[0-9]+$ ]]; then
+  echo "jenkins-trigger: PR_NUMBER must be numeric" >&2
+  exit 2
+fi
+if [[ -z "${PR_AUTHOR}" ]]; then
+  echo "jenkins-trigger: PR_AUTHOR must not be empty" >&2
+  exit 2
+fi
 if [[ ! "${GIT_SHA}" =~ ^[0-9a-fA-F]{40}$ ]]; then
   echo "jenkins-trigger: GIT_SHA must be a full commit SHA" >&2
   exit 2
@@ -149,6 +159,8 @@ headers=${temp_dir}/headers
 body=${temp_dir}/body
 status=$(auth_curl --request POST --dump-header "${headers}" --output "${body}" \
   --write-out '%{http_code}' \
+  --data-urlencode "PR_NUMBER=${PR_NUMBER}" \
+  --data-urlencode "PR_AUTHOR=${PR_AUTHOR}" \
   --data-urlencode "GIT_REF=${GIT_REF}" \
   --data-urlencode "GIT_SHA=${GIT_SHA}" \
   --data-urlencode "GITHUB_RUN_ID=${GITHUB_RUN_ID}" \

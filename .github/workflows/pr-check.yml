@@ -16,6 +16,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: pr-check-${{ github.event.pull_request.number || github.event.merge_group.head_sha }}
@@ -225,12 +226,40 @@ jobs:
           path: trusted-main
           persist-credentials: false
 
+      - name: Resolve merge queue PR metadata
+        id: pr-meta
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MERGE_REF: ${{ github.ref }}
+          REPOSITORY: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
+        run: |
+          set -euo pipefail
+          if [[ ! "${MERGE_REF}" =~ refs/heads/gh-readonly-queue/main/pr-([0-9]+)- ]]; then
+            echo "Cannot extract PR number from ${MERGE_REF}" >&2
+            exit 1
+          fi
+          pr_number="${BASH_REMATCH[1]}"
+          pr_json=$(
+            curl --fail --silent --show-error \
+              --header "Authorization: Bearer ${GH_TOKEN}" \
+              --header "Accept: application/vnd.github+json" \
+              --header "X-GitHub-Api-Version: 2022-11-28" \
+              "${API_URL}/repos/${REPOSITORY}/pulls/${pr_number}"
+          )
+          pr_author=$(jq -r '.user.login // empty' <<<"${pr_json}")
+          test -n "${pr_author}"
+          echo "pr_number=${pr_number}" >>"${GITHUB_OUTPUT}"
+          echo "pr_author=${pr_author}" >>"${GITHUB_OUTPUT}"
+
       - name: Trigger Jenkins regression and wait
         env:
           JENKINS_URL: ${{ vars.JENKINS_URL }}
           JENKINS_JOB_PATH: ${{ vars.JENKINS_JOB_PATH }}
           JENKINS_USER: ${{ secrets.JENKINS_USER }}
           JENKINS_API_TOKEN: ${{ secrets.JENKINS_API_TOKEN }}
+          PR_NUMBER: ${{ steps.pr-meta.outputs.pr_number }}
+          PR_AUTHOR: ${{ steps.pr-meta.outputs.pr_author }}
           GIT_REF: ${{ github.ref }}
           GIT_SHA: ${{ github.sha }}
           GITHUB_RUN_ID: ${{ github.run_id }}

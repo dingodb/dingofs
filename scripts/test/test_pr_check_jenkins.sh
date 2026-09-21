@@ -10,6 +10,7 @@ import pathlib
 import re
 import subprocess
 import sys
+import tempfile
 
 try:
     import yaml
@@ -225,8 +226,9 @@ def validate_source_workflow(workflow):
 
 def validate_jenkins_job(workflow):
     require(
-        workflow.get("permissions") == {"contents": "read"},
-        "pr-check.yml: permissions must be contents: read",
+        workflow.get("permissions")
+        == {"contents": "read", "pull-requests": "read"},
+        "pr-check.yml: permissions must allow PR metadata lookup",
     )
     jobs = workflow.get("jobs")
     require(isinstance(jobs, dict), "pr-check.yml: jobs must be a mapping")
@@ -262,10 +264,10 @@ def validate_jenkins_job(workflow):
 
     steps = job["steps"]
     require(
-        isinstance(steps, list) and len(steps) == 2,
-        "pr-check.yml: Jenkins job must contain exactly two steps",
+        isinstance(steps, list) and len(steps) == 3,
+        "pr-check.yml: Jenkins job must resolve PR metadata before triggering Jenkins",
     )
-    checkout_step, run_step = steps
+    checkout_step, metadata_step, run_step = steps
     require(
         set(checkout_step) == {"name", "uses", "with"},
         "pr-check.yml: trusted checkout step has unexpected fields",
@@ -286,6 +288,60 @@ def validate_jenkins_job(workflow):
     )
 
     require(
+        set(metadata_step) == {"name", "id", "env", "run"}
+        and metadata_step["id"] == "pr-meta",
+        "pr-check.yml: missing merge queue PR metadata step",
+    )
+    require(
+        metadata_step["env"]
+        == {
+            "GH_TOKEN": "${{ github.token }}",
+            "MERGE_REF": "${{ github.ref }}",
+            "REPOSITORY": "${{ github.repository }}",
+            "API_URL": "${{ github.api_url }}",
+        },
+        "pr-check.yml: PR metadata resolver environment mismatch",
+    )
+    with tempfile.TemporaryDirectory() as temp_dir:
+        output_path = pathlib.Path(temp_dir) / "github-output"
+        metadata_result = subprocess.run(
+            [
+                "/usr/bin/bash",
+                "--noprofile",
+                "--norc",
+                "-c",
+                "set -euo pipefail\n" + metadata_step["run"],
+            ],
+            cwd=root,
+            env={
+                "PATH": str(root / "scripts/test/fixtures/jenkins")
+                + os.pathsep
+                + os.environ.get("PATH", ""),
+                "GH_TOKEN": "test-token",
+                "MERGE_REF": (
+                    "refs/heads/gh-readonly-queue/main/"
+                    "pr-1083-c49f80eab51c019f276ea17459727ea3d9080d87"
+                ),
+                "REPOSITORY": "dingodb/dingofs",
+                "API_URL": "https://api.github.test",
+                "GITHUB_OUTPUT": str(output_path),
+            },
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        require(
+            metadata_result.returncode == 0,
+            "pr-check.yml: PR metadata resolver failed: "
+            + metadata_result.stderr.strip(),
+        )
+        require(
+            output_path.read_text().splitlines()
+            == ["pr_number=1083", "pr_author=octocat"],
+            "pr-check.yml: PR metadata resolver returned wrong values",
+        )
+
+    require(
         set(run_step) == {"name", "env", "run"},
         "pr-check.yml: Jenkins trigger step has unexpected fields",
     )
@@ -296,6 +352,8 @@ def validate_jenkins_job(workflow):
             "JENKINS_JOB_PATH": "${{ vars.JENKINS_JOB_PATH }}",
             "JENKINS_USER": "${{ secrets.JENKINS_USER }}",
             "JENKINS_API_TOKEN": "${{ secrets.JENKINS_API_TOKEN }}",
+            "PR_NUMBER": "${{ steps.pr-meta.outputs.pr_number }}",
+            "PR_AUTHOR": "${{ steps.pr-meta.outputs.pr_author }}",
             "GIT_REF": "${{ github.ref }}",
             "GIT_SHA": "${{ github.sha }}",
             "GITHUB_RUN_ID": "${{ github.run_id }}",
@@ -412,6 +470,7 @@ print("PASS: PR Check Jenkins contract")
 PY
 
 bash "${ROOT}/scripts/test/test_jenkins_setup_docs.sh"
+bash "${ROOT}/scripts/test/test_trigger_jenkins_metadata.sh"
 
 # GitHub-hosted runners do not guarantee that ripgrep is installed. Exercise
 # the documentation contract with a minimal PATH that provides grep but not rg.

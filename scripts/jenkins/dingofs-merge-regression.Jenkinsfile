@@ -4,6 +4,8 @@ pipeline {
   agent { label 'dingofs-regression' }
 
   parameters {
+    string(name: 'PR_NUMBER', defaultValue: '', trim: true)
+    string(name: 'PR_AUTHOR', defaultValue: '', trim: true)
     string(name: 'GIT_REF', defaultValue: '', trim: true)
     string(name: 'GIT_SHA', defaultValue: '', trim: true)
     string(name: 'GITHUB_RUN_ID', defaultValue: '', trim: true)
@@ -40,6 +42,12 @@ pipeline {
     stage('Validate request') {
       steps {
         script {
+          if (!(params.PR_NUMBER ==~ /[0-9]+/)) {
+            error('PR_NUMBER must be numeric')
+          }
+          if (!params.PR_AUTHOR) {
+            error('PR_AUTHOR must not be empty')
+          }
           if (!(params.GIT_SHA ==~ /[0-9a-fA-F]{40}/)) {
             error('GIT_SHA must be a full 40-character commit SHA')
           }
@@ -70,6 +78,18 @@ pipeline {
           git checkout --detach FETCH_HEAD
           actual=$(git rev-parse HEAD)
           test "${actual}" = "${GIT_SHA}"
+          commit_author_name=$(git show -s --format='%an' HEAD)
+          commit_author_email=$(git show -s --format='%ae' HEAD)
+          commit_subject=$(git show -s --format='%s' HEAD)
+          printf '%s\n' \
+            "pr_number=${PR_NUMBER}" \
+            "pr_author=${PR_AUTHOR}" \
+            "git_sha=${actual}" \
+            "git_author_name=${commit_author_name}" \
+            "git_author_email=${commit_author_email}" \
+            "git_subject=${commit_subject}" \
+            "commit_url=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/commit/${actual}" \
+            >"${WORKSPACE}/jenkins-commit-info.txt"
           git submodule sync --recursive
           git submodule update --init --recursive
         '''
@@ -659,6 +679,17 @@ TOPOLOGY
                   export PATH="${docker_wrapper_dir}:/home/jenkins/miniforge3/bin:${PATH}"
                   export PYTHONHOME=/home/jenkins/miniforge3
                   export PYTHONPATH=/home/jenkins/miniforge3/lib/python3.13/site-packages
+                  export DTT_PR_NUMBER="${PR_NUMBER}"
+                  export DTT_PR_AUTHOR="${PR_AUTHOR}"
+                  export DTT_TEST_COMMIT_SHA="${GIT_SHA}"
+                  export DTT_TEST_COMMIT_AUTHOR_NAME
+                  DTT_TEST_COMMIT_AUTHOR_NAME=$(git show -s --format='%an' HEAD)
+                  export DTT_TEST_COMMIT_AUTHOR_EMAIL
+                  DTT_TEST_COMMIT_AUTHOR_EMAIL=$(git show -s --format='%ae' HEAD)
+                  export DTT_TEST_COMMIT_SUBJECT
+                  DTT_TEST_COMMIT_SUBJECT=$(git show -s --format='%s' HEAD)
+                  export DTT_TEST_COMMIT_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/commit/${GIT_SHA}"
+                  export DTT_JENKINS_BUILD_URL="${BUILD_URL}"
                   touch "${WORKSPACE}/.dtt-smoke-started"
                   "${DTT_BIN}" smoke --env env_127
                   touch "${WORKSPACE}/.dtt-smoke-completed"
@@ -714,7 +745,8 @@ TOPOLOGY
                       --files-from=/dev/null
                   fi
                   for input in jenkins-build-inputs.txt jenkins-cluster-inputs.txt \
-                               jenkins-dtt-inputs.txt candidate-image.sha256; do
+                               jenkins-dtt-inputs.txt jenkins-commit-info.txt \
+                               candidate-image.sha256; do
                     if [[ -f "${WORKSPACE}/${input}" ]]; then
                       cp "${WORKSPACE}/${input}" "${artifacts}/"
                     fi

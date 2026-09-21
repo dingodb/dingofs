@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ -n "${FAKE_CURL_LOG:-}" ]]; then
+  printf '%s\n' "$@" >>"${FAKE_CURL_LOG}"
+fi
+
+header_file=""
+output_file=""
+url=""
+previous=""
+for argument in "$@"; do
+  case "${previous}" in
+    --dump-header) header_file=${argument} ;;
+    --output) output_file=${argument} ;;
+  esac
+  previous=${argument}
+  if [[ "${argument}" == http://* || "${argument}" == https://* ]]; then
+    url=${argument}
+  fi
+done
+
+case "${url}" in
+  */repos/dingodb/dingofs/pulls/1083)
+    printf '%s\n' '{"user":{"login":"octocat"}}'
+    ;;
+  */buildWithParameters)
+    printf 'HTTP/1.1 201 Created\r\nLocation: http://jenkins.test/queue/item/7/\r\n\r\n' \
+      >"${header_file}"
+    : >"${output_file}"
+    printf '201'
+    ;;
+  */queue/item/7/api/json)
+    printf '%s\n' '{"cancelled":false,"executable":{"number":42}}'
+    ;;
+  */42/api/json)
+    printf '%s\n' '{"building":false,"result":"SUCCESS"}'
+    ;;
+  *)
+    printf 'unexpected fake curl URL: %s\n' "${url}" >&2
+    exit 1
+    ;;
+esac
