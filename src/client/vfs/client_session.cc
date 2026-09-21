@@ -45,7 +45,6 @@
 #include "common/options/cache.h"
 #include "common/options/client.h"
 #include "common/status.h"
-#include "common/sync_point.h"
 #include "common/trace/trace_manager.h"
 #include "common/types.h"
 #include "fmt/format.h"
@@ -356,7 +355,6 @@ Status ClientSession::Start(const DingofsConfig& config, int upgrade_from_pid) {
     }
     lifecycle_state_ = LifecycleState::kStarting;
   }
-  TEST_SYNC_POINT_CALLBACK("ClientSession::Starting", this);
 
   if (config.fs_name.empty()) {
     return FinishStartFailure(Status::InvalidParam("fs_name is empty"));
@@ -453,7 +451,6 @@ Status ClientSession::Start(const DingofsConfig& config, int upgrade_from_pid) {
   uid_ = dingofs::Helper::GetOriginalUid();
   gid_ = dingofs::Helper::GetOriginalGid();
 
-  TEST_SYNC_POINT_CALLBACK("ClientSession::BeforePublishRunning", this);
   {
     std::lock_guard<std::mutex> lock(lifecycle_mutex_);
     lifecycle_state_ = LifecycleState::kRunning;
@@ -487,7 +484,6 @@ Status ClientSession::Stop(bool handover) {
     if (lifecycle_state_ == LifecycleState::kQuiescing) {
       const bool same_stop_mode = stop_handover_ == handover;
       lifecycle_cv_.wait(lock, [this]() {
-        TEST_SYNC_POINT_CALLBACK("ClientSession::StopWaiting", this);
         return lifecycle_state_ == LifecycleState::kStopped;
       });
       if (!same_stop_mode) {

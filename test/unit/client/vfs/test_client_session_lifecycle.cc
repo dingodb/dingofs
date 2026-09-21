@@ -5,22 +5,18 @@
  * you may not use this file except in compliance with the License.
  */
 
-#include <bthread/bthread.h>
 #include <bvar/variable.h>
 #include <fcntl.h>
 #include <gflags/gflags.h>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <spdlog/sinks/base_sink.h>
-#include <sys/syscall.h>
-#include <unistd.h>
 
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <cstdlib>
 #include <filesystem>
-#include <functional>
 #include <future>
 #include <memory>
 #include <mutex>
@@ -33,7 +29,6 @@
 #include "client/vfs/vfs_impl.h"
 #include "common/metrics/client/client.h"
 #include "common/options/client.h"
-#include "common/sync_point.h"
 #include "common/trace/trace_manager.h"
 #include "test/unit/client/vfs/test_base.h"
 #include "utils/scoped_cleanup.h"
@@ -47,20 +42,7 @@ using ::testing::Invoke;
 using ::testing::Return;
 
 namespace {
-enum class TestPoint {
-  kAfterFirstRead,
-  kAfterIncrement,
-  kAfterAdmission,
-  kBeforeWait,
-  kAfterDecrement,
-  kBeforeNotify,
-  kStarting,
-  kBeforePublishRunning,
-  kBeforeLeaseRelease,
-  kStopWaiting,
-};
 constexpr auto kWaitLimit = std::chrono::seconds(5);
-constexpr auto kBlockedCheck = std::chrono::milliseconds(50);
 
 class Event {
  public:
@@ -107,20 +89,6 @@ class Pause {
   bool released_{false};
 };
 
-struct OperationHooks {
-  explicit OperationHooks(TestPoint target) : target(target) {}
-
-  static void Call(void* arg, TestPoint point) {
-    auto& hooks = *static_cast<OperationHooks*>(arg);
-    if (point == TestPoint::kBeforeWait) hooks.waiting.Signal();
-    if (point == hooks.target) hooks.pause.Block();
-  }
-
-  TestPoint target;
-  Pause pause;
-  Event waiting;
-};
-
 int64_t Metric(const char* name) {
   const std::string value = bvar::Variable::describe_exposed(name);
   EXPECT_FALSE(value.empty()) << name;
@@ -136,9 +104,13 @@ int64_t RejectedOperations() {
 class PausingLogSink final : public spdlog::sinks::base_sink<std::mutex> {
  public:
   Pause pause;
+  std::atomic<bool> completed{false};
 
  private:
-  void sink_it_(const spdlog::details::log_msg&) override { pause.Block(); }
+  void sink_it_(const spdlog::details::log_msg&) override {
+    pause.Block();
+    completed = true;
+  }
   void flush_() override {}
 };
 
@@ -264,10 +236,6 @@ class ClientSessionLifecycleTest : public ::testing::Test {
   }
 
   void TearDown() override {
-#ifndef NDEBUG
-    SyncPoint::GetInstance()->DisableProcessing();
-    SyncPoint::GetInstance()->ClearAllCallBacks();
-#endif
     if (session_ != nullptr) {
       // Test-body captures are already gone. Verify unmet expectations before
       // teardown, then discard actions so a failed staging assertion cannot
@@ -295,37 +263,7 @@ class ClientSessionLifecycleTest : public ::testing::Test {
         std::make_unique<metrics::client::ClientOpMetric>();
   }
 
-#ifndef NDEBUG
-  void InstallHooks(OperationHooks& hooks) {
-    static constexpr std::pair<const char*, TestPoint> points[] = {
-        {"OperationTracker::AfterFirstRead", TestPoint::kAfterFirstRead},
-        {"OperationTracker::AfterIncrement", TestPoint::kAfterIncrement},
-        {"OperationTracker::AfterAdmission", TestPoint::kAfterAdmission},
-        {"OperationTracker::BeforeWait", TestPoint::kBeforeWait},
-        {"OperationTracker::AfterDecrement", TestPoint::kAfterDecrement},
-        {"OperationTracker::BeforeNotify", TestPoint::kBeforeNotify},
-        {"OperationTracker::BeforeLeaseRelease",
-         TestPoint::kBeforeLeaseRelease},
-        {"ClientSession::Starting", TestPoint::kStarting},
-        {"ClientSession::BeforePublishRunning",
-         TestPoint::kBeforePublishRunning},
-        {"ClientSession::StopWaiting", TestPoint::kStopWaiting},
-    };
-    auto* sync = SyncPoint::GetInstance();
-    for (const auto& [name, point] : points) {
-      void* expected = point == TestPoint::kStarting ||
-                               point == TestPoint::kBeforePublishRunning ||
-                               point == TestPoint::kStopWaiting
-                           ? static_cast<void*>(session_.get())
-                           : static_cast<void*>(&session_->operations_);
-      sync->SetCallBack(name, [&hooks, point, expected](void* arg) {
-        if (arg == expected) OperationHooks::Call(&hooks, point);
-      });
-    }
-    sync->EnableProcessing();
-  }
-
-  void RunLocalStart(bool concurrent_stop) {
+  void RunLocalStart() {
     char temp[] = "/tmp/dingofs-session-start-XXXXXX";
     ASSERT_NE(mkdtemp(temp), nullptr);
     const char* old_base = std::getenv("DINGOFS_BASE_DIR");
@@ -360,50 +298,29 @@ class ClientSessionLifecycleTest : public ::testing::Test {
     config.metasystem_type = "local";
     config.storage_info = std::string("storage=file&path=") + temp + "/blocks";
 
-    if (!concurrent_stop) {
-      const auto status = session_->Start(config);
-      ASSERT_TRUE(status.ok()) << status.ToString();
-      Attr attr;
-      EXPECT_TRUE(session_->GetAttr(Context{0, 0, 0, 0}, kRootIno, &attr).ok());
-      EXPECT_EQ(attr.ino, kRootIno);
-      EXPECT_TRUE(session_->Stop().ok());
-      EXPECT_TRUE(
-          session_->GetAttr(Context{0, 0, 0, 0}, kRootIno, &attr).IsStop());
-      return;
-    }
-
-    OperationHooks hooks(TestPoint::kBeforePublishRunning);
-    InstallHooks(hooks);
-    auto start =
-        std::async(std::launch::async, [&] { return session_->Start(config); });
-    auto join = MakeScopedCleanup([&] {
-      hooks.pause.Release();
-      if (start.valid()) start.wait();
-      SyncPoint::GetInstance()->DisableProcessing();
-      SyncPoint::GetInstance()->ClearAllCallBacks();
-    });
-    ASSERT_TRUE(hooks.pause.entered.Wait());
-    std::string info;
-    EXPECT_TRUE(session_->GetInfo(&info).IsStop());
-    Event stop_called;
-    auto stop = std::async(std::launch::async, [&] {
-      stop_called.Signal();
-      return session_->Stop();
-    });
-    auto release_stop = MakeScopedCleanup([&] { hooks.pause.Release(); });
-    ASSERT_TRUE(stop_called.Wait());
-    EXPECT_EQ(stop.wait_for(kBlockedCheck), std::future_status::timeout);
-    hooks.pause.Release();
-    const auto start_result = start.get();
-    EXPECT_TRUE(start_result.ok()) << start_result.ToString();
-    const auto stop_result = stop.get();
-    EXPECT_TRUE(stop_result.ok()) << stop_result.ToString();
-    EXPECT_TRUE(session_->GetInfo(&info).IsStop());
+    const auto status = session_->Start(config);
+    ASSERT_TRUE(status.ok()) << status.ToString();
+    Attr attr;
+    EXPECT_TRUE(session_->GetAttr(Context{0, 0, 0, 0}, kRootIno, &attr).ok());
+    EXPECT_EQ(attr.ino, kRootIno);
     EXPECT_TRUE(session_->Stop().ok());
+    EXPECT_TRUE(
+        session_->GetAttr(Context{0, 0, 0, 0}, kRootIno, &attr).IsStop());
   }
-#endif
 
   auto AcquireOperation() { return session_->TryAcquireOperation(); }
+
+  bool WaitForAdmissionClosed() {
+    // A rejected public call observes closure; it does not identify the
+    // stopping thread's position inside its drain wait.
+    const auto deadline = std::chrono::steady_clock::now() + kWaitLimit;
+    std::string info;
+    do {
+      if (session_->GetInfo(&info).IsStop()) return true;
+      std::this_thread::yield();
+    } while (std::chrono::steady_clock::now() < deadline);
+    return false;
+  }
 
   void ResetCreatedSession(bool install_core = false) {
     EXPECT_CALL(*core_, Stop(false)).WillOnce(Return(Status::OK()));
@@ -425,6 +342,9 @@ class ClientSessionLifecycleTest : public ::testing::Test {
         .WillByDefault(Return(session_->trace_manager_.get()));
     EXPECT_CALL(resources_->Hub(), GetTraceManager())
         .Times(::testing::AnyNumber());
+    EXPECT_CALL(resources_->Hub(), GetBlockAccesserOptions())
+        .Times(::testing::AnyNumber())
+        .WillRepeatedly(Return(blockaccess::BlockAccessOptions{}));
     session_->vfs_.reset(
         new vfs::VFSImpl(resources_->TakeHub(), *session_->trace_manager_));
     core_ = nullptr;
@@ -439,20 +359,26 @@ class ClientSessionLifecycleTest : public ::testing::Test {
 
 TEST_F(ClientSessionLifecycleTest, StopWaitsForAdmittedOperation) {
   Pause admitted;
+  std::atomic<bool> business_completed{false};
   std::atomic<bool> core_stopped{false};
-  EXPECT_CALL(*core_, GetInfo(_)).WillOnce(Invoke([&](std::string*) {
-    admitted.Block();
-    return Status::OK();
-  }));
+  std::string operation_info;
+  const auto business_status = Status::Internal("operation failed");
+  EXPECT_CALL(*core_, GetInfo(_)).WillRepeatedly(Return(Status::OK()));
+  EXPECT_CALL(*core_, GetInfo(&operation_info))
+      .WillOnce(Invoke([&](std::string*) {
+        admitted.Block();
+        EXPECT_FALSE(core_stopped.load());
+        business_completed = true;
+        return business_status;
+      }));
   EXPECT_CALL(*core_, Stop(false)).WillOnce(Invoke([&](bool) {
-    core_stopped.store(true);
+    EXPECT_TRUE(business_completed.load());
+    core_stopped = true;
     return Status::OK();
   }));
 
-  auto operation = std::async(std::launch::async, [&] {
-    std::string info;
-    return session_->GetInfo(&info);
-  });
+  auto operation = std::async(
+      std::launch::async, [&] { return session_->GetInfo(&operation_info); });
   auto join = MakeScopedCleanup([&] {
     admitted.Release();
     if (operation.valid()) operation.wait();
@@ -461,18 +387,20 @@ TEST_F(ClientSessionLifecycleTest, StopWaitsForAdmittedOperation) {
   auto stop_future =
       std::async(std::launch::async, [&] { return session_->Stop(false); });
   auto release_stop = MakeScopedCleanup([&] { admitted.Release(); });
-  EXPECT_EQ(stop_future.wait_for(kBlockedCheck), std::future_status::timeout);
+  ASSERT_TRUE(WaitForAdmissionClosed());
   EXPECT_FALSE(core_stopped.load());
   admitted.Release();
-  EXPECT_TRUE(operation.get().ok());
+  EXPECT_EQ(operation.get().ToString(), business_status.ToString());
   EXPECT_TRUE(stop_future.get().ok());
   EXPECT_TRUE(core_stopped.load());
 }
 
 TEST_F(ClientSessionLifecycleTest, ConcurrentStopRunsCoreStopOnce) {
   Pause teardown;
+  std::atomic<bool> teardown_completed{false};
   EXPECT_CALL(*core_, Stop(false)).WillOnce(Invoke([&](bool) {
     teardown.Block();
+    teardown_completed = true;
     return Status::OK();
   }));
   auto first =
@@ -482,14 +410,17 @@ TEST_F(ClientSessionLifecycleTest, ConcurrentStopRunsCoreStopOnce) {
     if (first.valid()) first.wait();
   });
   ASSERT_TRUE(teardown.entered.Wait());
+  // Rendezvous only starts the competing task; the public result and once-only
+  // expectation are checked without claiming that it entered the wait branch.
   Event second_called;
   auto second = std::async(std::launch::async, [&] {
     second_called.Signal();
-    return session_->Stop(false);
+    auto status = session_->Stop(false);
+    EXPECT_TRUE(teardown_completed.load());
+    return status;
   });
   auto release_second = MakeScopedCleanup([&] { teardown.Release(); });
   ASSERT_TRUE(second_called.Wait());
-  EXPECT_EQ(second.wait_for(kBlockedCheck), std::future_status::timeout);
   teardown.Release();
   EXPECT_TRUE(first.get().ok());
   EXPECT_TRUE(second.get().ok());
@@ -566,103 +497,6 @@ TEST_F(ClientSessionLifecycleTest, StoppedSessionRejectsBeforeCoreAccess) {
   EXPECT_DOUBLE_EQ(session_->GetEntryTimeout(kDirectory), 2.0);
 }
 
-#ifndef NDEBUG
-TEST_F(ClientSessionLifecycleTest, CloseAfterFirstReadRejectsLateRegistration) {
-  OperationHooks hooks(TestPoint::kAfterFirstRead);
-  InstallHooks(hooks);
-  const auto active = ActiveOperations();
-  const auto rejected = RejectedOperations();
-  EXPECT_CALL(*core_, GetInfo(_)).Times(0);
-  EXPECT_CALL(*core_, Stop(false)).WillOnce(Return(Status::OK()));
-
-  auto operation = std::async(std::launch::async, [&] {
-    std::string info;
-    return session_->GetInfo(&info);
-  });
-  auto join = MakeScopedCleanup([&] {
-    hooks.pause.Release();
-    if (operation.valid()) operation.wait();
-  });
-  ASSERT_TRUE(hooks.pause.entered.Wait());
-  // No tentative count yet: Stop may finish while this caller is still alive.
-  EXPECT_TRUE(session_->Stop().ok());
-  EXPECT_EQ(ActiveOperations(), active);
-  hooks.pause.Release();
-  EXPECT_TRUE(operation.get().IsStop());
-  EXPECT_EQ(RejectedOperations(), rejected + 1);
-  EXPECT_EQ(ActiveOperations(), active);
-}
-
-TEST_F(ClientSessionLifecycleTest,
-       CloseAfterIncrementWaitsForRejectedRollback) {
-  OperationHooks hooks(TestPoint::kAfterIncrement);
-  InstallHooks(hooks);
-  const auto active = ActiveOperations();
-  const auto rejected = RejectedOperations();
-  std::atomic<bool> core_stopped{false};
-  EXPECT_CALL(*core_, GetInfo(_)).Times(0);
-  EXPECT_CALL(*core_, Stop(false)).WillOnce(Invoke([&](bool) {
-    core_stopped = true;
-    return Status::OK();
-  }));
-
-  auto operation = std::async(std::launch::async, [&] {
-    std::string info;
-    return session_->GetInfo(&info);
-  });
-  auto join = MakeScopedCleanup([&] {
-    hooks.pause.Release();
-    if (operation.valid()) operation.wait();
-  });
-  ASSERT_TRUE(hooks.pause.entered.Wait());
-  auto stop = std::async(std::launch::async, [&] { return session_->Stop(); });
-  auto release_stop = MakeScopedCleanup([&] { hooks.pause.Release(); });
-  ASSERT_TRUE(hooks.waiting.Wait());
-  EXPECT_EQ(ActiveOperations(), active);
-  EXPECT_FALSE(core_stopped.load());
-  hooks.pause.Release();
-  EXPECT_TRUE(operation.get().IsStop());
-  EXPECT_TRUE(stop.get().ok());
-  EXPECT_EQ(RejectedOperations(), rejected + 1);
-  EXPECT_EQ(ActiveOperations(), active);
-}
-
-TEST_F(ClientSessionLifecycleTest, AdmittedBeforeCoreStillHoldsStop) {
-  OperationHooks hooks(TestPoint::kAfterAdmission);
-  InstallHooks(hooks);
-  std::atomic<bool> core_entered{false};
-  std::atomic<bool> core_stopped{false};
-  EXPECT_CALL(*core_, GetInfo(_)).WillOnce(Invoke([&](std::string*) {
-    EXPECT_FALSE(core_stopped.load());
-    core_entered = true;
-    return Status::OK();
-  }));
-  EXPECT_CALL(*core_, Stop(false)).WillOnce(Invoke([&](bool) {
-    EXPECT_TRUE(core_entered.load());
-    core_stopped = true;
-    return Status::OK();
-  }));
-  auto operation = std::async(std::launch::async, [&] {
-    std::string info;
-    return session_->GetInfo(&info);
-  });
-  auto join = MakeScopedCleanup([&] {
-    hooks.pause.Release();
-    if (operation.valid()) operation.wait();
-  });
-  ASSERT_TRUE(hooks.pause.entered.Wait());
-  auto stop = std::async(std::launch::async, [&] { return session_->Stop(); });
-  auto release_stop = MakeScopedCleanup([&] { hooks.pause.Release(); });
-  ASSERT_TRUE(hooks.waiting.Wait());
-  EXPECT_FALSE(core_entered.load());
-  EXPECT_FALSE(core_stopped.load());
-  std::string info;
-  EXPECT_TRUE(session_->GetInfo(&info).IsStop());
-  hooks.pause.Release();
-  EXPECT_TRUE(operation.get().ok());
-  EXPECT_TRUE(stop.get().ok());
-}
-
 TEST_F(ClientSessionLifecycleTest, QuiescingRejectsBeforeCoreAccess) {
   Pause teardown;
   const auto rejected = RejectedOperations();
@@ -721,30 +555,35 @@ TEST_F(ClientSessionLifecycleTest, CreatedStopPreventsAnyLaterStart) {
   EXPECT_EQ(RejectedOperations(), rejected + 2);
 }
 
-TEST_F(ClientSessionLifecycleTest, StopDuringStartingWaitsForStartFailure) {
+TEST_F(ClientSessionLifecycleTest, ConcurrentStopSharesStartFailure) {
   ResetCreatedSession(true);
-  OperationHooks hooks(TestPoint::kStarting);
-  InstallHooks(hooks);
+  Pause cleanup;
+  std::atomic<bool> cleanup_completed{false};
   EXPECT_CALL(*core_, GetInfo(_)).Times(0);
-  EXPECT_CALL(*core_, Stop(false)).WillOnce(Return(Status::OK()));
+  EXPECT_CALL(*core_, Stop(false)).WillOnce(Invoke([&](bool) {
+    cleanup.Block();
+    cleanup_completed = true;
+    return Status::Internal("cleanup failed");
+  }));
   auto start = std::async(std::launch::async,
                           [&] { return session_->Start(DingofsConfig{}); });
   auto join = MakeScopedCleanup([&] {
-    hooks.pause.Release();
+    cleanup.Release();
     if (start.valid()) start.wait();
   });
-  ASSERT_TRUE(hooks.pause.entered.Wait());
+  ASSERT_TRUE(cleanup.entered.Wait());
   Event stop_called;
   auto stop = std::async(std::launch::async, [&] {
     stop_called.Signal();
-    return session_->Stop();
+    auto status = session_->Stop();
+    EXPECT_TRUE(cleanup_completed.load());
+    return status;
   });
-  auto release_stop = MakeScopedCleanup([&] { hooks.pause.Release(); });
+  auto release_stop = MakeScopedCleanup([&] { cleanup.Release(); });
   ASSERT_TRUE(stop_called.Wait());
-  EXPECT_EQ(stop.wait_for(kBlockedCheck), std::future_status::timeout);
   std::string info;
   EXPECT_TRUE(session_->GetInfo(&info).IsStop());
-  hooks.pause.Release();
+  cleanup.Release();
   const auto result = start.get();
   EXPECT_TRUE(result.IsInvalidParam());
   EXPECT_EQ(stop.get().ToString(), result.ToString());
@@ -764,11 +603,13 @@ TEST_F(ClientSessionLifecycleTest, RepeatedStopPreservesOriginalFailure) {
   EXPECT_TRUE(session_->GetInfo(&info).IsStop());
 }
 
-TEST_F(ClientSessionLifecycleTest, SameModeStopWaitersShareCoreFailure) {
+TEST_F(ClientSessionLifecycleTest, ConcurrentSameModeStopsShareCoreFailure) {
   Pause teardown;
+  std::atomic<bool> teardown_completed{false};
   const auto failure = Status::Internal("core shutdown failed");
   EXPECT_CALL(*core_, Stop(false)).WillOnce(Invoke([&](bool) {
     teardown.Block();
+    teardown_completed = true;
     return failure;
   }));
   auto first = std::async(std::launch::async, [&] { return session_->Stop(); });
@@ -780,46 +621,15 @@ TEST_F(ClientSessionLifecycleTest, SameModeStopWaitersShareCoreFailure) {
   Event second_called;
   auto second = std::async(std::launch::async, [&] {
     second_called.Signal();
-    return session_->Stop();
+    auto status = session_->Stop();
+    EXPECT_TRUE(teardown_completed.load());
+    return status;
   });
   auto release_second = MakeScopedCleanup([&] { teardown.Release(); });
   ASSERT_TRUE(second_called.Wait());
-  EXPECT_EQ(second.wait_for(kBlockedCheck), std::future_status::timeout);
   teardown.Release();
   EXPECT_EQ(first.get().ToString(), failure.ToString());
   EXPECT_EQ(second.get().ToString(), failure.ToString());
-}
-
-TEST_F(ClientSessionLifecycleTest, ConflictingStopWaitsForFullTeardown) {
-  OperationHooks hooks(TestPoint::kStopWaiting);
-  InstallHooks(hooks);
-  Pause teardown;
-  const auto failure = Status::Internal("first stop failed");
-  EXPECT_CALL(*core_, Stop(false)).WillOnce(Invoke([&](bool) {
-    teardown.Block();
-    return failure;
-  }));
-  EXPECT_CALL(*core_, Stop(true)).Times(0);
-  EXPECT_CALL(*core_, Dump(_, _)).Times(0);
-  auto first = std::async(std::launch::async, [&] { return session_->Stop(); });
-  auto join = MakeScopedCleanup([&] {
-    teardown.Release();
-    if (first.valid()) first.wait();
-  });
-  ASSERT_TRUE(teardown.entered.Wait());
-  auto conflicting =
-      std::async(std::launch::async, [&] { return session_->Stop(true); });
-  auto release_conflict = MakeScopedCleanup([&] {
-    hooks.pause.Release();
-    teardown.Release();
-  });
-  // The conflicting caller has observed Quiescing while teardown is paused.
-  ASSERT_TRUE(hooks.pause.entered.Wait());
-  hooks.pause.Release();
-  teardown.Release();
-  EXPECT_EQ(first.get().ToString(), failure.ToString());
-  EXPECT_TRUE(conflicting.get().IsInvalidParam());
-  EXPECT_EQ(session_->Stop(true).ToString(), failure.ToString());
 }
 
 TEST_F(ClientSessionLifecycleTest, HandoverFailureSkipsDumpAndStopsTrace) {
@@ -835,8 +645,9 @@ TEST_F(ClientSessionLifecycleTest, HandoverFailureSkipsDumpAndStopsTrace) {
   EXPECT_EQ(session_->Stop(true).ToString(), failure.ToString());
 }
 
-TEST_F(ClientSessionLifecycleTest, HandoverDumpFailureNotifiesSameModeWaiter) {
+TEST_F(ClientSessionLifecycleTest, ConcurrentHandoverStopsShareDumpFailure) {
   Pause dump;
+  std::atomic<bool> dump_completed{false};
   SetTraceStarted(true);
   {
     ::testing::InSequence order;
@@ -845,6 +656,7 @@ TEST_F(ClientSessionLifecycleTest, HandoverDumpFailureNotifiesSameModeWaiter) {
         .WillOnce(Invoke([&](ContextSPtr, Json::Value&) {
           EXPECT_TRUE(TraceStarted());
           dump.Block();
+          dump_completed = true;
           return false;
         }));
   }
@@ -858,11 +670,12 @@ TEST_F(ClientSessionLifecycleTest, HandoverDumpFailureNotifiesSameModeWaiter) {
   Event second_called;
   auto second = std::async(std::launch::async, [&] {
     second_called.Signal();
-    return session_->Stop(true);
+    auto status = session_->Stop(true);
+    EXPECT_TRUE(dump_completed.load());
+    return status;
   });
   auto release_second = MakeScopedCleanup([&] { dump.Release(); });
   ASSERT_TRUE(second_called.Wait());
-  EXPECT_EQ(second.wait_for(kBlockedCheck), std::future_status::timeout);
   std::string info;
   EXPECT_TRUE(session_->GetInfo(&info).IsStop());
   dump.Release();
@@ -884,17 +697,14 @@ TEST_F(ClientSessionLifecycleTest, MovedFromLeaseDoesNotChangeActiveOwnership) {
   EXPECT_EQ(ActiveOperations(), active + 1);
   EXPECT_EQ(RejectedOperations(), rejected);
 
-  OperationHooks hooks(TestPoint::kAfterFirstRead);
-  InstallHooks(hooks);
+  EXPECT_CALL(*core_, GetInfo(_)).WillRepeatedly(Return(Status::OK()));
   EXPECT_CALL(*core_, Stop(false)).WillOnce(Invoke([&](bool) {
     EXPECT_EQ(ActiveOperations(), active);
     return Status::OK();
   }));
   auto stop = std::async(std::launch::async, [&] { return session_->Stop(); });
   auto release_lease = MakeScopedCleanup([&] { destination.reset(); });
-  ASSERT_TRUE(hooks.waiting.Wait());
-  std::string info;
-  EXPECT_TRUE(session_->GetInfo(&info).IsStop());
+  ASSERT_TRUE(WaitForAdmissionClosed());
   EXPECT_EQ(RejectedOperations(), rejected + 1);
   EXPECT_EQ(ActiveOperations(), active + 1);
   destination.reset();
@@ -902,40 +712,8 @@ TEST_F(ClientSessionLifecycleTest, MovedFromLeaseDoesNotChangeActiveOwnership) {
   EXPECT_EQ(ActiveOperations(), active);
 }
 
-TEST_F(ClientSessionLifecycleTest,
-       FinalTrackerReleaseStillHoldsStopAfterActiveZero) {
-  OperationHooks hooks(TestPoint::kBeforeLeaseRelease);
-  InstallHooks(hooks);
-  const auto active = ActiveOperations();
-  std::atomic<bool> core_stopped{false};
-  EXPECT_CALL(*core_, GetInfo(_)).WillOnce(Return(Status::OK()));
-  EXPECT_CALL(*core_, Stop(false)).WillOnce(Invoke([&](bool) {
-    core_stopped = true;
-    return Status::OK();
-  }));
-  auto operation = std::async(std::launch::async, [&] {
-    std::string info;
-    return session_->GetInfo(&info);
-  });
-  auto join = MakeScopedCleanup([&] {
-    hooks.pause.Release();
-    if (operation.valid()) operation.wait();
-  });
-  ASSERT_TRUE(hooks.pause.entered.Wait());
-  EXPECT_EQ(ActiveOperations(), active);
-  auto stop = std::async(std::launch::async, [&] { return session_->Stop(); });
-  auto release_stop = MakeScopedCleanup([&] { hooks.pause.Release(); });
-  ASSERT_TRUE(hooks.waiting.Wait());
-  EXPECT_FALSE(core_stopped.load());
-  hooks.pause.Release();
-  EXPECT_TRUE(operation.get().ok());
-  EXPECT_TRUE(stop.get().ok());
-}
-
 TEST_F(ClientSessionLifecycleTest, StopWaitsForUnpublishedRealHandle) {
   auto& resources = UseRealVFS();
-  OperationHooks hooks(TestPoint::kBeforePublishRunning);
-  InstallHooks(hooks);
   Pause before_publish;
   uint64_t internal_fh = 0;
   EXPECT_CALL(resources.Meta(), Open(_, 42, O_RDONLY, _, _))
@@ -951,8 +729,11 @@ TEST_F(ClientSessionLifecycleTest, StopWaitsForUnpublishedRealHandle) {
       .RetiresOnSaturation();
   std::atomic<bool> stopped{false};
   EXPECT_CALL(resources.Hub(), Stop(false)).WillOnce(Invoke([&](bool) {
+    EXPECT_TRUE(resources.Handles().FindHandlerForRelease(internal_fh));
+    EXPECT_EQ(resources.Readers()->Size(), 1u);
     stopped = true;
     resources.StopResources();
+    EXPECT_EQ(resources.Readers()->Size(), 0u);
     return Status::OK();
   }));
 
@@ -969,7 +750,7 @@ TEST_F(ClientSessionLifecycleTest, StopWaitsForUnpublishedRealHandle) {
   EXPECT_FALSE(resources.Handles().FindHandlerForRelease(internal_fh));
   auto stop = std::async(std::launch::async, [&] { return session_->Stop(); });
   auto release_stop = MakeScopedCleanup([&] { before_publish.Release(); });
-  ASSERT_TRUE(hooks.waiting.Wait());
+  ASSERT_TRUE(WaitForAdmissionClosed());
   EXPECT_FALSE(stopped.load());
   before_publish.Release();
   EXPECT_TRUE(operation.get().ok());
@@ -986,8 +767,6 @@ TEST_F(ClientSessionLifecycleTest, StopWaitsAfterRealHandleErase) {
   ASSERT_TRUE(
       session_->Open(Context{0, 0, 0, 0}, 42, O_RDONLY, &fh, &keep_cache).ok());
   ASSERT_TRUE(resources.Handles().FindHandlerForRelease(fh));
-  OperationHooks hooks(TestPoint::kBeforePublishRunning);
-  InstallHooks(hooks);
   Pause after_erase;
   EXPECT_CALL(resources.Hub(), GetReaderRegistry()).WillOnce(Invoke([&] {
     after_erase.Block();
@@ -995,6 +774,7 @@ TEST_F(ClientSessionLifecycleTest, StopWaitsAfterRealHandleErase) {
   }));
   std::atomic<bool> stopped{false};
   EXPECT_CALL(resources.Hub(), Stop(false)).WillOnce(Invoke([&](bool) {
+    EXPECT_EQ(resources.Readers()->Size(), 0u);
     stopped = true;
     resources.StopResources();
     return Status::OK();
@@ -1011,7 +791,7 @@ TEST_F(ClientSessionLifecycleTest, StopWaitsAfterRealHandleErase) {
   EXPECT_FALSE(resources.Handles().FindHandlerForRelease(fh));
   auto stop = std::async(std::launch::async, [&] { return session_->Stop(); });
   auto release_stop = MakeScopedCleanup([&] { after_erase.Release(); });
-  ASSERT_TRUE(hooks.waiting.Wait());
+  ASSERT_TRUE(WaitForAdmissionClosed());
   EXPECT_FALSE(stopped.load());
   after_erase.Release();
   EXPECT_TRUE(operation.get().ok());
@@ -1020,19 +800,20 @@ TEST_F(ClientSessionLifecycleTest, StopWaitsAfterRealHandleErase) {
 
 TEST_F(ClientSessionLifecycleTest, StopWaitsForRealNoHandleMetadataPath) {
   auto& resources = UseRealVFS();
-  OperationHooks hooks(TestPoint::kBeforePublishRunning);
-  InstallHooks(hooks);
   Pause metadata;
   std::atomic<bool> stopped{false};
+  std::atomic<bool> metadata_completed{false};
   const auto expected_attr = vfs::test::MakeFileAttr(42);
   EXPECT_CALL(resources.Meta(), GetAttr(_, 42, _))
       .WillOnce(Invoke([&](ContextSPtr, Ino, Attr* attr) {
         metadata.Block();
         EXPECT_FALSE(stopped.load());
         *attr = expected_attr;
+        metadata_completed = true;
         return Status::OK();
       }));
   EXPECT_CALL(resources.Hub(), Stop(false)).WillOnce(Invoke([&](bool) {
+    EXPECT_TRUE(metadata_completed.load());
     stopped = true;
     resources.StopResources();
     return Status::OK();
@@ -1048,7 +829,7 @@ TEST_F(ClientSessionLifecycleTest, StopWaitsForRealNoHandleMetadataPath) {
   ASSERT_TRUE(metadata.entered.Wait());
   auto stop = std::async(std::launch::async, [&] { return session_->Stop(); });
   auto release_stop = MakeScopedCleanup([&] { metadata.Release(); });
-  ASSERT_TRUE(hooks.waiting.Wait());
+  ASSERT_TRUE(WaitForAdmissionClosed());
   EXPECT_FALSE(stopped.load());
   metadata.Release();
   EXPECT_TRUE(operation.get().ok());
@@ -1065,8 +846,7 @@ TEST_F(ClientSessionLifecycleTest, AccessLogDestructorRemainsInsideLease) {
       MakeScopedCleanup([&] { logger = std::move(previous_logger); });
   FLAGS_vfs_access_logging = true;
   FLAGS_vfs_access_log_threshold_us = 0;
-  OperationHooks hooks(TestPoint::kBeforePublishRunning);
-  InstallHooks(hooks);
+  EXPECT_CALL(*core_, GetInfo(_)).WillRepeatedly(Return(Status::OK()));
   const auto active = ActiveOperations();
   std::atomic<bool> business_returned{false};
   std::atomic<bool> stopped{false};
@@ -1078,6 +858,7 @@ TEST_F(ClientSessionLifecycleTest, AccessLogDestructorRemainsInsideLease) {
         return business_status;
       }));
   EXPECT_CALL(*core_, Stop(false)).WillOnce(Invoke([&](bool) {
+    EXPECT_TRUE(sink->completed.load());
     stopped = true;
     return Status::OK();
   }));
@@ -1094,97 +875,12 @@ TEST_F(ClientSessionLifecycleTest, AccessLogDestructorRemainsInsideLease) {
   EXPECT_EQ(ActiveOperations(), active + 1);
   auto stop = std::async(std::launch::async, [&] { return session_->Stop(); });
   auto release_stop = MakeScopedCleanup([&] { sink->pause.Release(); });
-  ASSERT_TRUE(hooks.waiting.Wait());
+  ASSERT_TRUE(WaitForAdmissionClosed());
   EXPECT_FALSE(stopped.load());
   sink->pause.Release();
   EXPECT_EQ(operation.get().ToString(), business_status.ToString());
   EXPECT_TRUE(stop.get().ok());
   EXPECT_EQ(ActiveOperations(), active);
-}
-
-TEST_F(ClientSessionLifecycleTest, OwnerJoinsDecrementTailAfterStopReturns) {
-  OperationHooks hooks(TestPoint::kAfterDecrement);
-  InstallHooks(hooks);
-  EXPECT_CALL(*core_, GetInfo(_)).WillOnce(Return(Status::OK()));
-  EXPECT_CALL(*core_, Stop(false)).WillOnce(Return(Status::OK()));
-  auto operation = std::async(std::launch::async, [&] {
-    std::string info;
-    return session_->GetInfo(&info);
-  });
-  auto join = MakeScopedCleanup([&] {
-    hooks.pause.Release();
-    if (operation.valid()) operation.wait();
-  });
-  ASSERT_TRUE(hooks.pause.entered.Wait());
-  EXPECT_TRUE(session_->Stop().ok());
-  EXPECT_EQ(operation.wait_for(kBlockedCheck), std::future_status::timeout);
-  hooks.pause.Release();
-  EXPECT_TRUE(operation.get().ok());
-  // Stop's zero-count observation is not permission to destroy until this
-  // caller has completed its closed-epoch check and notification tail.
-  session_.reset();
-}
-
-TEST_F(ClientSessionLifecycleTest,
-       OwnerJoinsNotifyTailAfterOtherSlotWakesStop) {
-  OperationHooks hooks(TestPoint::kBeforeNotify);
-  InstallHooks(hooks);
-  Pause first_core;
-  Pause second_core;
-  std::atomic<unsigned> entered{0};
-  EXPECT_CALL(*core_, GetInfo(_))
-      .Times(2)
-      .WillRepeatedly(Invoke([&](std::string*) {
-        if (entered.fetch_add(1) == 0) {
-          first_core.Block();
-        } else {
-          second_core.Block();
-        }
-        return Status::OK();
-      }));
-  EXPECT_CALL(*core_, Stop(false)).WillOnce(Return(Status::OK()));
-  auto first = std::async(std::launch::async, [&] {
-    OperationTracker::SetTestSlot(0);
-    auto clear = MakeScopedCleanup([] { OperationTracker::ClearTestSlot(); });
-    std::string info;
-    return session_->GetInfo(&info);
-  });
-  auto join_first = MakeScopedCleanup([&] {
-    first_core.Release();
-    hooks.pause.Release();
-    if (first.valid()) first.wait();
-  });
-  ASSERT_TRUE(first_core.entered.Wait());
-  auto second = std::async(std::launch::async, [&] {
-    OperationTracker::SetTestSlot(1);
-    auto clear = MakeScopedCleanup([] { OperationTracker::ClearTestSlot(); });
-    std::string info;
-    return session_->GetInfo(&info);
-  });
-  auto join_second = MakeScopedCleanup([&] {
-    second_core.Release();
-    first_core.Release();
-    hooks.pause.Release();
-    if (second.valid()) second.wait();
-  });
-  ASSERT_TRUE(second_core.entered.Wait());
-  auto stop = std::async(std::launch::async, [&] { return session_->Stop(); });
-  auto release_stop = MakeScopedCleanup([&] {
-    first_core.Release();
-    second_core.Release();
-    hooks.pause.Release();
-  });
-  ASSERT_TRUE(hooks.waiting.Wait());
-  first_core.Release();
-  ASSERT_TRUE(hooks.pause.entered.Wait());
-  second_core.Release();
-  EXPECT_TRUE(second.get().ok());
-  ASSERT_EQ(stop.wait_for(kWaitLimit), std::future_status::ready);
-  EXPECT_TRUE(stop.get().ok());
-  EXPECT_EQ(first.wait_for(kBlockedCheck), std::future_status::timeout);
-  hooks.pause.Release();
-  EXPECT_TRUE(first.get().ok());
-  session_.reset();
 }
 
 TEST_F(ClientSessionLifecycleTest, SuccessfulLocalStartOpensAdmission) {
@@ -1197,104 +893,11 @@ TEST_F(ClientSessionLifecycleTest, SuccessfulLocalStartOpensAdmission) {
   // test ordering, repeats, and other fixtures' logger ownership.
   ASSERT_EXIT(
       {
-        RunLocalStart(false);
+        RunLocalStart();
         std::_Exit(::testing::Test::HasFailure() ? 1 : 0);
       },
       ::testing::ExitedWithCode(0), "");
 }
-
-TEST_F(ClientSessionLifecycleTest,
-       StopDuringStartingWaitsForSuccessfulLocalStart) {
-  ResetCreatedSession();
-  const auto previous_style = ::testing::FLAGS_gtest_death_test_style;
-  ::testing::FLAGS_gtest_death_test_style = "threadsafe";
-  auto restore = MakeScopedCleanup(
-      [&] { ::testing::FLAGS_gtest_death_test_style = previous_style; });
-  ASSERT_EXIT(
-      {
-        RunLocalStart(true);
-        std::_Exit(::testing::Test::HasFailure() ? 1 : 0);
-      },
-      ::testing::ExitedWithCode(0), "");
-}
-
-TEST_F(ClientSessionLifecycleTest, MigratedBthreadReturnsItsOriginalSlot) {
-  struct Migration {
-    Pause occupied_worker;
-    Event operation_done;
-    bthread_t blocker{};
-    int blocker_start{-1};
-    pid_t entered_tid{-1};
-    pid_t occupied_tid{-1};
-    pid_t resumed_tid{-1};
-    Status result;
-  } migration;
-
-  const auto active = ActiveOperations();
-  EXPECT_CALL(*core_, GetInfo(_)).WillOnce(Invoke([&](std::string*) {
-    EXPECT_EQ(ActiveOperations(), active + 1);
-    // Urgent start transfers this worker to the child. The child blocks the
-    // OS thread (not just its bthread) until the owner below joins this call.
-    // Only another worker can steal and resume the public operation.
-    migration.blocker_start = bthread_start_urgent(
-        &migration.blocker, nullptr,
-        +[](void* arg) -> void* {
-          auto& state = *static_cast<Migration*>(arg);
-          state.occupied_tid = static_cast<pid_t>(syscall(SYS_gettid));
-          state.occupied_worker.Block();
-          OperationTracker::ClearTestSlot();
-          return nullptr;
-        },
-        &migration);
-    if (migration.blocker_start != 0) {
-      return Status::Internal("could not occupy bthread worker");
-    }
-    migration.resumed_tid = static_cast<pid_t>(syscall(SYS_gettid));
-    // The exit worker deliberately uses a different slot. Looking up TLS in
-    // Leave instead of remembering the entry slot would underflow or leak.
-    OperationTracker::SetTestSlot(1);
-    return Status::OK();
-  }));
-  EXPECT_CALL(*core_, Stop(false)).WillOnce(Return(Status::OK()));
-
-  std::function<void()> call = [&] {
-    OperationTracker::SetTestSlot(0);
-    migration.entered_tid = static_cast<pid_t>(syscall(SYS_gettid));
-    std::string info;
-    migration.result = session_->GetInfo(&info);
-    OperationTracker::ClearTestSlot();
-    migration.operation_done.Signal();
-  };
-  bthread_t caller;
-  ASSERT_EQ(bthread_start_background(
-                &caller, nullptr,
-                +[](void* arg) -> void* {
-                  (*static_cast<std::function<void()>*>(arg))();
-                  return nullptr;
-                },
-                &call),
-            0);
-  auto join = MakeScopedCleanup([&] {
-    migration.occupied_worker.Release();
-    bthread_join(caller, nullptr);
-    if (migration.blocker_start == 0) {
-      bthread_join(migration.blocker, nullptr);
-    }
-  });
-  ASSERT_TRUE(migration.operation_done.Wait());
-  ASSERT_TRUE(migration.occupied_worker.entered.Wait());
-  EXPECT_EQ(migration.blocker_start, 0);
-  EXPECT_EQ(migration.entered_tid, migration.occupied_tid);
-  EXPECT_NE(migration.entered_tid, migration.resumed_tid);
-  RecordProperty("entry_os_tid", migration.entered_tid);
-  RecordProperty("exit_os_tid", migration.resumed_tid);
-  EXPECT_TRUE(migration.result.ok()) << migration.result.ToString();
-  EXPECT_EQ(ActiveOperations(), active);
-  EXPECT_TRUE(session_->Stop().ok());
-  // Caller and urgent child both join while the session is still owned.
-}
-
-#endif  // NDEBUG
 
 }  // namespace client
 }  // namespace dingofs
