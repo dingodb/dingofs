@@ -465,7 +465,7 @@ bool Server::InitCrontab() {
       "HEARTBEAT",
       FLAGS_mds_crontab_heartbeat_interval_s * 1000,
       true,
-      [](void*) { Server::GetInstance().GetHeartbeat()->Run(); },
+      []() { Server::GetInstance().GetHeartbeat()->Run(); },
   });
 
   // Add fs info sync crontab
@@ -473,7 +473,7 @@ bool Server::InitCrontab() {
       "FSINFO_SYNC",
       FLAGS_mds_crontab_fsinfosync_interval_s * 1000,
       true,
-      [](void*) { Server::GetInstance().GetFsInfoSync()->Run(); },
+      []() { Server::GetInstance().GetFsInfoSync()->Run(); },
   });
 
   // Add fs info sync crontab
@@ -481,7 +481,7 @@ bool Server::InitCrontab() {
       "MDS_MONITOR",
       FLAGS_mds_crontab_mdsmonitor_interval_s * 1000,
       true,
-      [](void*) { Server::GetInstance().GetMonitor()->Run(); },
+      []() { Server::GetInstance().GetMonitor()->Run(); },
   });
 
   // Add quota sync crontab
@@ -489,7 +489,7 @@ bool Server::InitCrontab() {
       "QUOTA_SYNC",
       FLAGS_mds_crontab_quota_sync_interval_s * 1000,
       true,
-      [](void*) { Server::GetInstance().GetQuotaSynchronizer()->Run(); },
+      []() { Server::GetInstance().GetQuotaSynchronizer()->Run(); },
   });
 
   // Add dir-stats sync crontab
@@ -497,7 +497,7 @@ bool Server::InitCrontab() {
       "DIR_STATS_SYNC",
       FLAGS_mds_crontab_dir_stats_sync_interval_s * 1000,
       true,
-      [](void*) { Server::GetInstance().GetDirStatsSynchronizer()->Run(); },
+      []() { Server::GetInstance().GetDirStatsSynchronizer()->Run(); },
   });
 
   // Add fs info sync crontab
@@ -505,7 +505,7 @@ bool Server::InitCrontab() {
       "GC",
       FLAGS_mds_crontab_gc_interval_s * 1000,
       true,
-      [](void*) { Server::GetInstance().GetGcProcessor()->Run(); },
+      []() { Server::GetInstance().GetGcProcessor()->Run(); },
   });
 
   // Trash cleanup runs on its own cadence — bucket eligibility only changes at
@@ -514,7 +514,7 @@ bool Server::InitCrontab() {
       "GC_TRASH",
       FLAGS_mds_crontab_gc_trash_interval_s * 1000,
       true,
-      [](void*) { Server::GetInstance().GetGcProcessor()->RunTrash(); },
+      []() { Server::GetInstance().GetGcProcessor()->RunTrash(); },
   });
 
   // Add filesystem cache crontab
@@ -522,7 +522,7 @@ bool Server::InitCrontab() {
       "CLEAN_EXPIRED_CACHE",
       FLAGS_mds_crontab_clean_expired_cache_interval_s * 1000,
       true,
-      [](void*) { Server::GetInstance().GetFileSystemSet()->CleanExpiredCache(); },
+      []() { Server::GetInstance().GetFileSystemSet()->CleanExpiredCache(); },
   });
 
   // Add cache member sync crontab
@@ -530,7 +530,7 @@ bool Server::InitCrontab() {
       "CACHE_MEMBER_SYNC",
       FLAGS_mds_crontab_cache_member_sync_interval_s * 1000,
       true,
-      [](void*) { Server::GetInstance().GetCacheMemberSynchronizer()->Run(); },
+      []() { Server::GetInstance().GetCacheMemberSynchronizer()->Run(); },
   });
 
   return true;

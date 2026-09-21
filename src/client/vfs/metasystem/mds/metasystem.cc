@@ -494,7 +494,7 @@ bool MDSMetaSystem::InitCrontab() {
       "HEARTBEAT",
       kHeartbeatIntervalS * 1000,
       true,
-      [this](void*) { this->Heartbeat(); },
+      [this]() { this->Heartbeat(); },
   });
 
   // add clean expired crontab
@@ -502,7 +502,7 @@ bool MDSMetaSystem::InitCrontab() {
       "CLEAN_EXPIRED",
       kCleanExpiredModifyTimeMemoIntervalS * 1000,
       true,
-      [this](void*) { this->CleanExpired(); },
+      [this]() { this->CleanExpired(); },
   });
 
   // Note: the cached fs_info refreshes via the 5s heartbeat path — MDS echoes
