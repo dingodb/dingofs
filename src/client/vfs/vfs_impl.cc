@@ -274,7 +274,11 @@ Status VFSImpl::Lookup(ContextSPtr ctx, Ino parent, const std::string& name,
     return Status::OK();
   }
 
+  utils::Duration duration;
+
   Status s = meta_system_->Lookup(ctx, TranslateIno(parent), name, attr);
+  ctx->AddLatencyTrace("meta", duration.ElapsedUs(true));
+
   if (s.ok()) {
     TranslateAttrToLocal(attr);
     vfs_hub_->GetFileSuffixWatcher()->Remeber(*attr, name);
@@ -600,11 +604,14 @@ Status VFSImpl::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t* fh,
     if (!s.ok()) return s;
   }
 
+  utils::Duration duration;
   Status s = meta_system_->Open(ctx, TranslateIno(ino), flags, gfh, keep_cache);
   if ((flags & O_TRUNC) && (s.ok() || s.IsNetError())) {
     reader_registry_->InvalidateByIno(ino, 0,
                                       std::numeric_limits<int64_t>::max());
   }
+
+  ctx->AddLatencyTrace("meta", duration.ElapsedUs(true));
 
   if (s.ok()) {
     auto* handle = handle_manager_->NewHandle(gfh, ino, flags);
@@ -613,6 +620,8 @@ Status VFSImpl::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t* fh,
     }
     *fh = handle->fh;
   }
+
+  ctx->AddLatencyTrace("new-h", duration.ElapsedUs(true));
 
   return s;
 }
@@ -793,6 +802,8 @@ Status VFSImpl::Release(ContextSPtr ctx, Ino ino, uint64_t fh) {
     return Status::OK();
   }
 
+  utils::Duration duration;
+
   auto handle = handle_manager_->FindHandlerForRelease(fh);
   if (!handle) {
     VLOG(1) << "Release ignored, fh not found, ino: " << ino << ", fh: " << fh;
@@ -825,6 +836,8 @@ Status VFSImpl::Release(ContextSPtr ctx, Ino ino, uint64_t fh) {
 
   Status close_status =
       !resources_detached ? meta_system_->Close(ctx, ino, fh) : Status::OK();
+
+  ctx->AddLatencyTrace("meta", duration.ElapsedUs(true));
 
   handle_manager_->ReleaseHandler(fh);
 

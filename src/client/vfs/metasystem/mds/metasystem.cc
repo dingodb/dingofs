@@ -542,9 +542,11 @@ Status MDSMetaSystem::Lookup(ContextSPtr ctx, Ino parent,
 
   InodeSPtr inode;
 
+  utils::Duration duration;
   // check dentry cache
   Ino ino = GetDentryFromCache(parent, name);
   if (ino != 0) inode = GetInodeFromCache(ino);
+  ctx->AddLatencyTrace("get", duration.ElapsedUs(true));
 
   // not found in dentry cache
   if (inode == nullptr || !inode->IsAttrFresh()) {
@@ -558,6 +560,7 @@ Status MDSMetaSystem::Lookup(ContextSPtr ctx, Ino parent,
     }
 
     inode = PutInodeToCache(attr_entry);
+    ctx->AddLatencyTrace("fetch", duration.ElapsedUs(true));
   }
 
   *attr = inode->ToAttr();
@@ -572,6 +575,8 @@ Status MDSMetaSystem::Lookup(ContextSPtr ctx, Ino parent,
   if (!ctx->inner_req) {
     modify_time_memo_.UpdateKernelMtime(attr->ino, attr->mtime);
   }
+
+  ctx->AddLatencyTrace("corr", duration.ElapsedUs(true));
 
   return Status::OK();
 }

@@ -38,6 +38,9 @@ DEFINE_validator(vfs_access_logging, brpc::PassValidate);
 DEFINE_int64(vfs_access_log_threshold_us, 0, "access log threshold");
 DEFINE_validator(vfs_access_log_threshold_us, brpc::PassValidate);
 
+DEFINE_bool(vfs_enable_latency_trace, true, "enable latency trace");
+DEFINE_validator(vfs_enable_latency_trace, brpc::PassValidate);
+
 DEFINE_bool(fuse_enable_readdir_cache, true, "enable readdir cache");
 DEFINE_validator(fuse_enable_readdir_cache, brpc::PassValidate);
 

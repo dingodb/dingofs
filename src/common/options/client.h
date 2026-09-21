@@ -36,6 +36,8 @@ DECLARE_int32(vfs_bthread_worker_num);
 DECLARE_bool(vfs_access_logging);
 DECLARE_int64(vfs_access_log_threshold_us);
 
+DECLARE_bool(vfs_enable_latency_trace);
+
 // fuse mount option
 DECLARE_string(fuse_mount_options);
 DECLARE_bool(fuse_use_single_thread);
