@@ -85,6 +85,13 @@ points at the binary path.
 
 ## Running
 
+For batch regression use `scripts/dev-mds/run_all_test.sh --type=xfstests`: it runs
+the cases listed in the repo's `xfstests/supported`, calls `reset.sh` first, and
+collects `results/` under
+`/tmp/dev-regression-test/xfstests_test_<timestamp>_<round>/results/`.
+
+Manual run:
+
 ```bash
 cd <xfstests-tree>
 sudo ./check generic/001              # single test
@@ -96,6 +103,7 @@ sudo ./check -g quick -e generic/062  # exclude known failures
 On failure, evidence lives in two places:
 
 - `<xfstests-tree>/results/generic/NNN.out.bad` (+ `.full`) — test-side diff/log
+  (`RESULT_BASE` overrides this directory; the wrapper points it at its log dir)
 - `<root>/runtime/<fsname>/run/client.out` — output before daemonization
 - `<root>/runtime/<fsname>/log/<pid>.stdout` and the glog files in the same
   directory — output from the background client; if test output contains

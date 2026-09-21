@@ -14,6 +14,7 @@
 
 #include "mds/filesystem/warmup.h"
 
+#include <set>
 #include <vector>
 
 #include "fmt/ranges.h"
@@ -69,15 +70,14 @@ Status WarmupChunkTask::WarmupBatchChunk(const std::vector<Ino>& inoes) {
 
   if (warmup_pocessor_.IsStopped()) return Status::OK();
 
-  std::vector<Ino> miss_inoes;
-  miss_inoes.reserve(inoes.size());
+  std::set<Ino> miss_inoes;
   for (const auto& ino : inoes) {
-    if (!chunk_cache.IsExist(ino)) miss_inoes.push_back(ino);
+    if (!chunk_cache.IsExist(ino)) miss_inoes.insert(ino);
   }
   if (miss_inoes.empty()) return Status::OK();
 
   class Trace trace;
-  BatchGetFirstChunkOperation operation(trace, fs_id, miss_inoes);
+  BatchGetFirstChunkOperation operation(trace, fs_id, std::vector<Ino>(miss_inoes.begin(), miss_inoes.end()));
   auto status = operation_processor->RunAlone(&operation);
   if (!status.ok()) return status;
 

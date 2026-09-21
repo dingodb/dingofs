@@ -83,6 +83,12 @@ client 后无需重装——配置里记录的是二进制路径。
 
 ## 运行
 
+批量回归可用 `scripts/dev-mds/run_all_test.sh --type=xfstests`：按仓库
+`xfstests/supported` 清单跑，跑前先 `reset.sh`，并把 `results/` 收进
+`/tmp/dev-regression-test/xfstests_test_<时间戳>_<轮次>/results/`。
+
+手动运行：
+
 ```bash
 cd <xfstests树>
 sudo ./check generic/001              # 单个用例
@@ -94,6 +100,7 @@ sudo ./check -g quick -e generic/062  # 排除已知失败
 失败后到两处找证据：
 
 - `<xfstests树>/results/generic/NNN.out.bad`（及 `.full`）——测试侧 diff/日志
+  （`RESULT_BASE` 可覆盖该目录，封装脚本就把它指向日志目录）
 - `<root>/runtime/<fsname>/run/client.out`——daemonize 之前的启动输出
 - `<root>/runtime/<fsname>/log/<pid>.stdout` 及同目录下的 glog 文件——后台
   client 的输出；测试出现 `Transport endpoint is not connected` 时到这里

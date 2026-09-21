@@ -26,6 +26,7 @@
 #include <utility>
 #include <vector>
 
+#include "common/options/client.h"
 #include "utils/time.h"
 
 namespace dingofs {
@@ -64,13 +65,18 @@ struct Context {
   }
 
   void AddLatencyTrace(const char* label, uint64_t latency_us) {
+    if (!client::FLAGS_vfs_enable_latency_trace) return;
+
     latency_trace.emplace_back(label, latency_us);
   }
+
   std::string ToLatencyTraceStr() const {
+    if (!client::FLAGS_vfs_enable_latency_trace) return "";
+
     std::string result;
     result.reserve(latency_trace.size() * 32);
     for (const auto& entry : latency_trace) {
-      result += absl::StrFormat("%s:%llu; ", entry.first, entry.second);
+      result += absl::StrFormat("%s:%llu;", entry.first, entry.second);
     }
     return result;
   }
