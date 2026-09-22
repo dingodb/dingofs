@@ -18,7 +18,7 @@ context: fork
 - `SERVER_HOST` / `SERVER_LISTEN_HOST`：对外 / 监听地址
 - `SERVER_START_PORT`：起始端口；第 `i` 个实例为 `SERVER_START_PORT + i`，即首实例 `7801`
 - `CLUSTER_ID`、`MDS_INSTANCE_START_ID`、`COORDINATOR_ADDR`
-- `STORAGE_ENGINE` / `STORAGE_URL`：由 `deploy_mds.sh` 写进 `mds.conf`
+- `STORAGE_ENGINE` / `STORAGE_URL`：由 `operate_mds.sh` 写进 `mds.conf`
 - `S3_ENDPOINT` / `S3_AK` / `S3_SK` / `S3_BUCKETNAME`、`LOCAL_DATASTORE_PATH`：仅 `create_fs.sh` 使用
 
 ## 步骤
@@ -45,7 +45,7 @@ context: fork
 3. **部署并启动 MDS**
 
    ```bash
-   bash clean_start.sh --server_num=$SERVER_NUM
+   bash operate_mds.sh restart --server_num=$SERVER_NUM
    ```
 
    判据：`pgrep -c dingo-mds` 输出等于 `SERVER_NUM`。（不要用 `ps -ef | grep`，它会匹配到自己，也不校验数量。）
@@ -95,4 +95,13 @@ bash create_fs.sh --fs_name=$FS_NAME --mds_addr=$SERVER_HOST:$(($SERVER_START_PO
 
 ## 其他脚本
 
-`deploy_mds.sh` / `start_mds.sh` / `stop_mds.sh` 是 `clean_start.sh` 的拆分，只重启 MDS 时单独用。参数以 `bash <脚本> --help` 为准。
+`operate_mds.sh` 一个脚本管全部 MDS 生命周期，子命令选动作，flag 两种写法都行（`--server_num=2 restart` 同 `restart --server_num=2`）：
+
+```bash
+bash operate_mds.sh restart --server_num=1   # = stop + deploy + start，等价于原 clean_start.sh
+bash operate_mds.sh stop --server_num=1      # 停；--force 用 kill -9，--use_pgrep 按进程名而非 pid 文件
+bash operate_mds.sh deploy --server_num=1    # 只重新部署（软链二进制 + 渲染 conf）
+bash operate_mds.sh start --server_num=1     # 只启动
+```
+
+参数以 `bash operate_mds.sh --help` 为准。`restart` 中 stop / deploy 失败会直接中止，不会带着半坏状态继续起服务。

@@ -115,3 +115,6 @@ bench_results/
 
 CONTEXT.md
 .pi-subagents/
+
+# Local dev config (contains secrets)
+scripts/dev-mds/env.local

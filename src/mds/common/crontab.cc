@@ -16,212 +16,208 @@
 
 #include <glog/logging.h>
 
+#include <mutex>
+#include <utility>
+
 #include "bthread/bthread.h"
 #include "bthread/unstable.h"
-#include "common/logging.h"
+#include "butil/time.h"
 #include "fmt/core.h"
 
 namespace dingofs {
 namespace mds {
 
-void Crontab::DescribeByJson(Json::Value& value) const {
-  value["id"] = id;
-  value["name"] = name;
-  value["interval_ms"] = interval;
-  value["max_times"] = max_times;
-  value["immediately"] = immediately;
-  value["run_count"] = run_count;
-  value["pause"] = pause.load();
+Crontab::Crontab(uint32_t id, CrontabConfig cfg) : id_(id), cfg_(std::move(cfg)) {
+  CHECK_EQ(bthread_mutex_init(&mu_, nullptr), 0);
+  CHECK_EQ(bthread_cond_init(&drained_cv_, nullptr), 0);
 }
 
-CrontabManager::CrontabManager() { bthread_mutex_init(&mutex_, nullptr); }
-
-CrontabManager::~CrontabManager() {
-  // Crontab::Run() reschedules itself via bthread_timer_add() using a raw
-  // Crontab* (see below). If crontabs_ (and the Crontabs it keeps alive)
-  // were destroyed without first cancelling those pending timers, the
-  // timer thread could still invoke Run() on a freed Crontab later,
-  // causing a use-after-free. Destroy() cancels every pending timer and
-  // waits for in-flight callbacks to finish before we let crontabs_ go.
-  Stop();
-  bthread_mutex_destroy(&mutex_);
+Crontab::~Crontab() {
+  CHECK_EQ(pending_ops_, 0) << cfg_.name;
+  bthread_cond_destroy(&drained_cv_);
+  bthread_mutex_destroy(&mu_);
 }
 
-void CrontabManager::Run(void* arg) {
-  Crontab* crontab = static_cast<Crontab*>(arg);
-  if (crontab->pause) {
-    return;
-  }
-  if (crontab->immediately) {
-    try {
-      crontab->func(crontab->arg);
-    } catch (...) {
-      LOG(ERROR) << fmt::format("[crontab.run][id({}).name({})] crontab happen exception", crontab->id, crontab->name);
-    }
-    ++crontab->run_count;
+void Crontab::Launch() {
+  std::lock_guard<bthread_mutex_t> lock(mu_);
+  if (stopped_) return;
+
+  if (cfg_.immediately) {
+    StartRoutine();
+    if (cfg_.async) ArmLocked();
+
   } else {
-    crontab->immediately = true;
-  }
-
-  // Re-check pause: Destroy()/PauseCrontab() may have paused this crontab
-  // while func() above was executing. Without this check we could keep
-  // rearming a timer after the owning CrontabManager decided to stop (and
-  // is waiting to release the Crontab), leading to a use-after-free once
-  // the manager is destroyed.
-  if (!crontab->pause && (crontab->max_times == 0 || crontab->run_count < crontab->max_times)) {
-    bthread_timer_add(&crontab->timer_id, butil::milliseconds_from_now(crontab->interval), &Run, crontab);
+    ArmLocked();
   }
 }
 
-uint32_t CrontabManager::AllocCrontabId() { return auinc_crontab_id_.fetch_add(1); }
+void Crontab::Stop() {
+  std::lock_guard<bthread_mutex_t> lock(mu_);
+  stopped_ = true;
 
-void CrontabManager::AddCrontab(std::vector<CrontabConfig>& crontab_configs) {
-  for (auto& crontab_config : crontab_configs) {
-    LOG(INFO) << fmt::format("[crontab.add][name({}).interval({}ms).async({})] add crontab task.", crontab_config.name,
-                             crontab_config.interval, crontab_config.async);
-
-    auto crontab = std::make_shared<Crontab>();
-    crontab->name = crontab_config.name;
-    crontab->interval = crontab_config.interval;
-    if (crontab_config.async) {
-      crontab->func = [this, &crontab_config](void*) {
-        // Track in-flight async tasks so Stop() can wait for them; otherwise
-        // a detached bthread could use already-stopped components.
-        struct Ctx {
-          CrontabManager* manager;
-          CrontabConfig* config;
-        };
-        auto* ctx = new Ctx{this, &crontab_config};
-        inflight_async_count_.fetch_add(1);
-
-        bthread_t tid;
-        const bthread_attr_t attr = BTHREAD_ATTR_NORMAL;
-        if (bthread_start_background(
-                &tid, &attr,
-                [](void* arg) -> void* {
-                  auto* ctx = static_cast<Ctx*>(arg);
-                  ctx->config->funcer(nullptr);
-                  ctx->manager->inflight_async_count_.fetch_sub(1);
-                  delete ctx;
-                  return nullptr;
-                },
-                ctx) != 0) {
-          inflight_async_count_.fetch_sub(1);
-          delete ctx;
-        }
-      };
-    } else {
-      crontab->func = crontab_config.funcer;
-    }
-
-    crontab->arg = nullptr;
-
-    this->AddAndRunCrontab(crontab);
+  // Only successful cancellation returns the reservation to us.
+  // Otherwise the timer callback still owns it.
+  if (has_timer_ && bthread_timer_del(timer_id_) == 0) {
+    has_timer_ = false;
+    ReleasePending();
   }
 }
 
-uint32_t CrontabManager::AddAndRunCrontab(CrontabSPtr crontab) {
-  uint32_t crontab_id = AddCrontab(crontab);
-  StartCrontab(crontab_id);
-
-  return crontab_id;
-}
-
-uint32_t CrontabManager::AddCrontab(CrontabSPtr crontab) {
-  BAIDU_SCOPED_LOCK(mutex_);
-
-  uint32_t crontab_id = AllocCrontabId();
-  crontab->id = crontab_id;
-
-  crontabs_[crontab_id] = crontab;
-  return crontab_id;
-}
-
-void CrontabManager::StartCrontab(uint32_t crontab_id) {
-  BAIDU_SCOPED_LOCK(mutex_);
-
-  auto it = crontabs_.find(crontab_id);
-  if (it == crontabs_.end()) {
-    LOG(WARNING) << fmt::format("[crontab.start][id({})] not exist crontab.", crontab_id);
-    return;
+void Crontab::Join() {
+  std::unique_lock<bthread_mutex_t> lock(mu_);
+  while (pending_ops_ > 0) {
+    bthread_cond_wait(&drained_cv_, &mu_);
   }
-  auto crontab = it->second;
-  crontab->pause = false;
+}
 
+void Crontab::DescribeByJson(Json::Value& value) const {
+  std::lock_guard<bthread_mutex_t> lock(mu_);
+  value["id"] = id_;
+  value["name"] = cfg_.name;
+  value["interval_ms"] = static_cast<int64_t>(cfg_.interval_ms);
+  value["max_times"] = cfg_.max_times;
+  value["immediately"] = cfg_.immediately;  // Configuration, not mutable run state.
+  value["run_count"] = run_count_;          // Admitted calls, not completed calls.
+  value["stop"] = stopped_;
+}
+
+// Requires mu_. Reserve before publishing the timer.
+void Crontab::ArmLocked() {
+  if (stopped_) return;
+  if (cfg_.max_times != 0 && run_count_ >= cfg_.max_times) return;
+
+  timespec deadline = butil::milliseconds_from_now(cfg_.interval_ms);
+  ++pending_ops_;
+  has_timer_ = true;
+  int rc = bthread_timer_add(&timer_id_, deadline, &Crontab::OnTimer, this);
+  if (rc != 0) {
+    LOG(ERROR) << fmt::format("[crontab.arm][id({}).name({})] bthread_timer_add failed: {}", id_, cfg_.name, rc);
+    has_timer_ = false;
+    ReleasePending();
+  }
+}
+
+void Crontab::OnTimer(void* arg) { static_cast<Crontab*>(arg)->OnTimerFired(); }
+
+void* Crontab::OnRoutineRun(void* arg) {
+  static_cast<Crontab*>(arg)->RunOnce();
+  return nullptr;
+}
+
+// Requires mu_. Reserve independently of the timer that dispatches this work.
+void Crontab::StartRoutine() {
+  ++pending_ops_;
   bthread_t tid;
   const bthread_attr_t attr = BTHREAD_ATTR_NORMAL;
-  bthread_start_background(
-      &tid, &attr,
-      [](void* arg) -> void* {
-        CrontabManager::Run(arg);
-        return nullptr;
-      },
-      crontab.get());
+  if (bthread_start_background(&tid, &attr, &Crontab::OnRoutineRun, this) != 0) {
+    LOG(ERROR) << fmt::format("[crontab.run][id({}).name({})] bthread_start_background failed", id_, cfg_.name);
+    ReleasePending();
+  }
 }
 
-void CrontabManager::InnerPauseCrontab(uint32_t crontab_id) {
-  auto it = crontabs_.find(crontab_id);
-  if (it == crontabs_.end()) {
-    LOG(WARNING) << fmt::format("[crontab.pause][id({})] not exist crontab.", crontab_id);
+void Crontab::OnTimerFired() {
+  std::unique_lock<bthread_mutex_t> lock(mu_);
+
+  has_timer_ = false;
+  if (stopped_ || (cfg_.max_times != 0 && run_count_ >= cfg_.max_times)) {
+    ReleasePending();
     return;
   }
-  auto crontab = it->second;
 
-  crontab->pause = true;
-  if (crontab->timer_id != 0) {
-    bthread_timer_del(crontab->timer_id);
+  if (cfg_.async) {
+    StartRoutine();
+    // Keep the submission cadence independent of callback duration.
+    ArmLocked();
+    ReleasePending();
+
+  } else {
+    lock.unlock();
+    RunOnce();  // The synchronous invocation takes over the timer reservation.
   }
 }
 
-void CrontabManager::PauseCrontab(uint32_t crontab_id) {
-  BAIDU_SCOPED_LOCK(mutex_);
+void Crontab::RunOnce() {
+  std::unique_lock<bthread_mutex_t> lock(mu_);
+  // Check at invocation admission: queued bthreads must not exceed max_times.
+  if (!stopped_ && (cfg_.max_times == 0 || run_count_ < cfg_.max_times)) {
+    ++run_count_;
+    lock.unlock();
 
-  InnerPauseCrontab(crontab_id);
+    try {
+      cfg_.callback();
+    } catch (...) {
+      LOG(ERROR) << fmt::format("[crontab.run][id({}).name({})] exception in callback", id_, cfg_.name);
+    }
+    lock.lock();
+    if (!cfg_.async) ArmLocked();
+  }
+
+  ReleasePending();
 }
 
-void CrontabManager::DeleteCrontab(uint32_t crontab_id) {
-  BAIDU_SCOPED_LOCK(mutex_);
-  InnerPauseCrontab(crontab_id);
+// Requires mu_.
+void Crontab::ReleasePending() {
+  --pending_ops_;
+  CHECK_GE(pending_ops_, 0) << cfg_.name;
+  if (pending_ops_ == 0) bthread_cond_broadcast(&drained_cv_);
+}
 
-  crontabs_.erase(crontab_id);
+CrontabManager::CrontabManager() { CHECK_EQ(bthread_mutex_init(&mu_, nullptr), 0); }
+
+CrontabManager::~CrontabManager() {
+  Stop();
+  bthread_mutex_destroy(&mu_);
+}
+
+void CrontabManager::AddCrontab(std::vector<CrontabConfig> configs) {
+  std::vector<CrontabSPtr> launch_tasks;
+  launch_tasks.reserve(configs.size());
+  {
+    std::lock_guard<bthread_mutex_t> lock(mu_);
+    if (stopped_) {
+      LOG(WARNING) << fmt::format("[crontab.add] manager already stopped; dropping {} config(s)", configs.size());
+      return;
+    }
+    for (auto& cfg : configs) {
+      LOG(INFO) << fmt::format("[crontab.add][name({}).interval({}ms).async({})] added", cfg.name, cfg.interval_ms,
+                               cfg.async);
+      auto task = std::make_shared<Crontab>(next_id_++, std::move(cfg));
+      tasks_.push_back(task);
+      launch_tasks.push_back(task);
+    }
+  }
+  // Keep each task alive if Stop races with launch; Stop makes Launch a no-op.
+  for (const auto& task : launch_tasks) task->Launch();
 }
 
 void CrontabManager::Stop() {
-  BAIDU_SCOPED_LOCK(mutex_);
-
-  // Pause every crontab first so any Run() invocation still in flight sees
-  // pause==true and skips its reschedule (see the check added in Run()).
-  // Only after that is it safe to cancel timers and drop crontabs_'s
-  // shared_ptrs: otherwise a concurrent Run() could rearm a timer that
-  // outlives the Crontab it points to.
-  for (auto& [_, crontab] : crontabs_) {
-    crontab->pause = true;
+  std::vector<CrontabSPtr> draining;
+  {
+    std::lock_guard<bthread_mutex_t> lock(mu_);
+    stopped_ = true;
+    // Keep tasks visible until drained so concurrent Stop callers also wait.
+    draining = tasks_;
   }
 
-  for (auto it = crontabs_.begin(); it != crontabs_.end();) {
-    while (bthread_timer_del(it->second->timer_id) == 1) {
-      bthread_usleep(1000L);  // Wait for timer to be deleted
-    }
+  for (const auto& task : draining) task->Stop();
+  for (const auto& task : draining) task->Join();
 
-    it = crontabs_.erase(it);
-  }
-
-  // Wait for in-flight async crontab tasks to finish, so components they use
-  // (operation processor, kv storage, ...) can be stopped safely afterwards.
-  while (inflight_async_count_.load() > 0) {
-    bthread_usleep(10000L);  // 10ms
-  }
+  std::lock_guard<bthread_mutex_t> lock(mu_);
+  tasks_.clear();
 }
 
 void CrontabManager::DescribeByJson(Json::Value& value) {
   CHECK(value.isArray()) << "value is not array.";
+  std::vector<CrontabSPtr> snapshot;
+  {
+    std::lock_guard<bthread_mutex_t> lock(mu_);
+    snapshot = tasks_;
+  }
 
-  BAIDU_SCOPED_LOCK(mutex_);
-
-  for (auto& [_, crontab] : crontabs_) {
-    Json::Value crontab_value;
-    crontab->DescribeByJson(crontab_value);
-    value.append(crontab_value);
+  for (const auto& task : snapshot) {
+    Json::Value entry;
+    task->DescribeByJson(entry);
+    value.append(entry);
   }
 }
 

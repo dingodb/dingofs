@@ -15,10 +15,8 @@
 #ifndef DINGOFS_MDS_COMMON_CRONTAB_H_
 #define DINGOFS_MDS_COMMON_CRONTAB_H_
 
-#include <atomic>
 #include <cstdint>
 #include <functional>
-#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -29,78 +27,102 @@
 namespace dingofs {
 namespace mds {
 
+// Configuration for a single crontab task.
 struct CrontabConfig {
+  // Human-readable name; used only for logging and JSON reports.
   std::string name;
-  uint32_t interval;
+  // Delay between async submissions, or after a synchronous callback returns.
+  uint32_t interval_ms;
+  // Async callbacks run on bthreads and may overlap; callers own synchronization.
+  // Sync callbacks run on the shared timer thread and must not block.
+  // An immediate first invocation always runs on a bthread.
   bool async;
-  std::function<void(void*)> funcer;
+  // Captured resources must outlive Join() / CrontabManager::Stop().
+  std::function<void()> callback;
+  // 0 means unlimited. Every invocation counts, including those that throw.
+  uint32_t max_times{0};
+  // If true the first invocation does not wait interval_ms.
+  bool immediately{false};
 };
+
+// Launch at most once. Stop, then Join before destruction; never Join
+// from this task's callback. The owner must join all callers before destruction.
 
 class Crontab {
  public:
-  uint32_t id{0};
-  std::string name;
-  // unit ms
-  int64_t interval{0};
-  // 0 is no limit
-  uint32_t max_times{0};
-  // Is immediately run
-  bool immediately{false};
-  // Already run count
-  uint32_t run_count{0};
-  // Is pause crontab. Read on the timer thread (Run) and written from
-  // whichever thread calls PauseCrontab/DeleteCrontab/Destroy, so it must
-  // be atomic to avoid a torn/reordered read racing with the reschedule
-  // in Run().
-  std::atomic<bool> pause{false};
-  // bthread_timer_t handler
-  bthread_timer_t timer_id{0};
-  // For run target function
-  std::function<void(void*)> func;
-  // Delivery to func_'s argument
-  void* arg{nullptr};
+  Crontab(uint32_t id, CrontabConfig cfg);
+  ~Crontab();
+
+  Crontab(const Crontab&) = delete;
+  Crontab& operator=(const Crontab&) = delete;
+
+  void Launch();
+
+  // Permanently close scheduling without waiting for admitted callbacks.
+  void Stop();
+  // Wait for all timer/bthread reservations to be released.
+  // Stop() must be called first; Join() does not request stopping.
+  void Join();
 
   void DescribeByJson(Json::Value& value) const;
+
+ private:
+  static void OnTimer(void* arg);
+  static void* OnRoutineRun(void* arg);
+
+  void OnTimerFired();
+  void StartRoutine();
+  void RunOnce();
+  void ArmLocked();
+  void ReleasePending();
+
+  const uint32_t id_;
+  const CrontabConfig cfg_;
+
+  // mu_ guards scheduling state. Each timer and each dispatched bthread owns
+  // a reservation; Join waits until all reservations have been released.
+  mutable bthread_mutex_t mu_;
+  bthread_cond_t drained_cv_;
+
+  bool stopped_{false};
+
+  bool has_timer_{false};
+  bthread_timer_t timer_id_{0};
+
+  // Count admitted invocations, including callbacks still running or throwing.
+  uint32_t run_count_{0};
+  int32_t pending_ops_{0};
 };
+
 using CrontabSPtr = std::shared_ptr<Crontab>;
 
-// Manage crontab use brpc::bthread_timer_add
+// Owns periodic tasks. Async invocations of the same task may overlap.
+// AddCrontab takes ownership of the configs; after Stop it is a no-op.
+// Stop closes scheduling for all tasks before waiting, including concurrent calls.
+// Callbacks must not call Stop or destroy this manager (that would self-wait).
+// The owner must join all callers before destruction; the destructor calls Stop.
 class CrontabManager {
  public:
   CrontabManager();
   ~CrontabManager();
 
   CrontabManager(const CrontabManager&) = delete;
-  const CrontabManager& operator=(const CrontabManager&) = delete;
+  CrontabManager& operator=(const CrontabManager&) = delete;
 
-  static void Run(void* arg);
-
-  void AddCrontab(std::vector<CrontabConfig>& crontab_configs);
-
-  uint32_t AddCrontab(CrontabSPtr crontab);
-  uint32_t AddAndRunCrontab(CrontabSPtr crontab);
-  void StartCrontab(uint32_t crontab_id);
-  void PauseCrontab(uint32_t crontab_id);
-  void DeleteCrontab(uint32_t crontab_id);
+  void AddCrontab(std::vector<CrontabConfig> configs);
 
   void Stop();
 
   void DescribeByJson(Json::Value& value);
 
  private:
-  // Allocate crontab id by auto incremental.
-  uint32_t AllocCrontabId();
+  bthread_mutex_t mu_;
 
-  void InnerPauseCrontab(uint32_t crontab_id);
+  std::vector<CrontabSPtr> tasks_;
 
-  // Atomic auto incremental variable
-  std::atomic<uint32_t> auinc_crontab_id_;
-  // Protect crontabs_ concurrence access.
-  bthread_mutex_t mutex_;
-  // Store all crontab, key(crontab_id) / value(Crontab)
-  std::map<uint32_t, CrontabSPtr> crontabs_;
-  // In-flight async crontab tasks; Stop() waits until it drops to zero.
-  std::atomic<int64_t> inflight_async_count_{0};
+  uint32_t next_id_{1};
+
+  bool stopped_{false};
 };
 
 }  // namespace mds

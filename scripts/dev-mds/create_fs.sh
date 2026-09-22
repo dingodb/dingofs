@@ -6,12 +6,18 @@ if [[ ! -d "$mydir" ]]; then mydir="$PWD"; fi
 
 DEFINE_string fs_name '' 'fs name'
 DEFINE_string mds_addr '' 'mds address'
-DEFINE_string parameters 'mds_deploy_parameters.local' 'deploy parameters file'
+DEFINE_string env 'env.local' 'deploy env file'
 DEFINE_boolean use_local_datastore false 'use local datastore'
 
 # parse the command-line
 FLAGS "$@" || exit 1
 eval set -- "${FLAGS_ARGV}"
+
+source $mydir/${FLAGS_env}
+
+if [ -z "${FLAGS_mds_addr}" ]; then
+    FLAGS_mds_addr="${SERVER_HOST}:$((SERVER_START_PORT + 1))"
+fi
 
 echo "fs_name: ${FLAGS_fs_name}"
 echo "mds_addr: ${FLAGS_mds_addr}"
@@ -26,8 +32,6 @@ if [ -z "${FLAGS_mds_addr}" ]; then
     echo "mds address is empty"
     exit -1
 fi
-
-source $mydir/${FLAGS_parameters}
 
 BASE_DIR=$(dirname $(dirname $(cd $(dirname $0); pwd)))
 BUILD_DIR=$BASE_DIR/build

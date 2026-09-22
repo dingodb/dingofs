@@ -12,6 +12,8 @@ DEFINE_integer force 1 'use kill -9 to stop'
 DEFINE_boolean stop false 'just stop client, do not start'
 DEFINE_boolean clean_log false 'clean log'
 DEFINE_integer port 39000 'server listen port'
+DEFINE_string log_level INFO 'cache log level'
+DEFINE_integer log_v 0 'cache log v'
 
 
 # parse the command-line
@@ -63,7 +65,8 @@ function start() {
   --cache_dir=${FLAGS_cache_dir} \
   --cache_size_mb=1048576 \
   --log_dir=${log_dir} \
-  --log_level=INFO \
+  --log_level=${FLAGS_log_level} \
+  --log_v=${FLAGS_log_v} \
   --daemonize=true 2>&1 > $log_dir/out
 }
 
