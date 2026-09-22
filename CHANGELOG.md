@@ -1,6 +1,68 @@
 # DINGOFS Change Log
 All notable changes to this project are documented in this file.
 
+## [5.2.0]
+
+### Features
+- Support mounting a subdirectory of a filesystem
+- Support filesystem-level UID/GID mapping
+- Add a trash feature with file and directory recovery and automatic cleanup of expired entries
+- Add directory usage statistics and quota and cache monitoring metrics
+- Support large directories
+- Support file space operations through `fallocate`
+- Support `copy_file_range`, including copies within the same file
+- Support streaming block uploads and segmented upload payloads
+- Support RDMA transport for MDS RPCs
+- Support the TiKV Go client
+- Support RDMA transport for the distributed cache
+- Support multiple eviction policies for the distributed cache
+
+### Changed
+- Refactor the chunk/slice protocol and slice metadata encoding; the new format is incompatible with 5.1
+- Reimplement the distributed cache using a shared-nothing architecture
+
+### Improvements
+- Improve read/write memory management and add backpressure
+- Optimize write, flush, and compaction paths
+- Improve metadata caching, batching of storage operations, and concurrent request handling
+- Improve directory lookup and listing, small-file warmup, and read performance
+- Improve permission inheritance for new files and directories, and validation of create and open requests
+- Improve TiKV transaction handling and support storage garbage collection
+- Improve inode ID generation for files and directories to distribute backend storage load
+- Improve version management for inodes, partitions, and directory shards
+- Improve service process shutdown
+- Improve dashboard pages
+
+### Bugfixes
+- Fix chunk cache issues, inconsistent reads, and stale data when accessing files from multiple clients
+- Fix old data reappearing after a file is truncated and extended again
+- Fix operation ordering and error handling for write, flush, and close
+- Fix atomicity, cache update, and crash issues in rename operations
+- Fix entries being overwritten during concurrent file and directory creation
+- Fix incorrect block deletion and crashes during compaction
+- Fix quota and directory usage accounting, including quota updates when restoring from trash
+- Fix errors in timestamp updates, extended attribute operations, and file space allocation
+- Fix directory iteration loops
+- Fix resource cleanup during asynchronous I/O and file close
+- Fix deadlocks and resource leaks during unmount and client hot upgrades
+- Fix stale data after RADOS object overwrites and delays in refreshing cluster maps
+- Fix error handling for oversized files and incorrect reporting of some I/O errors
+- Fix dummy storage issues, as well as crashes and resource leaks in storage backends and during service startup and shutdown
+- Fix data written to the distributed cache not being scheduled for background upload
+- Fix fallback to storage and cleanup of invalid entries after distributed cache failures
+- Fix in-flight disk I/O exceeding queue capacity under high concurrency in the distributed cache
+- Fix error handling when distributed cache nodes fail to start
+- Fix other known issues
+
+### Others
+- Add a Python SDK and C API (`libdingofs.so`) for direct filesystem access without FUSE
+- Add `dingo-mdtest-bench` and `mdtest_bench_direct_mds` for metadata benchmarking
+- Add SDK benchmarks `read_bench` and `write_bench` to measure read/write performance without FUSE
+- Improve mds-cli with backup integrity checks, clearer command output, and fixes for filesystem error handling and local datastore paths
+- Support isolating multiple filesystems in a single bucket using object key prefixes; add asynchronous delete and batch delete operations with parallel RADOS deletes
+- Support NUMA binding and configurable AWS CRT S3 throughput targets and event loop thread counts
+- Add version metrics and show the proto submodule commit in the dashboard
+
 ## [5.1.0]
 
 **Client**
