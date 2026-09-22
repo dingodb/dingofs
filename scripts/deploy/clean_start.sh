@@ -12,15 +12,13 @@ eval set -- "${FLAGS_ARGV}"
 
 
 echo "============ stop ============"
-$mydir/stop.sh --role=${FLAGS_role} 
+"$mydir/stop.sh" --role="${FLAGS_role}" || exit "$?"
 
 sleep 1
 echo "============ deploy ============"
-$mydir/deploy.sh --role=${FLAGS_role}
+"$mydir/deploy.sh" --role="${FLAGS_role}" || exit "$?"
 
 sleep 1
 echo "============ start ============"
-$mydir/start.sh --role=${FLAGS_role}
-
-sleep 1
-echo ""============ done ============""
+# Preserve the server's exit status and deliver container signals directly.
+exec "$mydir/start.sh" --role="${FLAGS_role}"
