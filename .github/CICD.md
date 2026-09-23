@@ -10,8 +10,8 @@ dingofs 使用 GitHub Actions 与 GitHub Merge Queue 验证 `main` 和 `v5.[0-9]
 |---|---|---|
 | `.github/workflows/pr-check.yml` | 目标为 `main` 或 `v5.[0-9]+` 分支的 `pull_request` + `merge_group` | 普通 PR 的重检查全部跳过；merge group 顺序执行 `unit-test` → `build` → `e2e`，仅 `main` 的 merge group 并行运行 `jenkins-regression` |
 | `.github/workflows/pr-source.yml` | 目标为 `main` 或 `v5.[0-9]+` 分支的 `pull_request_target` + `merge_group` | 可选的来源准入提示；`TRUSTED_SOURCE_ENABLED=false` 时跳过，不检出 PR 代码，不替代代码审核 |
-| `.github/workflows/release.yml` | `push: branches:[main, 'v5.[0-9]+']` + `push: tags:['v*']` | build → docker-publish；wheels 仅 main/tag，pypi-publish 仅 tag。**不重测**，不得以发布成功替代合并前验证 |
-| `.github/actions/build-release/` | composite action（被 pr-check `build` + release `build` 两处 `uses:` 内联）| `dingodatabase/dingo-eureka:rocky9-fs` container 内 Release cmake build，产 `dingofs.tar.gz` artifact。dingo-sdk install 走 `actions/cache`（同 unit-test，见 §8）。**逻辑复用走 composite 而非 `workflow_call`**——后者会让 required check 漂成锚不住的叶子名（见 §8）|
+| `.github/workflows/release.yml` | `push: branches:[main, 'v5.[0-9]+']` + `push: tags:['v*']` | build → docker-publish；wheels 仅 main/tag，pypi-publish 和 github-release 仅 tag。**不重测**，不得以发布成功替代合并前验证 |
+| `.github/actions/build-release/` | composite action（被 pr-check `build` + release `build` 两处 `uses:` 内联）| 固定 Eureka Rocky9 镜像（见 §5.2）内 Release cmake build，产 `dingofs.tar.gz` artifact。dingo-sdk install 走 `actions/cache`（同 unit-test，见 §8）。**逻辑复用走 composite 而非 `workflow_call`**——后者会让 required check 漂成锚不住的叶子名（见 §8）|
 
 ### Status Check 命名
 
@@ -111,6 +111,7 @@ bash .github/scripts/_lib/glog-scan.sh
 2. `build` 使用 `./.github/actions/build-release` 生成本次提交的 artifact；`docker-publish` 只消费同一 run 的 artifact。
 3. Docker 发布到 `dingodatabase/dingofs`，标签规则如下。分支与 Git tag 分别按 `refs/heads/` 和 `refs/tags/` 判断，不混用。
 4. `wheels` 仍仅在 main/tag 构建；`pypi-publish` 仍仅在 tag 发布。维护分支 push 不构建 wheel、不上传 PyPI。
+5. `github-release` 仅在 tag push 运行，等待 `build`，下载同一 run 的 `dingofs` artifact。从 `dingofs.tar.gz` 提取 `dingo-client`、`dingo-cache`、`dingo-mds`、`dingo-mds-client`，发布四个可执行文件、各自的 basename-relative `.sha256` 和记录 `GITHUB_SHA` 的 `commitId.txt`，共九个附件；缺失或不可执行时失败。仅该 job 获得 `contents: write`；含 `-` 的标签标记为 prerelease。
 
 | 触发 ref | Docker image tags |
 |---|---|
@@ -120,7 +121,7 @@ bash .github/scripts/_lib/glog-scan.sh
 | `refs/tags/v5.2.0` | `v5.2.0` |
 | `refs/tags/v5.2.0-rc.1` | `v5.2.0-rc.1` |
 
-分支持续镜像中的 `-latest` 表示该维护分支最新构建，不代表正式发版；不会覆盖主线 `latest`。分支 push 仍遵守现有 `paths-ignore`，纯文档等被忽略的变更不触发发布；tag push 不受路径过滤影响。RC 标签的既有 Docker/PyPI 行为未在本次修改，打 tag 前仍需明确发布策略。
+分支持续镜像中的 `-latest` 表示该维护分支最新构建，不代表正式发版；不会覆盖主线 `latest`。分支 push 仍遵守现有 `paths-ignore`，纯文档等被忽略的变更不触发发布；tag push 不受路径过滤影响。CMake 和 Python 包版本均为 `5.2.0`。RC 标签仍会触发现有 PyPI 上传：若计划发布 `v5.2.0-rc.1`，必须先将 Python 包版本调整为对应的 `5.2.0rc1`，不能用正式版版本号上传 RC wheel。
 
 **为什么 release 不重测**：发布流水只负责构建和发布，依赖合并前的队列验证；必须先为维护分支配置保护与 Merge Queue。绕过队列合并或直接打 tag 不会自动补跑回归。
 
@@ -128,7 +129,7 @@ bash .github/scripts/_lib/glog-scan.sh
 
 ## 5. 依赖管理（日常 unpin / release pin 双形态）
 
-dingo 系自家依赖（dingocli + dingo-store image）日常**不 pin**，跟随上游 latest；dingo 系外的第三方依赖（minio image / GHA actions）始终 pin sha256/commit 防供应链漂移。**打 release branch / tag 时两类都临时 pin**。
+日常主线可跟随 dingo 系上游迭代；本维护分支的 release 构建输入按 §5.2 固定。镜像固定使用 digest，源码固定使用完整 commit；不能仅凭浮动标签或 Eureka 标签推断其中的 SDK 身份。
 
 ### 5.1 日常形态（main / feature 分支）
 
@@ -137,28 +138,42 @@ dingo 系自家依赖（dingocli + dingo-store image）日常**不 pin**，跟�
 | `dingocli` | `.github/scripts/_lib/install.sh` | **不 pin**：`curl .../releases/latest/download/dingo` | dingo 系自家工具，向后兼容由上游保证 |
 | `dingodatabase/dingo-store` image | `.github/scripts/docker-compose.yml` | **不 pin**：`image: dingodatabase/dingo-store:latest` | 同组织，跟随上游迭代 |
 | `minio/minio` image | `.github/scripts/docker-compose.yml` | **pin sha256**：`image: minio/minio@sha256:...` | 第三方供应链，pin 防漂移 |
-| GHA actions | workflow yml | **pin commit hash**：`uses: foo@<sha>` | 同上，社区 action 防供应链投毒 |
+| GHA actions | workflow yml | 当前沿用 action 版本 tag | 不宣称已全部固定到 commit hash |
 
 **为什么 dingo 系日常不 pin**：dingofs e2e 测试要验证的就是"客户端跟最新 dingo-store / dingocli 的兼容性"，pin 反而掩盖 dingo 系自身的 regression。pin 后每次上游发版还要手工 bump，运维成本 > 安全收益。
 
 ### 5.2 Release Pinning Checklist（打 tag / 开 release branch 前必做）
 
+本次 `v5.2.0` 准备固定以下输入：
+
+| 输入 | 固定身份 |
+|---|---|
+| Native Eureka | `rocky9-fs-89c3d2b@sha256:2d260b50730c027370a7c938f5e9c8b6e42b81f116dd1fd8664a89fbc96d57b0` |
+| Wheel Eureka | `manylinux_2_34-fs-89c3d2b@sha256:deb67c3aa84c9be686bf7104f9ecc4c6c9fb1d1a9540548ec51a344886ecbec8` |
+| SDK | `v1.2`，checkout `1d6c98788531ab7fb1112b39d6447d0b221fa6cb` |
+| Runtime dingo-base | `rocky9@sha256:d6f6c394596d0a530cb3ae68b1cf877b434a1bafc6621fd6d23d5292b203df77` |
+
+SDK 构建由 `.github/scripts/_lib/build-dingo-sdk.sh` 统一负责，启用 PIC；native unit-test/release source 该脚本，wheel 的 `before-all` 执行同一脚本。wheel 不直接沿用镜像内的未知 SDK 提交，而是在每个新构建容器中从固定源码重新安装。MinIO 保持已有 digest。`dingocli` 下载仍使用 latest，action 版本 tag 和构建工具依赖也并非完全冻结；本次不宣称整个发布环境可逐字节重现。
+
+回归环境的 coordinator 和 store 均保持 `dingodatabase/dingo-store:latest`，本次发版不固定 Store 镜像；固定范围不包含 Store 服务端。
+
+以下仍是正式打 tag 前的检查项，不代表本 PR 已完成生产验收：
+
 ```
-□ 1. 跑 `bash .github/scripts/get-image-digest.sh dingodatabase/dingo-store latest`
-     → 拿当前 dingo-store image digest，写入 docker-compose.yml coordinator/store image 字段
+□ 1. 确认 coordinator/store 继续使用 dingodatabase/dingo-store:latest；无需为本次发版固定 Store digest
 □ 2. 确认 dingocli 当前 stable release tag (如 v5.1.0)，跑：
      curl -fsSL ".../releases/download/v5.1.0/dingo" | sha256sum
      → 把 tag + sha256 写回 _lib/install.sh (加 DINGOCLI_TAG + DINGOCLI_SHA256 + sha256sum -c 三行)
-□ 3. 本机 `bash .github/scripts/simulate-locally.sh` 跑 119/119 pass，确认 pin 形态没破东西
+□ 3. 运行本地回归并记录实际结果；分别验证固定依赖下的 native、wheel 与 local/MDS e2e，不用历史通过数替代本次结果
 □ 4. 改动落到维护分支（例如 `v5.2`）或直接打 tag 的 commit
-□ 5. push 维护分支 → 发布分支 Docker 镜像；push v* tag → 发布版本 Docker 镜像和 PyPI 包
+□ 5. push 维护分支 → 发布分支 Docker 镜像；push v* tag → 发布版本 Docker 镜像、PyPI 包和 GitHub Release 九个附件
 □ 6. main 分支保持 unpin 形态不动（release branch/tag 是独立分叉，不 merge 回主干）
 ```
 
 **为什么 release 要 pin**：
 
 - 用户报告 v0.x.x 出 bug 时，maintainer 要能精确 checkout 该 tag 复现，pin 是唯一能保证"复现环境跟当时发版一致"的手段
-- 半年后回看老 release，dingo-store latest 早飘到 v3.0 完全跑不动当时的 v0.5 release，pin 防退化
+- 固定 Eureka、SDK 和运行基础镜像可避免构建依赖漂移；Store 是明确保留 latest 的回归依赖，不属于本次冻结范围
 - 日常 main 不 pin 是为了跟进上游 + e2e 覆盖兼容性；release 是 frozen artifact，恰恰相反
 
 ---
@@ -241,8 +256,8 @@ ci-logs/
 - **为什么普通 PR 跳过重检查**：`unit-test`、`build`、`e2e` 只在 merge group 的合并候选上运行，避免 PR 和队列重复构建；主线 Jenkins 同样只在队列运行。代价是审阅 PR 时没有本轮回归结果，绕过队列直接合并也就绕过了这些验证。
 - **为什么 `build` 是普通内联 job + composite action，而不用 `workflow_call`**：required check 必须名字稳定，而 `workflow_call` reusable 的 check 会漂成叶子名 `build / <job>`，且 caller 被 skip 时还卡 `Expected`（实测两次死锁，详 §1 ⚠️）。改用普通内联 `build` job：check 名就是 `build`；`if: github.event_name == 'merge_group'` 跳过时直接报 `skipped`（跟 `e2e` 同机制，满足 required 不挡），merge_group 才真跑、`success` 才放行。构建逻辑（sdk + dingofs Release 编译 + 产 `dingofs.tar.gz`）抽到 composite action 给 pr-check `build` 与 release `build` 两处 `uses:` 复用——composite 在 caller 内联执行,既复用逻辑又不引入会漂移的叶子 check 名。**这是整套"PR skip / 队列真跑 / 三个都 required"设计能跑通的命门**：required 的 job 必须是内联 job。
 - **为什么缓存 dingo-sdk install（`actions/cache`）**：`unit-test` 与 `build` 都需要 SDK，共享相同 cache key 和 `.cache-complete` 哨兵，命中时复用已安装的 SDK。构建配方、Eureka 镜像或 SDK 提交改变会使 key 失效。普通 PR 不运行这些构建，也不会读取或填充这份缓存；composite action 的缓存保存仍在 job 结束时执行。
-- **cache key 的四段构成（为什么不只靠外部 head + sentinel）**：`dingo-sdk-v1-<构建配方指纹>-<eureka 镜像 ID>-<dingo-sdk main HEAD SHA>`。
-  - `<dingo-sdk main SHA>` + `<eureka 镜像 ID>`：**外部输入**变了就重编（ABI 不会拿旧 sdk 配新 eureka）。
+- **cache key 的四段构成（为什么不只靠外部输入 + sentinel）**：`dingo-sdk-v1-<构建配方指纹>-<eureka 镜像 ID>-<固定 dingo-sdk SHA>`。
+  - `<固定 dingo-sdk SHA>` + `<eureka 镜像 ID>`：固定输入变更后重编，不再查询 SDK main HEAD。
   - `<构建配方指纹>` = `hashFiles('.github/scripts/_lib/build-dingo-sdk.sh')`：**本地"怎么编"**(cmake flags / 编译命令)变了就重编。sdk 的 clone+cmake+make 抽到这个**单一真相源脚本**（unit-test 和 build 都 `source` 它，不会两边 drift），改它 → hash 变 → key 自动失效。**这是关键**：只锚外部 head + `.cache-complete` sentinel 的话，改了配方但 key 不变，sentinel 会"自信地"命中、复用配方过时的 sdk；指纹堵上这个洞，也免去手动 bump。
   - `v1`：保留的**手动版本位**，留作"配方没变但想强制刷缓存"（如缓存损坏）的应急杠杆。
 - **为什么没有 nightly main 健康检查**：merge queue 已保证 main 上每个 commit 测过；nightly 防"依赖漂移 / 镜像更新"的兜底场景按需独立加，不强制属于本设计核心。

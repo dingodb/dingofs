@@ -24,6 +24,55 @@ jobs:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/build-release
 
+  github-release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download dingofs artifact (from same run)
+        uses: actions/download-artifact@v4
+        with:
+          name: dingofs
+
+      - name: Prepare release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -xzf dingofs.tar.gz
+          mkdir -p release-assets
+          for binary in dingo-client dingo-cache dingo-mds dingo-mds-client; do
+            source="dingofs/build/bin/$binary"
+            if [[ ! -f "$source" || ! -x "$source" ]]; then
+              echo "::error::Missing expected executable: $source"
+              exit 1
+            fi
+            cp "$source" "release-assets/$binary"
+            (cd release-assets && sha256sum "$binary" > "$binary.sha256")
+          done
+          printf '%s\n' "$GITHUB_SHA" > release-assets/commitId.txt
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          token: ${{ github.token }}
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          fail_on_unmatched_files: true
+          files: |
+            release-assets/dingo-client
+            release-assets/dingo-cache
+            release-assets/dingo-mds
+            release-assets/dingo-mds-client
+            release-assets/dingo-client.sha256
+            release-assets/dingo-cache.sha256
+            release-assets/dingo-mds.sha256
+            release-assets/dingo-mds-client.sha256
+            release-assets/commitId.txt
+
   docker-publish:
     needs: build
     runs-on: ubuntu-latest
