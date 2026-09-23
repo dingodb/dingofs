@@ -9,9 +9,9 @@ name: PR Source
 
 on:
   pull_request_target:
-    branches: [main]
+    branches: [main, 'v5.[0-9]+']
   merge_group:
-    branches: [main]
+    branches: [main, 'v5.[0-9]+']
 
 permissions:
   contents: read
