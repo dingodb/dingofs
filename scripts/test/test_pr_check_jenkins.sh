@@ -101,6 +101,20 @@ def keys(value):
             yield from keys(child)
 
 
+def matches_filters(ref, patterns):
+    # Model the filters' GitHub glob subset: *, [0-9], and +.
+    return any(
+        re.fullmatch(
+            re.escape(pattern)
+            .replace(r"\*", "[^/]*")
+            .replace(r"\[0\-9\]", "[0-9]")
+            .replace(r"\+", "+"),
+            ref,
+        )
+        for pattern in patterns
+    )
+
+
 def validate_branch_filters(workflow, events):
     for event in events:
         patterns = workflow["on"][event]["branches"]
@@ -121,17 +135,7 @@ def validate_branch_filters(workflow, events):
             ("feature/v5.2", False),
             ("v5.2/topic", False),
         ):
-            # Model the filters' GitHub glob subset: *, [0-9], and +.
-            matched = any(
-                re.fullmatch(
-                    re.escape(pattern)
-                    .replace(r"\*", "[^/]*")
-                    .replace(r"\[0\-9\]", "[0-9]")
-                    .replace(r"\+", "+"),
-                    branch,
-                )
-                for pattern in patterns
-            )
+            matched = matches_filters(branch, patterns)
             require(
                 matched == expected,
                 f"{event}: branch {branch} admission is {matched}, expected {expected}",
@@ -179,14 +183,27 @@ def validate_job_routes(workflow):
         )
 
 
+def validate_tag_filters(workflow):
+    patterns = workflow["on"]["push"].get("tags", [])
+    for tag, expected in (
+        ("v5.2.0", True),
+        ("v5.2.0-rc.1", True),
+        ("release-5.2.0", False),
+    ):
+        require(
+            matches_filters(tag, patterns) == expected,
+            f"push: tag {tag} admission must be {expected}",
+        )
+
+
 def validate_release_routes(workflow):
     image_jobs = {"build", "docker-publish"}
     for ref, expected in (
         ("refs/heads/main", image_jobs | {"wheels"}),
         ("refs/heads/v5.2", image_jobs),
         ("refs/heads/v5.3", image_jobs),
-        ("refs/tags/v5.2.0", image_jobs | {"wheels", "pypi-publish"}),
-        ("refs/tags/v5.2.0-rc.1", image_jobs | {"wheels", "pypi-publish"}),
+        ("refs/tags/v5.2.0", image_jobs | {"wheels", "pypi-publish", "github-release"}),
+        ("refs/tags/v5.2.0-rc.1", image_jobs | {"wheels", "pypi-publish", "github-release"}),
     ):
         runnable = runnable_jobs(
             workflow,
@@ -506,6 +523,7 @@ try:
     validate_branch_filters(source, ("pull_request_target", "merge_group"))
     release = load_workflow(root / ".github/workflows/release.yml")
     validate_branch_filters(release, ("push",))
+    validate_tag_filters(release)
     validate_release_routes(release)
     validate_source_workflow(source)
     validate_jenkins_job(pr_check)

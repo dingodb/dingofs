@@ -27,18 +27,18 @@ runs:
         echo "check disk space"
         df -h
 
-    - name: Pull dingodatabase/dingo-eureka:rocky9-fs
+    - name: Pull pinned dingo-eureka
       shell: bash
       run: |
-        docker pull dingodatabase/dingo-eureka:rocky9-fs
+        docker pull dingodatabase/dingo-eureka:rocky9-fs-89c3d2b@sha256:2d260b50730c027370a7c938f5e9c8b6e42b81f116dd1fd8664a89fbc96d57b0
 
     - name: Resolve dingo-sdk cache key
       id: sdk-key
       shell: bash
       run: |
-        sdk_sha=$(git ls-remote https://github.com/dingodb/dingo-sdk.git refs/heads/main | cut -f1)
-        eureka_id=$(docker image inspect --format '{{.Id}}' dingodatabase/dingo-eureka:rocky9-fs | cut -d: -f2 | head -c12)
-        # key = 手动版本 v1 · 构建配方指纹(hashFiles) · eureka 镜像 ID · dingo-sdk main SHA
+        sdk_sha=1d6c98788531ab7fb1112b39d6447d0b221fa6cb
+        eureka_id=$(docker image inspect --format '{{.Id}}' dingodatabase/dingo-eureka:rocky9-fs-89c3d2b@sha256:2d260b50730c027370a7c938f5e9c8b6e42b81f116dd1fd8664a89fbc96d57b0 | cut -d: -f2 | head -c12)
+        # key = 手动版本 v1 · 构建配方指纹(hashFiles) · eureka 镜像 ID · 固定 dingo-sdk SHA
         echo "key=dingo-sdk-v1-${{ hashFiles('.github/scripts/_lib/build-dingo-sdk.sh') }}-${eureka_id}-${sdk_sha}" >> "$GITHUB_OUTPUT"
 
     # /mnt 是 root 属主：预建成 runner 可写，下面 actions/cache restore 才能往里解压（命中时）
@@ -99,7 +99,7 @@ runs:
         docker run --name release-dingofs --rm \
           -v /mnt/dingofs:/opt/dingofs/ \
           -v /mnt/dingo-sdk:/root/.local/dingo-sdk \
-          dingodatabase/dingo-eureka:rocky9-fs /opt/dingofs/build.sh
+          dingodatabase/dingo-eureka:rocky9-fs-89c3d2b@sha256:2d260b50730c027370a7c938f5e9c8b6e42b81f116dd1fd8664a89fbc96d57b0 /opt/dingofs/build.sh
 
     - name: Normalize dingo-sdk cache ownership
       if: always()

@@ -15,7 +15,7 @@
 # if compile_commands.json is needed, please enable CMAKE_EXPORT_COMPILE_COMMANDS, of use `bear --append -- make` to do make, it's more recommended to use bear.
 
 cmake_minimum_required(VERSION 3.25 FATAL_ERROR)
-project(dingofs VERSION 5.1.0 LANGUAGES C CXX)
+project(dingofs VERSION 5.2.0 LANGUAGES C CXX)
 
 find_program(CCACHE_EXECUTABLE ccache)
 if(CCACHE_EXECUTABLE)

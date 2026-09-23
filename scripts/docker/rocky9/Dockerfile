@@ -1,4 +1,4 @@
-FROM dingodatabase/dingo-base:rocky9
+FROM dingodatabase/dingo-base:rocky9@sha256:d6f6c394596d0a530cb3ae68b1cf877b434a1bafc6621fd6d23d5292b203df77
 
 # rdma-core/libibverbs provide libibverbs.so.1, which dingo-client and
 # dingo-cache link dynamically (RDMA cache feature). Installed here so the
