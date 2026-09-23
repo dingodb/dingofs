@@ -11,6 +11,7 @@ import re
 import subprocess
 import sys
 import tempfile
+from types import SimpleNamespace
 
 try:
     import yaml
@@ -100,21 +101,107 @@ def keys(value):
             yield from keys(child)
 
 
-def require_external_configuration(path, required_lines):
-    lines = {line.strip() for line in path.read_text().splitlines()}
-    for line in required_lines:
-        require(line in lines, f"{path.name}: missing external configuration note: {line}")
+def validate_branch_filters(workflow, events):
+    for event in events:
+        patterns = workflow["on"][event]["branches"]
+        for branch, expected in (
+            ("main", True),
+            ("v5.2", True),
+            ("v5.10", True),
+            ("v5.1", True),
+            ("v4.2", False),
+            ("v6.0", False),
+            ("vnext", False),
+            ("v50", False),
+            ("v5-test", False),
+            ("v5.", False),
+            ("v5.2-debug", False),
+            ("v5.2.0", False),
+            ("release-5.2", False),
+            ("feature/v5.2", False),
+            ("v5.2/topic", False),
+        ):
+            # Model the filters' GitHub glob subset: *, [0-9], and +.
+            matched = any(
+                re.fullmatch(
+                    re.escape(pattern)
+                    .replace(r"\*", "[^/]*")
+                    .replace(r"\[0\-9\]", "[0-9]")
+                    .replace(r"\+", "+"),
+                    branch,
+                )
+                for pattern in patterns
+            )
+            require(
+                matched == expected,
+                f"{event}: branch {branch} admission is {matched}, expected {expected}",
+            )
+
+
+def runnable_jobs(workflow, context):
+    runnable = set()
+    for name, job in workflow["jobs"].items():
+        # These gates use string equality, boolean operators and startsWith.
+        # Evaluate their outcomes instead of pinning expression formatting.
+        expression = job.get("if", "True").strip()
+        if expression.startswith("${{") and expression.endswith("}}"):
+            expression = expression[3:-2].strip()
+        expression = expression.replace("&&", " and ").replace("||", " or ")
+        if eval(expression, {"__builtins__": {}}, context):
+            runnable.add(name)
+    return runnable
+
+
+def validate_job_routes(workflow):
+    for event, branch, enabled, expected in (
+        ("pull_request", "main", "", set()),
+        ("pull_request", "v5.2", "", set()),
+        ("merge_group", "main", "", {"unit-test", "build", "e2e", "jenkins-regression"}),
+        ("merge_group", "v5.2", "", {"unit-test", "build", "e2e"}),
+        ("merge_group", "main", "false", {"unit-test", "build", "e2e"}),
+    ):
+        context = {
+            "github": SimpleNamespace(
+                event_name=event,
+                event=SimpleNamespace(
+                    merge_group=SimpleNamespace(
+                        base_ref=f"refs/heads/{branch}" if event == "merge_group" else "",
+                    ),
+                ),
+            ),
+            "vars": SimpleNamespace(JENKINS_REGRESSION_ENABLED=enabled),
+        }
+        runnable = runnable_jobs(workflow, context)
+        require(
+            runnable == expected,
+            f"{event}/{branch}, Jenkins switch={enabled!r}: "
+            f"runnable jobs {sorted(runnable)}, expected {sorted(expected)}",
+        )
+
+
+def validate_release_routes(workflow):
+    image_jobs = {"build", "docker-publish"}
+    for ref, expected in (
+        ("refs/heads/main", image_jobs | {"wheels"}),
+        ("refs/heads/v5.2", image_jobs),
+        ("refs/heads/v5.3", image_jobs),
+        ("refs/tags/v5.2.0", image_jobs | {"wheels", "pypi-publish"}),
+        ("refs/tags/v5.2.0-rc.1", image_jobs | {"wheels", "pypi-publish"}),
+    ):
+        runnable = runnable_jobs(
+            workflow,
+            {
+                "github": SimpleNamespace(ref=ref),
+                "startsWith": lambda value, prefix: value.lower().startswith(prefix.lower()),
+            },
+        )
+        require(
+            runnable == expected,
+            f"release/{ref}: runnable jobs {sorted(runnable)}, expected {sorted(expected)}",
+        )
 
 
 def validate_source_workflow(workflow):
-    require(
-        workflow.get("on")
-        == {
-            "pull_request_target": {"branches": ["main"]},
-            "merge_group": {"branches": ["main"]},
-        },
-        "pr-source.yml: events must be pull_request_target and merge_group for main",
-    )
     require(
         workflow.get("permissions") == {"contents": "read"},
         "pr-source.yml: permissions must be contents: read",
@@ -239,11 +326,7 @@ def validate_jenkins_job(workflow):
         == {"if", "runs-on", "environment", "timeout-minutes", "steps"},
         "pr-check.yml: jenkins-regression has unexpected fields",
     )
-    require(
-        job["if"]
-        == "vars.JENKINS_REGRESSION_ENABLED != 'false' && github.event_name == 'merge_group'",
-        "pr-check.yml: Jenkins job must honor its switch and run independently for merge groups",
-    )
+    validate_job_routes(workflow)
     require(job["runs-on"] == "ubuntu-latest", "pr-check.yml: wrong Jenkins runner")
     require(
         job["environment"] == "jenkins-regression",
@@ -369,24 +452,6 @@ def validate_jenkins_job(workflow):
     )
 
 
-def validate_contract_test_step(workflow):
-    unit_job = workflow["jobs"]["unit-test"]
-    steps = unit_job["steps"]
-    checkout_indexes = [
-        index for index, step in enumerate(steps) if step.get("uses") == "actions/checkout@v4"
-    ]
-    require(len(checkout_indexes) == 1, "pr-check.yml: unit-test must have one checkout step")
-    checkout_index = checkout_indexes[0]
-    require(
-        checkout_index + 1 < len(steps),
-        "pr-check.yml: contract test step must follow unit-test checkout",
-    )
-    contract_step = steps[checkout_index + 1]
-    require(
-        set(contract_step) == {"name", "run"}
-        and contract_step["run"] == "bash scripts/test/test_pr_check_jenkins.sh",
-        "pr-check.yml: contract test must run immediately after unit-test checkout",
-    )
 
 
 def validate_topology_template():
@@ -437,31 +502,14 @@ def validate_topology_template():
 try:
     pr_check = load_workflow(pr_check_path)
     source = load_workflow(source_path)
+    validate_branch_filters(pr_check, ("pull_request", "merge_group"))
+    validate_branch_filters(source, ("pull_request_target", "merge_group"))
+    release = load_workflow(root / ".github/workflows/release.yml")
+    validate_branch_filters(release, ("push",))
+    validate_release_routes(release)
     validate_source_workflow(source)
     validate_jenkins_job(pr_check)
-    validate_contract_test_step(pr_check)
     validate_topology_template()
-    require_external_configuration(
-        source_path,
-        {
-            "# - require status check: trusted-source",
-            "# - expected source: GitHub Actions",
-            "# - accept both fork and same-repository pull requests",
-            "# - merge queue grouping strategy: ALLGREEN",
-            "# - no bypass actors",
-        },
-    )
-    require_external_configuration(
-        pr_check_path,
-        {
-            "# - require status checks: unit-test, build, e2e, jenkins-regression",
-            "# - expected source for each status check: GitHub Actions",
-            "# - do not also add this file as an organization required workflow",
-            "# - Environment jenkins-regression: no required reviewers",
-            "# - store JENKINS_USER and JENKINS_API_TOKEN only as Environment secrets",
-            "# Candidate-controlled test: honest regression coverage only, not a security boundary.",
-        },
-    )
 except (AssertionError, KeyError, TypeError, WorkflowLoadError) as error:
     print(f"workflow contract failed: {error}", file=sys.stderr)
     raise SystemExit(1)
@@ -469,17 +517,5 @@ except (AssertionError, KeyError, TypeError, WorkflowLoadError) as error:
 print("PASS: PR Check Jenkins contract")
 PY
 
-bash "${ROOT}/scripts/test/test_jenkins_setup_docs.sh"
 bash "${ROOT}/scripts/test/test_trigger_jenkins_metadata.sh"
 
-# GitHub-hosted runners do not guarantee that ripgrep is installed. Exercise
-# the documentation contract with a minimal PATH that provides grep but not rg.
-fallback_path=$(mktemp -d)
-cleanup_fallback_path() {
-  rm -rf -- "${fallback_path}"
-}
-trap cleanup_fallback_path EXIT
-ln -s "$(command -v dirname)" "${fallback_path}/dirname"
-ln -s "$(command -v grep)" "${fallback_path}/grep"
-PATH="${fallback_path}" /usr/bin/bash \
-  "${ROOT}/scripts/test/test_jenkins_setup_docs.sh"

@@ -1,6 +1,6 @@
 # DingoFS CI/CD
 
-dingofs 的 CI/CD 系统：**2 个 GitHub Actions workflow + 1 个 composite action** 配 **GitHub Merge Queue** 守护 main 分支永远绿，发布时自动产 docker image + pypi wheel。
+dingofs 使用 GitHub Actions 与 GitHub Merge Queue 验证 `main` 和 `v5.[0-9]+` 维护分支（如 `v5.2`、`v5.10`）。`main` 额外运行 Jenkins 回归；维护分支暂不接入 Jenkins。发布流水接受上述分支 push 和 `v*` 标签 push；分支镜像与正式版本镜像使用不同标签，维护分支不发布 Python 包。
 
 ---
 
@@ -8,19 +8,25 @@ dingofs 的 CI/CD 系统：**2 个 GitHub Actions workflow + 1 个 composite act
 
 | 文件 | 触发 | 做什么 |
 |---|---|---|
-| `.github/workflows/pr-check.yml` | `pull_request` + `merge_group` | 顶层 3 个内联 job：`unit-test` → `build` → `e2e`。**PR 阶段只跑 `unit-test`**（拦编译 + client 单测，~17min）；`build` / `e2e` 用 `if: github.event_name == 'merge_group'` 跳过——**只在 `merge_group` 出队对 rebased SHA 真跑**。见 §8 决策。merge_group event 是 Merge Queue 出队 gate |
-| `.github/workflows/release.yml` | `push: branches:[main]` + `push: tags:['v*']` | 发布流水：build → docker-publish (always) + wheels → pypi-publish (tag only)。**不重测**（信任 merge queue 已守门）|
+| `.github/workflows/pr-check.yml` | 目标为 `main` 或 `v5.[0-9]+` 分支的 `pull_request` + `merge_group` | 普通 PR 的重检查全部跳过；merge group 顺序执行 `unit-test` → `build` → `e2e`，仅 `main` 的 merge group 并行运行 `jenkins-regression` |
+| `.github/workflows/pr-source.yml` | 目标为 `main` 或 `v5.[0-9]+` 分支的 `pull_request_target` + `merge_group` | 可选的来源准入提示；`TRUSTED_SOURCE_ENABLED=false` 时跳过，不检出 PR 代码，不替代代码审核 |
+| `.github/workflows/release.yml` | `push: branches:[main, 'v5.[0-9]+']` + `push: tags:['v*']` | build → docker-publish；wheels 仅 main/tag，pypi-publish 仅 tag。**不重测**，不得以发布成功替代合并前验证 |
 | `.github/actions/build-release/` | composite action（被 pr-check `build` + release `build` 两处 `uses:` 内联）| `dingodatabase/dingo-eureka:rocky9-fs` container 内 Release cmake build，产 `dingofs.tar.gz` artifact。dingo-sdk install 走 `actions/cache`（同 unit-test，见 §8）。**逻辑复用走 composite 而非 `workflow_call`**——后者会让 required check 漂成锚不住的叶子名（见 §8）|
 
 ### Status Check 命名
 
-branch protection required status checks 锚 `PR Check` 的 **3 个内联 job 裸名**（普通 job，check 名 == job 名，永不漂移）：
+`main` 和 `v5.[0-9]+` 维护分支的 branch protection 都使用以下 **3 个内联 job 裸名**作为 Required status checks：
 
 - `unit-test` （pr-check.yml 内联 job）
 - `build` （pr-check.yml 内联 job；构建逻辑 `uses: ./.github/actions/build-release` composite）
 - `e2e` （pr-check.yml 内联 job）
+- `main` 另外要求 `jenkins-regression`；维护分支暂不要求，也不会启动该 job。
 
-PR 上 `build` / `e2e` 被 `if: github.event_name == 'merge_group'` 跳过 → 直接上报 `skipped`（GitHub 把 required 的 skipped 当通过，不挡入队）；merge_group 出队时真跑、`success` 才放行。
+为每条维护分支（例如 `v5.2`）单独配置对应保护规则与 Merge Queue。Actions 的 `v5.[0-9]+` 匹配 `v5.<数字>`，不匹配 `v5.2-debug`、`v5.2.0` 或 `v6.0`；不要直接将 Actions glob 复制到语法不同的保护规则中。workflow 不会创建分支、保护规则或队列，旧分支也不会因为主线更新而自动获得这份 workflow；本次不重命名或修改旧 `v5.1` 等分支。检查的 Expected source 均选择 GitHub Actions。
+
+Jenkins 入口同时要求 `merge_group` 事件和 `github.event.merge_group.base_ref == 'refs/heads/main'`，并保留 `JENKINS_REGRESSION_ENABLED` 开关。维护分支不使用 Jenkins Environment，不需要扩展 trigger 或线上 Pipeline 的分支白名单；不要为了维护分支而关闭主线的 Jenkins 开关。
+
+普通 PR 的 `unit-test`、`build`、`e2e`、`jenkins-regression` 均为 `skipped`，这只允许 PR 进入队列，不代表测试通过。队列针对合并候选实际执行该目标分支要求的检查。维护分支三项检查通过也不等同于完成 Jenkins 的回归覆盖，正式发布前仍需补齐候选提交的关键回归。
 
 > ⚠️ 历史坑（务必遵守，实测踩过两段）：**required 的 `build` 绝不能用 `workflow_call` reusable 实现**。曾把 build 做成 `uses: _release-build.yml` 的 reusable caller，结果：
 > 1. caller 用 `if` 跳过 → reusable 不实例化 → 叶子 check 永远 `Expected — Waiting for status to be reported` → 死锁；
@@ -84,75 +90,39 @@ bash .github/scripts/_lib/glog-scan.sh
 
 ### 4.1 PR 流程（pr-check.yml）
 
-```
-开发者 push 到 PR 分支
-        ↓
-pr-check.yml 触发（pull_request event）
-        ↓
-┌──────────────────────────────────────────────────────┐
-│  unit-test  内联，编译 + test_client → 真跑             │
-│  build      内联（uses composite），if: merge_group → skip│
-│  e2e        内联，if: merge_group → skip                │
-└──────────────────────────────────────────────────────┘
-   required check：unit-test=success / build=skipped / e2e=skipped
-   （三个都是内联 job，check 名 == job 名；skipped 满足 required）
-        ↓
-reviewer 审批 → 点 "Add to merge queue"
-        ↓
-PR 进入 Merge Queue（build + e2e 出队时才真跑，见 4.2）
-```
+1. 开发者提交目标为 `main` 或 `v5.[0-9]+` 维护分支的 PR，触发 `pr-check.yml`。
+2. `unit-test`、`build`、`e2e`、`jenkins-regression` 全部跳过；启用时，PR Source 单独执行来源准入提示。
+3. 完成代码审核后加入目标分支的 Merge Queue。
+4. 队列为合并候选触发真实检查，见 4.2。不要把 PR 阶段的 skipped 状态当作回归结果。
 
 ### 4.2 Merge Queue 流程
 
-```
-Queue: [PR-A, PR-B, PR-C, ...]
-        ↓
-GitHub 自动出队 PR-A
-        ↓
-自动 rebase PR-A 到当前 main HEAD
-        ↓
-触发 pr-check.yml（merge_group event，跑 rebased 新 SHA）
-        ↓
-unit-test + build + e2e 全跑（PR 阶段跳过的 build/e2e 在这里补齐）
-        ↓
-   ┌───┴───┐
-  pass    fail
-   ↓        ↓
-merge   踢出 queue
-入 main   ↓
-   ↓     PR 留 open，开发者修
-push event → release.yml 触发（见 4.3）
-```
+1. GitHub 将 PR 与目标分支及队列中前序改动组合成 merge group，生成独立的候选 SHA。
+2. `merge_group` 触发 `unit-test`、`build`、`e2e`，后一个 job 依赖前一个成功。
+3. 目标为 `main` 时，`jenkins-regression` 同时开始；目标为维护分支时跳过 Jenkins。
+4. 对应 Required checks 全部成功后合并；失败则退出队列，PR 保持打开。
+5. 合入 `main` 或 `v5.[0-9]+` 维护分支后，符合路径过滤的 push 触发分支镜像发布；正式版本仍通过 `v*` 标签发布。
 
 **关键**：queue 出队跑的是 **rebased 新 SHA**——保证 main 上每个 commit 都被测过精确的 merge 后状态。
 
-### 4.3 Release 流程（push main / tag）
+### 4.3 Release 流程（push main / maintenance branch / tag）
 
-```
-PR 通过 queue → merge 入 main → push event 触发
-       OR
-开发者 push tag v* → release.yml 触发
-        ↓
-┌─────────────────────────────────────────────┐
-│  job: build  (uses ./.github/actions/build-release) │
-│        ↓                                     │
-│  ┌─ Docker 链 ─────────────────────┐        │
-│  │ job: docker-publish (内联)      │        │
-│  │   needs: build                  │        │
-│  │   → image push (always)         │        │
-│  └─────────────────────────────────┘        │
-│  ┌─ Pypi 链（独立并行 Docker 链）─┐          │
-│  │ job: wheels (内联 cibuildwheel)│          │
-│  │   → dingofs_whl artifact       │          │
-│  │ job: pypi-publish (内联 twine) │          │
-│  │   needs: wheels                │          │
-│  │   if: startsWith tag           │          │
-│  │   → wheel push (tag only)      │          │
-│  └────────────────────────────────┘          │
-└─────────────────────────────────────────────┘
-```
+1. `main` 或 `v5.[0-9]+` 维护分支 push，或 `v*` 标签 push，触发 `release.yml`。
+2. `build` 使用 `./.github/actions/build-release` 生成本次提交的 artifact；`docker-publish` 只消费同一 run 的 artifact。
+3. Docker 发布到 `dingodatabase/dingofs`，标签规则如下。分支与 Git tag 分别按 `refs/heads/` 和 `refs/tags/` 判断，不混用。
+4. `wheels` 仍仅在 main/tag 构建；`pypi-publish` 仍仅在 tag 发布。维护分支 push 不构建 wheel、不上传 PyPI。
 
-**为什么 release 不重测**：merge queue 已保证入 main 的每个 commit 都被测过精确的 merge 后状态。release 信任这个保证，只负责 build artifact 给 docker/pypi。
+| 触发 ref | Docker image tags |
+|---|---|
+| `refs/heads/main` | `latest`、`<7位SHA>` |
+| `refs/heads/v5.2` | `v5.2-latest`、`v5.2-<7位SHA>` |
+| `refs/heads/v5.3` | `v5.3-latest`、`v5.3-<7位SHA>` |
+| `refs/tags/v5.2.0` | `v5.2.0` |
+| `refs/tags/v5.2.0-rc.1` | `v5.2.0-rc.1` |
+
+分支持续镜像中的 `-latest` 表示该维护分支最新构建，不代表正式发版；不会覆盖主线 `latest`。分支 push 仍遵守现有 `paths-ignore`，纯文档等被忽略的变更不触发发布；tag push 不受路径过滤影响。RC 标签的既有 Docker/PyPI 行为未在本次修改，打 tag 前仍需明确发布策略。
+
+**为什么 release 不重测**：发布流水只负责构建和发布，依赖合并前的队列验证；必须先为维护分支配置保护与 Merge Queue。绕过队列合并或直接打 tag 不会自动补跑回归。
 
 ---
 
@@ -180,8 +150,8 @@ dingo 系自家依赖（dingocli + dingo-store image）日常**不 pin**，跟�
      curl -fsSL ".../releases/download/v5.1.0/dingo" | sha256sum
      → 把 tag + sha256 写回 _lib/install.sh (加 DINGOCLI_TAG + DINGOCLI_SHA256 + sha256sum -c 三行)
 □ 3. 本机 `bash .github/scripts/simulate-locally.sh` 跑 119/119 pass，确认 pin 形态没破东西
-□ 4. 改动落到 release branch (`release/v0.x`) 或直接打 tag 的 commit
-□ 5. push release branch / tag → release.yml 触发 → docker / pypi 发包
+□ 4. 改动落到维护分支（例如 `v5.2`）或直接打 tag 的 commit
+□ 5. push 维护分支 → 发布分支 Docker 镜像；push v* tag → 发布版本 Docker 镜像和 PyPI 包
 □ 6. main 分支保持 unpin 形态不动（release branch/tag 是独立分叉，不 merge 回主干）
 ```
 
@@ -227,11 +197,7 @@ ci-logs/
 
 ### 失败分阶段处理
 
-**PR 阶段失败**（只有 `unit-test` 会在 PR 跑——编译错误 / client 单测回归）：
-- 显示在 PR Checks tab
-- 开发者 push fix → 自动重跑 unit-test
-- concurrency 自动 cancel 旧 run
-- `build` / `e2e` 的失败不在 PR 暴露，留到 merge queue 出队才发现（见下）
+**普通 PR 阶段**：重检查只建立 skipped 状态，不执行编译或回归。更新 PR 会刷新这组状态，但编译、单测、e2e 和 Jenkins 的实际失败要在队列阶段处理。
 
 **Merge Queue 阶段失败**（queue 出队后 unit/build/e2e 任一红）：
 - queue UI 显示 PR ✗
@@ -270,11 +236,11 @@ ci-logs/
 
 ## 8. 设计决策（why）
 
-- **为什么 2 workflow + 1 composite action**：2 workflow 对应 PR / Release 两个事件入口；Release 构建逻辑被两处复用，抽成 **composite action**（`.github/actions/build-release`）而非 `workflow_call` sub-workflow——composite 在 caller 里内联执行、不改 check 名，避免 required check 漂成锚不住的叶子名（见 §1 ⚠️ + 下条）。
+- **为什么使用独立入口与 composite action**：PR Check 负责候选验证，PR Source 负责可选来源准入，Release 负责发布。构建逻辑通过 composite action 复用，不使用会改变 Required check 名称的 `workflow_call` caller。
 - **为什么 release 不重测 unit/build/e2e**：merge queue 已用 rebased SHA gate 过，重测是浪费 + 阻塞 publish。release.yml 信任 queue 保证。
-- **为什么 PR 只跑 unit-test，build + e2e 留到 merge_group**：完整链跑一次 ~47min（实测 unit-test 17 / build 23 / e2e 7），PR + 出队跑两次等于 ~94min。`unit-test`（Debug 编译 + `test_client`）拦掉最高频失败——编译错误和单测回归；且 Debug 编过 ⟹ Release 基本编过，`build` 极少独立挂。于是 PR 阶段只花 17min 就挡住绝大多数问题，把 `build` + `e2e` 推到出队时对 rebased SHA 跑——`e2e` 这种集成验证本就该测 merge 后状态。代价是 reviewer 审批时看不到 e2e 绿、坏 PR 会赔一个出队周期，单维护者 / 低并发可接受；PR 量上来再把 `build`/`e2e` 加回 `pull_request` 触发即可。
+- **为什么普通 PR 跳过重检查**：`unit-test`、`build`、`e2e` 只在 merge group 的合并候选上运行，避免 PR 和队列重复构建；主线 Jenkins 同样只在队列运行。代价是审阅 PR 时没有本轮回归结果，绕过队列直接合并也就绕过了这些验证。
 - **为什么 `build` 是普通内联 job + composite action，而不用 `workflow_call`**：required check 必须名字稳定，而 `workflow_call` reusable 的 check 会漂成叶子名 `build / <job>`，且 caller 被 skip 时还卡 `Expected`（实测两次死锁，详 §1 ⚠️）。改用普通内联 `build` job：check 名就是 `build`；`if: github.event_name == 'merge_group'` 跳过时直接报 `skipped`（跟 `e2e` 同机制，满足 required 不挡），merge_group 才真跑、`success` 才放行。构建逻辑（sdk + dingofs Release 编译 + 产 `dingofs.tar.gz`）抽到 composite action 给 pr-check `build` 与 release `build` 两处 `uses:` 复用——composite 在 caller 内联执行,既复用逻辑又不引入会漂移的叶子 check 名。**这是整套"PR skip / 队列真跑 / 三个都 required"设计能跑通的命门**：required 的 job 必须是内联 job。
-- **为什么缓存 dingo-sdk install（`actions/cache`）**：`unit-test`（pr-check.yml）和 `build`（composite action）各自 `git clone dingo-sdk && make -j$(nproc)` 一遍，是两个 job 的耗时大头且完全重复。把 sdk 的 install 目录缓存在 host `/mnt/dingo-sdk`、bind-mount 进容器 `/root/.local/dingo-sdk`，命中（目录里有 `.cache-complete` sentinel）就跳过 clone + 编译。同 key 跨 job 共享——merge_group 出队时 `unit-test` 编完，`build` 直接命中。**PR 阶段只有 unit-test 跑，故只有它的缓存被命中（~16min → ~3min）；`build` 的缓存只在 merge_group / release 生效。** composite 里 `actions/cache` 的 save 靠嵌套 action 的 post-step 在 job 结束时跑。
+- **为什么缓存 dingo-sdk install（`actions/cache`）**：`unit-test` 与 `build` 都需要 SDK，共享相同 cache key 和 `.cache-complete` 哨兵，命中时复用已安装的 SDK。构建配方、Eureka 镜像或 SDK 提交改变会使 key 失效。普通 PR 不运行这些构建，也不会读取或填充这份缓存；composite action 的缓存保存仍在 job 结束时执行。
 - **cache key 的四段构成（为什么不只靠外部 head + sentinel）**：`dingo-sdk-v1-<构建配方指纹>-<eureka 镜像 ID>-<dingo-sdk main HEAD SHA>`。
   - `<dingo-sdk main SHA>` + `<eureka 镜像 ID>`：**外部输入**变了就重编（ABI 不会拿旧 sdk 配新 eureka）。
   - `<构建配方指纹>` = `hashFiles('.github/scripts/_lib/build-dingo-sdk.sh')`：**本地"怎么编"**(cmake flags / 编译命令)变了就重编。sdk 的 clone+cmake+make 抽到这个**单一真相源脚本**（unit-test 和 build 都 `source` 它，不会两边 drift），改它 → hash 变 → key 自动失效。**这是关键**：只锚外部 head + `.cache-complete` sentinel 的话，改了配方但 key 不变，sentinel 会"自信地"命中、复用配方过时的 sdk；指纹堵上这个洞，也免去手动 bump。
