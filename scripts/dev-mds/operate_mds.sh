@@ -10,7 +10,7 @@ if [[ ! -d "$mydir" ]]; then mydir="$PWD"; fi
 
 DEFINE_integer server_num 3 'server number'
 DEFINE_boolean clean_log true 'clean log'
-DEFINE_boolean replace_conf false 'replace conf'
+DEFINE_boolean replace_conf true 'replace conf'
 DEFINE_string env 'env.local' 'deploy env file'
 DEFINE_boolean force true 'use kill -9 to stop'
 DEFINE_boolean use_pgrep true 'use pgrep to get pid'
