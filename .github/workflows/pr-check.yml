@@ -1,6 +1,6 @@
 # Repository ruleset configuration for this ordinary CI workflow:
-# - main required checks: unit-test, build, e2e, jenkins-regression
-# - v5.[0-9]+ maintenance branches required checks: unit-test, build, e2e
+# - main and v5.2 required checks: unit-test, build, e2e, jenkins-regression
+# - other v5.[0-9]+ maintenance branches required checks: unit-test, build, e2e
 # - configure merge queue separately for each protected target branch
 # - expected source for each status check: GitHub Actions
 # - do not also add this file as an organization required workflow
@@ -216,7 +216,8 @@ jobs:
     if: >-
       vars.JENKINS_REGRESSION_ENABLED != 'false' &&
       github.event_name == 'merge_group' &&
-      github.event.merge_group.base_ref == 'refs/heads/main'
+      (github.event.merge_group.base_ref == 'refs/heads/main' ||
+       github.event.merge_group.base_ref == 'refs/heads/v5.2')
     runs-on: ubuntu-latest
     environment: jenkins-regression
     timeout-minutes: 270
@@ -238,11 +239,11 @@ jobs:
           API_URL: ${{ github.api_url }}
         run: |
           set -euo pipefail
-          if [[ ! "${MERGE_REF}" =~ refs/heads/gh-readonly-queue/main/pr-([0-9]+)- ]]; then
+          if [[ ! "${MERGE_REF}" =~ ^refs/heads/gh-readonly-queue/(main|v5\.2)/pr-([0-9]+)- ]]; then
             echo "Cannot extract PR number from ${MERGE_REF}" >&2
             exit 1
           fi
-          pr_number="${BASH_REMATCH[1]}"
+          pr_number="${BASH_REMATCH[2]}"
           pr_json=$(
             curl --fail --silent --show-error \
               --header "Authorization: Bearer ${GH_TOKEN}" \
