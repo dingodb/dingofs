@@ -206,7 +206,7 @@ pipeline {
               cd /opt/dingofs
               git config --global --add safe.directory /opt/dingofs
               make file_dep
-              make file_build only=//src/* release=1 unit_tests=OFF
+              USE_CICD_BUILD=ON make file_build only=//src/* release=1 unit_tests=OFF
               make file_deploy_config
             '
 

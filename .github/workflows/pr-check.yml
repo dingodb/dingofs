@@ -35,6 +35,9 @@ jobs:
       - name: Check Jenkins workflow contract
         run: bash scripts/test/test_pr_check_jenkins.sh
 
+      - name: Check build version metadata
+        run: python3 scripts/test/test_git_version.py
+
       - name: Copy dingofs repository
         run: |
           echo "Move dingofs repository"
@@ -94,14 +97,14 @@ jobs:
           make file_dep
           # Debug build with NDEBUG undefined so SyncPoint and TEST_SYNC_POINT
           # are armed. unit_tests=ON pulls in test/unit/ targets.
-          make file_build only=//src/* release=0 unit_tests=ON build_type=Debug
+          USE_CICD_BUILD=ON make file_build only=//src/* release=0 unit_tests=ON build_type=Debug
           if [ \$? -ne 0 ]; then
               echo "build failed"
               exit -1
           fi
 
-          # Run client unit tests. Other suites (mds, cache) are out of scope
-          # for this job and can be enabled here as they stabilize.
+          # Run the focused version regression and the client unit tests.
+          ./build/bin/test/test_common --gtest_filter=VersionTest.* --gtest_color=yes
           ./build/bin/test/test_client --gtest_color=yes
           EOF
           chmod +x /mnt/dingofs/test.sh
@@ -110,6 +113,7 @@ jobs:
         run: |
           echo "Run DingoFS unit tests"
           docker run --name unit-test-dingofs --rm \
+            -e GITHUB_REF_NAME -e GITHUB_SHA \
             -v /mnt/dingofs:/opt/dingofs/ \
             -v /mnt/dingo-sdk:/root/.local/dingo-sdk \
             dingodatabase/dingo-eureka:rocky9-fs /opt/dingofs/test.sh

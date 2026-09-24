@@ -25,10 +25,6 @@ namespace dingofs {
 #define GIT_VERSION "unknown"
 #endif
 
-#ifndef GIT_TAG_NAME
-#define GIT_TAG_NAME "unknown"
-#endif
-
 #ifndef GIT_BRANCH_NAME
 #define GIT_BRANCH_NAME "unknown"
 #endif
@@ -49,6 +45,10 @@ namespace dingofs {
 #define DINGOFS_BUILD_TYPE "unknown"
 #endif
 
+#ifndef DINGOFS_BUILD_SOURCE
+#define DINGOFS_BUILD_SOURCE "local"
+#endif
+
 #ifndef GIT_LAST_COMMIT_ID
 #define GIT_LAST_COMMIT_ID "unknown"
 #endif
@@ -58,12 +58,20 @@ namespace dingofs {
 #endif
 
 std::string DingoVersionString();
+// Returns the case-preserving Git build identity followed by [ci/cd|local].
+// The identity includes -dirty for tracked changes, or -unknown-state when
+// Git has a commit but its worktree state cannot be read; see GetGitVersion().
+// Build source is selected independently via the USE_CICD_BUILD CMake option.
 std::string DingoShortVersionString();
 
 void DingoLogVersion();
 std::vector<std::pair<std::string, std::string>> DingoVersion();
 void ExposeDingoVersion();
 
+// Returns <ref>-<short SHA> with the worktree suffix, without the source
+// suffix. Ref is the actual branch, a verified CI ref, or "detached".
+// Without a readable commit, SHA is "unknown"; a known branch is retained.
+// With neither branch nor commit metadata, returns "detached-unknown".
 std::string GetGitVersion();
 std::string GetGitCommitHash();
 std::string GetGitCommitTime();

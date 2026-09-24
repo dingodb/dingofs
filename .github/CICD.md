@@ -124,6 +124,35 @@ bash .github/scripts/_lib/glog-scan.sh
 
 **为什么 release 不重测**：发布流水只负责构建和发布，依赖合并前的队列验证；必须先为维护分支配置保护与 Merge Queue。绕过队列合并或直接打 tag 不会自动补跑回归。
 
+### 4.4 构建版本身份
+
+CMake 的 `Build version`、日志/完整版本信息中的 `DINGOFS VERSION`
+和 `dingo_version` 指标统一使用 `<ref>-<short-sha>[-dirty]`。
+该值由 `cmake/GitVersion.cmake` 生成，保留 ref 大小写，不是产品版本号或 Docker 标签。
+程序的 `--version` 保持单行输出，在该身份后附加 `[ci/cd]` 或 `[local]`，保留构建来源区分。
+
+- 有本地分支时使用实际检出的分支。
+- detached HEAD 时，仅当 `GITHUB_SHA` 与实际 HEAD 完全一致，才使用 `GITHUB_REF_NAME`
+  （可能是分支、tag 或 merge-queue ref）；否则使用 `detached`，不推测所属分支。
+- 原生构建容器和 cibuildwheel 显式传递这两个环境变量。其他构建系统未提供可验证的
+  ref 时使用 `detached-<short-sha>`；源码没有 Git 信息时使用 `detached-unknown`。
+  已知分支但尚无提交时保留分支名，使用 `<branch>-unknown`。
+- 受跟踪文件存在暂存或未暂存修改时，在主身份后追加 `-dirty`；干净时不加后缀，
+  未跟踪的构建产物不计入。能读取提交但无法检查工作树时追加 `-unknown-state`，不误报干净。
+- 不再输出最近历史 tag 或 `git describe`；构建类型仍由 `DINGOFS BUILD_TYPE` 展示。
+- 构建来源由 `USE_CICD_BUILD` 独立指定，默认 `OFF`（local），`ON` 表示 ci/cd；
+  不根据 Git 分支、detached HEAD 或 GitHub ref 变量猜测来源。CMake 的 `Build source`、
+  日志/完整版本中的 `DINGOFS BUILD_SOURCE` 和结构化信息中的 `BUILD_SOURCE` 独立展示该值。
+- GitHub Actions 和 Jenkins 的原生 CI 均显式使用 `USE_CICD_BUILD=ON make file_build ...`；
+  本地调用该脚本默认 `OFF`，直接调用 CMake 时可显式传 `-DUSE_CICD_BUILD=ON`。
+- wheel CI 使用 `CIBW_CONFIG_SETTINGS=cmake.define.USE_CICD_BUILD=ON` 将选项传给构建后端；
+  本地 wheel 构建默认仍是 local。`GITHUB_REF_NAME` / `GITHUB_SHA` 的透传只用于确定 Git 身份。
+
+Git 元数据在 CMake 配置时采集；HEAD 或源码变化后需重新配置，以刷新编译进产物的身份信息。
+
+本地回归入口为 `python3 scripts/test/test_git_version.py`，以及构建后的
+`test_common --gtest_filter=VersionTest.*`；Merge Queue 的 unit-test job 同样执行这两项。
+
 ---
 
 ## 5. 依赖管理（日常 unpin / release pin 双形态）
