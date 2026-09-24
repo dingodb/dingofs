@@ -14,6 +14,7 @@ DEFINE_boolean clean_log false 'clean log'
 DEFINE_integer port 39000 'server listen port'
 DEFINE_string log_level INFO 'cache log level'
 DEFINE_integer log_v 0 'cache log v'
+DEFINE_string env 'env.local' 'deploy env file'
 
 
 # parse the command-line
@@ -30,12 +31,45 @@ if [ -z "${FLAGS_cache_dir}" ]; then
     exit -1
 fi
 
+
+
 BASE_DIR=$(dirname $(dirname $(cd $(dirname $0); pwd)))
+SRC_CACHE_BIN_PATH=$BASE_DIR/build/bin/dingo-cache
 CACHE_BASE_DIR=$BASE_DIR/dist/cache
-CACHE_BIN_PATH=$CACHE_BASE_DIR/bin/dingo-cache  
+CACHE_BIN_DIR=$CACHE_BASE_DIR/bin
+CACHE_BIN_PATH=$CACHE_BIN_DIR/dingo-cache
+
+
 CACHE_LOG_DIR=$CACHE_BASE_DIR/log
-  
-CACHE_NODE_LIST="27BF3B69-F44C-43BD-A1CC-A2F5374150F1,1B7E4F23-9C8E-4A42-8DEA-969C80BC693E"
+
+
+if [ ! -f "$mydir/${FLAGS_env}" ]; then
+  echo "error: env file not found: $mydir/${FLAGS_env}"
+  exit 1
+fi
+source $mydir/${FLAGS_env} || exit 1
+
+# check CACHE_NODE_LIST
+if [ -z "$CACHE_NODE_LIST" ]; then
+    echo "CACHE_NODE_LIST is empty"
+    exit -1
+fi
+
+# check if log dir exist
+if [ ! -d "$CACHE_LOG_DIR" ]; then
+    mkdir -p $CACHE_LOG_DIR
+fi
+
+if [ ! -f "$CACHE_BIN_PATH" ]; then
+    mkdir -p $CACHE_BIN_DIR
+    if [ ! -f "$SRC_CACHE_BIN_PATH" ]; then
+        echo "not found dingo-cache at $SRC_CACHE_BIN_PATH"
+        exit 1
+    fi
+
+    cp $SRC_CACHE_BIN_PATH $CACHE_BIN_PATH
+fi
+
 
 function start() {
   id=$1

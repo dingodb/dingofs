@@ -51,29 +51,30 @@ FSNAME=$(echo ${FLAGS_meta} | awk -F'/' '{print $NF}')
 echo "fsname: ${FSNAME}"
 
 BASE_DIR=$(dirname $(dirname $(cd $(dirname $0); pwd)))
+SRC_CLIENT_BIN_PATH=$BASE_DIR/build/bin/dingo-client
 CLIENT_BASE_DIR=$BASE_DIR/dist/client
 CLIENT_BIN_PATH=$CLIENT_BASE_DIR/bin/dingo-client
-CLIENT_CONF_DIR=$CLIENT_BASE_DIR/conf
-CLIENT_CACHE_DIR=$CLIENT_BASE_DIR/cache
 CLIENT_LOG_DIR=$CLIENT_BASE_DIR/log
 
 cd $CLIENT_BASE_DIR
 
 # set -x
 
-# check if conf dir exist
-if [ ! -d "$CLIENT_CONF_DIR" ]; then
-    mkdir -p $CLIENT_CONF_DIR
-fi
-
-# check if cache dir exist
-if [ ! -d "$CLIENT_CACHE_DIR" ]; then
-    mkdir -p $CLIENT_CACHE_DIR
-fi
 
 # check if log dir exist
 if [ ! -d "$CLIENT_LOG_DIR" ]; then
     mkdir -p $CLIENT_LOG_DIR
+fi
+
+# check CLIENT_BIN_PATH exist
+if [ ! -f "$CLIENT_BIN_PATH" ]; then
+    mkdir -p $CLIENT_BASE_DIR/bin
+    if [ ! -f "$SRC_CLIENT_BIN_PATH" ]; then
+        echo "not found dingo-client at $SRC_CLIENT_BIN_PATH"
+        exit 1
+    fi
+
+    cp $SRC_CLIENT_BIN_PATH $CLIENT_BIN_PATH
 fi
 
 wait_for_process_exit() {
