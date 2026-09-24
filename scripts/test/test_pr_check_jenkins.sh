@@ -157,7 +157,9 @@ def validate_job_routes(workflow):
         ("pull_request", "main", "", set()),
         ("pull_request", "v5.2", "", set()),
         ("merge_group", "main", "", {"unit-test", "build", "e2e", "jenkins-regression"}),
-        ("merge_group", "v5.2", "", {"unit-test", "build", "e2e"}),
+        ("merge_group", "v5.2", "", {"unit-test", "build", "e2e", "jenkins-regression"}),
+        ("merge_group", "v5.3", "", {"unit-test", "build", "e2e"}),
+        ("merge_group", "v5.2", "false", {"unit-test", "build", "e2e"}),
         ("merge_group", "main", "false", {"unit-test", "build", "e2e"}),
     ):
         context = {
@@ -402,7 +404,7 @@ def validate_jenkins_job(workflow):
                 + os.environ.get("PATH", ""),
                 "GH_TOKEN": "test-token",
                 "MERGE_REF": (
-                    "refs/heads/gh-readonly-queue/main/"
+                    "refs/heads/gh-readonly-queue/v5.2/"
                     "pr-1083-c49f80eab51c019f276ea17459727ea3d9080d87"
                 ),
                 "REPOSITORY": "dingodb/dingofs",
@@ -518,4 +520,3 @@ print("PASS: PR Check Jenkins contract")
 PY
 
 bash "${ROOT}/scripts/test/test_trigger_jenkins_metadata.sh"
-

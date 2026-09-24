@@ -28,6 +28,21 @@ grep -Fx 'PR_NUMBER=1083' "${FAKE_CURL_LOG}"
 grep -Fx 'PR_AUTHOR=octocat' "${FAKE_CURL_LOG}"
 grep -F 'Jenkins finished with SUCCESS' "${TEMP_ROOT}/success.stdout"
 
+export GIT_REF=refs/heads/gh-readonly-queue/v5.2/pr-1083-deadbeef
+bash "${ROOT}/.github/scripts/trigger-jenkins.sh" \
+  >"${TEMP_ROOT}/v5.2.stdout" 2>"${TEMP_ROOT}/v5.2.stderr"
+grep -Fx "GIT_REF=${GIT_REF}" "${FAKE_CURL_LOG}"
+grep -F 'Jenkins finished with SUCCESS' "${TEMP_ROOT}/v5.2.stdout"
+
+for rejected_ref in refs/heads/v5.2 refs/heads/gh-readonly-queue/v5.3/pr-1083-deadbeef; do
+  if GIT_REF="${rejected_ref}" bash "${ROOT}/.github/scripts/trigger-jenkins.sh" \
+      >"${TEMP_ROOT}/rejected.stdout" 2>"${TEMP_ROOT}/rejected.stderr"; then
+    echo "trigger unexpectedly accepted ${rejected_ref}" >&2
+    exit 1
+  fi
+  grep -F 'GIT_REF is not a main or v5.2 merge-queue ref' "${TEMP_ROOT}/rejected.stderr"
+done
+
 if env -u PR_AUTHOR bash "${ROOT}/.github/scripts/trigger-jenkins.sh" \
     >"${TEMP_ROOT}/missing.stdout" 2>"${TEMP_ROOT}/missing.stderr"; then
   echo 'trigger unexpectedly accepted a missing PR_AUTHOR' >&2
