@@ -16,17 +16,14 @@
 
 #include <bvar/bvar.h>
 
-#include <iostream>
 #include <sstream>
 
-#include "common/helper.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
 
 namespace dingofs {
 
 static const std::string kGitVersion = GIT_VERSION;
-static const std::string kGitTagName = GIT_TAG_NAME;
 static const std::string kGitBranchName = GIT_BRANCH_NAME;
 static const std::string kGitLastCommit = GIT_LAST_COMMIT_ID;
 static const std::string kProtoGitCommit = PROTO_GIT_COMMIT_ID;
@@ -34,10 +31,10 @@ static const std::string kGitCommitUser = GIT_COMMIT_USER;
 static const std::string kGitCommitMail = GIT_COMMIT_MAIL;
 static const std::string kGitCommitTime = GIT_COMMIT_TIME;
 static const std::string kDingoFsBuildType = DINGOFS_BUILD_TYPE;
+static const std::string kDingoFsBuildSource = DINGOFS_BUILD_SOURCE;
 static bool kUseTcmalloc = false;
 static bool kUseProfiler = false;
 static bool kUseSanitizer = false;
-static bool kUseCICDBuild = false;
 
 static std::string GetBuildFlag() {
 #ifdef LINK_TCMALLOC
@@ -68,36 +65,28 @@ static std::string GetBuildFlag() {
 std::string DingoVersionString() {
   std::ostringstream oss;
   oss << fmt::format("DINGOFS VERSION:[{}]\n", kGitVersion.c_str());
-  oss << fmt::format("DINGOFS GIT_LAST_TAG:[{}]\n", kGitTagName.c_str());
   oss << fmt::format("DINGOFS GIT_BRANCH_NAME:[{}]\n", kGitBranchName.c_str());
   oss << fmt::format("DINGOFS GIT_COMMIT_HASH:[{}]\n", kGitLastCommit.c_str());
-  oss << fmt::format("DINGOFS PROTO_COMMIT_HASH:[{}]\n", kProtoGitCommit.c_str());
+  oss << fmt::format("DINGOFS PROTO_COMMIT_HASH:[{}]\n",
+                     kProtoGitCommit.c_str());
   oss << fmt::format("DINGOFS BUILD_TYPE:[{}]\n", kDingoFsBuildType.c_str());
+  oss << fmt::format("DINGOFS BUILD_SOURCE:[{}]\n", kDingoFsBuildSource);
   oss << GetBuildFlag() << "\n";
 
   return oss.str();
 }
 
 std::string DingoShortVersionString() {
-#ifdef USE_CICD_BUILD
-  kUseCICDBuild = true;
-#else
-  kUseCICDBuild = false;
-#endif
-
-  return ::dingofs::Helper::ToLowerCase(
-      fmt::format("{}, {} build-{}:{} + {}", kGitBranchName,
-                  kUseCICDBuild ? "ci/cd" : "local", kGitBranchName,
-                  kGitLastCommit, kDingoFsBuildType));
+  return fmt::format("{} [{}]", kGitVersion, kDingoFsBuildSource);
 }
 
 void DingoLogVersion() {
   LOG(INFO) << "DINGOFS VERSION:[" << kGitVersion << "]";
-  LOG(INFO) << "DINGOFS GIT_LAST_TAG:[" << kGitTagName << "]";
   LOG(INFO) << "DINGOFS GIT_BRANCH_NAME:[" << kGitBranchName << "]";
   LOG(INFO) << "DINGOFS GIT_COMMIT_HASH:[" << kGitLastCommit << "]";
   LOG(INFO) << "DINGOFS PROTO_COMMIT_HASH:[" << kProtoGitCommit << "]";
   LOG(INFO) << "DINGOFS BUILD_TYPE:[" << kDingoFsBuildType << "]";
+  LOG(INFO) << "DINGOFS BUILD_SOURCE:[" << kDingoFsBuildSource << "]";
   LOG(INFO) << GetBuildFlag();
   LOG(INFO) << "PID: " << getpid();
 }
@@ -111,6 +100,7 @@ std::vector<std::pair<std::string, std::string>> DingoVersion() {
   result.emplace_back("COMMIT_MAIL", kGitCommitMail);
   result.emplace_back("COMMIT_TIME", kGitCommitTime);
   result.emplace_back("BUILD_TYPE", kDingoFsBuildType);
+  result.emplace_back("BUILD_SOURCE", kDingoFsBuildSource);
 
   return result;
 }
@@ -118,7 +108,7 @@ std::vector<std::pair<std::string, std::string>> DingoVersion() {
 void ExposeDingoVersion() {
   static bvar::Status<std::string> version;
   version.expose_as("dingo", "version");
-  version.set_value("%s-%s", kGitBranchName.c_str(), kGitLastCommit.c_str());
+  version.set_value("%s", kGitVersion.c_str());
 }
 
 std::string GetGitVersion() { return kGitVersion; }

@@ -33,7 +33,7 @@ option(BUILD_UNIT_TESTS "Build unit test" OFF)
 option(BUILD_INTEGRATION_TESTS "Build integration test" OFF)
 option(USE_TCMALLOC "Use tcmalloc" ON)
 option(BRPC_ENABLE_CPU_PROFILER "Enable brpc cpu profiler" OFF)
-option(USE_CICD_BUILD "Enable CI/CD build" OFF)
+option(USE_CICD_BUILD "Mark the build as produced by CI/CD" OFF)
 
 option(ENABLE_COVERAGE "Enable GCC coverage instrumentation" OFF)
 
@@ -116,82 +116,7 @@ message("CMAKE_MODULE_PATH: ${CMAKE_MODULE_PATH}")
 add_definitions(-DUSE_BTHREAD_MUTEX)
 add_definitions(-DSPDLOG_FMT_EXTERNAL)
 
-execute_process(
-  COMMAND git describe --always --dirty --tags
-  OUTPUT_VARIABLE GIT_VERSION
-  OUTPUT_STRIP_TRAILING_WHITESPACE)
-
-execute_process(
-  COMMAND git describe --abbrev=0 --tags --always
-  OUTPUT_VARIABLE GIT_TAG_NAME
-  OUTPUT_STRIP_TRAILING_WHITESPACE)
-
-execute_process(
-  COMMAND git log --pretty=format:%an -1
-  OUTPUT_VARIABLE GIT_COMMIT_USER
-  OUTPUT_STRIP_TRAILING_WHITESPACE)
-
-execute_process(
-  COMMAND git log --pretty=format:%ae -1
-  OUTPUT_VARIABLE GIT_COMMIT_MAIL
-  OUTPUT_STRIP_TRAILING_WHITESPACE)
-
-execute_process(
-  COMMAND git log --pretty=format:%ai -1
-  OUTPUT_VARIABLE GIT_COMMIT_TIME
-  OUTPUT_STRIP_TRAILING_WHITESPACE)
-
-execute_process(
-  COMMAND git log -1 --format=%h
-  OUTPUT_VARIABLE GIT_LAST_COMMIT_ID
-  OUTPUT_STRIP_TRAILING_WHITESPACE
-)
-
-execute_process(
-  COMMAND git branch --show-current
-  OUTPUT_VARIABLE GIT_BRANCH_NAME
-  OUTPUT_STRIP_TRAILING_WHITESPACE
-)
-
-# proto/ is the dingofs-proto git submodule; record its commit id so the
-# dashboard Git section can show which proto revision was built against.
-execute_process(
-  COMMAND git -C ${PROJECT_SOURCE_DIR}/proto log -1 --format=%h
-  OUTPUT_VARIABLE PROTO_GIT_COMMIT_ID
-  OUTPUT_STRIP_TRAILING_WHITESPACE
-  ERROR_QUIET
-)
-
-if(NOT PROTO_GIT_COMMIT_ID)
-  set(PROTO_GIT_COMMIT_ID "unknown")
-  message(WARNING "Proto git commit id is unknown")
-endif()
-
-if(NOT GIT_VERSION)
-  set(GIT_VERSION "unknown")
-  message(WARNING "Git version is unknown")
-endif()
-
-if(NOT GIT_TAG_NAME)
-  set(GIT_TAG_NAME "unknown")
-  message(WARNING "Git tag name is unknown")
-endif()
-
-message(STATUS "Git version: ${GIT_VERSION}")
-message(STATUS "Git tag name: ${GIT_TAG_NAME}")
-message(STATUS "Git commit user: ${GIT_COMMIT_USER}")
-message(STATUS "Git commit mail: ${GIT_COMMIT_MAIL}")
-message(STATUS "Git commit time: ${GIT_COMMIT_TIME}")
-message(STATUS "Git last commit id: ${GIT_LAST_COMMIT_ID}")
-message(STATUS "Git branch name: ${GIT_BRANCH_NAME}")
-message(STATUS "Proto git commit id: ${PROTO_GIT_COMMIT_ID}")
-
-if(USE_CICD_BUILD)
-    message(STATUS "CI/CD build enabled")
-    add_definitions(-DUSE_CICD_BUILD=1)
-else()
-    message(STATUS "Local build - CI/CD disabled")
-endif()
+include(GitVersion)
 
 # find dingoEureka
 find_package(dingoEureka 1.0 REQUIRED)

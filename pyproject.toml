@@ -40,3 +40,4 @@ manylinux-x86_64-image = "dingodatabase/dingo-eureka:manylinux_2_34-fs"
 
 [tool.cibuildwheel.linux]
 archs = ["x86_64"]
+environment-pass = ["GITHUB_REF_NAME", "GITHUB_SHA"]

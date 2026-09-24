@@ -94,6 +94,7 @@ jobs:
         uses: pypa/cibuildwheel@v2.19.1
         env:
           CIBW_BUILD_FRONTEND: build
+          CIBW_CONFIG_SETTINGS: "cmake.define.USE_CICD_BUILD=ON"
       - uses: actions/upload-artifact@v4
         with:
           name: dingofs_whl

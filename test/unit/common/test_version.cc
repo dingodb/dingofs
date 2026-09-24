@@ -14,68 +14,85 @@
  * limitations under the License.
  */
 
-#include "common/version.h"
-
+#include <bvar/variable.h>
+#include <gflags/gflags.h>
+#include <glog/logging.h>
 #include <gtest/gtest.h>
 
+#include <map>
+#include <mutex>
+#include <string>
+#include <utility>
+
+#include "common/version.h"
+
 namespace dingofs {
+namespace {
 
-TEST(VersionTest, DingoVersionStringContainsAllFields) {
-  std::string s = DingoVersionString();
-  EXPECT_NE(s.find("DINGOFS VERSION:["), std::string::npos);
-  EXPECT_NE(s.find("DINGOFS GIT_LAST_TAG:["), std::string::npos);
-  EXPECT_NE(s.find("DINGOFS GIT_BRANCH_NAME:["), std::string::npos);
-  EXPECT_NE(s.find("DINGOFS GIT_COMMIT_HASH:["), std::string::npos);
-  EXPECT_NE(s.find("DINGOFS PROTO_COMMIT_HASH:["), std::string::npos);
-  EXPECT_NE(s.find("DINGOFS BUILD_TYPE:["), std::string::npos);
-  EXPECT_NE(s.find("LINK_TCMALLOC:["), std::string::npos);
-}
+class VersionLogSink final : public google::LogSink {
+ public:
+  VersionLogSink() { google::AddLogSink(this); }
+  ~VersionLogSink() override { google::RemoveLogSink(this); }
 
-TEST(VersionTest, DingoShortVersionStringIsLowercased) {
-  std::string s = DingoShortVersionString();
-  for (char c : s) {
-    EXPECT_EQ(c, static_cast<char>(tolower(static_cast<unsigned char>(c))));
+  void send(google::LogSeverity, const char*, const char*, int,
+            const google::LogMessageTime&, const char* message,
+            size_t message_len) override {
+    std::string line(message, message_len);
+    if (line.rfind("DINGOFS VERSION:[", 0) == 0) {
+      std::lock_guard<std::mutex> lock(mutex_);
+      version_ = std::move(line);
+    } else if (line.rfind("DINGOFS BUILD_SOURCE:[", 0) == 0) {
+      std::lock_guard<std::mutex> lock(mutex_);
+      build_source_ = std::move(line);
+    }
   }
-}
 
-TEST(VersionTest, DingoVersionReturnsExpectedKeysInOrder) {
-  auto kvs = DingoVersion();
-  ASSERT_EQ(kvs.size(), 7u);
-  EXPECT_EQ(kvs[0].first, "BRANCH");
-  EXPECT_EQ(kvs[1].first, "COMMIT_HASH");
-  EXPECT_EQ(kvs[2].first, "PROTO_COMMIT_HASH");
-  EXPECT_EQ(kvs[3].first, "COMMIT_USER");
-  EXPECT_EQ(kvs[4].first, "COMMIT_MAIL");
-  EXPECT_EQ(kvs[5].first, "COMMIT_TIME");
-  EXPECT_EQ(kvs[6].first, "BUILD_TYPE");
-}
+  std::string Version() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return version_;
+  }
 
-TEST(VersionTest, GetGitVersionMatchesDingoVersionStringContent) {
-  EXPECT_NE(DingoVersionString().find(GetGitVersion()), std::string::npos);
-}
+  std::string BuildSource() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return build_source_;
+  }
 
-TEST(VersionTest, GetGitCommitHashMatchesDingoVersionEntry) {
-  auto kvs = DingoVersion();
-  EXPECT_EQ(kvs[1].second, GetGitCommitHash());
-}
+ private:
+  std::mutex mutex_;
+  std::string version_;
+  std::string build_source_;
+};
 
-TEST(VersionTest, GetGitCommitTimeMatchesDingoVersionEntry) {
-  auto kvs = DingoVersion();
-  EXPECT_EQ(kvs[5].second, GetGitCommitTime());
-}
+}  // namespace
 
-TEST(VersionTest, GetProtoGitCommitHashMatchesDingoVersionEntry) {
-  auto kvs = DingoVersion();
-  EXPECT_EQ(kvs[2].second, GetProtoGitCommitHash());
-}
+TEST(VersionTest, AllSurfacesIdentifyTheSameBuild) {
+  const auto fields = DingoVersion();
+  const std::map<std::string, std::string> metadata(fields.begin(),
+                                                    fields.end());
+  const std::string identity =
+      metadata.at("BRANCH") + "-" + metadata.at("COMMIT_HASH");
+  const std::string expected = GetGitVersion();
+  EXPECT_TRUE(expected == identity || expected == identity + "-dirty" ||
+              expected == identity + "-unknown-state");
 
-TEST(VersionTest, DingoLogVersionDoesNotCrash) {
-  // Purely a logging side-effect; just exercise the code path.
+  const std::string& source = metadata.at("BUILD_SOURCE");
+  ASSERT_TRUE(source == "ci/cd" || source == "local");
+  EXPECT_EQ(DingoShortVersionString(), expected + " [" + source + "]");
+  const std::string version_line = "DINGOFS VERSION:[" + expected + "]";
+  const std::string full_version = DingoVersionString();
+  EXPECT_EQ(full_version.substr(0, full_version.find('\n')), version_line);
+  const std::string source_line = "DINGOFS BUILD_SOURCE:[" + source + "]";
+  EXPECT_NE(full_version.find(source_line + "\n"), std::string::npos);
+
+  gflags::FlagSaver flag_saver;
+  FLAGS_minloglevel = google::GLOG_INFO;
+  VersionLogSink sink;
   DingoLogVersion();
-}
+  EXPECT_EQ(sink.Version(), version_line);
+  EXPECT_EQ(sink.BuildSource(), source_line);
 
-TEST(VersionTest, ExposeDingoVersionDoesNotCrash) {
   ExposeDingoVersion();
+  EXPECT_EQ(bvar::Variable::describe_exposed("dingo_version"), expected);
 }
 
 }  // namespace dingofs

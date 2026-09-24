@@ -69,7 +69,7 @@ runs:
         git config --global --add safe.directory /opt/dingofs
 
         make file_dep
-        make file_build only=//src/* release=1 unit_tests=OFF
+        USE_CICD_BUILD=ON make file_build only=//src/* release=1 unit_tests=OFF
         # check if the build is successful
         if [ \$? -ne 0 ]
         then
@@ -97,6 +97,7 @@ runs:
       run: |
         echo "Build DingoFS"
         docker run --name release-dingofs --rm \
+          -e GITHUB_REF_NAME -e GITHUB_SHA \
           -v /mnt/dingofs:/opt/dingofs/ \
           -v /mnt/dingo-sdk:/root/.local/dingo-sdk \
           dingodatabase/dingo-eureka:rocky9-fs /opt/dingofs/build.sh
