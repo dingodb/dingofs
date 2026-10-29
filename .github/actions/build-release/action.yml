@@ -69,7 +69,7 @@ runs:
         git config --global --add safe.directory /opt/dingofs
 
         make file_dep
-        make file_build only=//src/* release=1 unit_tests=OFF
+        make file_build only=//src/* release=1 unit_tests=OFF build_type=Release
         # check if the build is successful
         if [ \$? -ne 0 ]
         then
