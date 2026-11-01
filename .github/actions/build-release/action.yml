@@ -30,14 +30,14 @@ runs:
     - name: Pull pinned dingo-eureka
       shell: bash
       run: |
-        docker pull dingodatabase/dingo-eureka:rocky9-fs-89c3d2b@sha256:2d260b50730c027370a7c938f5e9c8b6e42b81f116dd1fd8664a89fbc96d57b0
+        docker pull dingodatabase/dingo-eureka:rocky9-fs-8182b23@sha256:effb3a47159942b43f81d885edf371dc8be487836344d8d5e21d839eb6980548
 
     - name: Resolve dingo-sdk cache key
       id: sdk-key
       shell: bash
       run: |
         sdk_sha=1d6c98788531ab7fb1112b39d6447d0b221fa6cb
-        eureka_id=$(docker image inspect --format '{{.Id}}' dingodatabase/dingo-eureka:rocky9-fs-89c3d2b@sha256:2d260b50730c027370a7c938f5e9c8b6e42b81f116dd1fd8664a89fbc96d57b0 | cut -d: -f2 | head -c12)
+        eureka_id=$(docker image inspect --format '{{.Id}}' dingodatabase/dingo-eureka:rocky9-fs-8182b23@sha256:effb3a47159942b43f81d885edf371dc8be487836344d8d5e21d839eb6980548 | cut -d: -f2 | head -c12)
         # key = 手动版本 v1 · 构建配方指纹(hashFiles) · eureka 镜像 ID · 固定 dingo-sdk SHA
         echo "key=dingo-sdk-v1-${{ hashFiles('.github/scripts/_lib/build-dingo-sdk.sh') }}-${eureka_id}-${sdk_sha}" >> "$GITHUB_OUTPUT"
 
@@ -99,7 +99,7 @@ runs:
         docker run --name release-dingofs --rm \
           -v /mnt/dingofs:/opt/dingofs/ \
           -v /mnt/dingo-sdk:/root/.local/dingo-sdk \
-          dingodatabase/dingo-eureka:rocky9-fs-89c3d2b@sha256:2d260b50730c027370a7c938f5e9c8b6e42b81f116dd1fd8664a89fbc96d57b0 /opt/dingofs/build.sh
+          dingodatabase/dingo-eureka:rocky9-fs-8182b23@sha256:effb3a47159942b43f81d885edf371dc8be487836344d8d5e21d839eb6980548 /opt/dingofs/build.sh
 
     - name: Normalize dingo-sdk cache ownership
       if: always()
