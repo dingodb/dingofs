@@ -38,7 +38,7 @@ before-all = "bash {project}/.github/scripts/_lib/build-dingo-sdk.sh"
 before-build = "rm -rf {project}/build"
 build = "*-manylinux*"
 skip = "*-musllinux* pp*"
-manylinux-x86_64-image = "dingodatabase/dingo-eureka:manylinux_2_34-fs-89c3d2b@sha256:deb67c3aa84c9be686bf7104f9ecc4c6c9fb1d1a9540548ec51a344886ecbec8"
+manylinux-x86_64-image = "dingodatabase/dingo-eureka:manylinux_2_34-fs-8182b23@sha256:f8b119ce6ddda1b6f781fd545acd423a7fee9c814f6d77b02143b55d311cd591"
 
 [tool.cibuildwheel.linux]
 archs = ["x86_64"]
