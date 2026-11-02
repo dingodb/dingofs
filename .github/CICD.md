@@ -148,8 +148,8 @@ bash .github/scripts/_lib/glog-scan.sh
 
 | 输入 | 固定身份 |
 |---|---|
-| Native Eureka | `rocky9-fs-89c3d2b@sha256:2d260b50730c027370a7c938f5e9c8b6e42b81f116dd1fd8664a89fbc96d57b0` |
-| Wheel Eureka | `manylinux_2_34-fs-89c3d2b@sha256:deb67c3aa84c9be686bf7104f9ecc4c6c9fb1d1a9540548ec51a344886ecbec8` |
+| Native Eureka | `rocky9-fs-8182b23@sha256:effb3a47159942b43f81d885edf371dc8be487836344d8d5e21d839eb6980548` |
+| Wheel Eureka | `manylinux_2_34-fs-8182b23@sha256:f8b119ce6ddda1b6f781fd545acd423a7fee9c814f6d77b02143b55d311cd591` |
 | SDK | `v1.2`，checkout `1d6c98788531ab7fb1112b39d6447d0b221fa6cb` |
 | Runtime dingo-base | `rocky9@sha256:d6f6c394596d0a530cb3ae68b1cf877b434a1bafc6621fd6d23d5292b203df77` |
 
