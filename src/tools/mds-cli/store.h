@@ -17,6 +17,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 #include "mds/storage/storage.h"
 
@@ -37,6 +38,9 @@ class StoreClient {
   bool DropFsStatsTable();
   bool DropFsMetaTable(uint32_t fs_id);
 
+  // delete mds heartbeat meta from backend store
+  bool DeleteMds(const std::vector<int64_t>& mds_ids);
+
   // print fs dentry tree
   void PrintDentryTree(uint32_t fs_id, bool is_details);
 
@@ -56,6 +60,7 @@ class StoreCommandRunner {
     uint32_t cluster_id{0};
     uint32_t fs_id{0};
     std::string fs_name;
+    std::string mds_id_list;
     std::string meta_table_name;
     std::string fsstats_table_name;
 
