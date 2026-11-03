@@ -105,15 +105,16 @@ class Renamer {
   Status Execute(FileSystemSPtr fs, Context& ctx, const T& param, RenameResult& out);
 
  private:
-  bool Execute(TaskRunnablePtr task);
+  bool Execute(Ino new_parent, TaskRunnablePtr task);
 
-  WorkerSPtr worker_;
+  // route by new_parent hash, renames to the same dir run in order
+  WorkerSetSPtr worker_set_;
 };
 
 template <typename T>
 Status Renamer::Execute(FileSystemSPtr fs, Context& ctx, const T& param, RenameResult& out) {
   auto task = std::make_shared<RenameTask<T> >(fs, &ctx, param, nullptr);
-  if (!Execute(task)) {
+  if (!Execute(param.new_parent, task)) {
     return Status(pb::error::EINTERNAL, "commit task fail");
   }
 

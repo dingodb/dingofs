@@ -129,6 +129,13 @@ Status DingodbStorage::IsExistTable(const std::string& start_key, const std::str
   return region_ids.empty() ? Status(pb::error::ENOT_FOUND, "table not exist") : Status::OK();
 }
 
+// a failed commit leaves the sdk txn unfinished, which aborts the process when the sdk client is destroyed.
+static dingodb::sdk::Status CommitOrRollback(dingodb::sdk::Transaction& txn) {
+  auto status = txn.Commit();
+  if (!status.ok()) txn.Rollback();
+  return status;
+}
+
 DingodbStorage::SdkTxnUPtr DingodbStorage::NewSdkTxn(Txn::IsolationLevel isolation_level) {
   dingodb::sdk::TransactionOptions options;
   options.isolation = (isolation_level == Txn::kSnapshotIsolation)
@@ -162,7 +169,7 @@ Status DingodbStorage::Put(WriteOption option, const std::string& key, const std
     return Status(pb::error::EBACKEND_STORE, status.ToString());
   }
 
-  status = txn->Commit();
+  status = CommitOrRollback(*txn);
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, status.ToString());
   }
@@ -188,7 +195,7 @@ Status DingodbStorage::Put(WriteOption option, KeyValue& kv) {
     }
   }
 
-  auto status = txn->Commit();
+  auto status = CommitOrRollback(*txn);
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, status.ToString());
   }
@@ -216,7 +223,7 @@ Status DingodbStorage::Put(WriteOption option, const std::vector<KeyValue>& kvs)
     }
   }
 
-  auto status = txn->Commit();
+  auto status = CommitOrRollback(*txn);
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, status.ToString());
   }
@@ -285,7 +292,7 @@ Status DingodbStorage::Get(const std::string& key, std::string& value) {
     return TransformStatus(status);
   }
 
-  status = txn->Commit();
+  status = CommitOrRollback(*txn);
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, status.ToString());
   }
@@ -302,7 +309,7 @@ Status DingodbStorage::BatchGet(const std::vector<std::string>& keys, std::vecto
   auto status = SdkBatchGet(*txn, keys, kvs);
   if (!status.ok()) return status;
 
-  auto sdk_status = txn->Commit();
+  auto sdk_status = CommitOrRollback(*txn);
   if (!sdk_status.ok()) {
     return Status(pb::error::EBACKEND_STORE, sdk_status.ToString());
   }
@@ -327,7 +334,7 @@ Status DingodbStorage::Scan(const Range& range, std::vector<KeyValue>& kvs) {
 
   KvPairsToKeyValues(kv_pairs, kvs);
 
-  status = txn->Commit();
+  status = CommitOrRollback(*txn);
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, status.ToString());
   }
@@ -346,7 +353,7 @@ Status DingodbStorage::Delete(const std::string& key) {
     return Status(pb::error::EBACKEND_STORE, status.ToString());
   }
 
-  status = txn->Commit();
+  status = CommitOrRollback(*txn);
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, status.ToString());
   }
@@ -367,7 +374,7 @@ Status DingodbStorage::Delete(const std::vector<std::string>& keys) {
     }
   }
 
-  auto status = txn->Commit();
+  auto status = CommitOrRollback(*txn);
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, status.ToString());
   }
