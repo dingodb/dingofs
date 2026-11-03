@@ -130,21 +130,17 @@ bool StoreClient::DropFsMetaTable(uint32_t fs_id) {
 }
 
 bool StoreClient::DeleteMds(const std::vector<int64_t>& mds_ids) {
-  auto processor = OperationProcessor::New(kv_storage_);
+  std::vector<std::string> keys;
+  for (auto mds_id : mds_ids) keys.push_back(MetaCodec::EncodeHeartbeatKey(mds_id));
 
-  bool ok = true;
-  for (auto mds_id : mds_ids) {
-    Trace trace;
-    DeleteMdsOperation operation(trace, mds_id);
-    auto status = processor->RunAlone(&operation);
-    if (!status.ok()) {
-      LOG(ERROR) << fmt::format("delete mds({}) meta fail, error: {}.", mds_id,
-                                status.error_str());
-      ok = false;
-    }
+  auto status = kv_storage_->Delete(keys);
+  if (!status.ok()) {
+    LOG(ERROR) << fmt::format("delete mds meta fail, error: {}.",
+                              status.error_str());
+    return false;
   }
 
-  return ok;
+  return true;
 }
 
 static void TraversePrint(FsTreeNode* item, bool is_details, int level) {
