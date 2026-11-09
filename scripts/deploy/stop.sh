@@ -62,19 +62,15 @@ else
 
         # Check if the PID is a number
         if [[ "$pid" =~ ^[0-9]+$ ]]; then
-            # Kill the process with the specified PID
-            if [ ${FLAGS_force} -eq 0 ]
-            then
+            if [ -r "/proc/${pid}/cmdline" ] && \
+               tr '\0' ' ' < "/proc/${pid}/cmdline" | grep -q -- "dingo-${FLAGS_role}"; then
                 echo "killing process with pid($pid) on $pid_file"
                 kill ${pid}
+                wait_for_process_exit ${pid}
+                rm -f "$pid_file"
             else
-                echo "killing -9 process with pid($pid) on $pid_file"
-                kill -9 ${pid}
+                echo "pid($pid) on $pid_file is not dingo-${FLAGS_role}, skip"
             fi
-
-            wait_for_process_exit ${pid}
-        else
-            echo "invalid pid($pid) on $pid_file"
         fi
     else
         echo "not found $pid_file"
