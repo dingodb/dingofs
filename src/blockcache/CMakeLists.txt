@@ -12,8 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+set(BLOCKCACHE_MARCH "x86-64-v3" CACHE STRING "-march value for blockcache targets")
+message(STATUS "blockcache: -march=${BLOCKCACHE_MARCH}")
+
 function(blockcache_tune target)
-    target_compile_options(${target} PRIVATE -O3 -march=native -falign-functions=64)
+    target_compile_options(${target} PRIVATE -O3 -march=${BLOCKCACHE_MARCH} -falign-functions=64)
     set_property(TARGET ${target} PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
 endfunction()
 
