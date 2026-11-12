@@ -89,8 +89,8 @@ constexpr uint32_t kInoMdsIdBits = kInoShiftBits + kInoBucketBits;
 constexpr uint64_t kInoMask = (1ULL << kInoShiftBits) - 1;
 constexpr uint64_t kInoBucketMask = (1ULL << kInoBucketBits) - 1;
 
-// 1TB
-constexpr uint64_t kMaxFileLength = 1024ULL * 1024 * 1024 * 1024;
+// 64TB
+constexpr uint64_t kMaxFileLength = 1024ULL * 1024 * 1024 * 1024 * 64;
 inline bool IsValidFileSize(uint64_t size) { return size <= kMaxFileLength; }
 
 }  // namespace dingofs
