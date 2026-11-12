@@ -14,8 +14,14 @@
 
 #include "mds/filesystem/renamer.h"
 
+#include <gflags/gflags.h>
+
 #include "mds/common/status.h"
 #include "mds/filesystem/filesystem.h"
+
+const std::string kRenameWorkerSetName = "RENAME_WORKER_SET";
+
+DEFINE_uint32(mds_rename_worker_num, 8, "rename worker number");
 
 namespace dingofs {
 namespace mds {
@@ -37,25 +43,23 @@ void RenameTask<T>::Run() {
 }
 
 bool Renamer::Init() {
-  worker_ = Worker::New();
-  return worker_->Init();
+  worker_set_ = ExecqWorkerSet::New(kRenameWorkerSetName, FLAGS_mds_rename_worker_num, 0, false);
+  return worker_set_->Init();
 }
 
 bool Renamer::Stop() {
-  if (worker_) {
-    worker_->Stop();
-  }
+  if (worker_set_) worker_set_->Stop();
 
   return true;
 }
 
-bool Renamer::Execute(TaskRunnablePtr task) {
-  if (worker_ == nullptr) {
-    LOG(ERROR) << "renamer worker is nullptr.";
+bool Renamer::Execute(Ino new_parent, TaskRunnablePtr task) {
+  if (worker_set_ == nullptr) {
+    LOG(ERROR) << "renamer worker set is nullptr.";
     return false;
   }
 
-  return worker_->Execute(task);
+  return worker_set_->ExecuteHash(new_parent, task);
 }
 
 }  // namespace mds

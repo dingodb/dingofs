@@ -18,7 +18,9 @@
 #include <cstdint>
 #include <iostream>
 #include <ostream>
+#include <set>
 #include <string>
+#include <vector>
 
 #include "dingofs/mds.pb.h"
 #include "fmt/core.h"
@@ -121,6 +123,20 @@ bool StoreClient::DropFsMetaTable(uint32_t fs_id) {
     LOG(ERROR) << fmt::format("drop fs meta table fail, error: {}.",
                               status.error_str())
                << '\n';
+    return false;
+  }
+
+  return true;
+}
+
+bool StoreClient::DeleteMds(const std::vector<int64_t>& mds_ids) {
+  std::vector<std::string> keys;
+  for (auto mds_id : mds_ids) keys.push_back(MetaCodec::EncodeHeartbeatKey(mds_id));
+
+  auto status = kv_storage_->Delete(keys);
+  if (!status.ok()) {
+    LOG(ERROR) << fmt::format("delete mds meta fail, error: {}.",
+                              status.error_str());
     return false;
   }
 
@@ -286,6 +302,7 @@ bool StoreCommandRunner::Run(const Options& options,
       ::dingofs::Helper::ToLowerCase("DropFsMetaTable"),
       ::dingofs::Helper::ToLowerCase("UpdateFsS3InfoByStore"),
       ::dingofs::Helper::ToLowerCase("UpdateFsRadosInfoByStore"),
+      ::dingofs::Helper::ToLowerCase("DeleteMds"),
       "tree",
   };
 
@@ -355,6 +372,25 @@ bool StoreCommandRunner::Run(const Options& options,
     } else {
       PrintFailure(cmd, "STORE_ERROR",
                    "failed to drop filesystem metadata table");
+    }
+
+  } else if (cmd == ::dingofs::Helper::ToLowerCase("DeleteMds")) {
+    std::vector<int64_t> mds_ids;
+    dingofs::Helper::SplitString(options.mds_id_list, ',', mds_ids);
+    if (mds_ids.empty()) {
+      PrintFailure(cmd, "INVALID_ARGUMENT", "mds_id_list is empty");
+      return true;
+    }
+    for (auto mds_id : mds_ids) {
+      if (mds_id <= 0) {
+        PrintFailure(cmd, "INVALID_ARGUMENT", "mds_id is invalid");
+        return true;
+      }
+    }
+    if (store_client.DeleteMds(mds_ids)) {
+      PrintSuccess(cmd, "mds meta deleted");
+    } else {
+      PrintFailure(cmd, "STORE_ERROR", "failed to delete mds meta");
     }
 
   } else if (cmd == ::dingofs::Helper::ToLowerCase("tree")) {

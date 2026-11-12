@@ -272,22 +272,26 @@ bool Server::InitLogCleanManager() {
 }
 
 bool Server::InitMDSMeta() {
-  MDSMeta temp_mds_meta;
-  if (mds_meta_map_->GetMDSMeta(FLAGS_mds_server_id, temp_mds_meta)) {
-    self_mds_meta_ = temp_mds_meta;
-    LOG(INFO) << fmt::format("old mds: {}.", self_mds_meta_.ToString());
-
-  } else {
-    self_mds_meta_.SetID(FLAGS_mds_server_id);
-    self_mds_meta_.SetHost(FLAGS_mds_server_host);
-    self_mds_meta_.SetPort(FLAGS_mds_server_port);
-    self_mds_meta_.SetState(MDSMeta::State::kNormal);
-    self_mds_meta_.SetCreateTimeMs(utils::TimestampMs());
-
-    LOG(INFO) << fmt::format("new mds: {}.", self_mds_meta_.ToString());
-
-    mds_meta_map_->UpsertMDSMeta(self_mds_meta_);
+  MDSMeta old_mds_meta;
+  if (mds_meta_map_->GetMDSMeta(FLAGS_mds_server_id, old_mds_meta)) {
+    LOG(INFO) << fmt::format("old mds: {}.", old_mds_meta.ToString());
   }
+
+  self_mds_meta_.SetID(FLAGS_mds_server_id);
+  self_mds_meta_.SetHost(FLAGS_mds_server_host);
+  self_mds_meta_.SetPort(FLAGS_mds_server_port);
+  self_mds_meta_.SetState(MDSMeta::State::kNormal);
+  self_mds_meta_.SetCreateTimeMs(utils::TimestampMs());
+  self_mds_meta_.SetLastOnlineTimeMs(utils::TimestampMs());
+
+  LOG(INFO) << fmt::format("new mds: {}.", self_mds_meta_.ToString());
+
+  if (self_mds_meta_.Host() != old_mds_meta.Host() || self_mds_meta_.Port() != old_mds_meta.Port()) {
+    LOG(WARNING) << fmt::format("mds host or port changed, {}:{} -> {}:{}", old_mds_meta.Host(), old_mds_meta.Port(),
+                                self_mds_meta_.Host(), self_mds_meta_.Port());
+  }
+
+  mds_meta_map_->UpsertMDSMeta(self_mds_meta_);
 
   return true;
 }
@@ -679,8 +683,7 @@ void Server::Run() {
   brpc_server_.set_version(dingofs::DingoShortVersionString());
 
   brpc::ServerOptions option;
-  option.socket_mode =
-      FLAGS_mds_use_rdma ? brpc::SOCKET_MODE_RDMA : brpc::SOCKET_MODE_TCP;
+  option.socket_mode = FLAGS_mds_use_rdma ? brpc::SOCKET_MODE_RDMA : brpc::SOCKET_MODE_TCP;
   CHECK(brpc_server_.Start(GetListenAddr().c_str(), &option) == 0) << "start brpc server error.";
 
   // Start crontab only after brpc is listening, so heartbeat doesn't report
