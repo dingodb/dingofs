@@ -35,6 +35,7 @@ enum class LinkLayer : uint8_t {
 };
 
 const char* LinkLayerName(LinkLayer layer);
+bool IsIpv4MappedGid(const uint8_t* gid);
 
 struct PortInfo {
   uint8_t port_num = 1;

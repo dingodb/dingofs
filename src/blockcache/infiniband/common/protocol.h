@@ -65,7 +65,7 @@ struct HandshakeMsg {
 
   void ToPb(pb::blockcache::EndpointInfo* out) const;
   bool FromPb(const pb::blockcache::EndpointInfo& in);
-  const char* Check(uint8_t local_qps, LinkLayer local_link_layer) const;
+  const char* Check(uint8_t local_qps, const PortInfo& local) const;
 };
 
 // Format: [MessageHeader 24B][RemoteRegion 20B x region_count][payload]
