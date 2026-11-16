@@ -104,7 +104,8 @@ Future<Status> NodeProber::GetNodeInfo() {
   }
 
   remote_shard_count_ = std::max(1U, response.shards());
-  use_rdma_ = FLAGS_use_rdma && response.rdma_enabled();
+  use_rdma_ =
+      response.rdma_enabled() && infiniband::ThisInfinibandContext() != nullptr;
 
   const unsigned shard = ThisShardId();
   if (use_rdma_) {
