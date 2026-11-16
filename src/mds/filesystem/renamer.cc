@@ -16,12 +16,15 @@
 
 #include <gflags/gflags.h>
 
+#include "brpc/reloadable_flags.h"
+#include "fmt/format.h"
 #include "mds/common/status.h"
 #include "mds/filesystem/filesystem.h"
 
-const std::string kRenameWorkerSetName = "RENAME_WORKER_SET";
+static const std::string kRenameWorkerSetName = "RENAME_WORKER_SET";
 
 DEFINE_uint32(mds_rename_worker_num, 8, "rename worker number");
+DEFINE_validator(mds_rename_worker_num, brpc::PositiveInteger);
 
 namespace dingofs {
 namespace mds {
@@ -42,8 +45,9 @@ void RenameTask<T>::Run() {
   }
 }
 
-bool Renamer::Init() {
-  worker_set_ = ExecqWorkerSet::New(kRenameWorkerSetName, FLAGS_mds_rename_worker_num, 0, false);
+bool Renamer::Init(uint32_t fs_id) {
+  worker_set_ = ExecqWorkerSet::New(fmt::format("{}_{}", kRenameWorkerSetName, fs_id), FLAGS_mds_rename_worker_num, 0,
+                                    false);
   return worker_set_->Init();
 }
 

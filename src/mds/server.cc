@@ -273,20 +273,20 @@ bool Server::InitLogCleanManager() {
 
 bool Server::InitMDSMeta() {
   MDSMeta old_mds_meta;
-  if (mds_meta_map_->GetMDSMeta(FLAGS_mds_server_id, old_mds_meta)) {
-    LOG(INFO) << fmt::format("old mds: {}.", old_mds_meta.ToString());
-  }
+  bool has_old = mds_meta_map_->GetMDSMeta(FLAGS_mds_server_id, old_mds_meta);
+  if (has_old) LOG(INFO) << fmt::format("old mds: {}.", old_mds_meta.ToString());
 
+  uint64_t now_ms = utils::TimestampMs();
   self_mds_meta_.SetID(FLAGS_mds_server_id);
   self_mds_meta_.SetHost(FLAGS_mds_server_host);
   self_mds_meta_.SetPort(FLAGS_mds_server_port);
   self_mds_meta_.SetState(MDSMeta::State::kNormal);
-  self_mds_meta_.SetCreateTimeMs(utils::TimestampMs());
-  self_mds_meta_.SetLastOnlineTimeMs(utils::TimestampMs());
+  self_mds_meta_.SetCreateTimeMs(has_old ? old_mds_meta.CreateTimeMs() : now_ms);
+  self_mds_meta_.SetLastOnlineTimeMs(now_ms);
 
   LOG(INFO) << fmt::format("new mds: {}.", self_mds_meta_.ToString());
 
-  if (self_mds_meta_.Host() != old_mds_meta.Host() || self_mds_meta_.Port() != old_mds_meta.Port()) {
+  if (has_old && (self_mds_meta_.Host() != old_mds_meta.Host() || self_mds_meta_.Port() != old_mds_meta.Port())) {
     LOG(WARNING) << fmt::format("mds host or port changed, {}:{} -> {}:{}", old_mds_meta.Host(), old_mds_meta.Port(),
                                 self_mds_meta_.Host(), self_mds_meta_.Port());
   }

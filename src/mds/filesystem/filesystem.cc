@@ -194,7 +194,7 @@ bool FileSystem::Init() {
     return false;
   }
 
-  if (!renamer_.Init()) {
+  if (!renamer_.Init(fs_id_)) {
     LOG(ERROR) << fmt::format("[fs.{}] init renamer fail.", fs_id_);
     return false;
   }

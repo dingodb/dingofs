@@ -86,7 +86,8 @@ DEFINE_string(out, "./output", "output file path");
 DEFINE_string(in, "./input", "input file path");
 DEFINE_bool(is_binary, false, "is binary");
 
-DEFINE_string(mds_id_list, "", "mds id list for joinfs, quitfs or deletemds, e.g. 1,2,3");
+DEFINE_string(mds_id_list, "", "mds id list for joinfs, quitfs or deletemds, e.g. 1,2,3. "
+              "deletemds: only for offline mds, quitfs first");
 
 DEFINE_string(member_id, "", "cache member id must be uuid");
 DEFINE_string(cache_member_ip, "", "cache member ip");
