@@ -78,6 +78,14 @@ Future<> RemoteNode::Shutdown() {
   LOG(INFO) << "Successfully shutdown " << *this;
 }
 
+Future<> RemoteNode::CloseDeadConnections() {
+  Gate::Holder holder(gate_);
+  if (!holder.ok()) {
+    co_return;
+  }
+  co_await connections_->CloseDead();
+}
+
 Future<Status> RemoteNode::Put(BlockHandle handle, BufferViews block,
                                bool stage) {
   pb::blockcache::PutRequest request;
