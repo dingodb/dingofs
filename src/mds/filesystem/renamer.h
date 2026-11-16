@@ -98,7 +98,7 @@ class Renamer {
 
   static RenamerSPtr New() { return std::make_shared<Renamer>(); }
 
-  bool Init();
+  bool Init(uint32_t fs_id);
   bool Stop();
 
   template <typename T>
