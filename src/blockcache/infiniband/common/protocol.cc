@@ -71,15 +71,19 @@ bool HandshakeMsg::FromPb(const pb::blockcache::EndpointInfo& in) {
 }
 
 const char* HandshakeMsg::Check(uint8_t local_qps,
-                                LinkLayer local_link_layer) const {
+                                const PortInfo& local) const {
   if (version != Protocol::kHandshakeVersion) {
     return "handshake version mismatch";
   } else if (num_qps != local_qps) {
     return "peer advertises a different number of QPs";
   } else if (num_qps == 0 || num_qps > 1 + kMaxBulkQps) {
     return "peer advertises an invalid number of QPs";
-  } else if (static_cast<LinkLayer>(link_layer) != local_link_layer) {
+  } else if (static_cast<LinkLayer>(link_layer) != local.link_layer) {
     return "link layer mismatch";
+  } else if (local.link_layer == LinkLayer::kEthernet &&
+             IsIpv4MappedGid(qp_infos[0].gid) !=
+                 IsIpv4MappedGid(local.gid.raw)) {
+    return "gid family mismatch; check --cache_rdma_device on both ends";
   } else if (rpc_credits < Protocol::kMinRecvCredits) {
     return "peer advertises too few receive credits";
   } else if (rpc_credits < FLAGS_rdma_max_inflight_rpcs) {

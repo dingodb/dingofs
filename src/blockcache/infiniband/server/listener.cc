@@ -70,7 +70,7 @@ StatusOr<ConnectionUPtr> Listener::Accept(const HandshakeMsg& peer,
 
 Status Listener::CheckPeerInfo(const HandshakeMsg& peer) const {
   auto qp_count = static_cast<uint8_t>(1 + FLAGS_rdma_bulk_qps);
-  const char* reason = peer.Check(qp_count, device_->port_info().link_layer);
+  const char* reason = peer.Check(qp_count, device_->port_info());
   if (reason != nullptr) {
     LOG(ERROR) << "Fail to handshake with peer: " << reason;
     return ToStatus(EPROTO, reason);
