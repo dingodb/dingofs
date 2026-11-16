@@ -132,7 +132,10 @@ Status DingodbStorage::IsExistTable(const std::string& start_key, const std::str
 // a failed commit leaves the sdk txn unfinished, which aborts the process when the sdk client is destroyed.
 static dingodb::sdk::Status CommitOrRollback(dingodb::sdk::Transaction& txn) {
   auto status = txn.Commit();
-  if (!status.ok()) txn.Rollback();
+  if (!status.ok()) {
+    auto rb_status = txn.Rollback();
+    if (!rb_status.ok()) LOG(ERROR) << fmt::format("[storage] rollback fail, status({}).", rb_status.ToString());
+  }
   return status;
 }
 
