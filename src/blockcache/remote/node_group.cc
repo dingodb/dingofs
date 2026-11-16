@@ -18,6 +18,7 @@
 
 #include <glog/logging.h>
 
+#include <chrono>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -36,6 +37,8 @@ Future<> RemoteNodeGroup::Start() {
   running_ = true;
   tls_node_group = this;
   ThisRemoteCacheVars().members = &member_group_->raw_members();
+  reaper_ = std::make_unique<Timer>([this] { CloseDeadConnections(); });
+  reaper_->ArmPeriodic(std::chrono::seconds(10));
 
   LOG(INFO) << "Successfully start RemoteNodeGroup{shard=" << ThisShardId()
             << "}";
@@ -49,6 +52,7 @@ Future<> RemoteNodeGroup::Shutdown() {
 
   running_ = false;
   tls_node_group = nullptr;
+  reaper_->Cancel();
 
   LOG(INFO) << "RemoteNodeGroup{shard=" << ThisShardId()
             << "} is shutting down...";
@@ -116,6 +120,12 @@ void RemoteNodeGroup::Rebuild(MemberGroupSPtr member_group) {
   ThisRemoteCacheVars().members = &member_group_->raw_members();
   nodes_ = std::move(nodes);
   ShutdownNodes(std::move(to_shutdown));
+}
+
+void RemoteNodeGroup::CloseDeadConnections() {
+  for (auto& [id, node] : nodes_) {
+    (void)node->CloseDeadConnections();
+  }
 }
 
 void RemoteNodeGroup::StartNodes(const std::vector<RemoteNode*>& nodes) {
