@@ -79,9 +79,9 @@ static std::string RegistryKey(const std::string& name) {
   return name + ":" + std::to_string(PortNum()) + ":" + shard;
 }
 
-static bool IsIpv4MappedGid(const ibv_gid& gid) {
+bool IsIpv4MappedGid(const uint8_t* gid) {
   static const uint8_t kPrefix[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff};
-  return std::memcmp(gid.raw, kPrefix, sizeof(kPrefix)) == 0;
+  return std::memcmp(gid, kPrefix, sizeof(kPrefix)) == 0;
 }
 
 static std::string ReadGidAttr(const std::string& name, const char* attr,
@@ -118,7 +118,7 @@ static int SelectGidIndex(ibv_context* context, const std::string& name,
     if (ibv_query_gid(context, PortNum(), i, &gid) != 0) {
       continue;
     }
-    if (IsIpv4MappedGid(gid) && GidTypeIsRoceV2(name, i)) {
+    if (IsIpv4MappedGid(gid.raw) && GidTypeIsRoceV2(name, i)) {
       return i;
     }
   }
