@@ -99,7 +99,7 @@ Status QueuePair::ModifyToRtr(const QueuePairInfo& remote) {
   attr.max_dest_rd_atomic = kMaxRdAtomic;
   attr.min_rnr_timer = option_.min_rnr_timer;
 
-  attr.ah_attr.port_num = remote.port_num;
+  attr.ah_attr.port_num = local.port_num;
   attr.ah_attr.sl = 0;
   attr.ah_attr.src_path_bits = 0;
   if (local.link_layer == LinkLayer::kIB) {
