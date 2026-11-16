@@ -285,6 +285,14 @@ Future<Status> NodeConnections::OpenAll() {
   co_return Status::OK();
 }
 
+Future<> NodeConnections::CloseDead() {
+  for (const NodeConnectionUPtr& conn : connections_) {
+    if (conn->stub() != nullptr && !conn->IsConnected()) {
+      co_await conn->Close();
+    }
+  }
+}
+
 Future<> NodeConnections::CloseAll() {
   for (const NodeConnectionUPtr& conn : connections_) {
     co_await conn->Close();

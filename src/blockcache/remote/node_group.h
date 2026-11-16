@@ -23,6 +23,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "blockcache/core/reactor/timer.h"
 #include "blockcache/remote/members.h"
 #include "blockcache/remote/node.h"
 
@@ -48,6 +49,7 @@ class RemoteNodeGroup {
   bool empty() const { return member_group_->empty(); }
 
  private:
+  void CloseDeadConnections();
   void StartNodes(const std::vector<RemoteNode*>& nodes);
   void ShutdownNodes(std::vector<RemoteNodeUPtr> nodes);
   Future<> StartNode(RemoteNode* node);
@@ -59,6 +61,7 @@ class RemoteNodeGroup {
   MemberGroupSPtr member_group_{std::make_shared<const MemberGroup>(Members{})};
   std::unordered_map<std::string, RemoteNodeUPtr> nodes_;
   Gate inflight_;
+  TimerUPtr reaper_;
 };
 
 using RemoteNodeGroupUPtr = std::unique_ptr<RemoteNodeGroup>;

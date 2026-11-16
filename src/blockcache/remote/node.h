@@ -43,6 +43,7 @@ class RemoteNode {
 
   Future<Status> Start();
   Future<> Shutdown();
+  Future<> CloseDeadConnections();
 
   Future<Status> Put(BlockHandle handle, BufferViews block, bool stage);
   Future<Status> Get(BlockHandle handle, uint64_t offset, uint32_t length,
