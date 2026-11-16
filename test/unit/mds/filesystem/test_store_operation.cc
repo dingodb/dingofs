@@ -2154,6 +2154,49 @@ TEST_F(UpdateAttrRunTest, SetResultAttrCopiesMutatedAttr) {
   EXPECT_EQ(op.GetResult().attr.ino(), ino);
 }
 
+// CleanFsOperation drops every key scoped to the fs outside fsmeta (op logs,
+// fs stats, fs quota, fs record) and leaves other filesystems untouched.
+TEST(CleanFsOperationTest, RemovesFsScopedKeysOnly) {
+  auto storage = DummyStorage::New();
+  ASSERT_TRUE(storage->Init(""));
+
+  const uint32_t fs_id = 7, other_fs_id = 8;
+  const std::string fs_name = "fs_DELETED_7";
+  FsInfoEntry fs_info;
+  fs_info.set_fs_id(fs_id);
+  fs_info.set_fs_name(fs_name);
+
+  auto put = [&](const std::string& key, const std::string& value) {
+    ASSERT_TRUE(storage->Put(KVStorage::WriteOption(), key, value).ok());
+  };
+  put(MetaCodec::EncodeFsKey(fs_name), MetaCodec::EncodeFsValue(fs_info));
+  for (uint32_t id : {fs_id, other_fs_id}) {
+    put(MetaCodec::EncodeFsQuotaKey(id), "quota");
+    put(MetaCodec::EncodeFsOpLogKey(id, 1),
+        MetaCodec::EncodeFsOpLogValue(FsOpLog()));
+    put(MetaCodec::EncodeFsStatsKey(id, 1),
+        MetaCodec::EncodeFsStatsValue(FsStatsDataEntry()));
+  }
+
+  Trace trace;
+  CleanFsOperation op(trace, fs_name, fs_id);
+  auto txn = storage->NewTxn();
+  ASSERT_TRUE(op.Run(txn).ok());
+  ASSERT_TRUE(txn->Commit().ok());
+
+  std::string value;
+  auto exists = [&](const std::string& key) {
+    return storage->Get(key, value).ok();
+  };
+  EXPECT_FALSE(exists(MetaCodec::EncodeFsKey(fs_name)));
+  EXPECT_FALSE(exists(MetaCodec::EncodeFsQuotaKey(fs_id)));
+  EXPECT_FALSE(exists(MetaCodec::EncodeFsOpLogKey(fs_id, 1)));
+  EXPECT_FALSE(exists(MetaCodec::EncodeFsStatsKey(fs_id, 1)));
+  EXPECT_TRUE(exists(MetaCodec::EncodeFsQuotaKey(other_fs_id)));
+  EXPECT_TRUE(exists(MetaCodec::EncodeFsOpLogKey(other_fs_id, 1)));
+  EXPECT_TRUE(exists(MetaCodec::EncodeFsStatsKey(other_fs_id, 1)));
+}
+
 }  // namespace unit_test
 }  // namespace mds
 }  // namespace dingofs
