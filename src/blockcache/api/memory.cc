@@ -44,7 +44,10 @@ Status RegisterMemoryForRDMA(void* base, size_t bytes) {
 
   return RunOnAllAndWait([base, bytes](unsigned) -> Future<Status> {
     infiniband::InfinibandContext* context =
-        CHECK_NOTNULL(infiniband::ThisInfinibandContext());
+        infiniband::ThisInfinibandContext();
+    if (context == nullptr) {
+      co_return Status::OK();
+    }
 
     ibv_pd* pd = context->device->pd();
     StatusOr<infiniband::MemoryRegion> mr =
