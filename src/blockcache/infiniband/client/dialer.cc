@@ -203,7 +203,6 @@ Status Dialer::GetPeerInfo(const pb::blockcache::HandshakeResponse& response,
   auto qp_count = static_cast<uint8_t>(1 + FLAGS_rdma_bulk_qps);
   const char* reason = peer->Check(qp_count, device_->port_info());
   if (reason != nullptr) {
-    LOG(ERROR) << "Fail to handshake with peer: " << reason;
     return ToStatus(EPROTO, reason);
   }
   return Status::OK();

@@ -187,6 +187,8 @@ Future<Status> NodeConnection::Establish() {
   ChannelUPtr channel = NewChannel(option_.use_rdma);
   const Status status = co_await channel->Init(GenChannelOption(option_));
   if (!status.ok()) {
+    LOG(ERROR) << "Fail to connect to " << option_.server << " shard "
+               << option_.remote_shard << ": " << status.ToString();
     co_await channel->Shutdown();
     co_return status;
   }

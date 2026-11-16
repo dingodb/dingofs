@@ -50,7 +50,7 @@ StatusOr<QueuePair> QueuePair::Create(Device& device, ibv_cq* cq,
     qp = ibv_create_qp(device.pd(), &attr);
   }
   if (qp == nullptr) {
-    return ToStatus(errno, "create queue pair");
+    return ToStatus(errno, "create queue pair (out of UARs?)");
   }
 
   QueuePairOption granted = option;
