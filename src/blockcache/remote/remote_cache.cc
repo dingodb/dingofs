@@ -92,8 +92,9 @@ void RemoteCache::InitInfiniband() {
   }
   const Status status =
       infiniband::InfinibandContext::Create(FLAGS_cache_rdma_device);
-  LOG_IF(FATAL, !status.ok()) << "Fail to open the rdma context on shard "
-                              << ThisShardId() << ": " << status.ToString();
+  LOG_IF(ERROR, !status.ok())
+      << "Fail to open the rdma context on shard " << ThisShardId()
+      << ", fall back to tcp: " << status.ToString();
 }
 
 Future<> RemoteCache::ShutdownInfiniband() {
