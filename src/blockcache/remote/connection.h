@@ -117,6 +117,7 @@ class NodeConnections {
   Future<> Shutdown();
 
   Future<StatusOr<CacheStub*>> Get(uint64_t key);
+  Future<> CloseDead();
 
  private:
   void NewConnections();
