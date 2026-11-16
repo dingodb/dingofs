@@ -74,12 +74,6 @@ const char* LinkLayerName(LinkLayer layer) {
   }
 }
 
-static std::string RegistryKey(const std::string& name) {
-  const std::string shard =
-      HasReactor() ? std::to_string(ThisShardId()) : "shared";
-  return name + ":" + std::to_string(PortNum()) + ":" + shard;
-}
-
 bool IsIpv4MappedGid(const uint8_t* gid) {
   static const uint8_t kPrefix[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff};
   return std::memcmp(gid, kPrefix, sizeof(kPrefix)) == 0;
@@ -192,6 +186,25 @@ static StatusOr<ibv_context*> OpenDevice(const std::string& name) {
   return ToStatus(ENODEV, "find the requested rdma device");
 }
 
+// A thread domain gives the shard its own doorbell and lock-free posting.
+static ibv_pd* AllocParentDomain(ibv_context* context, ibv_pd* pd) {
+  ibv_td_init_attr td_attr{};
+  ibv_parent_domain_init_attr attr{};
+  attr.pd = pd;
+  attr.td = ibv_alloc_td(context, &td_attr);
+  ibv_pd* parent =
+      attr.td != nullptr ? ibv_alloc_parent_domain(context, &attr) : nullptr;
+  if (parent == nullptr) {
+    PLOG(WARNING) << "Fail to allocate a thread domain; shards share the pd";
+    if (attr.td != nullptr) {
+      (void)ibv_dealloc_td(attr.td);
+    }
+    return pd;
+  }
+  return parent;
+}
+
+// Shards share one context and pd, so the process holds a few UARs at most.
 StatusOr<Device*> Device::Open(std::string name) {
   static std::mutex mutex;
   static auto* registry = new std::map<std::string, Device*>();
@@ -202,12 +215,30 @@ StatusOr<Device*> Device::Open(std::string name) {
   }
 
   std::lock_guard<std::mutex> guard(mutex);
-  const std::string key = RegistryKey(name);
-  auto it = registry->find(key);
-  if (it != registry->end()) {
-    return it->second;
+  const std::string key = name + ":" + std::to_string(PortNum());
+  auto shared = registry->find(key);
+  if (shared == registry->end()) {
+    StatusOr<Device*> device = OpenShared(std::move(name));
+    if (!device.ok()) {
+      return device.status();
+    }
+    shared = registry->emplace(key, device.value()).first;
+  }
+  if (!HasReactor()) {
+    return shared->second;
   }
 
+  Device*& device = (*registry)[key + ":" + std::to_string(ThisShardId())];
+  if (device == nullptr) {
+    const Device* s = shared->second;
+    device = new Device(s->name_, s->context_, s->pd_,
+                        AllocParentDomain(s->context_, s->pd_), s->attr_,
+                        s->port_info_);
+  }
+  return device;
+}
+
+StatusOr<Device*> Device::OpenShared(std::string name) {
   // context
   StatusOr<ibv_context*> open = OpenDevice(name);
   if (!open.ok()) {
@@ -244,7 +275,7 @@ StatusOr<Device*> Device::Open(std::string name) {
   }
   std::move(defer).Cancel();
 
-  auto* device = new Device(std::move(name), context, pd, attr, port_info);
+  auto* device = new Device(std::move(name), context, pd, pd, attr, port_info);
   LOG(INFO) << "Successfully open rdma device{name=" << device->name()
             << " port=" << static_cast<int>(port_info.port_num)
             << " link=" << LinkLayerName(port_info.link_layer)
@@ -252,16 +283,16 @@ StatusOr<Device*> Device::Open(std::string name) {
             << " gid=" << GidToString(port_info.gid.raw)
             << " mtu=" << static_cast<int>(port_info.active_mtu)
             << " max_rd_atomic=" << attr.max_qp_rd_atom << "}";
-
-  registry->emplace(key, device);
   return device;
 }
 
 Device::Device(std::string name, ibv_context* context, ibv_pd* pd,
-               const ibv_device_attr& attr, const PortInfo& port_info)
+               ibv_pd* qp_pd, const ibv_device_attr& attr,
+               const PortInfo& port_info)
     : name_(std::move(name)),
       context_(context),
       pd_(pd),
+      qp_pd_(qp_pd),
       attr_(attr),
       port_info_(port_info) {}
 
