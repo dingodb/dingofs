@@ -101,11 +101,12 @@ static bool GidTypeIsRoceV2(const std::string& name, int index) {
   return std::strncmp(line, "RoCE v2", 7) == 0;
 }
 
-static int SelectGidIndex(ibv_context* context, const std::string& name) {
+static int SelectGidIndex(ibv_context* context, const std::string& name,
+                          int gid_tbl_len) {
   if (FLAGS_rdma_gid_idx >= 0) {
     return FLAGS_rdma_gid_idx;
   }
-  for (int i = 0; i < 16; ++i) {
+  for (int i = 0; i < gid_tbl_len; ++i) {
     ibv_gid gid;
     if (ibv_query_gid(context, PortNum(), i, &gid) != 0) {
       continue;
@@ -114,7 +115,7 @@ static int SelectGidIndex(ibv_context* context, const std::string& name) {
       return i;
     }
   }
-  return 0;
+  return -1;
 }
 
 static Status QueryPort(ibv_context* context, const std::string& name,
@@ -132,7 +133,12 @@ static Status QueryPort(ibv_context* context, const std::string& name,
   port_info->link_layer = ToLinkLayer(attr.link_layer);
   port_info->active = attr.state == IBV_PORT_ACTIVE;
   if (port_info->link_layer == LinkLayer::kEthernet) {
-    port_info->gid_index = SelectGidIndex(context, name);
+    port_info->gid_index = SelectGidIndex(context, name, attr.gid_tbl_len);
+    if (port_info->gid_index < 0) {
+      LOG(ERROR) << "Fail to find a RoCEv2 IPv4 gid on " << name
+                 << ": does its netdev have an IPv4 address?";
+      return ToStatus(EADDRNOTAVAIL, "find a RoCEv2 IPv4 gid");
+    }
   } else {
     port_info->gid_index = 0;
   }
