@@ -58,16 +58,20 @@ class Device {
   const std::string& name() const { return name_; }
   ibv_context* context() const { return context_; }
   ibv_pd* pd() const { return pd_; }
+  ibv_pd* qp_pd() const { return qp_pd_; }
   uint32_t max_cqe() const { return static_cast<uint32_t>(attr_.max_cqe); }
   const PortInfo& port_info() const { return port_info_; }
 
  private:
-  Device(std::string name, ibv_context* context, ibv_pd* pd,
+  static StatusOr<Device*> OpenShared(std::string name);
+
+  Device(std::string name, ibv_context* context, ibv_pd* pd, ibv_pd* qp_pd,
          const ibv_device_attr& attr, const PortInfo& port_info);
 
   std::string name_;
   ibv_context* context_ = nullptr;
   ibv_pd* pd_ = nullptr;
+  ibv_pd* qp_pd_ = nullptr;  // the shard's parent domain, or pd_
   ibv_device_attr attr_{};
   PortInfo port_info_;
 };
