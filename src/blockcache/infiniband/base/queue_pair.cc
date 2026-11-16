@@ -43,11 +43,11 @@ StatusOr<QueuePair> QueuePair::Create(Device& device, ibv_cq* cq,
   attr.cap.max_recv_sge = option.max_recv_sge;
   attr.cap.max_inline_data = option.max_inline_data;
 
-  ibv_qp* qp = ibv_create_qp(device.pd(), &attr);
+  ibv_qp* qp = ibv_create_qp(device.qp_pd(), &attr);
   if (qp == nullptr && option.max_inline_data != 0) {
     // Inline is an optimization; retry without it if the device refuses.
     attr.cap.max_inline_data = 0;
-    qp = ibv_create_qp(device.pd(), &attr);
+    qp = ibv_create_qp(device.qp_pd(), &attr);
   }
   if (qp == nullptr) {
     return ToStatus(errno, "create queue pair (out of UARs?)");
