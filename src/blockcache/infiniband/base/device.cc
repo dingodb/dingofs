@@ -35,7 +35,8 @@ namespace dingofs {
 namespace blockcache {
 
 DEFINE_bool(use_rdma, false, "use rdma transport");
-DEFINE_string(cache_rdma_device, "", "rdma device; empty picks the first");
+DEFINE_string(cache_rdma_device, "",
+              "rdma device or its netdev, e.g. mlx5_3 or roce2003");
 DEFINE_uint32(cache_rdma_port_num, 1, "hca port to use");
 DEFINE_validator(cache_rdma_port_num, [](const char* /*name*/, uint32_t value) {
   return value > 0;
@@ -83,22 +84,28 @@ static bool IsIpv4MappedGid(const ibv_gid& gid) {
   return std::memcmp(gid.raw, kPrefix, sizeof(kPrefix)) == 0;
 }
 
-static bool GidTypeIsRoceV2(const std::string& name, int index) {
+static std::string ReadGidAttr(const std::string& name, const char* attr,
+                               int index) {
   char path[256];
   (void)std::snprintf(path, sizeof(path),
-                      "/sys/class/infiniband/%s/ports/%u/gid_attrs/types/%d",
-                      name.c_str(), PortNum(), index);
+                      "/sys/class/infiniband/%s/ports/%u/gid_attrs/%s/%d",
+                      name.c_str(), PortNum(), attr, index);
   FILE* f = std::fopen(path, "r");
   if (f == nullptr) {
-    return false;
+    return "";
   }
   absl::Cleanup defer = [f] { (void)std::fclose(f); };
 
   char line[64] = {};
   if (std::fgets(line, sizeof(line), f) == nullptr) {
-    return false;
+    return "";
   }
-  return std::strncmp(line, "RoCE v2", 7) == 0;
+  line[std::strcspn(line, "\n")] = '\0';
+  return line;
+}
+
+static bool GidTypeIsRoceV2(const std::string& name, int index) {
+  return ReadGidAttr(name, "types", index) == "RoCE v2";
 }
 
 static int SelectGidIndex(ibv_context* context, const std::string& name,
@@ -160,7 +167,8 @@ static StatusOr<ibv_context*> OpenDevice(const std::string& name) {
   absl::Cleanup defer = [devices] { ibv_free_device_list(devices); };
 
   for (int i = 0; i < num_devices; ++i) {
-    if (name != ibv_get_device_name(devices[i])) {
+    const std::string device_name = ibv_get_device_name(devices[i]);
+    if (name != device_name && name != ReadGidAttr(device_name, "ndevs", 0)) {
       continue;
     }
 
@@ -200,6 +208,7 @@ StatusOr<Device*> Device::Open(std::string name) {
   }
   ibv_context* context = open.value();
   absl::Cleanup defer = [context] { ibv_close_device(context); };
+  name = ibv_get_device_name(context->device);
 
   // attr
   ibv_device_attr attr;
