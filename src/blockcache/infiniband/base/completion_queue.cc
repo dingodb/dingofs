@@ -43,7 +43,7 @@ StatusOr<CompletionQueue> CompletionQueue::Create(Device& device,
   ibv_cq* cq = ibv_create_cq(device.context(), static_cast<int>(entries),
                              nullptr, channel.get(), 0);
   if (cq == nullptr) {
-    return ToStatus(errno, "create completion queue");
+    return ToStatus(errno, "create completion queue (out of UARs?)");
   }
 
   LOG(INFO) << "Successfully create CompletionQueue{device=" << device.name()

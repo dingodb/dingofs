@@ -72,7 +72,6 @@ Status Listener::CheckPeerInfo(const HandshakeMsg& peer) const {
   auto qp_count = static_cast<uint8_t>(1 + FLAGS_rdma_bulk_qps);
   const char* reason = peer.Check(qp_count, device_->port_info());
   if (reason != nullptr) {
-    LOG(ERROR) << "Fail to handshake with peer: " << reason;
     return ToStatus(EPROTO, reason);
   }
   return Status::OK();
@@ -113,6 +112,9 @@ Future<> HandshakeHandler::Handshake(
   HandshakeMsg local;
   const Status status = co_await Establish(peer, &local);
   if (!status.ok()) {
+    LOG(ERROR) << "Fail to accept rdma connection from gid "
+               << GidToString(peer.qp_infos[0].gid) << ": "
+               << status.ToString();
     cntl->SetFailed(status.ToString());
     co_return;
   }

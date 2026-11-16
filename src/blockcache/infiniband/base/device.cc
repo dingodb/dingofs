@@ -16,6 +16,7 @@
 
 #include "blockcache/infiniband/base/device.h"
 
+#include <arpa/inet.h>
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
@@ -82,6 +83,12 @@ static std::string RegistryKey(const std::string& name) {
 bool IsIpv4MappedGid(const uint8_t* gid) {
   static const uint8_t kPrefix[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff};
   return std::memcmp(gid, kPrefix, sizeof(kPrefix)) == 0;
+}
+
+std::string GidToString(const uint8_t* gid) {
+  char text[INET6_ADDRSTRLEN] = {};
+  (void)inet_ntop(AF_INET6, gid, text, sizeof(text));
+  return text;
 }
 
 static std::string ReadGidAttr(const std::string& name, const char* attr,
@@ -242,6 +249,7 @@ StatusOr<Device*> Device::Open(std::string name) {
             << " port=" << static_cast<int>(port_info.port_num)
             << " link=" << LinkLayerName(port_info.link_layer)
             << " lid=" << port_info.lid << " gid_index=" << port_info.gid_index
+            << " gid=" << GidToString(port_info.gid.raw)
             << " mtu=" << static_cast<int>(port_info.active_mtu)
             << " max_rd_atomic=" << attr.max_qp_rd_atom << "}";
 
