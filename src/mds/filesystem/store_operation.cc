@@ -636,17 +636,19 @@ Status CleanFsOperation::Run(TxnUPtr& txn) {
   CHECK(fs_id_ > 0) << "fs_id is zero.";
   CHECK(!fs_name_.empty()) << "fs_name is empty.";
 
-  // clean fs op log
+  // clean fs op log and fs stats, fs quota is a single key
   std::vector<std::string> keys;
-  Range range = MetaCodec::GetFsConfigLogRange(fs_id_);
-  auto status = txn->Scan(range, [&](const std::string& key, const std::string&) -> bool {
-    keys.push_back(key);
-    return true;
-  });
-  if (!status.ok()) return status;
+  for (const auto& range : {MetaCodec::GetFsConfigLogRange(fs_id_), MetaCodec::GetFsStatsRange(fs_id_)}) {
+    auto status = txn->Scan(range, [&](const std::string& key, const std::string&) -> bool {
+      keys.push_back(key);
+      return true;
+    });
+    if (!status.ok()) return status;
+  }
 
   for (const auto& key : keys) txn->Delete(key);
 
+  txn->Delete(MetaCodec::EncodeFsQuotaKey(fs_id_));
   txn->Delete(MetaCodec::EncodeFsKey(fs_name_));
 
   return Status::OK();
