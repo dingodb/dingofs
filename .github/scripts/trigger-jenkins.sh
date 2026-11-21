@@ -33,8 +33,9 @@ if [[ ! "${GIT_SHA}" =~ ^[0-9a-fA-F]{40}$ ]]; then
   echo "jenkins-trigger: GIT_SHA must be a full commit SHA" >&2
   exit 2
 fi
-if [[ "${GIT_REF}" != refs/heads/gh-readonly-queue/main/* ]]; then
-  echo "jenkins-trigger: GIT_REF is not a main merge-queue ref" >&2
+if [[ "${GIT_REF}" != refs/heads/gh-readonly-queue/main/* &&
+      "${GIT_REF}" != refs/heads/gh-readonly-queue/v5.2/* ]]; then
+  echo "jenkins-trigger: GIT_REF is not a main or v5.2 merge-queue ref" >&2
   exit 2
 fi
 command -v curl >/dev/null || {
