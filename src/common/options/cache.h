@@ -87,9 +87,7 @@ DECLARE_uint32(heartbeat_interval_s);
 
 // blockcache/common/mds_client.cc
 DECLARE_string(mds_addrs);
-DECLARE_int64(cache_mds_rpc_timeout_ms);
-DECLARE_int32(cache_mds_rpc_retry_times);
-DECLARE_uint32(cache_mds_request_retry_times);
+DECLARE_int64(mds_rpc_timeout_ms);
 
 // blockcache/core/runtime/thread_pool.cc
 DECLARE_uint32(offload_threads);

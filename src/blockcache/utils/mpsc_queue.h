@@ -14,10 +14,12 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_BLOCKCACHE_UTILS_CONTAINERS_MPSC_QUEUE_H_
-#define DINGOFS_BLOCKCACHE_UTILS_CONTAINERS_MPSC_QUEUE_H_
+#ifndef DINGOFS_BLOCKCACHE_UTILS_MPSC_QUEUE_H_
+#define DINGOFS_BLOCKCACHE_UTILS_MPSC_QUEUE_H_
 
 #include <atomic>
+
+#include "blockcache/utils/align.h"
 
 namespace dingofs {
 namespace blockcache {
@@ -33,7 +35,7 @@ class MpscQueue {
   MpscQueue(const MpscQueue&) = delete;
   MpscQueue& operator=(const MpscQueue&) = delete;
 
-  void Push(MpscNode* node) {
+  void PushBack(MpscNode* node) {
     MpscNode* head = head_.load(std::memory_order_relaxed);
     do {
       node->next = head;
@@ -72,10 +74,10 @@ class MpscQueue {
   }
 
  private:
-  std::atomic<MpscNode*> head_{nullptr};
+  alignas(kCacheLineSize) std::atomic<MpscNode*> head_{nullptr};
 };
 
 }  // namespace blockcache
 }  // namespace dingofs
 
-#endif  // DINGOFS_BLOCKCACHE_UTILS_CONTAINERS_MPSC_QUEUE_H_
+#endif  // DINGOFS_BLOCKCACHE_UTILS_MPSC_QUEUE_H_

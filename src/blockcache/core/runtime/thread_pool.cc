@@ -52,7 +52,7 @@ void CpuWorker::Start(unsigned shard, int cpu) {
   thread_ = std::thread([this, shard, cpu] {
     SetThreadName("cpu-" + std::to_string(shard));
     if (cpu >= 0) {
-      PinThreadToCpu(::pthread_self(), cpu);
+      BindThreadToCpu(::pthread_self(), cpu);
     }
     Loop();
   });
@@ -69,7 +69,7 @@ void CpuWorker::Shutdown() {
 }
 
 void CpuWorker::Post(InboxWork* work) {
-  queue_.Push(work);
+  queue_.PushBack(work);
   parker_.Wake();
 }
 
@@ -131,7 +131,7 @@ void ThreadPool::Start(std::vector<int> shard_cpus) {
   cpu_workers_ = std::make_unique<CpuWorker[]>(cpu_worker_count_);
   for (unsigned shard = 0; shard < cpu_worker_count_; ++shard) {
     const int shard_cpu = shard < shard_cpus.size() ? shard_cpus[shard] : -1;
-    const int cpu = shard_cpu >= 0 ? GetSmtSibling(shard_cpu) : -1;
+    const int cpu = shard_cpu >= 0 ? GetSiblingCpu(shard_cpu) : -1;
     cpu_workers_[shard].Start(shard, cpu);
     if (cpu >= 0) {
       LOG(INFO) << "Pin cpu worker of shard " << shard << " to cpu " << cpu

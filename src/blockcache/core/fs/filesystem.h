@@ -23,7 +23,7 @@
 #include "blockcache/common/status.h"
 #include "blockcache/core/fs/io_ring.h"
 #include "blockcache/core/reactor/coroutine.h"
-#include "blockcache/utils/containers/admission_queue.h"
+#include "blockcache/utils/admission_queue.h"
 
 namespace dingofs {
 namespace blockcache {

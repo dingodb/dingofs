@@ -25,7 +25,7 @@
 #include <utility>
 #include <vector>
 
-#include "blockcache/common/status.h"
+#include "blockcache/common/status_helper.h"
 #include "blockcache/core/reactor/reactor.h"
 #include "blockcache/infiniband/base/device.h"
 #include "blockcache/infiniband/server/session.h"

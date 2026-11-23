@@ -34,18 +34,18 @@ DiskCacheGroup::DiskCacheGroup(const std::vector<DiskOption>& options) {
 Future<Status> DiskCacheGroup::Start(UploadFunc uploader) {
   LOG(INFO) << "DiskCacheGroup is starting...";
 
-  std::vector<uint64_t> caps;
   for (const DiskCacheUPtr& store : stores_) {
     const Status status = co_await store->Start(uploader);
     if (!status.ok()) {
       co_return status;
     }
-    caps.push_back(store->capacity_bytes());
   }
 
-  const std::vector<uint32_t> weights = NormalizeGcd(caps);
-  for (uint32_t i = 0; i < stores_.size(); ++i) {
-    chash_.Add(i, stores_[i]->uuid(), weights[i]);
+  for (const DiskCacheUPtr& store : stores_) {
+    chash_.Add(store->uuid(), store->capacity_bytes());
+    CHECK(stores_by_uuid_.emplace(store->uuid(), store.get()).second)
+        << "two disks in cache_dir share uuid " << store->uuid()
+        << ": a dir listed twice, or a copied .lock file";
   }
   chash_.Finalize();
 

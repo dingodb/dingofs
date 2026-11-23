@@ -34,7 +34,7 @@
 #include "blockcache/core/reactor/doorbell.h"
 #include "blockcache/core/runtime/shard_inbox.h"
 #include "blockcache/core/runtime/smp.h"
-#include "blockcache/utils/containers/mpsc_queue.h"
+#include "blockcache/utils/mpsc_queue.h"
 
 namespace dingofs {
 namespace blockcache {

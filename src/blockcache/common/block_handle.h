@@ -57,9 +57,9 @@ struct BlockHandle {
     uint64_t parsed_id = 0;
     uint32_t parsed_index = 0;
     uint32_t parsed_size = 0;
-    if (!SplitUint(&name, '_', &parsed_id) ||
-        !SplitUint(&name, '_', &parsed_index) ||
-        !SplitUint(&name, '\0', &parsed_size)) {
+    if (!ConsumeUint(&name, '_', &parsed_id) ||
+        !ConsumeUint(&name, '_', &parsed_index) ||
+        !ConsumeUint(&name, '\0', &parsed_size)) {
       return false;
     }
     id = parsed_id;
@@ -69,7 +69,7 @@ struct BlockHandle {
   }
 
   uint64_t Hash() const {
-    return Mix64(Mix64(id) ^ ((static_cast<uint64_t>(index) << 32) | size));
+    return HashInt(HashInt(id) ^ ((static_cast<uint64_t>(index) << 32) | size));
   }
 
   std::string Filename() const {
@@ -81,8 +81,8 @@ struct BlockHandle {
                        Filename());
   }
 
-  uint64_t fs_id{0};
-  uint64_t id{0};  // slice id
+  uint64_t fs_id{0};  // FIXME: delete this field
+  uint64_t id{0};     // slice id
   uint32_t index{0};
   uint32_t size{0};
 };

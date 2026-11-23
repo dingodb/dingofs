@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_BLOCKCACHE_UTILS_CONTAINERS_SPSC_RING_H_
-#define DINGOFS_BLOCKCACHE_UTILS_CONTAINERS_SPSC_RING_H_
+#ifndef DINGOFS_BLOCKCACHE_UTILS_SPSC_RING_H_
+#define DINGOFS_BLOCKCACHE_UTILS_SPSC_RING_H_
 
 #include <array>
 #include <atomic>
@@ -34,7 +34,7 @@ class SpscRing {
   static_assert(std::has_single_bit(N));
 
  public:
-  bool Push(T v) {
+  bool PushBack(T v) {
     uint32_t tail = tail_.load(std::memory_order_relaxed);
     if (tail - head_cache_ >= N) {
       head_cache_ = head_.load(std::memory_order_acquire);
@@ -47,6 +47,7 @@ class SpscRing {
     tail_.store(tail + 1, std::memory_order_release);
     return true;
   }
+
   template <typename F>
   uint32_t ConsumeAll(F f) {
     uint32_t head = head_.load(std::memory_order_relaxed);
@@ -56,7 +57,6 @@ class SpscRing {
       f(slots_[(head + i) & kMask]);
     }
     if (n != 0) {
-      tail_cache_ = tail;
       head_.store(tail, std::memory_order_release);
     }
     return n;
@@ -68,11 +68,10 @@ class SpscRing {
   alignas(kCacheLineSize) std::atomic<uint32_t> tail_{0};
   uint32_t head_cache_ = 0;
   alignas(kCacheLineSize) std::atomic<uint32_t> head_{0};
-  uint32_t tail_cache_ = 0;
   alignas(kCacheLineSize) std::array<T, N> slots_;
 };
 
 }  // namespace blockcache
 }  // namespace dingofs
 
-#endif  // DINGOFS_BLOCKCACHE_UTILS_CONTAINERS_SPSC_RING_H_
+#endif  // DINGOFS_BLOCKCACHE_UTILS_SPSC_RING_H_

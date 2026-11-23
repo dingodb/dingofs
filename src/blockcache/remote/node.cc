@@ -25,6 +25,7 @@
 #include <utility>
 
 #include "blockcache/common/route.h"
+#include "blockcache/common/status_helper.h"
 #include "blockcache/core/runtime/smp.h"
 #include "blockcache/net/controller.h"
 
@@ -91,7 +92,7 @@ Future<Status> RemoteNode::Put(BlockHandle handle, BufferViews block,
   pb::blockcache::PutRequest request;
   handle.ToPb(request.mutable_handle());
   request.set_stage(stage);
-  return SendRequest(&CacheStub::Put, RouteHintOf(handle), std::move(request),
+  return SendRequest(&CacheStub::Put, GetRouteKey(handle), std::move(request),
                      Attachment{.send = block});
 }
 
@@ -101,21 +102,21 @@ Future<Status> RemoteNode::Get(BlockHandle handle, uint64_t offset,
   handle.ToPb(request.mutable_handle());
   request.set_offset(offset);
   request.set_length(length);
-  return SendRequest(&CacheStub::Get, RouteHintOf(handle), std::move(request),
+  return SendRequest(&CacheStub::Get, GetRouteKey(handle), std::move(request),
                      Attachment{.receive = BufferView(buffer, length)});
 }
 
 Future<Status> RemoteNode::Prefetch(BlockHandle handle) {
   pb::blockcache::PrefetchRequest request;
   handle.ToPb(request.mutable_handle());
-  return SendRequest(&CacheStub::Prefetch, RouteHintOf(handle),
+  return SendRequest(&CacheStub::Prefetch, GetRouteKey(handle),
                      std::move(request), Attachment{});
 }
 
 Future<Status> RemoteNode::Delete(BlockHandle handle) {
   pb::blockcache::DeleteRequest request;
   handle.ToPb(request.mutable_handle());
-  return SendRequest(&CacheStub::Delete, RouteHintOf(handle),
+  return SendRequest(&CacheStub::Delete, GetRouteKey(handle),
                      std::move(request), Attachment{});
 }
 

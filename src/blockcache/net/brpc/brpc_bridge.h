@@ -231,7 +231,7 @@ void BridgeToShard(BrpcServer* server, S* service,
                    Future<> (S::*method)(Controller*, const Req*, Resp*),
                    ::brpc::Controller* cntl, const Req* request, Resp* response,
                    google::protobuf::Closure* done) {
-  const unsigned shard = ShardOf(RouteKeyOf(*request), ShardCount());
+  const unsigned shard = GetShard(RouteKeyOf(*request), ShardCount());
   PostCallToShard(server, shard, service, method, cntl, request, response,
                   done);
 }
@@ -244,7 +244,7 @@ void BridgeToShardLocal(BrpcServer* server, std::span<S* const> locals,
                         ::brpc::Controller* cntl, const Req* request,
                         Resp* response, google::protobuf::Closure* done) {
   DCHECK_EQ(locals.size(), size_t{ShardCount()}) << "one instance per shard";
-  const unsigned shard = ShardOf(RouteKeyOf(*request), ShardCount());
+  const unsigned shard = GetShard(RouteKeyOf(*request), ShardCount());
   PostCallToShard(server, shard, locals[shard], method, cntl, request, response,
                   done);
 }

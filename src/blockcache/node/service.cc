@@ -16,7 +16,7 @@
 
 #include "blockcache/node/service.h"
 
-#include "blockcache/common/status.h"
+#include "blockcache/common/status_helper.h"
 #include "blockcache/core/memory/buffer.h"
 #include "blockcache/core/memory/buffer_view.h"
 #include "blockcache/core/runtime/smp.h"

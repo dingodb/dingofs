@@ -40,18 +40,15 @@ DEFINE_uint32(periodic_sync_members_ms, 3000,
 
 MemberGroup::MemberGroup(Members members)
     : raw_members_(std::move(members)), members_(FilterMembers(raw_members_)) {
-  const std::vector<uint32_t> weights = RecalcWeights(members_);
+  const std::vector<uint64_t> weights = RecalcWeights(members_);
   for (uint32_t i = 0; i < members_.size(); ++i) {
-    chash_.Add(i, members_[i].id, weights[i]);
+    chash_.Add(members_[i].id, weights[i]);
   }
   chash_.Finalize();
 }
 
-const CacheGroupMember* MemberGroup::GetMember(uint64_t key) const {
-  if (members_.empty()) {
-    return nullptr;
-  }
-  return &members_[chash_.MemberOf(key)];
+std::string_view MemberGroup::GetMember(uint64_t key) const {
+  return chash_.GetMember(key);
 }
 
 Members MemberGroup::FilterMembers(Members members) {
@@ -68,25 +65,19 @@ Members MemberGroup::FilterMembers(Members members) {
   return members;
 }
 
-std::vector<uint32_t> MemberGroup::RecalcWeights(const Members& members) {
-  std::vector<uint64_t> raw;
-  raw.reserve(members.size());
+std::vector<uint64_t> MemberGroup::RecalcWeights(const Members& members) {
+  if (members.empty()) {
+    return {};
+  }
+
+  const uint64_t lightest =
+      std::ranges::min(members, {}, &CacheGroupMember::weight).weight;
+  std::vector<uint64_t> weights;
+  weights.reserve(members.size());
   for (const CacheGroupMember& member : members) {
-    raw.push_back(member.weight);
+    weights.push_back(
+        std::min<uint64_t>(member.weight, lightest * kMaxWeightRatio));
   }
-
-  std::vector<uint32_t> weights = NormalizeGcd(raw);
-  const auto heaviest = std::ranges::max_element(weights);
-  if (heaviest == weights.end() || *heaviest <= kMaxWeightRatio) {
-    return weights;
-  }
-
-  const uint64_t top = *heaviest;
-  for (uint32_t& weight : weights) {
-    weight = static_cast<uint32_t>(
-        std::max<uint64_t>(1, uint64_t{weight} * kMaxWeightRatio / top));
-  }
-
   return weights;
 }
 

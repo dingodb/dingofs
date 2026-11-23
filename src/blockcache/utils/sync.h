@@ -38,6 +38,7 @@ class SingleFlight {
     if (running_) {
       co_return co_await Join();
     }
+
     running_ = true;
     const Status status = co_await run();
     Finish(status);

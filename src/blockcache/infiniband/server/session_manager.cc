@@ -24,7 +24,7 @@
 #include <cstdint>
 #include <utility>
 
-#include "blockcache/common/status.h"
+#include "blockcache/common/status_helper.h"
 #include "blockcache/core/reactor/timer.h"
 #include "blockcache/infiniband/base/completion_queue.h"
 #include "blockcache/infiniband/base/device.h"

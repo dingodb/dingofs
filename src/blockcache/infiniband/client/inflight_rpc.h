@@ -26,7 +26,7 @@
 
 #include "blockcache/core/reactor/coroutine.h"
 #include "blockcache/core/reactor/reactor.h"
-#include "blockcache/utils/containers/park_queue.h"
+#include "blockcache/utils/park_queue.h"
 #include "common/status.h"
 
 namespace dingofs {
@@ -53,7 +53,7 @@ class InflightRpcTable {
     template <TaskPromise P>
     void await_suspend(std::coroutine_handle<P> h) noexcept {
       task_ = &h.promise();
-      table_->slot_waiters_.Push(this);
+      table_->slot_waiters_.PushBack(this);
     }
 
     uint16_t await_resume() noexcept {
@@ -104,7 +104,7 @@ class InflightRpcTable {
     slot.promise = Promise<T>();
     slot.response = nullptr;
 
-    SlotAwaiter* waiter = slot_waiters_.Pop();
+    SlotAwaiter* waiter = slot_waiters_.PopFront();
     if (waiter == nullptr) {
       free_slots_.push_back(slot_index);
       return;
@@ -124,7 +124,7 @@ class InflightRpcTable {
   }
 
   void FailAll(const Status& reason) {
-    slot_waiters_.TakeAllAnd([this](SlotAwaiter* waiter) {
+    slot_waiters_.ConsumeAll([this](SlotAwaiter* waiter) {
       waiter->failed_ = true;
       NotifyWaiter(waiter);
     });

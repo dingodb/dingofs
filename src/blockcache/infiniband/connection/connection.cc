@@ -25,7 +25,7 @@
 #include <memory>
 #include <utility>
 
-#include "blockcache/common/status.h"
+#include "blockcache/common/status_helper.h"
 #include "blockcache/core/reactor/coroutine.h"
 #include "blockcache/core/reactor/timer.h"
 #include "blockcache/infiniband/base/buffer_pool.h"

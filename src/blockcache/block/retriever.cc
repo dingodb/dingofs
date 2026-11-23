@@ -82,7 +82,7 @@ Future<> ObjectRetriever::Shutdown() {
 
 Future<Status> ObjectRetriever::GetPart(BlockHandle handle, uint64_t offset,
                                         uint32_t length, char* buffer) {
-  DCHECK_EQ(OwnerShard(handle), ThisShardId()) << "not the owner shard";
+  DCHECK_EQ(GetOwnerShard(handle), ThisShardId()) << "not the owner shard";
   Gate::Holder holder(gate_);
   if (!holder.ok()) {
     co_return Status::CacheDown("ObjectRetriever is down");
@@ -92,7 +92,7 @@ Future<Status> ObjectRetriever::GetPart(BlockHandle handle, uint64_t offset,
 
 Future<StatusOr<SharedBlock>> ObjectRetriever::GetWholeAndCache(
     BlockHandle handle) {
-  DCHECK_EQ(OwnerShard(handle), ThisShardId()) << "not the owner shard";
+  DCHECK_EQ(GetOwnerShard(handle), ThisShardId()) << "not the owner shard";
   bool created = false;
   Future<StatusOr<SharedBlock>> future =
       inflight_.GetOrCreate(handle, &created);
@@ -103,7 +103,7 @@ Future<StatusOr<SharedBlock>> ObjectRetriever::GetWholeAndCache(
 }
 
 Future<Status> ObjectRetriever::Prefetch(BlockHandle handle) {
-  DCHECK_EQ(OwnerShard(handle), ThisShardId()) << "not the owner shard";
+  DCHECK_EQ(GetOwnerShard(handle), ThisShardId()) << "not the owner shard";
   Gate::Holder holder(gate_);
   if (!holder.ok()) {
     co_return Status::CacheDown("ObjectRetriever is down");

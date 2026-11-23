@@ -25,6 +25,7 @@
 #include <new>
 
 #include "blockcache/utils/cpu.h"
+#include "blockcache/utils/memory.h"
 
 namespace dingofs {
 namespace blockcache {
@@ -181,7 +182,8 @@ static void CommitUpTo(ShardMem* m, size_t needed) {
     PLOG(FATAL) << "Fail to mprotect the arena commit";
   }
 
-  BindPages(start, len, m->numa_node);
+  BindMemoryToNumaNode(start, len, m->numa_node);
+  AdviseHugePages(start, len);
   m->committed = new_committed;
 }
 

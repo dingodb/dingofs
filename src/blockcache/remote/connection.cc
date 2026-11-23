@@ -25,6 +25,7 @@
 #include <utility>
 
 #include "blockcache/common/route.h"
+#include "blockcache/common/status_helper.h"
 #include "blockcache/core/runtime/smp.h"
 #include "blockcache/infiniband/client/channel.h"
 #include "blockcache/net/brpc/brpc_channel.h"
@@ -43,7 +44,7 @@ static ChannelOption GenChannelOption(const NodeConnection::Option& option) {
       "remote-" + std::to_string(ThisShardId()) + "-" + option.node_id;
   if (option.use_rdma) {
     channel_option.route_key =
-        HintForShard(option.remote_shard, option.remote_shard_count);
+        GetShardStartKey(option.remote_shard, option.remote_shard_count);
     channel_option.expected_shard = option.remote_shard;
   }
   return channel_option;
@@ -132,25 +133,16 @@ NodeProber::RemoteShardRange NodeProber::GetRemoteShardRange(
     return RemoteShardRange{.base = 0, .count = remote_shards};
   }
 
-  const uint64_t first = FirstHintOf(local_shard_id, local_shards);
+  const uint64_t first = GetShardStartKey(local_shard_id, local_shards);
   uint64_t last;
   if (local_shard_id + 1 == local_shards) {
     last = UINT64_MAX;
   } else {
-    last = FirstHintOf(local_shard_id + 1, local_shards) - 1;
+    last = GetShardStartKey(local_shard_id + 1, local_shards) - 1;
   }
-  const unsigned base = ShardOf(first, remote_shards);
-  const unsigned highest = ShardOf(last, remote_shards);
+  const unsigned base = GetShard(first, remote_shards);
+  const unsigned highest = GetShard(last, remote_shards);
   return RemoteShardRange{.base = base, .count = highest - base + 1};
-}
-
-uint64_t NodeProber::FirstHintOf(unsigned shard, unsigned shards) {
-  if (shard == 0 || shards <= 1) {
-    return 0;
-  }
-  const __uint128_t scaled =
-      (static_cast<__uint128_t>(shard) << 64) + shards - 1;
-  return static_cast<uint64_t>(scaled / shards);
 }
 
 NodeConnection::NodeConnection(Option option) : option_(std::move(option)) {}
@@ -306,7 +298,7 @@ NodeConnection& NodeConnections::GetConnection(uint64_t key) {
   }
 
   const auto& remote = prober_->remote_shards();
-  const unsigned remote_shard = ShardOf(key, prober_->remote_shard_count());
+  const unsigned remote_shard = GetShard(key, prober_->remote_shard_count());
   if (!remote.Contains(remote_shard)) {
     LOG_EVERY_N(WARNING, 1000)
         << "A request for remote shard " << remote_shard << " reached shard "

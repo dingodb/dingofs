@@ -26,7 +26,7 @@
 #include <string>
 #include <utility>
 
-#include "blockcache/common/status.h"
+#include "blockcache/common/status_helper.h"
 #include "blockcache/core/reactor/reactor.h"
 #include "blockcache/utils/align.h"
 
@@ -100,7 +100,7 @@ void RwAwaiter::Issue() {
   const int fd = fixed_file ? file_->fixed_fd_ : file_->fd_;
 
   if (iov_ != nullptr) {
-    DCHECK(!file_->direct() || IsAligned(pos_, kDirectIoAlign))
+    DCHECK(!file_->direct() || IsAligned(pos_, kIoAlign))
         << "unaligned DMA writev: pos=" << pos_;
     io_uring_prep_writev(sqe, fd, iov_, iovcnt_, pos_);
     if (fixed_file) {
@@ -110,8 +110,8 @@ void RwAwaiter::Issue() {
   }
 
   DCHECK(!file_->direct() ||
-         (IsAligned(buffer_, kDirectIoAlign) &&
-          IsAligned(pos_, kDirectIoAlign) && IsAligned(len_, kDirectIoAlign)))
+         (IsAligned(buffer_, kIoAlign) && IsAligned(pos_, kIoAlign) &&
+          IsAligned(len_, kIoAlign)))
       << "unaligned DMA io: buffer=" << buffer_ << " pos=" << pos_
       << " len=" << len_;
 

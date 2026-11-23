@@ -21,7 +21,7 @@
 
 #include "blockcache/core/reactor/poller.h"
 #include "blockcache/core/reactor/reactor.h"
-#include "blockcache/utils/containers/mpsc_queue.h"
+#include "blockcache/utils/mpsc_queue.h"
 
 namespace dingofs {
 namespace blockcache {
@@ -57,7 +57,7 @@ class ShardInbox final : public Poller {
       return false;
     }
 
-    queue_.Push(work);
+    queue_.PushBack(work);
     reactor_.load(std::memory_order_acquire)->Wakeup();
     return true;
   }

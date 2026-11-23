@@ -21,7 +21,7 @@
 
 #include <sstream>
 
-#include "blockcache/utils/cpu.h"
+#include "blockcache/utils/memory.h"
 
 namespace dingofs {
 namespace blockcache {
@@ -59,7 +59,8 @@ SlabPool::SlabPool(const SlabPoolOption& option) : metas_(option.superblock_coun
   }
 
   base_ = static_cast<char*>(base);
-  BindPages(base_, total_, option.numa_node);
+  BindMemoryToNumaNode(base_, total_, option.numa_node);
+  AdviseHugePages(base_, total_);
 
   for (size_t sb = option.superblock_count; sb > 0; --sb) {
     PushFreeSuperblock(static_cast<uint32_t>(sb - 1));

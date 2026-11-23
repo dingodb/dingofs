@@ -12,7 +12,38 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+add_subdirectory(base)
 add_subdirectory(common)
 add_subdirectory(fs)
 add_subdirectory(runtime)
 add_subdirectory(infiniband)
+add_subdirectory(utils)
+
+add_executable(test_blockcache
+  main.cc
+)
+target_compile_features(test_blockcache PRIVATE cxx_std_20)
+
+target_link_libraries(test_blockcache
+  PROTO_OBJS
+
+  $<TARGET_OBJECTS:test_blockcache_base>
+  $<TARGET_OBJECTS:test_blockcache_common>
+  $<TARGET_OBJECTS:test_blockcache_utils>
+
+  blockcache_common
+  blockcache_status
+  blockcache_core
+  blockcache_flags
+
+  protobuf::libprotobuf
+  ${TEST_DEPS_WITHOUT_MAIN}
+)
+
+if(USE_TCMALLOC)
+  target_link_libraries(test_blockcache tcmalloc unwind)
+endif()
+
+set_target_properties(test_blockcache PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY ${TEST_EXECUTABLE_OUTPUT_PATH}
+)

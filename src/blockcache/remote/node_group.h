@@ -17,10 +17,11 @@
 #ifndef DINGOFS_BLOCKCACHE_REMOTE_NODE_GROUP_H_
 #define DINGOFS_BLOCKCACHE_REMOTE_NODE_GROUP_H_
 
+#include <absl/container/flat_hash_map.h>
+
 #include <cstdint>
 #include <memory>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 #include "blockcache/core/reactor/timer.h"
@@ -59,7 +60,7 @@ class RemoteNodeGroup {
 
   bool running_ = false;
   MemberGroupSPtr member_group_{std::make_shared<const MemberGroup>(Members{})};
-  std::unordered_map<std::string, RemoteNodeUPtr> nodes_;
+  absl::flat_hash_map<std::string, RemoteNodeUPtr> nodes_;
   Gate inflight_;
   TimerUPtr reaper_;
 };

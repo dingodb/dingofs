@@ -30,6 +30,7 @@
 #include <utility>
 #include <vector>
 
+#include "blockcache/common/status_helper.h"
 #include "blockcache/core/reactor/reactor.h"
 #include "blockcache/core/runtime/shard_inbox.h"
 #include "blockcache/core/runtime/smp.h"

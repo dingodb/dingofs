@@ -212,7 +212,7 @@ void IoRing::Admit(RingOp* op, unsigned slots) {
   }
 
   ++deferred_;
-  parked_.Push(op);
+  parked_.PushBack(op);
 }
 
 // The CQ room is charged here, before any SQE exists, so a Reap() nested in
@@ -351,11 +351,11 @@ unsigned IoRing::Reap() {
 }
 
 void IoRing::DrainParked() {
-  while (RingOp* op = parked_.Peek()) {
+  while (RingOp* op = parked_.front()) {
     if (inflight_ + op->slots > cq_capacity_) {
       break;
     }
-    parked_.Pop();
+    parked_.PopFront();
     Issue(op);
   }
 }

@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_BLOCKCACHE_UTILS_CONTAINERS_ADMISSION_QUEUE_H_
-#define DINGOFS_BLOCKCACHE_UTILS_CONTAINERS_ADMISSION_QUEUE_H_
+#ifndef DINGOFS_BLOCKCACHE_UTILS_ADMISSION_QUEUE_H_
+#define DINGOFS_BLOCKCACHE_UTILS_ADMISSION_QUEUE_H_
 
 #include <cstdint>
 
-#include "blockcache/utils/containers/park_queue.h"
+#include "blockcache/utils/park_queue.h"
 
 namespace dingofs {
 namespace blockcache {
@@ -34,12 +34,12 @@ class AdmissionQueue {
       ++inflight_;
       op->Submit();
     } else {
-      parked_.Push(op);
+      parked_.PushBack(op);
     }
   }
 
   void OnComplete() {
-    Op* next = parked_.Pop();
+    Op* next = parked_.PopFront();
     if (next != nullptr) {
       next->Submit();
     } else {
@@ -56,4 +56,4 @@ class AdmissionQueue {
 }  // namespace blockcache
 }  // namespace dingofs
 
-#endif  // DINGOFS_BLOCKCACHE_UTILS_CONTAINERS_ADMISSION_QUEUE_H_
+#endif  // DINGOFS_BLOCKCACHE_UTILS_ADMISSION_QUEUE_H_

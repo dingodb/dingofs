@@ -28,7 +28,7 @@
 #include "blockcache/core/reactor/poller.h"
 #include "blockcache/core/reactor/task.h"
 #include "blockcache/core/reactor/timer.h"
-#include "blockcache/utils/containers/circular_buffer.h"
+#include "blockcache/utils/circular_buffer.h"
 
 namespace dingofs {
 namespace blockcache {

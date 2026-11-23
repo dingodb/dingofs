@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_BLOCKCACHE_UTILS_CONTAINERS_PARK_QUEUE_H_
-#define DINGOFS_BLOCKCACHE_UTILS_CONTAINERS_PARK_QUEUE_H_
+#ifndef DINGOFS_BLOCKCACHE_UTILS_PARK_QUEUE_H_
+#define DINGOFS_BLOCKCACHE_UTILS_PARK_QUEUE_H_
 
 #include <cstdint>
 
@@ -25,7 +25,7 @@ namespace blockcache {
 template <typename Node>
 class ParkQueue {
  public:
-  void Push(Node* node) {
+  void PushBack(Node* node) {
     node->park_next = nullptr;
     if (tail_ != nullptr) {
       tail_->park_next = node;
@@ -36,7 +36,7 @@ class ParkQueue {
     ++size_;
   }
 
-  Node* Pop() {
+  Node* PopFront() {
     Node* node = head_;
     if (node == nullptr) {
       return nullptr;
@@ -51,6 +51,26 @@ class ParkQueue {
     return node;
   }
 
+  // `park_next` is read BEFORE f runs: f typically resumes the waiter, which
+  // may destroy it.
+  template <typename F>
+  uint32_t ConsumeAll(F f) {
+    uint32_t n = 0;
+    Node* node = TakeAll();
+    while (node != nullptr) {
+      Node* next = node->park_next;
+      f(node);
+      node = next;
+      ++n;
+    }
+    return n;
+  }
+
+  Node* front() const { return head_; }
+  bool empty() const { return head_ == nullptr; }
+  uint32_t size() const { return size_; }
+
+ private:
   Node* TakeAll() {
     Node* node = head_;
     head_ = nullptr;
@@ -59,23 +79,6 @@ class ParkQueue {
     return node;
   }
 
-  // `park_next` is read BEFORE f runs: f typically resumes the waiter, which
-  // may destroy it.
-  template <typename F>
-  void TakeAllAnd(F f) {
-    Node* node = TakeAll();
-    while (node != nullptr) {
-      Node* next = node->park_next;
-      f(node);
-      node = next;
-    }
-  }
-
-  Node* Peek() const { return head_; }
-  bool empty() const { return head_ == nullptr; }
-  uint32_t size() const { return size_; }
-
- private:
   Node* head_ = nullptr;
   Node* tail_ = nullptr;
   uint32_t size_ = 0;
@@ -84,4 +87,4 @@ class ParkQueue {
 }  // namespace blockcache
 }  // namespace dingofs
 
-#endif  // DINGOFS_BLOCKCACHE_UTILS_CONTAINERS_PARK_QUEUE_H_
+#endif  // DINGOFS_BLOCKCACHE_UTILS_PARK_QUEUE_H_

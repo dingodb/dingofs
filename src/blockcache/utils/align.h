@@ -27,10 +27,11 @@ namespace blockcache {
 
 inline constexpr uint64_t kKiB = 1024;
 inline constexpr uint64_t kMiB = 1024 * kKiB;
+inline constexpr uint64_t kGiB = 1024 * kMiB;
 
+// TODO: maybe 128 is better?
 inline constexpr size_t kCacheLineSize = 64;
 inline constexpr size_t kIoAlign = 4096;
-inline constexpr size_t kDirectIoAlign = 512;
 
 template <typename T>
 constexpr T AlignUp(T v, T align) {
@@ -52,11 +53,9 @@ inline bool IsAligned(const void* p, size_t align) {
   return (reinterpret_cast<uintptr_t>(p) & (align - 1)) == 0;
 }
 
-constexpr size_t AlignUp4K(size_t n) { return AlignUp(n, kIoAlign); }
-
-inline char* AlignedAlloc(size_t n) {
+inline char* AlignedAlloc(size_t n, size_t align = kIoAlign) {
   void* ptr = nullptr;
-  if (posix_memalign(&ptr, kIoAlign, AlignUp4K(n)) != 0) {
+  if (posix_memalign(&ptr, align, AlignUp(n, align)) != 0) {
     return nullptr;
   }
   return static_cast<char*>(ptr);

@@ -124,7 +124,7 @@ Future<StatusOr<File>> LocalFileSystem::OpenFile(std::string path,
 Future<Status> LocalFileSystem::WriteFile(File* file, BufferViews block,
                                           bool direct) {
   const uint64_t total = TotalBytes(block);
-  const uint64_t align_length = AlignUp4K(total);
+  const uint64_t align_length = AlignUp<uint64_t>(total, kIoAlign);
   const auto length = static_cast<uint32_t>(direct ? align_length : total);
 
   const Status status = co_await file->Allocate(0, align_length);

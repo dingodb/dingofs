@@ -21,7 +21,7 @@
 #include <memory>
 #include <utility>
 
-#include "blockcache/common/status.h"
+#include "blockcache/common/status_helper.h"
 #include "blockcache/core/reactor/reactor.h"
 #include "blockcache/infiniband/base/completion_queue.h"
 #include "blockcache/infiniband/common/wr_id.h"

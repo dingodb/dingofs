@@ -32,7 +32,7 @@ namespace blockcache {
 void BecomeShardThread(unsigned shard, int cpu) {
   SetThreadName("shard-" + std::to_string(shard));
   if (cpu >= 0) {
-    PinThreadToCpu(::pthread_self(), cpu);
+    BindThreadToCpu(::pthread_self(), cpu);
   }
 
   memory::ShardInit(shard, cpu >= 0 ? GetNumaNode(cpu) : -1);

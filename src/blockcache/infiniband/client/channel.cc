@@ -24,7 +24,7 @@
 #include <string>
 #include <utility>
 
-#include "blockcache/common/status.h"
+#include "blockcache/common/status_helper.h"
 #include "blockcache/infiniband/base/memory_registry.h"
 #include "blockcache/infiniband/client/context.h"
 #include "common/options/cache.h"

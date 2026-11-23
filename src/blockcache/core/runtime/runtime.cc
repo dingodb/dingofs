@@ -34,7 +34,7 @@ DEFINE_bool(pin_cpu, false, "pin each shard to its core");
 DEFINE_bool(poll_mode, false, "busy-poll the reactors");
 
 ShardLayout ShardLayout::Plan() {
-  std::vector<int> cpus = GetAllCpus();
+  std::vector<int> cpus = GetOnlineCpus();
   if (!FLAGS_cpuset.empty()) {
     auto parsed = ParseCpuSet(FLAGS_cpuset);
     CHECK(parsed.ok()) << "Fail to start runtime: "
@@ -42,7 +42,7 @@ ShardLayout ShardLayout::Plan() {
     cpus = std::move(parsed).value();
   }
 
-  const std::vector<int> cores = GetPhyCores(cpus);
+  const std::vector<int> cores = RemoveSiblingCpus(cpus);
   unsigned shard_count =
       FLAGS_shards != 0 ? FLAGS_shards : static_cast<unsigned>(cores.size());
   if (shard_count == 0) {

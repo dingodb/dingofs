@@ -60,7 +60,6 @@ class NodeProber {
   static RemoteShardRange GetRemoteShardRange(unsigned local_shard_id,
                                               unsigned local_shards,
                                               unsigned remote_shards);
-  static uint64_t FirstHintOf(unsigned shard, unsigned shards);
 
   std::string node_id_;
   std::string address_;

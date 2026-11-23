@@ -165,7 +165,7 @@ bool BlockCacheImpl::Check(BlockHandle handle, unsigned* shard) {
   if (!running_.load(std::memory_order_acquire)) {
     return false;
   }
-  *shard = OwnerIndex(handle, ShardCount());
+  *shard = GetOwnerShard(handle);
   return throttle_->Acquire(*shard);
 }
 
