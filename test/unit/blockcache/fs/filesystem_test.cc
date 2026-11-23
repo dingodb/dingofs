@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "blockcache/core/fs/filesystem.h"
+#include "blockcache/core/filesystem/filesystem.h"
 
 #include <gtest/gtest.h>
 #include <unistd.h>
@@ -39,7 +39,7 @@ class FileSystemTest : public ::testing::Test {
  protected:
   static void SetUpTestSuite() {
     FLAGS_shards = 1;
-    StartProcessRuntime();
+    ASSERT_TRUE(StartProcessRuntime().ok());
   }
   static void TearDownTestSuite() { StopProcessRuntime(); }
 

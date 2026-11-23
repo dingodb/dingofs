@@ -50,7 +50,7 @@ class ShardedTierCache {
 
  private:
   template <typename Fn>
-  auto InvokeOnOwner(const BlockHandle& handle, Fn fn) {
+  auto RunOnOwner(const BlockHandle& handle, Fn fn) {
     return tiers_.InvokeOn(GetOwnerShard(handle), std::move(fn));
   }
 

@@ -76,7 +76,7 @@ struct alignas(kCacheLineSize) CrossFreeStack {
 
 struct ShardMem {
   unsigned shard_id = 0;
-  int numa_node = -1;
+  int numa_node = kNoNumaNode;
   char* base = nullptr;  // this shard's arena base
   size_t committed = 0;  // bytes committed (RW) from base
   size_t bump = 0;       // bytes handed out from base
@@ -152,7 +152,9 @@ void ShardInit(unsigned shard_id, int numa_node) {
   tls_arena_base = reinterpret_cast<uintptr_t>(m->base);
 }
 
-int LocalNumaNode() { return tls_mem != nullptr ? tls_mem->numa_node : -1; }
+int LocalNumaNode() {
+  return tls_mem != nullptr ? tls_mem->numa_node : kNoNumaNode;
+}
 
 bool IsShardMemory(const void* p) {
   return static_cast<size_t>(reinterpret_cast<uintptr_t>(p) -

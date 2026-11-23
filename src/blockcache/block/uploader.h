@@ -20,9 +20,9 @@
 #include <deque>
 #include <memory>
 
+#include "blockcache/core/reactor/gate.h"
 #include "blockcache/object/object.h"
 #include "blockcache/store/cache_store.h"
-#include "blockcache/utils/gate.h"
 
 namespace dingofs {
 namespace blockcache {

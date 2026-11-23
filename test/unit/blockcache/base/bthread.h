@@ -14,19 +14,35 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_BLOCKCACHE_UTILS_DAEMON_H_
-#define DINGOFS_BLOCKCACHE_UTILS_DAEMON_H_
+/*
+ * Project: DingoFS
+ * Created Date: 2026-10-11
+ * Author: AI
+ */
 
+#ifndef DINGOFS_TEST_UNIT_BLOCKCACHE_BASE_BTHREAD_H_
+#define DINGOFS_TEST_UNIT_BLOCKCACHE_BASE_BTHREAD_H_
+
+#include <bthread/bthread.h>
+#include <bthread/types.h>
+#include <gflags/gflags.h>
+
+#include <cerrno>
 #include <string>
-#include <vector>
 
 namespace dingofs {
 namespace blockcache {
 
-int DaemonizeAndWait(const std::vector<std::string>& args);
-void ReportDaemonReady();
+inline void SyncBthreadConcurrency() {
+  const int workers = bthread_getconcurrency_by_tag(BTHREAD_TAG_DEFAULT);
+  if (workers == EPERM) {
+    return;
+  }
+  const std::string value = std::to_string(workers);
+  gflags::SetCommandLineOption("bthread_concurrency", value.c_str());
+}
 
 }  // namespace blockcache
 }  // namespace dingofs
 
-#endif  // DINGOFS_BLOCKCACHE_UTILS_DAEMON_H_
+#endif  // DINGOFS_TEST_UNIT_BLOCKCACHE_BASE_BTHREAD_H_

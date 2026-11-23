@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_BLOCKCACHE_UTILS_SYNC_H_
-#define DINGOFS_BLOCKCACHE_UTILS_SYNC_H_
+#ifndef DINGOFS_BLOCKCACHE_CORE_REACTOR_SINGLE_FLIGHT_H_
+#define DINGOFS_BLOCKCACHE_CORE_REACTOR_SINGLE_FLIGHT_H_
 
 #include <utility>
 #include <vector>
@@ -70,4 +70,4 @@ class SingleFlight {
 }  // namespace blockcache
 }  // namespace dingofs
 
-#endif  // DINGOFS_BLOCKCACHE_UTILS_SYNC_H_
+#endif  // DINGOFS_BLOCKCACHE_CORE_REACTOR_SINGLE_FLIGHT_H_

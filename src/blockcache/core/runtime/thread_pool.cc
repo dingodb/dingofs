@@ -22,6 +22,7 @@
 
 #include <string>
 
+#include "blockcache/core/runtime/mesh.h"
 #include "blockcache/core/runtime/smp.h"
 #include "blockcache/utils/cpu.h"
 #include "blockcache/utils/thread.h"
@@ -51,7 +52,7 @@ void CpuWorker::Start(unsigned shard, int cpu) {
   stopping_.store(false, std::memory_order_release);
   thread_ = std::thread([this, shard, cpu] {
     SetThreadName("cpu-" + std::to_string(shard));
-    if (cpu >= 0) {
+    if (cpu != kNoCpu) {
       BindThreadToCpu(::pthread_self(), cpu);
     }
     Loop();
@@ -107,11 +108,6 @@ bool CpuWorker::SpinForWork(uint64_t spin_ns) {
   return !queue_.empty();
 }
 
-// Set by Start(), cleared by Shutdown(); both run on the external thread.
-static ThreadPool* g_thread_pool = nullptr;
-
-ThreadPool* GetGlobalThreadPool() { return g_thread_pool; }
-
 ThreadPool::ThreadPool()
     : thread_count_(FLAGS_offload_threads),
       capacity_(FLAGS_offload_queue_capacity) {}
@@ -127,20 +123,20 @@ void ThreadPool::Start(std::vector<int> shard_cpus) {
   // shard gets its worker on the SMT sibling of its core: the completion
   // handoff stays inside one core's caches and never crosses a socket, and a
   // spinning worker does not take a whole core away from another shard.
-  cpu_worker_count_ = ShardCount();
+  CHECK(!Mesh::Instance().built() || shard_cpus.size() == ShardCount())
+      << "ThreadPool needs one cpu per shard: got " << shard_cpus.size()
+      << " for " << ShardCount() << " shards";
+  cpu_worker_count_ = static_cast<unsigned>(shard_cpus.size());
   cpu_workers_ = std::make_unique<CpuWorker[]>(cpu_worker_count_);
   for (unsigned shard = 0; shard < cpu_worker_count_; ++shard) {
-    const int shard_cpu = shard < shard_cpus.size() ? shard_cpus[shard] : -1;
-    const int cpu = shard_cpu >= 0 ? GetSiblingCpu(shard_cpu) : -1;
+    const int shard_cpu = shard_cpus[shard];
+    const int cpu = shard_cpu != kNoCpu ? GetSiblingCpu(shard_cpu) : kNoCpu;
     cpu_workers_[shard].Start(shard, cpu);
-    if (cpu >= 0) {
+    if (cpu != kNoCpu) {
       LOG(INFO) << "Pin cpu worker of shard " << shard << " to cpu " << cpu
                 << " (sibling of " << shard_cpu << ")";
     }
   }
-
-  CHECK(g_thread_pool == nullptr) << "a second ThreadPool in this process";
-  g_thread_pool = this;
 
   closed_.store(false, std::memory_order_release);
   workers_.reserve(thread_count_);
@@ -191,9 +187,6 @@ void ThreadPool::Shutdown() {
   while (inflight_.load(std::memory_order_acquire) != 0) {
     std::this_thread::yield();
   }
-  if (g_thread_pool == this) {
-    g_thread_pool = nullptr;
-  }
   LOG(INFO) << "Successfully shutdown ThreadPool: cpu lane moved "
             << cpu_copied_bytes() << " bytes";
 }
@@ -209,6 +202,7 @@ void ThreadPool::Post(InboxWork* work) {
     work->run(work);
     return;
   }
+  DCHECK_LT(ThisShardId(), cpu_worker_count_);
   cpu_workers_[ThisShardId()].Post(work);
 }
 
@@ -224,6 +218,7 @@ Status ThreadPool::Enqueue(OffloadWorkBase* job, Lane lane) {
       return Status::CacheDown("offload pool is stopped");
     }
     inflight_.fetch_add(1, std::memory_order_relaxed);
+    DCHECK_LT(job->origin_shard, cpu_worker_count_);
     cpu_workers_[job->origin_shard].Post(job);
     return Status::OK();
   }

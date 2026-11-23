@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "blockcache/core/fs/filesystem.h"
+#include "blockcache/core/filesystem/filesystem.h"
 
 #include <fcntl.h>
 #include <glog/logging.h>
@@ -28,18 +28,14 @@
 
 #include "blockcache/common/status_helper.h"
 #include "blockcache/core/reactor/reactor.h"
+#include "blockcache/core/reactor/uring.h"
 #include "blockcache/utils/align.h"
 
 namespace dingofs {
 namespace blockcache {
 
-static bool IsOpSupported(int op) {
-  static io_uring_probe* probe = io_uring_get_probe();
-  return probe != nullptr && io_uring_opcode_supported(probe, op);
-}
-
 static Future<int> Mkdir(std::string path, uint32_t mode) {
-  if (IsOpSupported(IORING_OP_MKDIRAT)) {
+  if (IsUringOpSupported(IORING_OP_MKDIRAT)) {
     co_return co_await UringOp([&path, mode](io_uring_sqe* sqe) {
       io_uring_prep_mkdirat(sqe, AT_FDCWD, path.c_str(),
                             static_cast<mode_t>(mode));
@@ -87,11 +83,7 @@ StatusOr<size_t> RwAwaiter::await_resume() {
   return static_cast<size_t>(result_);
 }
 
-void RwAwaiter::Arm() { file_->queue_.Admit(this); }
-
-void RwAwaiter::OnResult() noexcept { file_->queue_.OnComplete(); }
-
-void RwAwaiter::Submit() { ThisIoRing().Admit(this); }
+void RwAwaiter::Arm() { ThisIoRing().Admit(this); }
 
 void RwAwaiter::Issue() {
   IoRing& ring = ThisIoRing();
@@ -305,7 +297,7 @@ Future<StatusOr<File>> FileSystem::Open(std::string path, OpenFlags flags,
     (void)posix_fadvise(fd, 0, 0, POSIX_FADV_RANDOM);
   }
 
-  File file(fd, option.io_inflight, option.direct);
+  File file(fd, option.direct);
   if (option.register_fd) {
     const int slot = ThisIoRing().files().Acquire(fd);
     if (slot >= 0) {
@@ -355,7 +347,7 @@ Future<StatusOr<size_t>> FileSystem::Read(std::string path, uint64_t pos,
 
 Future<Status> FileSystem::Unlink(std::string path) {
   int rc;
-  if (IsOpSupported(IORING_OP_UNLINKAT)) {
+  if (IsUringOpSupported(IORING_OP_UNLINKAT)) {
     rc = co_await UringOp([&path](io_uring_sqe* sqe) {
       io_uring_prep_unlinkat(sqe, AT_FDCWD, path.c_str(), 0);
     });
@@ -371,7 +363,7 @@ Future<Status> FileSystem::Unlink(std::string path) {
 
 Future<Status> FileSystem::Link(std::string from, std::string to) {
   int rc;
-  if (IsOpSupported(IORING_OP_LINKAT)) {
+  if (IsUringOpSupported(IORING_OP_LINKAT)) {
     rc = co_await UringOp([&from, &to](io_uring_sqe* sqe) {
       io_uring_prep_linkat(sqe, AT_FDCWD, from.c_str(), AT_FDCWD, to.c_str(),
                            0);
@@ -388,7 +380,7 @@ Future<Status> FileSystem::Link(std::string from, std::string to) {
 
 Future<Status> FileSystem::Rename(std::string from, std::string to) {
   int rc;
-  if (IsOpSupported(IORING_OP_RENAMEAT)) {
+  if (IsUringOpSupported(IORING_OP_RENAMEAT)) {
     rc = co_await UringOp([&from, &to](io_uring_sqe* sqe) {
       io_uring_prep_renameat(sqe, AT_FDCWD, from.c_str(), AT_FDCWD, to.c_str(),
                              0);
@@ -431,7 +423,7 @@ Future<StatusOr<FileStat>> FileSystem::StatPath(std::string path) {
       STATX_SIZE | STATX_NLINK | STATX_ATIME | STATX_MTIME;
   struct statx sx{};
   int rc;
-  if (IsOpSupported(IORING_OP_STATX)) {
+  if (IsUringOpSupported(IORING_OP_STATX)) {
     rc = co_await UringOp([&path, &sx](io_uring_sqe* sqe) {
       io_uring_prep_statx(sqe, AT_FDCWD, path.c_str(), 0, kMask, &sx);
     });

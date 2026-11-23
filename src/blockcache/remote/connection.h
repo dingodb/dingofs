@@ -26,10 +26,10 @@
 #include "blockcache/common/mds_client.h"
 #include "blockcache/common/status.h"
 #include "blockcache/core/reactor/coroutine.h"
+#include "blockcache/core/reactor/single_flight.h"
 #include "blockcache/net/channel.h"
 #include "blockcache/net/types.h"
 #include "blockcache/remote/stub.h"
-#include "blockcache/utils/sync.h"
 
 namespace dingofs {
 namespace blockcache {
@@ -115,7 +115,7 @@ class NodeConnections {
   Future<Status> Start();
   Future<> Shutdown();
 
-  Future<StatusOr<CacheStub*>> Get(uint64_t key);
+  Future<StatusOr<CacheStub*>> Get(uint64_t route_key);
   Future<> CloseDead();
 
  private:
@@ -123,8 +123,8 @@ class NodeConnections {
   Future<Status> OpenAll();
   Future<> CloseAll();
 
-  NodeConnection& GetConnection(uint64_t key);
-  Future<StatusOr<CacheStub*>> DialThenGet(uint64_t key);
+  NodeConnection& GetConnection(uint64_t route_key);
+  Future<StatusOr<CacheStub*>> DialThenGet(uint64_t route_key);
 
   std::string Address() const;
 

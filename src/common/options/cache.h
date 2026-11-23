@@ -59,18 +59,18 @@ DECLARE_uint32(rdma_cq_entries);
 DECLARE_uint32(shards);
 DECLARE_string(cpuset);
 DECLARE_bool(pin_cpu);
-DECLARE_bool(poll_mode);
 
 // blockcache/core/reactor/reactor.cc
 DECLARE_uint32(idle_poll_us);
+DECLARE_bool(poll_mode);
 
 // blockcache/core/reactor/dispatcher.cc
 DECLARE_uint32(task_quota_us);
 
-// blockcache/core/fs/io_ring.cc
+// blockcache/core/filesystem/io_ring.cc
 DECLARE_uint32(iodepth);
 
-// blockcache/core/memory/buffer.cc
+// blockcache/core/runtime/bootstrap.cc
 DECLARE_uint64(buffer_pool_mb);
 
 // blockcache/net/brpc/brpc_server.cc
@@ -96,12 +96,9 @@ DECLARE_uint32(offload_cpu_min_bytes);
 DECLARE_uint32(offload_cpu_spin_us);
 
 // blockcache/object/object.cc
-DECLARE_uint32(storage_upload_max_tries);
-DECLARE_uint32(storage_download_max_tries);
-DECLARE_uint32(storage_download_notfound_max_tries);
-DECLARE_uint32(storage_upload_retry_backoff_base_ms);
-DECLARE_uint32(storage_download_retry_backoff_base_ms);
-DECLARE_uint32(storage_download_notfound_retry_backoff_base_ms);
+DECLARE_uint32(storage_put_max_tries);
+DECLARE_uint32(storage_get_max_tries);
+DECLARE_uint32(storage_get_notfound_max_tries);
 
 // blockcache/block/uploader.cc
 DECLARE_uint32(upload_stage_max_inflights);

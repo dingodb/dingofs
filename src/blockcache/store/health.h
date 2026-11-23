@@ -23,9 +23,9 @@
 
 #include "blockcache/common/stats.h"
 #include "blockcache/core/reactor/coroutine.h"
+#include "blockcache/core/reactor/gate.h"
 #include "blockcache/core/reactor/reactor.h"
 #include "blockcache/store/layout.h"
-#include "blockcache/utils/gate.h"
 
 namespace dingofs {
 namespace blockcache {

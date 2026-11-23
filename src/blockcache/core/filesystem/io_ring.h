@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_BLOCKCACHE_CORE_FS_IO_RING_H_
-#define DINGOFS_BLOCKCACHE_CORE_FS_IO_RING_H_
+#ifndef DINGOFS_BLOCKCACHE_CORE_FILESYSTEM_IO_RING_H_
+#define DINGOFS_BLOCKCACHE_CORE_FILESYSTEM_IO_RING_H_
 
 #include <glog/logging.h>
 #include <liburing.h>
@@ -206,4 +206,4 @@ UringOpAwaiter<PrepFn> UringOp(PrepFn prep) {
 }  // namespace blockcache
 }  // namespace dingofs
 
-#endif  // DINGOFS_BLOCKCACHE_CORE_FS_IO_RING_H_
+#endif  // DINGOFS_BLOCKCACHE_CORE_FILESYSTEM_IO_RING_H_

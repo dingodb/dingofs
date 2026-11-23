@@ -49,9 +49,13 @@ Status BlockCacheImpl::Start() {
 
   LOG(INFO) << "BlockCacheImpl is starting...";
 
-  StartProcessRuntime();
+  Status status = StartProcessRuntime();
+  if (!status.ok()) {
+    LOG(ERROR) << "Fail to start the process runtime: " << status.ToString();
+    return status;
+  }
 
-  Status status = StartTierCache();
+  status = StartTierCache();
   if (!status.ok()) {
     StopProcessRuntime();
     return status;

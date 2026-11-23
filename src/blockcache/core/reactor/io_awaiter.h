@@ -15,7 +15,7 @@
  */
 
 // Transport-neutral: how a coroutine waits for one completion. io_uring
-// (core/fs) and verbs (infiniband/base) both derive from it.
+// (core/filesystem) and verbs (infiniband/connection) both derive from it.
 
 #ifndef DINGOFS_BLOCKCACHE_CORE_REACTOR_IO_AWAITER_H_
 #define DINGOFS_BLOCKCACHE_CORE_REACTOR_IO_AWAITER_H_

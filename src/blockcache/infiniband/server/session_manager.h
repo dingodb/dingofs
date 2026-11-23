@@ -21,11 +21,11 @@
 #include <vector>
 
 #include "blockcache/core/reactor/coroutine.h"
+#include "blockcache/core/reactor/gate.h"
 #include "blockcache/core/reactor/timer.h"
 #include "blockcache/infiniband/base/completion_queue.h"
 #include "blockcache/infiniband/base/device.h"
 #include "blockcache/infiniband/server/session.h"
-#include "blockcache/utils/gate.h"
 
 namespace dingofs {
 namespace blockcache {

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "blockcache/core/fs/io_ring.h"
+#include "blockcache/core/filesystem/io_ring.h"
 
 #include <gflags/gflags.h>
 #include <glog/logging.h>
@@ -23,21 +23,15 @@
 #include <algorithm>
 #include <cerrno>
 #include <cstdint>
-#include <mutex>
-#include <string>
+
+#include "blockcache/core/reactor/uring.h"
+#include "blockcache/utils/validator.h"
 
 namespace dingofs {
 namespace blockcache {
 
-static bool Positive(const char*, uint32_t value) { return value > 0; }
-
 DEFINE_uint32(iodepth, 1024, "submission queue entries per shard's ring");
 DEFINE_validator(iodepth, Positive);
-
-struct UringOpcode {
-  int op;
-  const char* name;
-};
 
 constexpr UringOpcode kRequiredOps[] = {
     {.op = IORING_OP_NOP, .name = "NOP"},
@@ -59,37 +53,6 @@ constexpr unsigned kSetupLadder[] = {
     IORING_SETUP_COOP_TASKRUN | IORING_SETUP_TASKRUN_FLAG,
     0,
 };
-
-static void CheckOpCodes(io_uring* ring) {
-  static std::once_flag once;
-  std::call_once(once, [ring] {
-    io_uring_probe* probe = io_uring_get_probe_ring(ring);
-    if (probe == nullptr) {
-      return;
-    }
-
-    std::string missing;
-    for (const UringOpcode& op : kRequiredOps) {
-      if (!io_uring_opcode_supported(probe, op.op)) {
-        missing += op.name;
-        missing += ' ';
-      }
-    }
-
-    io_uring_free_probe(probe);
-    if (!missing.empty()) {
-      LOG(FATAL) << "Fail to use io_uring: missing opcodes: " << missing;
-    }
-  });
-}
-
-static void CheckFeatures(io_uring* ring, const io_uring_params& params) {
-  constexpr uint32_t kNeeded = IORING_FEAT_SUBMIT_STABLE | IORING_FEAT_NODROP;
-  if ((params.features & kNeeded) != kNeeded) {
-    io_uring_queue_exit(ring);
-    LOG(FATAL) << "Fail to use io_uring: kernel lacks SUBMIT_STABLE|NODROP";
-  }
-}
 
 int FixedBuffers::Register(void* base, size_t bytes, size_t chunk) {
   CHECK(!registered()) << "one registered region at a time";
@@ -189,7 +152,6 @@ void FixedFiles::Unregister() {
 
 IoRing::IoRing() {
   Init(FLAGS_iodepth);
-  CheckOpCodes(&ring_);
   CHECK(tls_io_ring == nullptr) << "one io ring per shard";
   tls_io_ring = this;
 }
@@ -285,7 +247,7 @@ void IoRing::Init(unsigned queue_len) {
     PLOG(FATAL) << "Fail to io_uring_queue_init_params(io)";
   }
 
-  CheckFeatures(&ring_, params);
+  CheckUringSupport(&ring_, params, kRequiredOps);
   features_ = params.features;
   cq_capacity_ = params.cq_entries;
   LOG(INFO) << "io ring ready: sq_entries=" << params.sq_entries

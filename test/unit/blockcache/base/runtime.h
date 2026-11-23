@@ -23,6 +23,7 @@
 #ifndef DINGOFS_TEST_UNIT_BLOCKCACHE_BASE_RUNTIME_H_
 #define DINGOFS_TEST_UNIT_BLOCKCACHE_BASE_RUNTIME_H_
 
+#include <glog/logging.h>
 #include <gtest/gtest.h>
 
 #include <chrono>
@@ -35,6 +36,7 @@
 #include "blockcache/core/runtime/bootstrap.h"
 #include "blockcache/core/runtime/smp.h"
 #include "common/options/cache.h"
+#include "common/status.h"
 
 namespace dingofs {
 namespace blockcache {
@@ -61,7 +63,9 @@ class ScopedRuntime {
  public:
   ScopedRuntime() {
     SetRuntimeFlags();
-    StartProcessRuntime();
+    const Status status = StartProcessRuntime();
+    CHECK(status.ok()) << "Fail to start the process runtime: "
+                       << status.ToString();
   }
 
   ~ScopedRuntime() { StopProcessRuntime(); }

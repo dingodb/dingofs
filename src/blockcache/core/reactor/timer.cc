@@ -179,7 +179,7 @@ TimerList TimerSet::Expire(uint64_t now) {
     const TimerList& finest = past_nonempty_
                                   ? buckets_[kPastBucket]
                                   : buckets_[63 - std::countl_zero(bits_)];
-    for (Timer* t = finest.Front(); t != nullptr; t = t->next_) {
+    for (Timer* t = finest.front(); t != nullptr; t = t->next_) {
       next_ = next_ < t->timeout_ns_ ? next_ : t->timeout_ns_;
     }
   }
@@ -222,7 +222,7 @@ void TimerQueue::Remove(Timer* t) {
 
 unsigned TimerQueue::RunExpired(uint64_t now) {
   expired_ = set_.Expire(now);
-  for (Timer* t = expired_.Front(); t != nullptr; t = t->next_) {
+  for (Timer* t = expired_.front(); t != nullptr; t = t->next_) {
     t->expired_ = true;
   }
 

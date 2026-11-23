@@ -26,9 +26,9 @@
 #include "blockcache/common/status.h"
 #include "blockcache/core/memory/buffer_view.h"
 #include "blockcache/core/reactor/coroutine.h"
+#include "blockcache/core/reactor/gate.h"
 #include "blockcache/remote/circuit_breaker.h"
 #include "blockcache/remote/connection.h"
-#include "blockcache/utils/gate.h"
 
 namespace dingofs {
 namespace blockcache {
@@ -60,7 +60,7 @@ class RemoteNode {
   };
 
   template <typename Method, typename Request>
-  Future<Status> SendRequest(Method method, uint64_t key, Request request,
+  Future<Status> SendRequest(Method method, uint64_t route_key, Request request,
                              Attachment attachment);
 
   bool running_ = false;

@@ -137,6 +137,7 @@ class Reactor {
   void Wakeup();
 
   void Schedule(Task* t) { tasks_.Push(t); }
+
   void RegisterPoller(Poller* p) { pollers_.Add(p); }
   void UnregisterPoller(Poller* p) { pollers_.Remove(p); }
 
@@ -161,8 +162,35 @@ class Reactor {
 
 inline thread_local Reactor* tls_reactor = nullptr;
 
-inline Reactor& ThisReactor() { return *tls_reactor; }
+inline Reactor& ThisReactor() {
+  DCHECK(tls_reactor != nullptr) << "no reactor on this thread";
+  return *tls_reactor;
+}
+
 inline bool HasReactor() { return tls_reactor != nullptr; }
+
+class [[nodiscard]] PollerRegistration {
+ public:
+  PollerRegistration(Reactor& reactor, Poller* poller)
+      : reactor_(reactor), poller_(poller) {
+    CHECK(tls_reactor == &reactor_)
+        << "PollerRegistration built off its reactor's thread";
+    reactor_.RegisterPoller(poller_);
+  }
+
+  ~PollerRegistration() {
+    CHECK(tls_reactor == &reactor_)
+        << "PollerRegistration dropped off its reactor's thread";
+    reactor_.UnregisterPoller(poller_);
+  }
+
+  PollerRegistration(const PollerRegistration&) = delete;
+  PollerRegistration& operator=(const PollerRegistration&) = delete;
+
+ private:
+  Reactor& reactor_;
+  Poller* poller_;
+};
 
 inline unsigned ThisShardId() {
   DCHECK(HasReactor()) << "ThisShardId off a shard thread";

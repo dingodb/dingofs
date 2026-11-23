@@ -17,6 +17,7 @@
 #include "common/blockaccess/block_access_log.h"
 
 #include <absl/strings/str_format.h>
+#include <glog/logging.h>
 
 namespace dingofs {
 namespace blockaccess {
@@ -28,8 +29,14 @@ bool InitBlockAccessLog(const std::string& prefix) {
   if (!initialized) {
     std::string filename =
         absl::StrFormat("%s/block_access_%d.log", prefix, getpid());
-    block_access_logger =
-        spdlog::daily_logger_mt("block_access", filename, 0, 0);
+    try {
+      block_access_logger =
+          spdlog::daily_logger_mt("block_access", filename, 0, 0);
+    } catch (const spdlog::spdlog_ex& e) {
+      LOG(ERROR) << "Fail to open the block access log " << filename << ": "
+                 << e.what();
+      return false;
+    }
     spdlog::flush_every(std::chrono::seconds(1));
     initialized = true;
   }

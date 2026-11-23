@@ -14,6 +14,7 @@
 
 add_subdirectory(base)
 add_subdirectory(common)
+add_subdirectory(core)
 add_subdirectory(fs)
 add_subdirectory(runtime)
 add_subdirectory(infiniband)
@@ -25,12 +26,22 @@ add_executable(test_blockcache
 target_compile_features(test_blockcache PRIVATE cxx_std_20)
 
 target_link_libraries(test_blockcache
+  ibverbs::ibverbs
+
   PROTO_OBJS
 
   $<TARGET_OBJECTS:test_blockcache_base>
   $<TARGET_OBJECTS:test_blockcache_common>
+  $<TARGET_OBJECTS:test_blockcache_core>
   $<TARGET_OBJECTS:test_blockcache_utils>
 
+  blockcache_api
+  blockcache_block
+  blockcache_node
+  blockcache_object
+  blockcache_remote
+  blockcache_store
+  blockcache_tier
   blockcache_common
   blockcache_status
   blockcache_core

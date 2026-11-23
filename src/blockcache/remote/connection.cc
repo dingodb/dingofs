@@ -239,14 +239,14 @@ Future<> NodeConnections::Shutdown() {
   LOG(INFO) << "Successfully shutdown " << *this;
 }
 
-Future<StatusOr<CacheStub*>> NodeConnections::Get(uint64_t key) {
+Future<StatusOr<CacheStub*>> NodeConnections::Get(uint64_t route_key) {
   if (!connections_.empty()) {
-    NodeConnection& conn = GetConnection(key);
+    NodeConnection& conn = GetConnection(route_key);
     if (conn.IsConnected()) {
       return MakeReadyFuture<StatusOr<CacheStub*>>(conn.stub());
     }
   }
-  return DialThenGet(key);
+  return DialThenGet(route_key);
 }
 
 void NodeConnections::NewConnections() {
@@ -292,13 +292,14 @@ Future<> NodeConnections::CloseAll() {
   connections_.clear();
 }
 
-NodeConnection& NodeConnections::GetConnection(uint64_t key) {
+NodeConnection& NodeConnections::GetConnection(uint64_t route_key) {
   if (!prober_->use_rdma()) {
     return *connections_[0];
   }
 
   const auto& remote = prober_->remote_shards();
-  const unsigned remote_shard = GetShard(key, prober_->remote_shard_count());
+  const unsigned remote_shard =
+      GetShard(route_key, prober_->remote_shard_count());
   if (!remote.Contains(remote_shard)) {
     LOG_EVERY_N(WARNING, 1000)
         << "A request for remote shard " << remote_shard << " reached shard "
@@ -309,7 +310,7 @@ NodeConnection& NodeConnections::GetConnection(uint64_t key) {
   return *connections_[remote_shard - remote.base];
 }
 
-Future<StatusOr<CacheStub*>> NodeConnections::DialThenGet(uint64_t key) {
+Future<StatusOr<CacheStub*>> NodeConnections::DialThenGet(uint64_t route_key) {
   if (!running_) {
     co_return Status::CacheDown("the connection to this cache node is closed");
   }
@@ -321,7 +322,7 @@ Future<StatusOr<CacheStub*>> NodeConnections::DialThenGet(uint64_t key) {
 
   NewConnections();
 
-  NodeConnection& conn = GetConnection(key);
+  NodeConnection& conn = GetConnection(route_key);
   const Status status = co_await conn.Open();
   if (!status.ok()) {
     co_return status;

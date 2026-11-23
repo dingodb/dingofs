@@ -121,7 +121,7 @@ Future<Status> RemoteNode::Delete(BlockHandle handle) {
 }
 
 template <typename Method, typename Request>
-Future<Status> RemoteNode::SendRequest(Method method, uint64_t key,
+Future<Status> RemoteNode::SendRequest(Method method, uint64_t route_key,
                                        Request request, Attachment attachment) {
   Gate::Holder holder(gate_);
   if (!holder.ok()) {
@@ -136,14 +136,14 @@ Future<Status> RemoteNode::SendRequest(Method method, uint64_t key,
   Status status;
   BRPC_SCOPE_EXIT { breaker_->OnCallEnd(status); };
 
-  StatusOr<CacheStub*> stub = co_await connections_->Get(key);
+  StatusOr<CacheStub*> stub = co_await connections_->Get(route_key);
   if (!stub.ok()) {
     status = stub.status();
     co_return status;
   }
 
-  if constexpr (requires { request.set_route_key(key); }) {
-    request.set_route_key(key);
+  if constexpr (requires { request.set_route_key(route_key); }) {
+    request.set_route_key(route_key);
   }
 
   Controller cntl;

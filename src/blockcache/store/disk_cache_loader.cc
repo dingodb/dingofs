@@ -29,7 +29,7 @@
 #include <vector>
 
 #include "blockcache/common/route.h"
-#include "blockcache/core/fs/filesystem.h"
+#include "blockcache/core/filesystem/filesystem.h"
 #include "blockcache/core/reactor/preempt.h"
 #include "blockcache/core/runtime/smp.h"
 #include "blockcache/store/local_filesystem.h"

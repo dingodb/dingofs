@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http:
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -22,7 +22,6 @@
 #include <utility>
 
 #include "blockcache/common/status_helper.h"
-#include "blockcache/core/reactor/reactor.h"
 #include "blockcache/infiniband/base/completion_queue.h"
 #include "blockcache/infiniband/common/wr_id.h"
 #include "blockcache/infiniband/connection/connection.h"
@@ -53,11 +52,12 @@ InfinibandPoller::InfinibandPoller(CompletionQueue* completion_queue,
     : completion_queue_(completion_queue),
       completion_channel_fd_(channel_fd),
       completion_channel_event_(
-          std::make_unique<CompletionChannelEvent>(this)) {
-  ThisReactor().RegisterPoller(this);
-}
+          std::make_unique<CompletionChannelEvent>(this)) {}
 
-InfinibandPoller::~InfinibandPoller() { ThisReactor().UnregisterPoller(this); }
+InfinibandPoller::~InfinibandPoller() {
+  DCHECK(!channel_event_registered_ && disarm_promise_ == nullptr)
+      << "InfinibandPoller destroyed before Disarm() completed";
+}
 
 bool InfinibandPoller::Poll() {
   int done = 0;

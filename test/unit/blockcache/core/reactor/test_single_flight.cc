@@ -29,7 +29,7 @@
 #include <vector>
 
 #include "blockcache/core/reactor/coroutine.h"
-#include "blockcache/utils/sync.h"
+#include "blockcache/core/reactor/single_flight.h"
 #include "common/status.h"
 #include "test/unit/blockcache/base/runtime.h"
 

@@ -18,9 +18,12 @@
 #define DINGOFS_BLOCKCACHE_INFINIBAND_CLIENT_CONTEXT_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "blockcache/common/status.h"
+#include "blockcache/core/reactor/coroutine.h"
+#include "blockcache/core/reactor/reactor.h"
 #include "blockcache/infiniband/base/buffer_pool.h"
 #include "blockcache/infiniband/base/completion_channel.h"
 #include "blockcache/infiniband/base/completion_queue.h"
@@ -38,12 +41,15 @@ using InfinibandContextUPtr = std::unique_ptr<InfinibandContext>;
 struct InfinibandContext {
   static Status Create(std::string device_name);
 
+  static Future<> Destroy();
+
   Device* device = nullptr;
   BufferPoolUPtr buffer_pool;
   MemoryRegistryUPtr memory_registry;
   CompletionChannelUPtr completion_channel;
   CompletionQueueUPtr completion_queue;
   InfinibandPollerUPtr poller;
+  std::optional<PollerRegistration> poller_registration;
 };
 
 inline thread_local InfinibandContextUPtr tls_infiniband_context;

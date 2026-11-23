@@ -22,7 +22,7 @@
 
 file(GLOB_RECURSE BLOCKCACHE_CORE_SRCS CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/reactor/*.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/fs/*.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/filesystem/*.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/runtime/*.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/memory/*.cc"
 )

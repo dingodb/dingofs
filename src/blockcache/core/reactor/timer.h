@@ -27,7 +27,6 @@
 
 #include "blockcache/core/reactor/dispatcher.h"
 #include "blockcache/utils/time.h"
-#include "utils/executor/timer/timer.h"
 
 namespace dingofs {
 namespace blockcache {
@@ -76,7 +75,7 @@ class TimerList {
   void SpliceAllInto(TimerList* dst);
 
   bool empty() const { return head_ == nullptr; }
-  Timer* Front() const { return head_; }
+  Timer* front() const { return head_; }
 
  private:
   Timer* head_ = nullptr;

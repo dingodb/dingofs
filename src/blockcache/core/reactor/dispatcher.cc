@@ -25,24 +25,17 @@
 
 #include <cerrno>
 #include <cstdint>
-#include <mutex>
-#include <string>
 
+#include "blockcache/core/reactor/uring.h"
 #include "blockcache/utils/time.h"
+#include "blockcache/utils/validator.h"
 
 namespace dingofs {
 namespace blockcache {
 
-static bool Positive(const char* /*name*/, uint32_t value) { return value > 0; }
-
 DEFINE_uint32(task_quota_us, 500,
               "microseconds a task may run before the reactor preempts it");
 DEFINE_validator(task_quota_us, Positive);
-
-struct UringOpcode {
-  int op;
-  const char* name;
-};
 
 constexpr UringOpcode kRequiredOps[] = {
     {.op = IORING_OP_READ, .name = "READ"},
@@ -55,20 +48,7 @@ static inline void PrefetchEvent(const io_uring_cqe* cqe) {
       reinterpret_cast<const void*>(static_cast<uintptr_t>(cqe->user_data)));
 }
 
-// This and CheckOpcodes() both LOG(FATAL) on a kernel that cannot serve the
-// ring: that is a deployment error, not something to degrade around.
-static void CheckFeatures(io_uring* ring, const io_uring_params& params) {
-  constexpr uint32_t kNeeded = IORING_FEAT_SUBMIT_STABLE | IORING_FEAT_NODROP;
-  if ((params.features & kNeeded) != kNeeded) {
-    io_uring_queue_exit(ring);
-    LOG(FATAL) << "Fail to use io_uring: kernel lacks SUBMIT_STABLE|NODROP";
-  }
-}
-
-EventRing::EventRing(unsigned queue_len) {
-  Init(queue_len);
-  CheckOpcodes();
-}
+EventRing::EventRing(unsigned queue_len) { Init(queue_len); }
 
 void EventRing::Exit() {
   if (open_) {
@@ -116,33 +96,10 @@ void EventRing::Init(unsigned queue_len) {
     PLOG(FATAL) << "Fail to io_uring_queue_init_params";
   }
 
-  CheckFeatures(&ring_, params);
+  CheckUringSupport(&ring_, params, kRequiredOps);
 
   open_ = true;
   io_uring_ring_dontfork(&ring_);
-}
-
-void EventRing::CheckOpcodes() {
-  static std::once_flag once;
-  std::call_once(once, [this] {
-    io_uring_probe* probe = io_uring_get_probe_ring(&ring_);
-    if (probe == nullptr) {
-      return;
-    }
-
-    std::string missing;
-    for (const UringOpcode& op : kRequiredOps) {
-      if (!io_uring_opcode_supported(probe, op.op)) {
-        missing += op.name;
-        missing += ' ';
-      }
-    }
-
-    io_uring_free_probe(probe);
-    if (!missing.empty()) {
-      LOG(FATAL) << "Fail to use io_uring: missing opcodes: " << missing;
-    }
-  });
 }
 
 QuotaTicker::QuotaTicker(std::chrono::microseconds quota) : quota_(quota) {

@@ -23,9 +23,9 @@
 #include <memory>
 
 #include "blockcache/common/status.h"
+#include "blockcache/core/reactor/gate.h"
 #include "blockcache/core/runtime/smp.h"
 #include "blockcache/infiniband/client/context.h"
-#include "blockcache/utils/gate.h"
 #include "common/options/cache.h"
 
 namespace dingofs {
@@ -98,12 +98,7 @@ void RemoteCache::InitInfiniband() {
 }
 
 Future<> RemoteCache::ShutdownInfiniband() {
-  infiniband::InfinibandContext* context = infiniband::ThisInfinibandContext();
-  if (context == nullptr) {
-    co_return;
-  }
-  co_await context->poller->Disarm();
-  infiniband::tls_infiniband_context.reset();
+  return infiniband::InfinibandContext::Destroy();
 }
 
 void RemoteCache::StartSyncer() {

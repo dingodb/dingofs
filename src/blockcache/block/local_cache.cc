@@ -25,6 +25,7 @@
 #include <memory>
 #include <utility>
 
+#include "blockcache/core/runtime/bootstrap.h"
 #include "blockcache/core/runtime/thread_pool.h"
 #include "blockcache/store/disk_cache_group.h"
 #include "common/options/cache.h"

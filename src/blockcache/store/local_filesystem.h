@@ -22,17 +22,14 @@
 #include <string>
 
 #include "blockcache/common/status.h"
-#include "blockcache/core/fs/filesystem.h"
+#include "blockcache/core/filesystem/filesystem.h"
 #include "blockcache/core/memory/buffer_view.h"
 #include "blockcache/core/reactor/coroutine.h"
-#include "blockcache/utils/align.h"
 
 namespace dingofs {
 namespace blockcache {
 
 class HealthChecker;
-
-inline constexpr uint32_t kBlockAlign = kIoAlign;
 
 class LocalFileSystem {
  public:
@@ -49,7 +46,7 @@ class LocalFileSystem {
   Future<bool> FileExists(std::string path);
 
   static OpenOption BlockOpenOption() {
-    return OpenOption{.io_inflight = UINT32_MAX, .register_fd = false};
+    return OpenOption{.register_fd = false};
   }
 
  private:

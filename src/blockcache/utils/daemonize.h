@@ -14,46 +14,26 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_BLOCKCACHE_UTILS_ADMISSION_QUEUE_H_
-#define DINGOFS_BLOCKCACHE_UTILS_ADMISSION_QUEUE_H_
+#ifndef DINGOFS_BLOCKCACHE_UTILS_DAEMONIZE_H_
+#define DINGOFS_BLOCKCACHE_UTILS_DAEMONIZE_H_
 
-#include <cstdint>
-
-#include "blockcache/utils/park_queue.h"
+#include <string>
+#include <vector>
 
 namespace dingofs {
 namespace blockcache {
 
-template <typename Op>
-class AdmissionQueue {
- public:
-  explicit AdmissionQueue(uint32_t limit = 128) : limit_(limit) {}
+inline constexpr char kReadyFdEnv[] = "DINGO_CACHE_READY_FD";
 
-  void Admit(Op* op) {
-    if (inflight_ < limit_) {
-      ++inflight_;
-      op->Submit();
-    } else {
-      parked_.PushBack(op);
-    }
-  }
+int TakeReadyFd();
 
-  void OnComplete() {
-    Op* next = parked_.PopFront();
-    if (next != nullptr) {
-      next->Submit();
-    } else {
-      --inflight_;
-    }
-  }
+int StartDaemon(const std::vector<std::string>& argv);
 
- private:
-  uint32_t limit_;
-  uint32_t inflight_ = 0;
-  ParkQueue<Op> parked_;
-};
+bool Detach(const std::string& output);
+
+void NotifyReady(int fd);
 
 }  // namespace blockcache
 }  // namespace dingofs
 
-#endif  // DINGOFS_BLOCKCACHE_UTILS_ADMISSION_QUEUE_H_
+#endif  // DINGOFS_BLOCKCACHE_UTILS_DAEMONIZE_H_

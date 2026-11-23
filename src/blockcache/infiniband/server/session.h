@@ -22,12 +22,12 @@
 #include <memory>
 
 #include "blockcache/core/reactor/coroutine.h"
+#include "blockcache/core/reactor/gate.h"
 #include "blockcache/infiniband/common/protocol.h"
 #include "blockcache/infiniband/connection/connection.h"
 #include "blockcache/net/controller.h"
 #include "blockcache/net/service.h"
 #include "blockcache/net/types.h"
-#include "blockcache/utils/gate.h"
 
 namespace dingofs {
 namespace blockcache {

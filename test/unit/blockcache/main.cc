@@ -29,6 +29,7 @@
 #include <string>
 #include <vector>
 
+#include "common/options/cache.h"
 #include "test/unit/blockcache/base/coverage.h"
 
 static void InitLog(const std::string& log_dir) {
@@ -69,6 +70,8 @@ int main(int argc, char** argv) {
 
   testing::InitGoogleTest(&argc, argv);
 
+  dingofs::blockcache::FLAGS_id = "8d0e9a52-3f4b-4c1e-a7d6-2b9c8e5f1a03";
+  dingofs::blockcache::FLAGS_listen_ip = "127.0.0.1";
   google::ParseCommandLineFlags(&argc, &argv, true);
 
   return dingofs::blockcache::RunTestsWithCoverage(

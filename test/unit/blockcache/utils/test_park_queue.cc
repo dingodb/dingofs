@@ -25,7 +25,7 @@
 #include <cstdint>
 #include <vector>
 
-#include "blockcache/core/fs/io_ring.h"
+#include "blockcache/core/filesystem/io_ring.h"
 #include "blockcache/utils/park_queue.h"
 
 namespace dingofs {

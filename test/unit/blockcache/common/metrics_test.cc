@@ -36,7 +36,7 @@ class MetricsTest : public ::testing::Test {
  protected:
   static void SetUpTestSuite() {
     FLAGS_shards = 2;
-    StartProcessRuntime();
+    ASSERT_TRUE(StartProcessRuntime().ok());
   }
   static void TearDownTestSuite() { StopProcessRuntime(); }
 

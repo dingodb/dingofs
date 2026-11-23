@@ -23,12 +23,14 @@
 #include <memory>
 #include <vector>
 
+#include "blockcache/utils/cpu.h"
+
 namespace dingofs {
 namespace blockcache {
 
 struct SlabPoolOption {
   size_t superblock_count = 64;  // 256 MiB
-  int numa_node = -1;
+  int numa_node = kNoNumaNode;
 };
 
 class SlabPool {

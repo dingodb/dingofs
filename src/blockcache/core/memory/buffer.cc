@@ -16,57 +16,17 @@
 
 #include "blockcache/core/memory/buffer.h"
 
-#include <gflags/gflags.h>
 #include <glog/logging.h>
 
 #include <memory>
 
-#include "blockcache/core/fs/io_ring.h"
 #include "blockcache/core/memory/shard_allocator.h"
-#include "blockcache/core/reactor/reactor.h"
-#include "blockcache/core/runtime/smp.h"
-#include "blockcache/utils/align.h"
 
 namespace dingofs {
 namespace blockcache {
 
-DEFINE_uint64(buffer_pool_mb, 256, "buffer pool per shard in MiB");
-
 // One per shard, created on the shard thread so its pages are NUMA-local.
-thread_local std::unique_ptr<SlabPool> tls_pool;
-
-static Future<Status> OpenPoolOnThisShard(size_t superblocks) {
-  if (tls_pool != nullptr) {
-    co_return Status::OK();  // idempotent
-  }
-  SlabPoolOption option;
-  option.superblock_count = superblocks;
-  option.numa_node = memory::LocalNumaNode();
-  auto pool = std::make_unique<SlabPool>(option);
-
-  // chunk == superblock: any allocation sits in one registered buffer.
-  if (HasIoRing()) {
-    const int rc = ThisIoRing().buffers().Register(
-        pool->base(), pool->total_bytes(), SlabPool::kSuperblockSize);
-    if (rc < 0) {
-      // Not fatal: fixed buffers are only an optimisation.
-      LOG(WARNING) << "Fail to register the buffer pool with io_uring,"
-                      " falling back to unfixed io: rc="
-                   << rc;
-    }
-  }
-  tls_pool = std::move(pool);
-  co_return Status::OK();
-}
-
-static Future<> ClosePoolOnThisShard() {
-  if (tls_pool != nullptr && HasIoRing() &&
-      ThisIoRing().buffers().registered()) {
-    ThisIoRing().buffers().Unregister();
-  }
-  tls_pool.reset();
-  co_return;
-}
+static thread_local std::unique_ptr<SlabPool> tls_pool;
 
 Buffer Buffer::Alloc(size_t n) {
   SlabPool* pool = tls_pool.get();
@@ -94,26 +54,22 @@ void Buffer::Reset() noexcept {
   }
 }
 
-Status BufferPool::InitOnAllShards() {
-  const size_t bytes_per_shard = size_t{FLAGS_buffer_pool_mb} * kMiB;
-  const size_t superblocks = (bytes_per_shard + SlabPool::kSuperblockSize - 1) /
-                             SlabPool::kSuperblockSize;
+Status BufferPool::Open(size_t superblocks) {
   if (superblocks == 0) {
     return Status::InvalidParam(
         "buffer pool must hold at least one 4MiB superblock");
   }
-
-  // Every shard reserves and pins its own pages; doing that one shard at a
-  // time is the bulk of a large pool's startup.
-  return RunOnAllAndWait([superblocks](unsigned /*shard*/) -> Future<Status> {
-    return OpenPoolOnThisShard(superblocks);
-  });
+  if (tls_pool != nullptr) {
+    return Status::OK();
+  }
+  SlabPoolOption option;
+  option.superblock_count = superblocks;
+  option.numa_node = memory::LocalNumaNode();
+  tls_pool = std::make_unique<SlabPool>(option);
+  return Status::OK();
 }
 
-void BufferPool::ShutdownOnAllShards() {
-  RunOnAllAndWait(
-      [](unsigned /*shard*/) -> Future<> { return ClosePoolOnThisShard(); });
-}
+void BufferPool::Close() { tls_pool.reset(); }
 
 SlabPool* BufferPool::LocalPool() { return tls_pool.get(); }
 

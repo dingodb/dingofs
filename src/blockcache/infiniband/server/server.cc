@@ -29,6 +29,7 @@
 #include "blockcache/core/memory/shard_allocator.h"
 #include "blockcache/core/memory/slab_pool.h"
 #include "blockcache/core/reactor/coroutine.h"
+#include "blockcache/core/reactor/reactor.h"
 #include "blockcache/core/runtime/smp.h"
 #include "blockcache/infiniband/common/protocol.h"
 #include "blockcache/infiniband/connection/connection.h"
@@ -185,6 +186,7 @@ Future<Status> Server::StartShard(unsigned shard) {
   {
     context->poller = std::make_unique<InfinibandPoller>(
         context->completion_queue.get(), context->completion_channel->fd());
+    context->poller_registration.emplace(ThisReactor(), context->poller.get());
   }
 
   // service_registry
@@ -240,6 +242,7 @@ Future<> Server::ShutdownShard(unsigned shard) {
   context->handshake_handler.reset();
   context->session_manager.reset();
   context->listener.reset();
+  context->poller_registration.reset();
   co_await context->poller->Disarm();
 
   shards_[shard].reset();
