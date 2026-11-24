@@ -2851,7 +2851,9 @@ Status RenameOperation::Run(TxnUPtr& txn) {
   result_.old_parent_attr_with_mutation.attr = old_parent_attr;
   result_.old_dentry = old_dentry;
   result_.old_attr = old_attr;
-  result_.new_parent_attr_with_mutation.attr = new_parent_attr;
+  // same parent: new_parent_attr is a pre-commit copy, use the bumped one
+  result_.new_parent_attr_with_mutation.attr =
+      is_same_parent ? old_parent_attr : new_parent_attr;
   result_.prev_new_dentry = prev_new_dentry;
   result_.prev_new_attr = prev_new_attr;
   result_.new_dentry = new_dentry;
