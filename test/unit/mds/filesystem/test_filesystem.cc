@@ -1046,6 +1046,11 @@ TEST_F(FileSystemTest, RenameWithSameDir) {
   auto status = fs->Rename(ctx, param, rename_result);
   ASSERT_TRUE(status.ok()) << "rename fail, error: " << status.error_str();
 
+  // cached parent must carry the version returned to the client
+  auto parent_inode = inode_cache.Get(old_parent_ino);
+  ASSERT_TRUE(parent_inode != nullptr);
+  ASSERT_EQ(parent_inode->CompleteVersion(), rename_result.new_parent_inode.version());
+
   std::vector<EntryWithNameOut> entries;
   ASSERT_TRUE(fs->ReadDir(ctx, old_parent_ino, "", 0, false, entries).ok());
   auto partition = partition_cache.Get(old_parent_ino);
@@ -1059,6 +1064,61 @@ TEST_F(FileSystemTest, RenameWithSameDir) {
                            << status.error_str();
   ASSERT_EQ(new_name, dentry.Name());
   ASSERT_EQ(old_parent_ino, dentry.ParentIno());
+}
+
+// Parent-hash partitions take the non-mono branch of Rename: the local parent
+// cache must advance to the version returned to the client.
+TEST(FileSystemHashPartitionTest, RenameWithSameDirKeepsParentCacheVersion) {
+  auto kv_storage = DummyStorage::New();
+  ASSERT_TRUE(kv_storage->Init("")) << "init kv storage fail.";
+
+  auto operation_processor = OperationProcessor::New(kv_storage);
+  ASSERT_TRUE(operation_processor->Init()) << "init mutation merger fail.";
+
+  auto quota_worker_set = SimpleWorkerSet::New("fs_hash_test_quota", 1, 1024, false, true);
+  ASSERT_TRUE(quota_worker_set->Init()) << "init quota worker set fail.";
+
+  pb::mds::FsInfo fs_info = CreateFsInfo(2000, "hash_fs", pb::mds::PartitionType::PARENT_ID_HASH_PARTITION);
+  auto fs = FileSystem::New(kMdsId, FsInfo::New(fs_info), NewInodeIdGenerator(2000, kv_storage),
+                            NewSliceIdGenerator(kv_storage), operation_processor, nullptr, nullptr, quota_worker_set,
+                            quota_worker_set, nullptr);
+  ASSERT_TRUE(fs->CreateRoot().ok());
+
+  Context ctx;
+  FileSystem::MkDirParam dir_param;
+  dir_param.parent = kRootIno;
+  dir_param.name = "hash_dir";
+  dir_param.mode = 0777;
+  dir_param.uid = 1;
+  dir_param.gid = 3;
+  dir_param.rdev = 1;
+  EntryWithPaOut dir_out;
+  ASSERT_TRUE(fs->MkDir(ctx, dir_param, dir_out).ok());
+  uint64_t dir_ino = dir_out.attr.ino();
+
+  FileSystem::MkNodParam file_param;
+  file_param.parent = dir_ino;
+  file_param.name = "file1";
+  file_param.mode = 0777;
+  file_param.uid = 1;
+  file_param.gid = 3;
+  file_param.rdev = 1;
+  EntryWithPaOut file_out;
+  ASSERT_TRUE(fs->MkNod(ctx, file_param, file_out).ok());
+
+  FileSystem::RenameParam rename_param;
+  rename_param.old_parent = dir_ino;
+  rename_param.old_name = "file1";
+  rename_param.new_parent = dir_ino;
+  rename_param.new_name = "file2";
+  FileSystem::RenameResult rename_result;
+  ASSERT_TRUE(fs->Rename(ctx, rename_param, rename_result).ok());
+
+  auto parent_inode = fs->GetInodeCache().Get(dir_ino);
+  ASSERT_TRUE(parent_inode != nullptr);
+  ASSERT_EQ(parent_inode->CompleteVersion(), rename_result.new_parent_inode.version());
+
+  operation_processor->Stop();
 }
 
 // /
