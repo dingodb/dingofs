@@ -34,7 +34,8 @@
 #include "blockcache/core/reactor/doorbell.h"
 #include "blockcache/core/runtime/shard_inbox.h"
 #include "blockcache/core/runtime/smp.h"
-#include "blockcache/utils/containers/mpsc_queue.h"
+#include "blockcache/utils/cpu.h"
+#include "blockcache/utils/mpsc_queue.h"
 
 namespace dingofs {
 namespace blockcache {
@@ -66,7 +67,7 @@ class CpuWorker {
   CpuWorker& operator=(const CpuWorker&) = delete;
 
   // `cpu` >= 0 pins the worker thread to that cpu.
-  void Start(unsigned shard, int cpu = -1);
+  void Start(unsigned shard, int cpu = kNoCpu);
   void Shutdown();  // drains what is queued, then joins
 
   void Post(InboxWork* work);  // any thread
@@ -93,7 +94,7 @@ class ThreadPool {
   // External thread only (main); Shutdown MUST finish before the shards stop.
   // `shard_cpus[i]` is the cpu shard i is pinned to (-1 = unpinned); each cpu
   // worker then sits on the SMT sibling of its shard's core.
-  void Start(std::vector<int> shard_cpus = {});
+  void Start(std::vector<int> shard_cpus);
   void Shutdown();
 
   // SHARD-ONLY. `fn` self-contained; resolves on the calling shard. Blocking
@@ -211,11 +212,6 @@ class ThreadPool {
 };
 
 using ThreadPoolUPtr = std::unique_ptr<ThreadPool>;
-
-// The process's pool, installed by Start() and dropped by Shutdown(). Null is
-// a real answer -- a bench or a test with no pool keeps its copies on the
-// shard -- so callers must handle it, as Mesh::built() is handled.
-ThreadPool* GetGlobalThreadPool();
 
 }  // namespace blockcache
 }  // namespace dingofs

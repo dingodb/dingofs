@@ -75,7 +75,7 @@ void ShardedLocalCache::Shutdown() {
 
 Future<Status> ShardedLocalCache::Put(BlockHandle handle, BufferViews block,
                                       PutOption option) {
-  return InvokeOnOwner(handle, [=](LocalCache& cache) {
+  return RunOnOwner(handle, [=](LocalCache& cache) {
     return cache.Put(handle, block, option);
   });
 }
@@ -83,21 +83,21 @@ Future<Status> ShardedLocalCache::Put(BlockHandle handle, BufferViews block,
 Future<Status> ShardedLocalCache::Get(BlockHandle handle, uint64_t offset,
                                       uint32_t length, char* buffer,
                                       GetOption option) {
-  return InvokeOnOwner(handle, [=](LocalCache& cache) {
+  return RunOnOwner(handle, [=](LocalCache& cache) {
     return cache.Get(handle, offset, length, buffer, option);
   });
 }
 
 Future<Status> ShardedLocalCache::Prefetch(BlockHandle handle,
                                            PrefetchOption option) {
-  return InvokeOnOwner(handle, [=](LocalCache& cache) {
+  return RunOnOwner(handle, [=](LocalCache& cache) {
     return cache.Prefetch(handle, option);
   });
 }
 
 Future<Status> ShardedLocalCache::Delete(BlockHandle handle,
                                          DeleteOption option) {
-  return InvokeOnOwner(
+  return RunOnOwner(
       handle, [=](LocalCache& cache) { return cache.Delete(handle, option); });
 }
 

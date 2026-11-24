@@ -25,7 +25,7 @@
 #include "blockcache/core/reactor/task.h"
 #include "blockcache/core/runtime/shard_inbox.h"
 #include "blockcache/utils/align.h"
-#include "blockcache/utils/containers/spsc_ring.h"
+#include "blockcache/utils/spsc_ring.h"
 
 // The process-wide per-shard resource table, and the messaging on top of it:
 // one MeshLink per (shard, peer) pair for shard-to-shard, one ShardInbox per
@@ -109,7 +109,7 @@ class MeshBatch {
     uint32_t pushed = 0;
     while (item != nullptr) {
       MeshWork* next = item->next;
-      if (!ring.Push(item)) {
+      if (!ring.PushBack(item)) {
         break;
       }
       item = next;

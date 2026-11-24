@@ -28,9 +28,9 @@
 
 #include "blockcache/common/status.h"
 #include "blockcache/core/memory/buffer_view.h"
+#include "blockcache/core/reactor/gate.h"
 #include "blockcache/object/object.h"
 #include "blockcache/utils/align.h"
-#include "blockcache/utils/gate.h"
 
 namespace dingofs {
 namespace blockcache {

@@ -26,6 +26,8 @@
 #include "blockcache/core/memory/buffer.h"
 #include "blockcache/core/memory/shard_allocator.h"
 #include "blockcache/core/memory/slab_pool.h"
+#include "blockcache/core/reactor/coroutine.h"
+#include "blockcache/core/reactor/reactor.h"
 #include "blockcache/infiniband/common/protocol.h"
 #include "blockcache/infiniband/connection/poller.h"
 #include "common/options/cache.h"
@@ -100,10 +102,22 @@ Status InfinibandContext::Create(std::string device_name) {
   {
     context->poller = std::make_unique<InfinibandPoller>(
         context->completion_queue.get(), context->completion_channel->fd());
+    context->poller_registration.emplace(ThisReactor(), context->poller.get());
   }
 
   tls_infiniband_context = std::move(context);
   return Status::OK();
+}
+
+Future<> InfinibandContext::Destroy() {
+  InfinibandContext* context = ThisInfinibandContext();
+  if (context == nullptr) {
+    co_return;
+  }
+
+  context->poller_registration.reset();
+  co_await context->poller->Disarm();
+  tls_infiniband_context.reset();
 }
 
 }  // namespace infiniband

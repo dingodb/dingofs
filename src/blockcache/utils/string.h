@@ -26,29 +26,29 @@ namespace dingofs {
 namespace blockcache {
 
 template <typename T>
-inline bool SplitUint(std::string_view* sv, char sep, T* out) {
-  const size_t end = sep == '\0' ? sv->size() : sv->find(sep);
+inline bool ConsumeUint(std::string_view* str, char sep, T* out) {
+  const size_t end = sep == '\0' ? str->size() : str->find(sep);
   if (end == std::string_view::npos || end == 0) {
     return false;
   }
-  const char* first = sv->data();
+  const char* first = str->data();
   const auto [ptr, ec] = std::from_chars(first, first + end, *out);
   if (ec != std::errc() || ptr != first + end) {
     return false;
   }
-  sv->remove_prefix(end == sv->size() ? end : end + 1);
+  str->remove_prefix(end == str->size() ? end : end + 1);
   return true;
 }
 
-inline std::vector<std::string> Split(std::string_view value, char sep) {
+inline std::vector<std::string> SplitStr(std::string_view str, char sep) {
   std::vector<std::string> items;
-  for (size_t begin = 0; begin <= value.size();) {
-    size_t end = value.find(sep, begin);
+  for (size_t begin = 0; begin <= str.size();) {
+    size_t end = str.find(sep, begin);
     if (end == std::string_view::npos) {
-      end = value.size();
+      end = str.size();
     }
     if (end > begin) {
-      items.emplace_back(value.substr(begin, end - begin));
+      items.emplace_back(str.substr(begin, end - begin));
     }
     begin = end + 1;
   }

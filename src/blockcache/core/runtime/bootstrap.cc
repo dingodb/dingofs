@@ -16,39 +16,91 @@
 
 #include "blockcache/core/runtime/bootstrap.h"
 
+#include <gflags/gflags.h>
 #include <glog/logging.h>
 
+#include <cstddef>
 #include <memory>
 #include <utility>
 #include <vector>
 
+#include "blockcache/common/status.h"
+#include "blockcache/core/filesystem/io_ring.h"
 #include "blockcache/core/memory/buffer.h"
+#include "blockcache/core/memory/slab_pool.h"
+#include "blockcache/core/reactor/coroutine.h"
 #include "blockcache/core/runtime/runtime.h"
+#include "blockcache/core/runtime/smp.h"
 #include "blockcache/core/runtime/thread_pool.h"
+#include "blockcache/utils/align.h"
 #include "common/status.h"
 
 namespace dingofs {
 namespace blockcache {
 
+DEFINE_uint64(buffer_pool_mb, 256, "buffer pool per shard in MiB");
+
 static RuntimeUPtr g_runtime;
 static ThreadPoolUPtr g_thread_pool;
 
-void StartProcessRuntime() {
+static Future<Status> OpenBufferPool(size_t superblocks) {
+  const Status status = BufferPool::Open(superblocks);
+  if (!status.ok()) {
+    co_return status;
+  }
+
+  if (HasIoRing() && !ThisIoRing().buffers().registered()) {
+    const SlabPool* pool = BufferPool::LocalPool();
+    const int rc = ThisIoRing().buffers().Register(
+        pool->base(), pool->total_bytes(), SlabPool::kSuperblockSize);
+    if (rc < 0) {
+      LOG(WARNING) << "Fail to register the buffer pool with io_uring,"
+                      " falling back to unfixed io: rc="
+                   << rc;
+    }
+  }
+  co_return Status::OK();
+}
+
+static Future<> CloseBufferPool() {
+  if (BufferPool::LocalPool() != nullptr && HasIoRing() &&
+      ThisIoRing().buffers().registered()) {
+    ThisIoRing().buffers().Unregister();
+  }
+  BufferPool::Close();
+  co_return;
+}
+
+Status StartProcessRuntime() {
   CHECK(g_runtime == nullptr) << "the process runtime is already up";
 
-  g_runtime = std::make_unique<Runtime>();
+  StatusOr<ShardLayout> layout = ShardLayout::Plan();
+  if (!layout.ok()) {
+    return layout.status();
+  }
+  g_runtime = std::make_unique<Runtime>(std::move(layout).value());
   g_runtime->Start();
 
-  const Status status = BufferPool::InitOnAllShards();
-  CHECK(status.ok()) << "Fail to create the buffer pools: "
-                     << status.ToString();
+  const size_t superblocks =
+      (size_t{FLAGS_buffer_pool_mb} * kMiB + SlabPool::kSuperblockSize - 1) /
+      SlabPool::kSuperblockSize;
+  const Status status =
+      RunOnAllAndWait([superblocks](unsigned /*shard*/) -> Future<Status> {
+        return OpenBufferPool(superblocks);
+      });
+  if (!status.ok()) {
+    StopProcessRuntime();
+    return status;
+  }
 
   std::vector<int> shard_cpus(g_runtime->shard_count());
   for (unsigned shard = 0; shard < shard_cpus.size(); ++shard) {
     shard_cpus[shard] = g_runtime->CpuOf(shard);
   }
-  g_thread_pool = std::make_unique<ThreadPool>();
-  g_thread_pool->Start(std::move(shard_cpus));
+  auto pool = std::make_unique<ThreadPool>();
+  pool->Start(std::move(shard_cpus));
+  g_thread_pool = std::move(pool);
+  return Status::OK();
 }
 
 void StopProcessRuntime() {
@@ -56,10 +108,13 @@ void StopProcessRuntime() {
     return;
   }
 
-  g_thread_pool->Shutdown();
-  g_thread_pool.reset();
+  if (g_thread_pool != nullptr) {
+    g_thread_pool->Shutdown();
+    g_thread_pool.reset();
+  }
 
-  BufferPool::ShutdownOnAllShards();
+  RunOnAllAndWait(
+      [](unsigned /*shard*/) -> Future<> { return CloseBufferPool(); });
 
   g_runtime->Shutdown();
   g_runtime->Join();
@@ -67,6 +122,8 @@ void StopProcessRuntime() {
 }
 
 bool ProcessRuntimeStarted() { return g_runtime != nullptr; }
+
+ThreadPool* GetGlobalThreadPool() { return g_thread_pool.get(); }
 
 }  // namespace blockcache
 }  // namespace dingofs

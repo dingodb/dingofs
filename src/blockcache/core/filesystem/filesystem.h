@@ -14,16 +14,15 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_BLOCKCACHE_CORE_FS_FILESYSTEM_H_
-#define DINGOFS_BLOCKCACHE_CORE_FS_FILESYSTEM_H_
+#ifndef DINGOFS_BLOCKCACHE_CORE_FILESYSTEM_FILESYSTEM_H_
+#define DINGOFS_BLOCKCACHE_CORE_FILESYSTEM_FILESYSTEM_H_
 
 #include <cstdint>
 #include <string>
 
 #include "blockcache/common/status.h"
-#include "blockcache/core/fs/io_ring.h"
+#include "blockcache/core/filesystem/io_ring.h"
 #include "blockcache/core/reactor/coroutine.h"
-#include "blockcache/utils/containers/admission_queue.h"
 
 namespace dingofs {
 namespace blockcache {
@@ -52,7 +51,6 @@ struct FileStat {
 };
 
 struct OpenOption {
-  uint32_t io_inflight = 128;
   uint32_t mode = 0644;
   bool register_fd = true;
   bool direct = true;
@@ -70,11 +68,7 @@ class RwAwaiter final : public UringAwaiter<RwAwaiter>, public RingOp {
   StatusOr<size_t> await_resume();
 
   void Arm();
-  void OnResult() noexcept;
-  void Submit();          // admitted by the file queue
-  void Issue() override;  // admitted by the ring
-
-  RwAwaiter* park_next = nullptr;  // file queue link; the ring uses RingOp's
+  void Issue() override;
 
  private:
   File* file_;
@@ -132,8 +126,7 @@ class File {
       : fd_(o.fd_),
         fixed_fd_(o.fixed_fd_),
         owns_slot_(o.owns_slot_),
-        direct_(o.direct_),
-        queue_(o.queue_) {
+        direct_(o.direct_) {
     o.Disown();
   }
 
@@ -144,7 +137,6 @@ class File {
       fixed_fd_ = o.fixed_fd_;
       owns_slot_ = o.owns_slot_;
       direct_ = o.direct_;
-      queue_ = o.queue_;
       o.Disown();
     }
     return *this;
@@ -167,8 +159,7 @@ class File {
   friend class RwAwaiter;
   friend class FileSystem;
 
-  File(int fd, uint32_t io_inflight, bool direct)
-      : fd_(fd), direct_(direct), queue_(io_inflight) {}
+  File(int fd, bool direct) : fd_(fd), direct_(direct) {}
 
   void AdoptSlot(int32_t slot) {
     fixed_fd_ = slot;
@@ -187,7 +178,6 @@ class File {
   int32_t fixed_fd_ = -1;
   bool owns_slot_ = false;
   bool direct_ = true;
-  AdmissionQueue<RwAwaiter> queue_{128};
 };
 
 class FileSystem {
@@ -216,4 +206,4 @@ class FileSystem {
 }  // namespace blockcache
 }  // namespace dingofs
 
-#endif  // DINGOFS_BLOCKCACHE_CORE_FS_FILESYSTEM_H_
+#endif  // DINGOFS_BLOCKCACHE_CORE_FILESYSTEM_FILESYSTEM_H_

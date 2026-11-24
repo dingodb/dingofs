@@ -78,7 +78,7 @@ void SendQueue::Submit(OpAwaiter* op) {
   }
 
   if (!TryAcquire(op->is_read())) {
-    (op->is_read() ? read_waiters_ : waiters_).Push(op);
+    (op->is_read() ? read_waiters_ : waiters_).PushBack(op);
     return;
   }
 
@@ -179,11 +179,11 @@ void SendQueue::Countdown(uint32_t num_wrs, uint32_t num_read_wrs) {
 
 OpAwaiter* SendQueue::TryAdmitWaiter() {
   if (!read_waiters_.empty() && TryAcquire(/*is_read=*/true)) {
-    return read_waiters_.Pop();
+    return read_waiters_.PopFront();
   }
 
   if (!waiters_.empty() && TryAcquire(/*is_read=*/false)) {
-    return waiters_.Pop();
+    return waiters_.PopFront();
   }
 
   return nullptr;
@@ -281,8 +281,8 @@ void SendQueue::HandleOne(ibv_send_wr* wr, int32_t wc_status) {
 
 void SendQueue::FailWaiters(int32_t wc_status) {
   const auto fail = [wc_status](OpAwaiter* op) { op->Abort(wc_status); };
-  read_waiters_.TakeAllAnd(fail);
-  waiters_.TakeAllAnd(fail);
+  read_waiters_.ConsumeAll(fail);
+  waiters_.ConsumeAll(fail);
 }
 
 }  // namespace infiniband

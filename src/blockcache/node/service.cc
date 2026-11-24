@@ -16,12 +16,11 @@
 
 #include "blockcache/node/service.h"
 
-#include "blockcache/common/status.h"
+#include "blockcache/common/status_helper.h"
 #include "blockcache/core/memory/buffer.h"
 #include "blockcache/core/memory/buffer_view.h"
 #include "blockcache/core/runtime/smp.h"
 #include "blockcache/net/types.h"
-#include "blockcache/store/local_filesystem.h"
 #include "blockcache/utils/align.h"
 #include "common/options/cache.h"
 
@@ -147,8 +146,8 @@ Future<> CacheService::GetNodeInfo(
 
 CacheService::AlignedRange CacheService::AlignRequest(uint64_t offset,
                                                       uint32_t length) {
-  const uint64_t start = AlignDown<uint64_t>(offset, kBlockAlign);
-  const uint64_t end = AlignUp<uint64_t>(offset + length, kBlockAlign);
+  const uint64_t start = AlignDown<uint64_t>(offset, kIoAlign);
+  const uint64_t end = AlignUp<uint64_t>(offset + length, kIoAlign);
   return {.offset = start, .length = static_cast<uint32_t>(end - start)};
 }
 

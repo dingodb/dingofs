@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "blockcache/core/fs/io_ring.h"
+#include "blockcache/core/filesystem/io_ring.h"
 
 #include <gtest/gtest.h>
 #include <unistd.h>
@@ -31,7 +31,7 @@
 #include <utility>
 #include <vector>
 
-#include "blockcache/core/fs/filesystem.h"
+#include "blockcache/core/filesystem/filesystem.h"
 #include "blockcache/core/runtime/bootstrap.h"
 #include "blockcache/core/runtime/smp.h"
 #include "common/options/cache.h"
@@ -57,7 +57,7 @@ class IoRingTest : public ::testing::Test {
     saved_iodepth_ = FLAGS_iodepth;
     FLAGS_shards = 1;
     FLAGS_iodepth = 4;  // SQ 4, CQ 16: trivial to overrun
-    StartProcessRuntime();
+    ASSERT_TRUE(StartProcessRuntime().ok());
   }
   static void TearDownTestSuite() {
     StopProcessRuntime();
@@ -242,7 +242,7 @@ TEST_F(IoRingTest, FileReadsAreCappedToo) {
   const RingStats before = Stats();
   int failures = 0;
   Status st = RunOnAndWait(0, [&]() -> Future<Status> {
-    OpenOption option{.io_inflight = 256, .register_fd = false};
+    OpenOption option{.register_fd = false};
     StatusOr<File> open = co_await FileSystem::Open(
         path, OpenFlags::kWrite | OpenFlags::kCreate, option);
     if (!open.ok()) co_return open.status();
@@ -283,7 +283,7 @@ class IoRingBench : public ::testing::Test {
  protected:
   static void SetUpTestSuite() {
     FLAGS_shards = 1;
-    StartProcessRuntime();
+    ASSERT_TRUE(StartProcessRuntime().ok());
   }
   static void TearDownTestSuite() { StopProcessRuntime(); }
 };
@@ -391,7 +391,7 @@ TEST_F(IoRingBench, DISABLED_RandomRead4K) {
     });
 
     st = RunOnAndWait(0, [&]() -> Future<Status> {
-      OpenOption option{.io_inflight = 256};
+      OpenOption option;
       StatusOr<File> open =
           co_await FileSystem::Open(path, OpenFlags::kRead, option);
       if (!open.ok()) co_return open.status();

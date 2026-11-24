@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "blockcache/common/status.h"
+#include "blockcache/common/status_helper.h"
 
 #include <cerrno>
 #include <cstring>
@@ -68,6 +68,15 @@ Status ToStatus(int sys_code, const char* what) {
   }
 }
 
+Status ToStatus(ibv_wc_status status, const char* what) {
+  if (status == IBV_WC_SUCCESS) {
+    return Status::OK();
+  }
+  const std::string message =
+      std::string("Fail to ") + what + ": " + ibv_wc_status_str(status);
+  return Status::IoError(static_cast<int32_t>(status), message);
+}
+
 Status ToStatus(pb::error::Errno errno_code) {
   switch (errno_code) {
     case pb::error::OK:
@@ -93,15 +102,6 @@ Status ToStatus(pb::error::Errno errno_code) {
     default:
       return Status::Internal("errno " + std::to_string(errno_code));
   }
-}
-
-Status ToStatus(ibv_wc_status status, const char* what) {
-  if (status == IBV_WC_SUCCESS) {
-    return Status::OK();
-  }
-  const std::string message =
-      std::string("Fail to ") + what + ": " + ibv_wc_status_str(status);
-  return Status::IoError(static_cast<int32_t>(status), message);
 }
 
 pb::error::Errno ToErrno(const Status& status) {

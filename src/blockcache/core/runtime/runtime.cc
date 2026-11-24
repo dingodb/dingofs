@@ -19,6 +19,11 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
+#include <algorithm>
+#include <string>
+#include <utility>
+#include <vector>
+
 #include "blockcache/core/memory/shard_allocator.h"
 #include "blockcache/core/runtime/mesh.h"
 #include "blockcache/core/runtime/shard.h"
@@ -29,27 +34,42 @@ namespace dingofs {
 namespace blockcache {
 
 DEFINE_uint32(shards, 8, "reactor shards, 0 means one per core");
-DEFINE_string(cpuset, "", "cores the shards run on, e.g. 0-31");
-DEFINE_bool(pin_cpu, false, "pin each shard to its core");
-DEFINE_bool(poll_mode, false, "busy-poll the reactors");
+DEFINE_string(cpuset, "",
+              "cpus for the shards, e.g. 0-31 (not brpc's --cpu_set): "
+              "--shards=0 runs one per core of them, --pin_cpu pins each "
+              "shard to one");
+DEFINE_bool(pin_cpu, false, "pin each shard to its cpu");
 
-ShardLayout ShardLayout::Plan() {
-  std::vector<int> cpus = GetAllCpus();
+StatusOr<ShardLayout> ShardLayout::Plan() {
+  const std::vector<int> online = GetOnlineCpus();
+  std::vector<int> cpus = online;
   if (!FLAGS_cpuset.empty()) {
     auto parsed = ParseCpuSet(FLAGS_cpuset);
-    CHECK(parsed.ok()) << "Fail to start runtime: "
-                       << parsed.status().ToString();
+    if (!parsed.ok()) {
+      return parsed.status();
+    }
+
+    std::string offline;
+    for (const int cpu : parsed.value()) {
+      if (!online.empty() && !std::ranges::binary_search(online, cpu)) {
+        offline += (offline.empty() ? "" : ",") + std::to_string(cpu);
+      }
+    }
+    if (!offline.empty()) {
+      return Status::InvalidParam("--cpuset=" + FLAGS_cpuset +
+                                  " has cpus that are not online: " + offline);
+    }
     cpus = std::move(parsed).value();
   }
 
-  const std::vector<int> cores = GetPhyCores(cpus);
+  const std::vector<int> cores = RemoveSiblingCpus(cpus);
   unsigned shard_count =
       FLAGS_shards != 0 ? FLAGS_shards : static_cast<unsigned>(cores.size());
   if (shard_count == 0) {
     shard_count = 1;
   }
 
-  std::vector<int> cpu_of_shard(shard_count, -1);  // -1 == unpinned
+  std::vector<int> cpu_of_shard(shard_count, kNoCpu);
   if (FLAGS_pin_cpu) {
     const std::vector<int>& cpu_pool =
         (shard_count <= cores.size()) ? cores : cpus;
@@ -68,9 +88,9 @@ struct Runtime::StopWork : InboxWork {
   }
 };
 
-Runtime::Runtime()
-    : layout_(ShardLayout::Plan()),
-      gate_(layout_.shard_count()),
+Runtime::Runtime(ShardLayout layout)
+    : layout_(std::move(layout)),
+      barrier_(layout_.shard_count()),
       stops_(std::make_unique<StopWork[]>(layout_.shard_count())) {}
 
 Runtime::~Runtime() {
@@ -95,10 +115,10 @@ void Runtime::Start() {
       BecomeShardThread(s, layout_.CpuOf(s));
       Mesh& mesh = Mesh::Instance();
       Shard shard(s, &mesh.InboxFor(s), mesh.PollerFor(s));
-      shard.Run(gate_);
+      shard.Run(barrier_);
     });
   }
-  gate_.WaitAllStarted();
+  barrier_.WaitAllStarted();
 
   LOG(INFO) << "Successfully start Runtime: shards=" << shard_count;
 }
@@ -115,7 +135,7 @@ void Runtime::Shutdown() {
   for (unsigned s = 0; s < layout_.shard_count(); ++s) {
     (void)PostTo(s, &stops_[s]);  // false == that shard already stopping
   }
-  gate_.IssueStop();
+  barrier_.IssueStop();
 
   LOG(INFO) << "Successfully shutdown Runtime";
 }

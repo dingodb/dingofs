@@ -26,7 +26,7 @@
 #include <cstring>
 #include <utility>
 
-#include "blockcache/core/fs/filesystem.h"
+#include "blockcache/core/filesystem/filesystem.h"
 #include "blockcache/core/runtime/smp.h"
 #include "blockcache/store/local_filesystem.h"
 #include "blockcache/utils/align.h"
@@ -86,7 +86,7 @@ void CacheManager::Insert(BlockHandle handle, uint32_t atime, bool staged) {
   e.size = handle.size;
   e.atime = atime;
   e.staged = staged;
-  used_bytes_ += AlignUp<uint64_t>(handle.size, kBlockAlign);
+  used_bytes_ += AlignUp<uint64_t>(handle.size, kIoAlign);
   if (staged) {
     staged_blocks_++;
   } else {
@@ -161,7 +161,7 @@ void CacheManager::EraseEntry(BlockIndex::iterator it) {
     policy_->OnErase(&e);
   }
 
-  used_bytes_ -= AlignUp<uint64_t>(e.size, kBlockAlign);
+  used_bytes_ -= AlignUp<uint64_t>(e.size, kIoAlign);
   entries_.erase(it);
 }
 
@@ -264,7 +264,7 @@ void CacheManager::EnterDeleteQueue(const Evicted& to_del, bool expired) {
       evicted_bytes_ += victim->size;
     }
 
-    used_bytes_ -= AlignUp<uint64_t>(victim->size, kBlockAlign);
+    used_bytes_ -= AlignUp<uint64_t>(victim->size, kIoAlign);
     batch.items.push_back(
         DelItem{.path = layout_.CachePath(handle), .size = victim->size});
     entries_.erase(handle);

@@ -20,8 +20,11 @@
 #include <pthread.h>
 
 #include <cstdio>
+#include <optional>
 
 #include "blockcache/core/memory/shard_allocator.h"
+#include "blockcache/core/reactor/reactor.h"
+#include "blockcache/core/runtime/lifecycle_barrier.h"
 #include "blockcache/core/runtime/mesh.h"
 #include "blockcache/utils/cpu.h"
 #include "blockcache/utils/thread.h"
@@ -31,11 +34,11 @@ namespace blockcache {
 
 void BecomeShardThread(unsigned shard, int cpu) {
   SetThreadName("shard-" + std::to_string(shard));
-  if (cpu >= 0) {
-    PinThreadToCpu(::pthread_self(), cpu);
+  if (cpu != kNoCpu) {
+    BindThreadToCpu(::pthread_self(), cpu);
   }
 
-  memory::ShardInit(shard, cpu >= 0 ? GetNumaNode(cpu) : -1);
+  memory::ShardInit(shard, cpu != kNoCpu ? GetNumaNode(cpu) : kNoNumaNode);
 }
 
 Shard::Shard(unsigned id, ShardInbox* inbox, Poller* mesh_poller)
@@ -43,39 +46,28 @@ Shard::Shard(unsigned id, ShardInbox* inbox, Poller* mesh_poller)
   Mesh::Instance().AttachReactor(id, &reactor_);
 }
 
-void Shard::Run(LifecycleBarrier& gate) {
-  RegisterPollers();
+void Shard::Run(LifecycleBarrier& barrier) {
+  {
+    const PollerRegistration io_ring_registration(reactor_, &io_ring_);
+    inbox_->Open(&reactor_);
+    const PollerRegistration inbox_registration(reactor_, inbox_);
+    std::optional<PollerRegistration> mesh_registration;
+    if (mesh_poller_ != nullptr) {
+      mesh_registration.emplace(reactor_, mesh_poller_);
+    }
 
-  gate.WaitAllStarted();
-  reactor_.Run();
-
-  UnregisterPollers();
+    barrier.WaitAllStarted();
+    reactor_.Run();
+    inbox_->Close();
+  }
 
   if (!inbox_->empty()) {
     LOG(ERROR) << "Fail to drain shard inbox: work was posted while shard "
                << id_ << " was stopping";
   }
 
-  gate.WaitAllStopped();
-  gate.WaitStopIssued();
-}
-
-void Shard::RegisterPollers() {
-  reactor_.RegisterPoller(&io_ring_);
-  inbox_->Open(&reactor_);
-  reactor_.RegisterPoller(inbox_);
-  if (mesh_poller_ != nullptr) {
-    reactor_.RegisterPoller(mesh_poller_);
-  }
-}
-
-void Shard::UnregisterPollers() {
-  inbox_->Close();
-  if (mesh_poller_ != nullptr) {
-    reactor_.UnregisterPoller(mesh_poller_);
-  }
-  reactor_.UnregisterPoller(inbox_);
-  reactor_.UnregisterPoller(&io_ring_);
+  barrier.WaitAllStopped();
+  barrier.WaitStopIssued();
 }
 
 }  // namespace blockcache

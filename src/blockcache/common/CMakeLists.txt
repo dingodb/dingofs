@@ -13,9 +13,9 @@
 # limitations under the License.
 
 file(GLOB BLOCKCACHE_COMMON_SRCS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cc")
-list(REMOVE_ITEM BLOCKCACHE_COMMON_SRCS "${CMAKE_CURRENT_SOURCE_DIR}/status.cc")
+list(REMOVE_ITEM BLOCKCACHE_COMMON_SRCS "${CMAKE_CURRENT_SOURCE_DIR}/status_helper.cc")
 
-add_library(blockcache_status status.cc)
+add_library(blockcache_status status_helper.cc)
 target_compile_features(blockcache_status PRIVATE cxx_std_20)
 target_link_libraries(blockcache_status
     ibverbs::ibverbs

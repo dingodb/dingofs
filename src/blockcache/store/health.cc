@@ -24,7 +24,7 @@
 #include <string>
 #include <utility>
 
-#include "blockcache/core/fs/filesystem.h"
+#include "blockcache/core/filesystem/filesystem.h"
 #include "blockcache/core/reactor/reactor.h"
 #include "blockcache/store/local_filesystem.h"
 #include "blockcache/utils/align.h"

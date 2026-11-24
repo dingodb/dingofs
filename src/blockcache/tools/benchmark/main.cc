@@ -17,9 +17,11 @@
 #include <glog/logging.h>
 
 #include <iostream>
+#include <optional>
 
 #include "blockcache/tools/benchmark/benchmarker.h"
 #include "blockcache/tools/benchmark/cli.h"
+#include "blockcache/utils/flags.h"
 #include "common/logging.h"
 
 using dingofs::Logger;
@@ -28,8 +30,9 @@ using dingofs::blockcache::FlagParser;
 using dingofs::blockcache::kBenchUsage;
 
 int main(int argc, char** argv) {
-  if (!FlagParser::Parse(&argc, &argv, kBenchUsage)) {
-    return 0;
+  if (const std::optional<int> code =
+          FlagParser::Parse(&argc, &argv, kBenchUsage)) {
+    return *code;
   }
 
   Logger::Init("cb");

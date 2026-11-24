@@ -22,6 +22,7 @@
 #include <cstdint>
 
 #include "blockcache/utils/align.h"
+#include "blockcache/utils/cpu.h"
 
 namespace dingofs {
 namespace blockcache {
@@ -34,7 +35,7 @@ inline constexpr size_t kMaxSmallSize = 4096;
 inline constexpr int kNumClasses = 16;
 
 void GlobalInit(unsigned shard_count);
-void ShardInit(unsigned shard_id, int numa_node = -1);
+void ShardInit(unsigned shard_id, int numa_node = kNoNumaNode);
 
 int LocalNumaNode();
 bool IsShardMemory(const void* p);

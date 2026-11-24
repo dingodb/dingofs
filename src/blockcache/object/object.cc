@@ -26,28 +26,22 @@
 #include <utility>
 #include <vector>
 
+#include "blockcache/core/runtime/bootstrap.h"
 #include "blockcache/core/runtime/smp.h"
 #include "blockcache/core/runtime/thread_pool.h"
 
 namespace dingofs {
 namespace blockcache {
 
-DEFINE_uint32(storage_upload_max_tries, 10, "upload tries per block");
-DEFINE_validator(storage_upload_max_tries, brpc::PassValidate);
+DEFINE_uint32(storage_put_max_tries, 10, "put tries per block");
+DEFINE_validator(storage_put_max_tries, brpc::PassValidate);
 
-DEFINE_uint32(storage_download_max_tries, 10, "retrieval tries per block");
-DEFINE_validator(storage_download_max_tries, brpc::PassValidate);
+DEFINE_uint32(storage_get_max_tries, 10, "get tries per block");
+DEFINE_validator(storage_get_max_tries, brpc::PassValidate);
 
-DEFINE_uint32(storage_download_notfound_max_tries, 8,
-              "retrieval tries when storage says not found");
-DEFINE_validator(storage_download_notfound_max_tries, brpc::PassValidate);
-
-DEFINE_uint32(storage_upload_retry_backoff_base_ms, 1000,
-              "first upload retry delay, doubling up to the cap (ms)");
-DEFINE_uint32(storage_download_retry_backoff_base_ms, 300,
-              "first retrieve retry delay, doubling up to the cap (ms)");
-DEFINE_uint32(storage_download_notfound_retry_backoff_base_ms, 500,
-              "first retry delay after a not-found retrieve (ms)");
+DEFINE_uint32(storage_get_notfound_max_tries, 8,
+              "get tries when storage says not found");
+DEFINE_validator(storage_get_notfound_max_tries, brpc::PassValidate);
 
 struct ObjectCompletion : InboxWork {
   ObjectCompletion() : shard(ThisShardId()) {
@@ -77,7 +71,7 @@ ObjectStorage::ObjectStorage(StorageClient* client)
 Future<Status> ObjectStorage::Put(BlockHandle handle, BufferViews block,
                                   ObjectPutOption option) {
   const uint32_t max_tries = std::max(
-      option.max_tries > 0 ? option.max_tries : FLAGS_storage_upload_max_tries,
+      option.max_tries > 0 ? option.max_tries : FLAGS_storage_put_max_tries,
       1U);
   const std::string key = handle.StoreKey();
   const blockaccess::PutPayload payload = PayloadOf(block);
@@ -87,18 +81,18 @@ Future<Status> ObjectStorage::Put(BlockHandle handle, BufferViews block,
     if (status.ok()) {
       co_return status;
     } else if (!IsRetriable(status)) {
-      LOG(ERROR) << "Fail to upload " << key
+      LOG(ERROR) << "Fail to put " << key
                  << ", unretriable: " << status.ToString();
       co_return status;
     } else if (tried >= max_tries) {
-      LOG(ERROR) << "Fail to upload " << key << ", out of tries " << tried
-                 << "/" << max_tries << ": " << status.ToString();
+      LOG(ERROR) << "Fail to put " << key << ", out of tries " << tried << "/"
+                 << max_tries << ": " << status.ToString();
       co_return status;
     }
 
     const uint64_t backoff_ms = PutBackoffMs(tried);
     num_upload_retry_ << 1;
-    LOG(WARNING) << "Fail to upload " << key << ", will retry " << tried << "/"
+    LOG(WARNING) << "Fail to put " << key << ", will retry " << tried << "/"
                  << max_tries << " in " << backoff_ms
                  << "ms: " << status.ToString();
 
@@ -111,14 +105,12 @@ Future<Status> ObjectStorage::Put(BlockHandle handle, BufferViews block,
 Future<Status> ObjectStorage::Get(BlockHandle handle, uint64_t offset,
                                   uint32_t length, char* buffer,
                                   ObjectGetOption option) {
-  const uint32_t max_tries =
-      std::max(option.max_tries > 0 ? option.max_tries
-                                    : FLAGS_storage_download_max_tries,
-               1U);
+  const uint32_t max_tries = std::max(
+      option.max_tries > 0 ? option.max_tries : FLAGS_storage_get_max_tries,
+      1U);
   const uint32_t notfound_max_tries =
-      option.retry_notfound
-          ? std::max(FLAGS_storage_download_notfound_max_tries, 1U)
-          : 1;
+      option.retry_notfound ? std::max(FLAGS_storage_get_notfound_max_tries, 1U)
+                            : 1;
   const std::string key = handle.StoreKey();
 
   uint32_t tried = 0;
@@ -132,7 +124,7 @@ Future<Status> ObjectStorage::Get(BlockHandle handle, uint64_t offset,
     uint64_t backoff_ms;
     if (status.IsNotFound()) {
       if (++notfound_tried >= notfound_max_tries) {
-        LOG(WARNING) << "Fail to retrieve " << key << ", object not found "
+        LOG(WARNING) << "Fail to get " << key << ", object not found "
                      << notfound_tried << "/" << notfound_max_tries << ": "
                      << status.ToString();
         co_return status;
@@ -140,22 +132,22 @@ Future<Status> ObjectStorage::Get(BlockHandle handle, uint64_t offset,
 
       backoff_ms = NotFoundBackoffMs(notfound_tried);
       num_download_notfound_retry_ << 1;
-      LOG(WARNING) << "Fail to retrieve " << key
-                   << ", object not found, will retry " << notfound_tried << "/"
-                   << notfound_max_tries << " in " << backoff_ms << "ms";
+      LOG(WARNING) << "Fail to get " << key << ", object not found, will retry "
+                   << notfound_tried << "/" << notfound_max_tries << " in "
+                   << backoff_ms << "ms";
     } else if (!IsRetriable(status)) {
-      LOG(ERROR) << "Fail to retrieve " << key
+      LOG(ERROR) << "Fail to get " << key
                  << ", unretriable: " << status.ToString();
       co_return status;
     } else if (++tried >= max_tries) {
-      LOG(ERROR) << "Fail to retrieve " << key << ", out of tries " << tried
-                 << "/" << max_tries << ": " << status.ToString();
+      LOG(ERROR) << "Fail to get " << key << ", out of tries " << tried << "/"
+                 << max_tries << ": " << status.ToString();
       co_return status;
     } else {
       backoff_ms = GetBackoffMs(tried);
       num_download_retry_ << 1;
-      LOG(WARNING) << "Fail to retrieve " << key << ", will retry " << tried
-                   << "/" << max_tries << " in " << backoff_ms
+      LOG(WARNING) << "Fail to get " << key << ", will retry " << tried << "/"
+                   << max_tries << " in " << backoff_ms
                    << "ms: " << status.ToString();
     }
 
@@ -230,18 +222,15 @@ bool ObjectStorage::IsRetriable(const Status& status) {
 }
 
 uint64_t ObjectStorage::PutBackoffMs(uint32_t tried) {
-  const uint64_t base = FLAGS_storage_upload_retry_backoff_base_ms;
-  return std::min(base * tried * tried, kPutBackoffCapMs);
+  return std::min(put_backoff_base_ms_ * tried * tried, kPutBackoffCapMs);
 }
 
 uint64_t ObjectStorage::GetBackoffMs(uint32_t tried) {
-  const uint64_t base = FLAGS_storage_download_retry_backoff_base_ms;
-  return std::min(base * tried, kGetBackoffCapMs);
+  return std::min(get_backoff_base_ms_ * tried, kGetBackoffCapMs);
 }
 
 uint64_t ObjectStorage::NotFoundBackoffMs(uint32_t tried) {
-  const uint64_t base = FLAGS_storage_download_notfound_retry_backoff_base_ms;
-  return std::min(base * tried, kGetBackoffCapMs);
+  return std::min(notfound_backoff_base_ms_ * tried, kGetBackoffCapMs);
 }
 
 Future<bool> ObjectStorage::WaitBackoff(uint64_t backoff_ms) {

@@ -18,7 +18,6 @@
 #define DINGOFS_BLOCKCACHE_COMMON_ROUTE_H_
 
 #include <cstdint>
-#include <utility>
 
 #include "blockcache/common/block_handle.h"
 #include "blockcache/core/runtime/smp.h"
@@ -27,33 +26,31 @@
 namespace dingofs {
 namespace blockcache {
 
-inline unsigned ShardOf(uint64_t route_key, unsigned shards) {
-  return static_cast<unsigned>(
-      (static_cast<__uint128_t>(route_key) * shards) >> 64);
+inline uint64_t GetRouteKey(BlockHandle handle) { return HashInt(handle.id); }
+
+inline unsigned GetShard(uint64_t route_key, unsigned shards) {
+  return static_cast<unsigned>((static_cast<__uint128_t>(route_key) * shards) >>
+                               64);
 }
 
-inline uint64_t HintForShard(unsigned shard, unsigned shards) {
-  if (shards <= 1) {
+inline unsigned GetOwnerShard(BlockHandle handle, unsigned shards) {
+  return GetShard(GetRouteKey(handle), shards);
+}
+
+inline unsigned GetOwnerShard(BlockHandle handle) {
+  return GetOwnerShard(handle, ShardCount());
+}
+
+// The smallest route key that GetShard() maps to `shard`.
+inline uint64_t GetShardStartKey(unsigned shard, unsigned shards) {
+  if (shard == 0 || shards <= 1) {
     return 0;
   }
-  return static_cast<uint64_t>((static_cast<__uint128_t>(shard) << 64) /
-                               shards) +
-         1;
-}
 
-inline uint64_t RouteHintOf(BlockHandle handle) { return Mix64(handle.id); }
-
-inline uint32_t OwnerIndex(BlockHandle handle, uint32_t n) {
-  return ShardOf(RouteHintOf(handle), n);
-}
-
-inline unsigned OwnerShard(BlockHandle handle) {
-  return OwnerIndex(handle, ShardCount());
-}
-
-template <typename Fn>
-auto OnOwner(BlockHandle handle, Fn fn) {
-  return SubmitTo(OwnerShard(handle), std::move(fn));
+  // ceil(shard * 2^64 / shards)
+  const __uint128_t scaled =
+      (static_cast<__uint128_t>(shard) << 64) + shards - 1;
+  return static_cast<uint64_t>(scaled / shards);
 }
 
 }  // namespace blockcache

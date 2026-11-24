@@ -18,9 +18,11 @@
 #define DINGOFS_BLOCKCACHE_INFINIBAND_SERVER_SERVER_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
+#include "blockcache/core/reactor/reactor.h"
 #include "blockcache/infiniband/base/buffer_pool.h"
 #include "blockcache/infiniband/base/completion_channel.h"
 #include "blockcache/infiniband/base/completion_queue.h"
@@ -48,6 +50,7 @@ struct ShardContext {
   CompletionChannelUPtr completion_channel;
   CompletionQueueUPtr completion_queue;
   InfinibandPollerUPtr poller;
+  std::optional<PollerRegistration> poller_registration;
   ServiceRegistryUPtr service_registry;
   ListenerUPtr listener;
   SessionManagerUPtr session_manager;

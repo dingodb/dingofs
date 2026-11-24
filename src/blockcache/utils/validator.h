@@ -14,46 +14,17 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_BLOCKCACHE_UTILS_CONTAINERS_ADMISSION_QUEUE_H_
-#define DINGOFS_BLOCKCACHE_UTILS_CONTAINERS_ADMISSION_QUEUE_H_
+#ifndef DINGOFS_BLOCKCACHE_UTILS_VALIDATOR_H_
+#define DINGOFS_BLOCKCACHE_UTILS_VALIDATOR_H_
 
 #include <cstdint>
-
-#include "blockcache/utils/containers/park_queue.h"
 
 namespace dingofs {
 namespace blockcache {
 
-template <typename Op>
-class AdmissionQueue {
- public:
-  explicit AdmissionQueue(uint32_t limit = 128) : limit_(limit) {}
-
-  void Admit(Op* op) {
-    if (inflight_ < limit_) {
-      ++inflight_;
-      op->Submit();
-    } else {
-      parked_.Push(op);
-    }
-  }
-
-  void OnComplete() {
-    Op* next = parked_.Pop();
-    if (next != nullptr) {
-      next->Submit();
-    } else {
-      --inflight_;
-    }
-  }
-
- private:
-  uint32_t limit_;
-  uint32_t inflight_ = 0;
-  ParkQueue<Op> parked_;
-};
+inline bool Positive(const char* /*name*/, uint32_t value) { return value > 0; }
 
 }  // namespace blockcache
 }  // namespace dingofs
 
-#endif  // DINGOFS_BLOCKCACHE_UTILS_CONTAINERS_ADMISSION_QUEUE_H_
+#endif  // DINGOFS_BLOCKCACHE_UTILS_VALIDATOR_H_

@@ -26,7 +26,7 @@
 namespace dingofs {
 namespace blockcache {
 
-inline uint64_t Mix64(uint64_t x) {
+inline uint64_t HashInt(uint64_t x) {
   x ^= x >> 30;
   x *= 0xbf58476d1ce4e5b9ULL;
   x ^= x >> 27;
@@ -35,12 +35,12 @@ inline uint64_t Mix64(uint64_t x) {
   return x;
 }
 
-inline uint64_t Fnv1a(std::string_view s) {
+inline uint64_t HashStr(std::string_view s) {
   uint64_t h = 0xcbf29ce484222325ULL;
   for (const char c : s) {
     h = (h ^ static_cast<unsigned char>(c)) * 0x100000001b3ULL;
   }
-  return h;
+  return HashInt(h);
 }
 
 class ConsistentHash {
@@ -49,18 +49,24 @@ class ConsistentHash {
 
   ConsistentHash(const ConsistentHash&) = delete;
   ConsistentHash& operator=(const ConsistentHash&) = delete;
-  void Add(uint32_t member, std::string_view id, uint32_t weight);
+
+  void Add(std::string_view id, uint64_t weight);
   void Finalize();
-  uint32_t MemberOf(uint64_t key) const;
+  std::string_view GetMember(uint64_t key) const;
 
  private:
-  static constexpr uint32_t kPointsPerWeight = 160;
+  friend class ConsistentHashPeer;
+
+  static constexpr uint64_t kLightestPoints = 1280;  // of the lightest member
+  static constexpr uint64_t kMaxPoints = uint64_t{1} << 20;  // of the ring
+
+  std::vector<uint64_t> CalcPoints(const std::vector<uint64_t>& weights);
 
   bool final_ = false;
-  std::vector<std::pair<uint32_t, uint32_t>> ring_;  // point -> member
+  std::vector<std::string> ids_;
+  std::vector<uint64_t> weights_;
+  std::vector<std::pair<uint32_t, uint32_t>> ring_;  // point -> index in ids_
 };
-
-std::vector<uint32_t> NormalizeGcd(const std::vector<uint64_t>& values);
 
 }  // namespace blockcache
 }  // namespace dingofs

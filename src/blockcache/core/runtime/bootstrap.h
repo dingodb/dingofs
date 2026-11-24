@@ -17,12 +17,18 @@
 #ifndef DINGOFS_BLOCKCACHE_CORE_RUNTIME_BOOTSTRAP_H_
 #define DINGOFS_BLOCKCACHE_CORE_RUNTIME_BOOTSTRAP_H_
 
+#include "common/status.h"
+
 namespace dingofs {
 namespace blockcache {
 
-void StartProcessRuntime();
+class ThreadPool;
+
+Status StartProcessRuntime();
 void StopProcessRuntime();
 bool ProcessRuntimeStarted();
+
+ThreadPool* GetGlobalThreadPool();
 
 }  // namespace blockcache
 }  // namespace dingofs

@@ -20,7 +20,7 @@
 #include <string>
 #include <utility>
 
-#include "blockcache/core/fs/filesystem.h"
+#include "blockcache/core/filesystem/filesystem.h"
 #include "blockcache/store/health.h"
 #include "blockcache/store/layout.h"
 #include "blockcache/utils/align.h"
@@ -42,8 +42,7 @@ Future<Status> LocalFileSystem::WriteFile(std::string path, BufferViews block) {
   }
 
   // open
-  const bool direct =
-      block.size() == 1 && IsAligned(block[0].data, kBlockAlign);
+  const bool direct = block.size() == 1 && IsAligned(block[0].data, kIoAlign);
   std::string tmp_path = DiskCacheLayout::TempPath(path);
   StatusOr<File> open = co_await OpenFile(
       tmp_path, OpenFlags::kWrite | OpenFlags::kCreate, direct);
@@ -70,9 +69,9 @@ Future<Status> LocalFileSystem::WriteFile(std::string path, BufferViews block) {
 
 Future<Status> LocalFileSystem::ReadFile(std::string path, uint64_t offset,
                                          uint32_t length, char* buffer) {
-  const bool direct = IsAligned(buffer, kBlockAlign) &&
-                      IsAligned(offset, kBlockAlign) &&
-                      IsAligned(length, kBlockAlign);
+  const bool direct = IsAligned(buffer, kIoAlign) &&
+                      IsAligned(offset, kIoAlign) &&
+                      IsAligned(length, kIoAlign);
 
   OpenOption option = BlockOpenOption();
   option.direct = direct;
@@ -124,7 +123,7 @@ Future<StatusOr<File>> LocalFileSystem::OpenFile(std::string path,
 Future<Status> LocalFileSystem::WriteFile(File* file, BufferViews block,
                                           bool direct) {
   const uint64_t total = TotalBytes(block);
-  const uint64_t align_length = AlignUp4K(total);
+  const uint64_t align_length = AlignUp<uint64_t>(total, kIoAlign);
   const auto length = static_cast<uint32_t>(direct ? align_length : total);
 
   const Status status = co_await file->Allocate(0, align_length);

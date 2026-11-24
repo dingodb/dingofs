@@ -106,12 +106,9 @@ class Buffer {
 // The per-shard pool behind Buffer, held in a thread_local.
 class BufferPool {
  public:
-  // Creates one pool of --buffer_pool_mb on every shard; call once, before
-  // anything allocates. External thread, after the shards are up.
-  static Status InitOnAllShards();
+  static Status Open(size_t superblocks);
 
-  // Destroys them again. Every Buffer must already be gone.
-  static void ShutdownOnAllShards();
+  static void Close();
 
   // This shard's pool, or nullptr when none was created.
   static SlabPool* LocalPool();

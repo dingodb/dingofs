@@ -12,14 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_executable(test_blockcache_common
-    metrics_test.cc
+file(GLOB TEST_BLOCKCACHE_COMMON_SRCS "*.cc")
+
+add_library(test_blockcache_common OBJECT
+  ${TEST_BLOCKCACHE_COMMON_SRCS}
 )
 target_compile_features(test_blockcache_common PRIVATE cxx_std_20)
+
 target_link_libraries(test_blockcache_common
-    blockcache_common
-    ${TEST_DEPS}
-)
-set_target_properties(test_blockcache_common PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY ${TEST_EXECUTABLE_OUTPUT_PATH}
+  PROTO_OBJS
+
+  blockcache_common
+  blockcache_status
+  blockcache_core
+
+  protobuf::libprotobuf
+  ${TEST_DEPS_WITHOUT_MAIN}
 )

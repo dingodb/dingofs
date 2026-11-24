@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_BLOCKCACHE_UTILS_CONTAINERS_CIRCULAR_BUFFER_H_
-#define DINGOFS_BLOCKCACHE_UTILS_CONTAINERS_CIRCULAR_BUFFER_H_
+#ifndef DINGOFS_BLOCKCACHE_UTILS_CIRCULAR_BUFFER_H_
+#define DINGOFS_BLOCKCACHE_UTILS_CIRCULAR_BUFFER_H_
 
 #include <bit>
 #include <cstdint>
@@ -73,4 +73,4 @@ class CircularBuffer {
 }  // namespace blockcache
 }  // namespace dingofs
 
-#endif  // DINGOFS_BLOCKCACHE_UTILS_CONTAINERS_CIRCULAR_BUFFER_H_
+#endif  // DINGOFS_BLOCKCACHE_UTILS_CIRCULAR_BUFFER_H_

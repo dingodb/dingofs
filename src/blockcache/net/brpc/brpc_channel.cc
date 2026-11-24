@@ -29,6 +29,7 @@
 #include <utility>
 
 #include "blockcache/common/status.h"
+#include "blockcache/core/runtime/bootstrap.h"
 #include "blockcache/core/runtime/smp.h"
 #include "blockcache/core/runtime/thread_pool.h"
 #include "blockcache/net/brpc/brpc_server.h"

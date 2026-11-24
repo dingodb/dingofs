@@ -16,12 +16,13 @@
 
 #include "blockcache/remote/node_group.h"
 
+#include <absl/container/flat_hash_map.h>
 #include <glog/logging.h>
 
 #include <chrono>
 #include <memory>
 #include <string>
-#include <unordered_map>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -60,7 +61,7 @@ Future<> RemoteNodeGroup::Shutdown() {
   member_group_ = std::make_shared<const MemberGroup>(Members{});
   ThisRemoteCacheVars().members = nullptr;
 
-  std::unordered_map<std::string, RemoteNodeUPtr> nodes = std::move(nodes_);
+  absl::flat_hash_map<std::string, RemoteNodeUPtr> nodes = std::move(nodes_);
   nodes_.clear();
   for (auto& [id, node] : nodes) {
     co_await node->Shutdown();
@@ -77,14 +78,14 @@ StatusOr<RemoteNode*> RemoteNodeGroup::GetNode(uint64_t key) {
     return Status::CacheDown("RemoteNodeGroup is down");
   }
 
-  const CacheGroupMember* member = member_group_->GetMember(key);
-  if (member == nullptr) {
+  if (member_group_->empty()) {
     return Status::NotFound("MemberGroup is empty");
   }
 
-  const auto iter = nodes_.find(member->id);
+  const std::string_view id = member_group_->GetMember(key);
+  const auto iter = nodes_.find(id);
   if (iter == nodes_.end()) {
-    return Status::NotFound("RemoteNode{id=" + member->id + "} not found");
+    return Status::NotFound("RemoteNode{id=" + std::string(id) + "} not found");
   }
 
   return iter->second.get();
@@ -95,7 +96,7 @@ void RemoteNodeGroup::Rebuild(MemberGroupSPtr member_group) {
     return;
   }
 
-  std::unordered_map<std::string, RemoteNodeUPtr> nodes;
+  absl::flat_hash_map<std::string, RemoteNodeUPtr> nodes;
   std::vector<RemoteNode*> to_start;
   nodes.reserve(member_group->size());
 

@@ -19,6 +19,7 @@
 
 #include <gflags/gflags.h>
 
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -44,15 +45,18 @@ class FlagParser {
     std::string_view uuid_flag;
   };
 
-  static bool Parse(int* argc, char*** argv, const Usage& usage);
+  static std::optional<int> Parse(int* argc, char*** argv, const Usage& usage);
 
   static std::string_view SectionOf(const Usage& usage,
                                     const gflags::CommandLineFlagInfo& flag);
   static std::vector<gflags::CommandLineFlagInfo> Collect(const Usage& usage);
   static std::vector<gflags::CommandLineFlagInfo> CollectEssential(
       const Usage& usage);
-  static std::string GenHelp(const Usage& usage,
-                             const std::vector<gflags::CommandLineFlagInfo>&);
+  static std::vector<gflags::CommandLineFlagInfo> CollectMatching(
+      const Usage& usage, std::string_view word);
+  static std::string GenHelp(
+      const Usage& usage, const std::vector<gflags::CommandLineFlagInfo>& flags,
+      size_t width);
   static std::string GenTemplate(
       const Usage& usage,
       const std::vector<gflags::CommandLineFlagInfo>& flags);

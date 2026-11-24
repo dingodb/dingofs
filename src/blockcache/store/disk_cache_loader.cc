@@ -29,7 +29,7 @@
 #include <vector>
 
 #include "blockcache/common/route.h"
-#include "blockcache/core/fs/filesystem.h"
+#include "blockcache/core/filesystem/filesystem.h"
 #include "blockcache/core/reactor/preempt.h"
 #include "blockcache/core/runtime/smp.h"
 #include "blockcache/store/local_filesystem.h"
@@ -88,7 +88,7 @@ Future<> DiskCacheLoader::LoadStageBlocks() {
   for (; !ec && it != std::filesystem::directory_iterator(); it.increment(ec)) {
     uint64_t fs_id = 0;
     std::string_view name = Filename(it->path().native());
-    if (SplitUint(&name, '\0', &fs_id)) {
+    if (ConsumeUint(&name, '\0', &fs_id)) {
       dirs.emplace_back(it->path().string(), fs_id);
     }
   }
@@ -148,7 +148,7 @@ Future<DiskCacheLoader::Result> DiskCacheLoader::LoadDir(std::string dir,
     if (DiskCacheLayout::IsTempFilename(name) ||
         !handle.ParseFromFilename(name)) {
       inflight.push_back(Unlink(path, &result));
-    } else if (OwnerShard(handle) == ThisShardId()) {
+    } else if (GetOwnerShard(handle) == ThisShardId()) {
       inflight.push_back(LoadBlock(path, handle, staged, &result));
     }
 

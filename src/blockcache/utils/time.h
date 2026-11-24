@@ -26,7 +26,6 @@ namespace blockcache {
 inline constexpr uint64_t kNsPerUs = 1000;
 inline constexpr uint64_t kNsPerMs = 1000 * kNsPerUs;
 inline constexpr uint64_t kNsPerSec = 1000 * kNsPerMs;
-inline constexpr uint64_t kUsPerSec = 1000 * 1000;
 
 inline uint64_t TimestampNs() {
   return std::chrono::duration_cast<std::chrono::nanoseconds>(

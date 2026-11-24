@@ -22,7 +22,7 @@
 #include <cerrno>
 #include <cstring>
 
-#include "blockcache/common/status.h"
+#include "blockcache/common/status_helper.h"
 
 namespace dingofs {
 namespace blockcache {

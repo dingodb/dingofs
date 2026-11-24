@@ -49,9 +49,13 @@ Status BlockCacheImpl::Start() {
 
   LOG(INFO) << "BlockCacheImpl is starting...";
 
-  StartProcessRuntime();
+  Status status = StartProcessRuntime();
+  if (!status.ok()) {
+    LOG(ERROR) << "Fail to start the process runtime: " << status.ToString();
+    return status;
+  }
 
-  Status status = StartTierCache();
+  status = StartTierCache();
   if (!status.ok()) {
     StopProcessRuntime();
     return status;
@@ -165,7 +169,7 @@ bool BlockCacheImpl::Check(BlockHandle handle, unsigned* shard) {
   if (!running_.load(std::memory_order_acquire)) {
     return false;
   }
-  *shard = OwnerIndex(handle, ShardCount());
+  *shard = GetOwnerShard(handle);
   return throttle_->Acquire(*shard);
 }
 

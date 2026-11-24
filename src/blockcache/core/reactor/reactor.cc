@@ -20,17 +20,18 @@
 #include <glog/logging.h>
 
 #include "blockcache/core/memory/shard_allocator.h"
+#include "blockcache/utils/validator.h"
 #include "common/options/cache.h"
 
 namespace dingofs {
 namespace blockcache {
 
-static bool Positive(const char* /*name*/, uint32_t value) { return value > 0; }
-
 DEFINE_uint32(idle_poll_us, 200,
               "microseconds a reactor spins on an empty queue before it sleeps;"
               " ignored under --poll_mode, which never sleeps");
 DEFINE_validator(idle_poll_us, Positive);
+
+DEFINE_bool(poll_mode, false, "busy-poll the reactors");
 
 Reactor::Reactor(unsigned shard_id)
     : shard_id_(shard_id),

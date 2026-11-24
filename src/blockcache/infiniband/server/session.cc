@@ -23,7 +23,7 @@
 #include <memory>
 #include <utility>
 
-#include "blockcache/common/status.h"
+#include "blockcache/common/status_helper.h"
 #include "blockcache/core/memory/buffer.h"
 #include "blockcache/core/reactor/coroutine.h"
 #include "blockcache/infiniband/connection/connection.h"

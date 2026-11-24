@@ -25,7 +25,7 @@
 #include <memory>
 
 #include "blockcache/core/reactor/reactor.h"
-#include "blockcache/utils/containers/park_queue.h"
+#include "blockcache/utils/park_queue.h"
 
 namespace dingofs {
 namespace blockcache {
@@ -46,7 +46,7 @@ class CreditFlowControl {
     template <TaskPromise P>
     void await_suspend(std::coroutine_handle<P> h) noexcept {
       task_ = &h.promise();
-      flow_control_->parked_.Push(this);
+      flow_control_->parked_.PushBack(this);
     }
 
     bool await_resume() noexcept {
@@ -108,7 +108,7 @@ class CreditFlowControl {
     available_send_credits_ = std::min<uint32_t>(
         available_send_credits_ + credits, max_send_credits_);
     while (!parked_.empty() && TryConsumeSendCredit(kCreditReturnReserve)) {
-      Waiter* waiter = parked_.Pop();
+      Waiter* waiter = parked_.PopFront();
       waiter->acquired_ = true;
       NotifyWaiter(waiter);
     }
@@ -116,7 +116,7 @@ class CreditFlowControl {
 
   void Shutdown() {
     shutdown_ = true;
-    parked_.TakeAllAnd([this](Waiter* waiter) { NotifyWaiter(waiter); });
+    parked_.ConsumeAll([this](Waiter* waiter) { NotifyWaiter(waiter); });
   }
 
  private:

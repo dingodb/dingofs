@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_BLOCKCACHE_UTILS_DAEMON_H_
-#define DINGOFS_BLOCKCACHE_UTILS_DAEMON_H_
+#ifndef DINGOFS_BLOCKCACHE_UTILS_DAEMONIZE_H_
+#define DINGOFS_BLOCKCACHE_UTILS_DAEMONIZE_H_
 
 #include <string>
 #include <vector>
@@ -23,10 +23,17 @@
 namespace dingofs {
 namespace blockcache {
 
-int DaemonizeAndWait(const std::vector<std::string>& args);
-void ReportDaemonReady();
+inline constexpr char kReadyFdEnv[] = "DINGO_CACHE_READY_FD";
+
+int TakeReadyFd();
+
+int StartDaemon(const std::vector<std::string>& argv);
+
+bool Detach(const std::string& output);
+
+void NotifyReady(int fd);
 
 }  // namespace blockcache
 }  // namespace dingofs
 
-#endif  // DINGOFS_BLOCKCACHE_UTILS_DAEMON_H_
+#endif  // DINGOFS_BLOCKCACHE_UTILS_DAEMONIZE_H_

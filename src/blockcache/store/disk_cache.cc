@@ -44,7 +44,7 @@ DEFINE_uint32(cache_size_mb, 102400, "cache size in mb");
 
 std::vector<DiskOption> ParseDiskOptions(const std::string& value) {
   std::vector<DiskOption> options;
-  for (std::string& item : Split(value, ',')) {
+  for (std::string& item : SplitStr(value, ',')) {
     DiskOption option;
     option.index = options.size();
     option.capacity_bytes = static_cast<uint64_t>(FLAGS_cache_size_mb) * kMiB;
@@ -52,7 +52,7 @@ std::vector<DiskOption> ParseDiskOptions(const std::string& value) {
     if (colon != std::string::npos) {
       uint64_t size_mb = 0;
       std::string_view size_sv = std::string_view(item).substr(colon + 1);
-      CHECK(SplitUint(&size_sv, '\0', &size_mb) && size_mb > 0)
+      CHECK(ConsumeUint(&size_sv, '\0', &size_mb) && size_mb > 0)
           << "bad disk size in cache_dir item: " << item;
       option.capacity_bytes = size_mb * kMiB;
       item.resize(colon);
@@ -205,7 +205,7 @@ Future<Status> DiskCache::Cache(BlockHandle handle, BufferViews block) {
 
 Future<Status> DiskCache::Load(BlockHandle handle, uint64_t offset,
                                uint32_t length, char* buffer) {
-  CHECK_LE(offset + length, AlignUp4K(handle.size));
+  CHECK_LE(offset + length, AlignUp<uint64_t>(handle.size, kIoAlign));
 
   const Status check = Check(kWantExec);
   if (!check.ok()) {

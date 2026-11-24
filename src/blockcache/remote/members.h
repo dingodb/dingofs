@@ -21,6 +21,7 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <string_view>
 #include <thread>
 #include <vector>
 
@@ -34,7 +35,8 @@ class MemberGroup {
  public:
   explicit MemberGroup(Members members);
 
-  const CacheGroupMember* GetMember(uint64_t key) const;
+  // The id of the member a key goes to; the group must not be empty.
+  std::string_view GetMember(uint64_t key) const;
 
   const Members& members() const { return members_; }
   const Members& raw_members() const { return raw_members_; }
@@ -49,7 +51,7 @@ class MemberGroup {
   static constexpr uint32_t kMaxWeightRatio = 64;
 
   Members FilterMembers(Members members);
-  std::vector<uint32_t> RecalcWeights(const Members& members);
+  std::vector<uint64_t> RecalcWeights(const Members& members);
 
   Members raw_members_;
   Members members_;

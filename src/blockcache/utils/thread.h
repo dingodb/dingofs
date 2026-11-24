@@ -19,10 +19,11 @@
 
 #include <glog/logging.h>
 #include <pthread.h>
+#include <sched.h>
 
 #include <cstdio>
-#include <string>
 #include <string_view>
+#include <vector>
 
 namespace dingofs {
 namespace blockcache {
@@ -34,17 +35,30 @@ inline void SetThreadName(std::string_view name) {
   (void)::pthread_setname_np(::pthread_self(), buffer);
 }
 
-inline bool PinThreadToCpu(pthread_t thread, int cpu) {
+inline bool BindThreadToCpu(pthread_t thread, int cpu) {
   cpu_set_t mask;
   CPU_ZERO(&mask);
   CPU_SET(cpu, &mask);
   int rc = ::pthread_setaffinity_np(thread, sizeof(mask), &mask);
   if (rc != 0) {
-    LOG(WARNING) << "Fail to pin thread to cpu=" << cpu << ": "
+    LOG(WARNING) << "Fail to bind thread to cpu=" << cpu << ": "
                  << std::strerror(rc);
     return false;
   }
   return true;
+}
+
+inline std::vector<int> GetThreadCpus(pthread_t thread) {
+  cpu_set_t mask;
+  CPU_ZERO(&mask);
+  (void)::pthread_getaffinity_np(thread, sizeof(mask), &mask);
+  std::vector<int> cpus;
+  for (int cpu = 0; cpu < CPU_SETSIZE; ++cpu) {
+    if (CPU_ISSET(cpu, &mask)) {
+      cpus.push_back(cpu);
+    }
+  }
+  return cpus;
 }
 
 }  // namespace blockcache

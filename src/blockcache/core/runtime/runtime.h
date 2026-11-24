@@ -18,13 +18,14 @@
 #define DINGOFS_BLOCKCACHE_CORE_RUNTIME_RUNTIME_H_
 
 #include <atomic>
-#include <barrier>
 #include <cstdint>
-#include <latch>
 #include <memory>
 #include <thread>
 #include <utility>
 #include <vector>
+
+#include "blockcache/common/status.h"
+#include "blockcache/core/runtime/lifecycle_barrier.h"
 
 namespace dingofs {
 namespace blockcache {
@@ -32,7 +33,7 @@ namespace blockcache {
 class ShardLayout {
  public:
   // Reads --shards / --cpuset / --pin_cpu.
-  static ShardLayout Plan();
+  static StatusOr<ShardLayout> Plan();
 
   int CpuOf(unsigned shard) const { return cpu_of_shard_[shard]; }
   unsigned shard_count() const {
@@ -46,27 +47,6 @@ class ShardLayout {
   std::vector<int> cpu_of_shard_;
 };
 
-class LifecycleBarrier {
- public:
-  explicit LifecycleBarrier(unsigned shard_count)
-      : all_started_(shard_count + 1),
-        all_stopped_(shard_count),
-        stop_issued_(1) {}
-
-  LifecycleBarrier(const LifecycleBarrier&) = delete;
-  LifecycleBarrier& operator=(const LifecycleBarrier&) = delete;
-
-  void WaitAllStarted() { all_started_.arrive_and_wait(); }
-  void WaitAllStopped() { all_stopped_.arrive_and_wait(); }
-  void IssueStop() { stop_issued_.count_down(); }
-  void WaitStopIssued() { stop_issued_.wait(); }
-
- private:
-  std::barrier<> all_started_;
-  std::barrier<> all_stopped_;
-  std::latch stop_issued_;
-};
-
 // The shard threads: start them, stop them, join them. That is all.
 //
 // Reaching INTO a shard is smp.h's job -- SubmitTo from another shard, PostTo
@@ -75,7 +55,7 @@ class LifecycleBarrier {
 // and no component takes one at construction.
 class Runtime {
  public:
-  Runtime();
+  explicit Runtime(ShardLayout layout);
   ~Runtime();
 
   Runtime(const Runtime&) = delete;
@@ -95,7 +75,7 @@ class Runtime {
   struct StopWork;  // defined in runtime.cc; one per shard, posted once
 
   ShardLayout layout_;
-  LifecycleBarrier gate_;
+  LifecycleBarrier barrier_;
   std::atomic<State> state_{State::kIdle};
   std::vector<std::thread> threads_;
   std::unique_ptr<StopWork[]> stops_;

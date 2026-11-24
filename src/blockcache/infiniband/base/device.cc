@@ -29,7 +29,7 @@
 #include <utility>
 
 #include "absl/cleanup/cleanup.h"
-#include "blockcache/common/status.h"
+#include "blockcache/common/status_helper.h"
 #include "blockcache/core/reactor/reactor.h"
 
 namespace dingofs {

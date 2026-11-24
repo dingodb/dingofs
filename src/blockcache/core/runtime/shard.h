@@ -17,14 +17,15 @@
 #ifndef DINGOFS_BLOCKCACHE_CORE_RUNTIME_SHARD_H_
 #define DINGOFS_BLOCKCACHE_CORE_RUNTIME_SHARD_H_
 
-#include "blockcache/core/fs/io_ring.h"
+#include "blockcache/core/filesystem/io_ring.h"
 #include "blockcache/core/reactor/poller.h"
 #include "blockcache/core/reactor/reactor.h"
-#include "blockcache/core/runtime/runtime.h"
 #include "blockcache/core/runtime/shard_inbox.h"
 
 namespace dingofs {
 namespace blockcache {
+
+class LifecycleBarrier;
 
 void BecomeShardThread(unsigned shard, int cpu);
 
@@ -36,12 +37,9 @@ class Shard {
   Shard(const Shard&) = delete;
   Shard& operator=(const Shard&) = delete;
 
-  void Run(LifecycleBarrier& gate);
+  void Run(LifecycleBarrier& barrier);
 
  private:
-  void RegisterPollers();
-  void UnregisterPollers();
-
   unsigned id_;
   ShardInbox* inbox_;    // outside -> shard
   Poller* mesh_poller_;  // peer shards -> shard; null when it has no peer

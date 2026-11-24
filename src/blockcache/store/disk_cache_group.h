@@ -17,8 +17,11 @@
 #ifndef DINGOFS_BLOCKCACHE_STORE_DISK_CACHE_GROUP_H_
 #define DINGOFS_BLOCKCACHE_STORE_DISK_CACHE_GROUP_H_
 
+#include <absl/container/flat_hash_map.h>
+
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "blockcache/store/cache_store.h"
@@ -49,10 +52,11 @@ class DiskCacheGroup final : public CacheStore {
 
  private:
   DiskCache& GetStore(BlockHandle handle) {
-    return *stores_[chash_.MemberOf(handle.id)];
+    return *stores_by_uuid_.at(chash_.GetMember(handle.id));
   }
 
   std::vector<DiskCacheUPtr> stores_;
+  absl::flat_hash_map<std::string, DiskCache*> stores_by_uuid_;
   ConsistentHash chash_;
 };
 

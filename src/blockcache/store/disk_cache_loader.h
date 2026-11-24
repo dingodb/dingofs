@@ -25,10 +25,10 @@
 
 #include "blockcache/common/block_handle.h"
 #include "blockcache/core/reactor/coroutine.h"
+#include "blockcache/core/reactor/gate.h"
 #include "blockcache/store/cache_manager.h"
 #include "blockcache/store/cache_store.h"
 #include "blockcache/store/layout.h"
-#include "blockcache/utils/gate.h"
 
 namespace dingofs {
 namespace blockcache {

@@ -24,7 +24,7 @@
 
 #include "blockcache/core/reactor/reactor.h"
 #include "blockcache/infiniband/base/buffer_pool.h"
-#include "blockcache/utils/containers/park_queue.h"
+#include "blockcache/utils/park_queue.h"
 
 namespace dingofs {
 namespace blockcache {
@@ -51,7 +51,7 @@ class SendBufferPool {
     template <TaskPromise P>
     void await_suspend(std::coroutine_handle<P> h) noexcept {
       task_ = &h.promise();
-      pool_->parked_.Push(this);
+      pool_->parked_.PushBack(this);
     }
 
     SendBuffer* await_resume() noexcept {
@@ -90,7 +90,7 @@ class SendBufferPool {
   Waiter Acquire() { return Waiter(this); }
 
   void Release(SendBuffer* buffer) {
-    Waiter* waiter = parked_.Pop();
+    Waiter* waiter = parked_.PopFront();
     if (waiter != nullptr) {
       waiter->buffer_ = buffer;
       NotifyWaiter(waiter);
@@ -101,7 +101,7 @@ class SendBufferPool {
   }
 
   void FailAll() {
-    parked_.TakeAllAnd([this](Waiter* waiter) {
+    parked_.ConsumeAll([this](Waiter* waiter) {
       waiter->buffer_ = nullptr;
       NotifyWaiter(waiter);
     });

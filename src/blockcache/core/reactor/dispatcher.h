@@ -120,7 +120,6 @@ class EventRing {
 
  private:
   void Init(unsigned queue_len);
-  void CheckOpcodes();
 
   io_uring ring_;
   bool open_ = false;

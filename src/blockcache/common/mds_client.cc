@@ -36,24 +36,13 @@
 namespace dingofs {
 namespace blockcache {
 
-static bool NonEmptyString(const char* /*name*/, const std::string& value) {
-  return !value.empty();
-}
-
 DEFINE_string(mds_addrs, "127.0.0.1:7400", "mds addresses");
-DEFINE_validator(mds_addrs, NonEmptyString);
+DEFINE_validator(mds_addrs, [](const char* /*name*/, const std::string& value) {
+  return !value.empty();
+});
 
-DEFINE_int64(cache_mds_rpc_timeout_ms, 3000,
-             "timeout for cache mds rpcs in milliseconds");
-DEFINE_validator(cache_mds_rpc_timeout_ms, brpc::PassValidate);
-
-DEFINE_int32(cache_mds_rpc_retry_times, 1,
-             "retry count for each cache mds rpc attempt");
-DEFINE_validator(cache_mds_rpc_retry_times, brpc::PassValidate);
-
-DEFINE_uint32(cache_mds_request_retry_times, 3,
-              "retry count for the cache mds request wrapper");
-DEFINE_validator(cache_mds_request_retry_times, brpc::PassValidate);
+DEFINE_int64(mds_rpc_timeout_ms, 3000, "mds rpc timeout in milliseconds");
+DEFINE_validator(mds_rpc_timeout_ms, brpc::PassValidate);
 
 MDSClientImpl::MDSClientImpl()
     : running_(false), rpc_(FLAGS_mds_addrs, "cache"), mds_discovery_(rpc_) {}
@@ -217,7 +206,7 @@ bool MDSClientImpl::ShouldRetry(Status status) {
       {pb::error::EINTERNAL, true},
       {pb::error::ENOT_CAN_CONNECTED, true},
   };
-  return status.IsNetError() || should_retry_errnos.count(status.Errno()) != 0;
+  return status.IsNetError() || should_retry_errnos.contains(status.Errno());
 }
 
 bool MDSClientImpl::ShouldMarkMDSAbnormal(Status status) {
@@ -230,7 +219,7 @@ bool MDSClientImpl::ShouldRefreshMDSList(Status status) {
       {pb::error::ENOT_SERVE, true},
   };
 
-  return should_refresh_errnos.count(status.Errno()) != 0;
+  return should_refresh_errnos.contains(status.Errno());
 }
 
 template <typename Request, typename Response>
@@ -239,10 +228,10 @@ Status MDSClientImpl::SendRequest(const std::string& service_name,
                                   Response& response) {
   mds::MDSMeta mds, old_mds;
   client::vfs::meta::SendRequestOption rpc_option;
-  rpc_option.timeout_ms = FLAGS_cache_mds_rpc_timeout_ms;
-  rpc_option.max_retry = FLAGS_cache_mds_rpc_retry_times;
+  rpc_option.timeout_ms = FLAGS_mds_rpc_timeout_ms;
+  rpc_option.max_retry = 1;
 
-  for (int retry = 0; retry < FLAGS_cache_mds_request_retry_times; ++retry) {
+  for (int attempt = 0; attempt < 3; ++attempt) {
     mds = GetRandomlyMDS(old_mds);
     auto endpoint = client::vfs::meta::StrToEndpoint(mds.Host(), mds.Port());
 

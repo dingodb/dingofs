@@ -17,8 +17,6 @@
 #ifndef DINGOFS_BLOCKCACHE_UTILS_CPU_H_
 #define DINGOFS_BLOCKCACHE_UTILS_CPU_H_
 
-#include <pthread.h>
-
 #include <string>
 #include <vector>
 
@@ -27,7 +25,9 @@
 namespace dingofs {
 namespace blockcache {
 
-// x86 PAUSE / aarch64 YIELD for the idle-spin loop.
+inline constexpr int kNoCpu = -1;
+inline constexpr int kNoNumaNode = -1;
+
 inline void CpuRelax() noexcept {
 #if defined(__x86_64__) || defined(__i386__)
   __builtin_ia32_pause();
@@ -38,12 +38,11 @@ inline void CpuRelax() noexcept {
 #endif
 }
 
-std::vector<int> GetAllCpus();
 StatusOr<std::vector<int>> ParseCpuSet(const std::string& spec);
-std::vector<int> GetPhyCores(const std::vector<int>& cpus);
+std::vector<int> GetOnlineCpus();
+int GetSiblingCpu(int cpu);
+std::vector<int> RemoveSiblingCpus(const std::vector<int>& cpus);
 int GetNumaNode(int cpu);
-int GetSmtSibling(int cpu);
-void BindPages(void* addr, size_t length, int numa_node);
 
 }  // namespace blockcache
 }  // namespace dingofs

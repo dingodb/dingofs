@@ -23,6 +23,7 @@
 #include <ios>
 
 #include "blockcache/common/status.h"
+#include "blockcache/common/status_helper.h"
 #include "blockcache/infiniband/base/region.h"
 #include "blockcache/infiniband/common/wr_id.h"
 #include "blockcache/infiniband/connection/send_queue.h"

@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_BLOCKCACHE_UTILS_GATE_H_
-#define DINGOFS_BLOCKCACHE_UTILS_GATE_H_
+#ifndef DINGOFS_BLOCKCACHE_CORE_REACTOR_GATE_H_
+#define DINGOFS_BLOCKCACHE_CORE_REACTOR_GATE_H_
 
 #include <algorithm>
 #include <chrono>
@@ -96,4 +96,4 @@ class Gate {
 }  // namespace blockcache
 }  // namespace dingofs
 
-#endif  // DINGOFS_BLOCKCACHE_UTILS_GATE_H_
+#endif  // DINGOFS_BLOCKCACHE_CORE_REACTOR_GATE_H_

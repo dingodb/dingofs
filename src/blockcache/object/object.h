@@ -75,6 +75,9 @@ class ObjectStorage {
   Future<bool> WaitBackoff(uint64_t backoff_ms);
 
   StorageClient* client_;
+  uint64_t put_backoff_base_ms_ = 1000;
+  uint64_t get_backoff_base_ms_ = 300;
+  uint64_t notfound_backoff_base_ms_ = 500;
   bvar::Adder<int64_t> num_upload_retry_;
   bvar::Adder<int64_t> num_download_retry_;
   bvar::Adder<int64_t> num_download_notfound_retry_;

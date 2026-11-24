@@ -68,27 +68,27 @@ void ShardedTierCache::Shutdown() {
 
 Future<Status> ShardedTierCache::Put(BlockHandle handle, BufferViews block,
                                      PutOption option) {
-  return InvokeOnOwner(
+  return RunOnOwner(
       handle, [=](TierCache& tier) { return tier.Put(handle, block, option); });
 }
 
 Future<Status> ShardedTierCache::Get(BlockHandle handle, uint64_t offset,
                                      uint32_t length, char* buffer,
                                      GetOption option) {
-  return InvokeOnOwner(handle, [=](TierCache& tier) {
+  return RunOnOwner(handle, [=](TierCache& tier) {
     return tier.Get(handle, offset, length, buffer, option);
   });
 }
 
 Future<Status> ShardedTierCache::Prefetch(BlockHandle handle,
                                           PrefetchOption option) {
-  return InvokeOnOwner(
+  return RunOnOwner(
       handle, [=](TierCache& tier) { return tier.Prefetch(handle, option); });
 }
 
 Future<Status> ShardedTierCache::Delete(BlockHandle handle,
                                         DeleteOption option) {
-  return InvokeOnOwner(
+  return RunOnOwner(
       handle, [=](TierCache& tier) { return tier.Delete(handle, option); });
 }
 
