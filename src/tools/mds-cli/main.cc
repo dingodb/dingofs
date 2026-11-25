@@ -32,74 +32,74 @@
 DEFINE_string(
     coor_addr, "",
     "coordinator address, etc: list://127.0.0.1:22001 or file://./coor_list");
-DEFINE_string(mds_addr, "", "mds address");
+DEFINE_string(mds_addr, "", "mds address, e.g. 127.0.0.1:7400 (required by mds commands)");
 
-DEFINE_string(cmd, "", "command");
+DEFINE_string(cmd, "", "command to run, see Usage (required)");
 DEFINE_string(format, "pretty", "output format: pretty or json");
 DEFINE_string(color, "auto", "ANSI color: auto, always, or never");
 DEFINE_bool(verbose, false, "show verbose command output");
 
-DEFINE_uint32(cluster_id, 0, "cluster id");
+DEFINE_uint32(cluster_id, 0, "dingofs cluster id, used in meta table names");
 
-DEFINE_string(s3_endpoint, "", "s3 endpoint");
-DEFINE_string(s3_ak, "", "s3 ak");
-DEFINE_string(s3_sk, "", "s3 sk");
+DEFINE_string(s3_endpoint, "", "s3 endpoint, e.g. http://127.0.0.1:9000");
+DEFINE_string(s3_ak, "", "s3 access key");
+DEFINE_string(s3_sk, "", "s3 secret key");
 DEFINE_string(s3_bucketname, "", "s3 bucket name");
-DEFINE_string(s3_objectname, "", "s3 object name");
+DEFINE_string(s3_objectname, "", "s3 object name (backup/restore to s3)");
 
-DEFINE_string(rados_user_name, "", "s3 user name");
-DEFINE_string(rados_pool_name, "", "s3 pool name");
+DEFINE_string(rados_user_name, "", "rados user name");
+DEFINE_string(rados_pool_name, "", "rados pool name");
 DEFINE_string(rados_mon_host, "", "rados mon host");
 DEFINE_string(rados_key, "", "rados key");
 DEFINE_string(rados_cluster_name, "", "rados cluster name");
 
-DEFINE_string(fs_name, "", "fs name");
-DEFINE_uint32(fs_id, 0, "fs id");
-DEFINE_string(fs_partition_type, "mono", "fs partition type");
+DEFINE_string(fs_name, "", "filesystem name");
+DEFINE_uint32(fs_id, 0, "filesystem id (0: unset)");
+DEFINE_string(fs_partition_type, "mono", "createfs: fs partition type, mono or parent_hash");
 
-DEFINE_uint32(chunk_size, 64 * 1024 * 1024, "chunk size");
-DEFINE_uint32(block_size, 4 * 1024 * 1024, "block size");
+DEFINE_uint32(chunk_size, 64 * 1024 * 1024, "createfs: chunk size in bytes");
+DEFINE_uint32(block_size, 4 * 1024 * 1024, "createfs: block size in bytes");
 
-DEFINE_string(name, "", "name");
-DEFINE_string(prefix, "", "prefix");
+DEFINE_string(name, "", "dentry name (mkdir, mknod, getdentry)");
+DEFINE_string(prefix, "", "name prefix (batchmkdir, batchmknod)");
 
-DEFINE_uint64(ino, 0, "ino");
+DEFINE_uint64(ino, 0, "inode number (getinode, quota, dir-stats commands)");
 DEFINE_string(
     path, "",
     "directory path for dir-stats commands; an absolute OS mount path (e.g. "
     "/mnt/dingofs/a/b) is recommended -- it also renders the full info header; "
     "a mount-relative path (e.g. a/b) still resolves the inode but the path "
     "header is degraded; alternative to --ino");
-DEFINE_uint64(parent, 0, "parent");
-DEFINE_string(parents, "", "parents");
-DEFINE_uint32(num, 3, "num");
+DEFINE_uint64(parent, 0, "parent inode number (mkdir, mknod, getdentry, listdentry)");
+DEFINE_string(parents, "", "comma-separated inode list, e.g. 1,2,3 (batch commands)");
+DEFINE_uint32(num, 3, "createfs: expected mds num; batchmkdir/batchmknod: count per parent");
 
-DEFINE_uint64(max_bytes, 1024 * 1024 * 1024, "max bytes");
-DEFINE_uint64(max_inodes, 1000000, "max inodes");
+DEFINE_uint64(max_bytes, 1024 * 1024 * 1024, "quota max bytes");
+DEFINE_uint64(max_inodes, 1000000, "quota max inodes");
 
-DEFINE_bool(is_force, false, "is force");
+DEFINE_bool(is_force, false, "force the operation (deletefs, restore)");
 DEFINE_bool(keep_data, false, "deletefs: only delete metadata, keep file data");
 DEFINE_bool(immediately, false, "deletefs: clean metadata immediately, requires keep_data");
 
-DEFINE_string(type, "", "type backup[meta|fsmeta]");
-DEFINE_string(output_type, "stdout", "output type[stdout|file|s3]");
-DEFINE_string(input_type, "stdout", "input type[stdout|file|s3]");
-DEFINE_string(out, "./output", "output file path");
-DEFINE_string(in, "./input", "input file path");
-DEFINE_bool(is_binary, false, "is binary");
+DEFINE_string(type, "", "backup/restore type: meta or fsmeta (fsmeta needs fs_id)");
+DEFINE_string(output_type, "stdout", "backup output: stdout, file or s3");
+DEFINE_string(input_type, "stdout", "restore input: stdout, file or s3");
+DEFINE_string(out, "./output", "backup output file path");
+DEFINE_string(in, "./input", "restore input file path");
+DEFINE_bool(is_binary, false, "backup in binary format");
 
 DEFINE_string(mds_id_list, "", "mds id list for joinfs, quitfs or deletemds, e.g. 1,2,3. "
               "deletemds: only for offline mds, quitfs first");
 
-DEFINE_string(member_id, "", "cache member id must be uuid");
+DEFINE_string(member_id, "", "cache member id (must be uuid)");
 DEFINE_string(cache_member_ip, "", "cache member ip");
 DEFINE_uint32(cache_member_port, 0, "cache member port");
 DEFINE_string(group_name, "", "cache group name");
 DEFINE_uint32(weight, 0, "cache member weight");
 
-DEFINE_string(storage_path, "", "local storage path");
+DEFINE_string(storage_path, "", "createfs: local storage path for a local-file fs");
 
-DEFINE_string(storage_engine, "dingo-store", "storage engine");
+DEFINE_string(storage_engine, "dingo-store", "store commands: storage engine, dingo-store or tikv");
 
 // Trash restore (`restoretrash` subcommand).
 DEFINE_string(hours, "",
@@ -140,8 +140,8 @@ DEFINE_uint32(entries, 10,
 DEFINE_uint32(dir_threads, 50,
               "concurrency for the client-side directory-tree walk "
               "(info -r / summary / syncdirstat)");
-DEFINE_bool(strict, false, "strict (accurate, full traversal)");
-DEFINE_bool(recursive, false, "recursive");
+DEFINE_bool(strict, false, "summary: strict (accurate, full traversal)");
+DEFINE_bool(recursive, false, "info/syncdirstat: walk sub-directories recursively");
 DEFINE_bool(repair, false, "repair inconsistent dir stats");
 DEFINE_bool(
     raw, false,
@@ -174,12 +174,64 @@ static std::string GetLastName(const std::string& name) {
 
 static dingofs::FlagExtraInfo extras = {
     .program = "dingo-mds-client",
-    .usage = "  dingo-mds-client [OPTIONS]",
-    .examples =
-        R"(  $ dingo-mds-client --cmd=backup --type=meta --output_type=file --out=backup_restore/meta_backup1
-  $ dingo-mds-client --cmd=restore --type=meta --input_type=file --in=backup_restore/meta_backup1
+    .usage = R"(  dingo-mds-client --mds_addr=<ip:port[,..]> --cmd=<command> [OPTIONS]
+  dingo-mds-client --coor_addr=<list://..|file://..> --cmd=<command> [OPTIONS]
+
+  --mds_addr  : used by MDS commands (fs / dir / quota / cache / trash / dir-stats).
+  --coor_addr : used by backup / restore / store commands; when empty, it falls
+                back to ./coor_list, ./conf/coor_list or ./bin/coor_list.
+  Command names are case-insensitive. Options are listed at the bottom.
+
+Commands (key options in brackets):
+  Filesystem (MDS)
+    createfs   [fs_name fs_id fs_partition_type chunk_size block_size num
+                trash_days immediate_trash_quota enable_uid_gid_map
+                enable_dir_stats s3_*|rados_*|storage_path]
+    deletefs   [fs_name is_force keep_data immediately]
+    getfs / listfs / getmdslist           [fs_name]
+    updatefs / updatefss3info / updatefsradosinfo   [fs_name s3_*|rados_*]
+    updatefstrashdays / updatefsenableuidgidmap / updatefsenabledirstats
+               [fs_name trash_days|enable_uid_gid_map|enable_dir_stats]
+    joinfs / quitfs                       [fs_name|fs_id mds_id_list]
+    setfsstats / continuesetfsstats / getfsstats / getfspersecondstats [fs_name]
+    restoretrash [fs_id hours put_back restore_threads]
+  Metadata (MDS)
+    mkdir / mknod [fs_id parent name]     getdentry [fs_id parent name]
+    listdentry [fs_id parent]             getinode  [fs_id ino]
+    batchmkdir / batchmknod [fs_id parents prefix num]
+    batchgetinode / batchgetxattr [fs_id parents(as inode list)]
+  Quota (MDS)
+    setfsquota [fs_id max_bytes max_inodes]    getfsquota [fs_id]
+    setdirquota [fs_id ino max_bytes max_inodes]
+    getdirquota / deletedirquota [fs_id ino]
+  Dir stats (MDS)
+    info / summary [fs_id ino|path depth entries dir_threads recursive raw]
+    syncdirstat    [fs_id ino|path recursive repair dir_threads]
+  Cache group (MDS)
+    joincachegroup [member_id cache_member_ip cache_member_port group_name weight]
+    leavecachegroup [member_id cache_member_ip cache_member_port group_name]
+    reweightmember [member_id cache_member_ip cache_member_port weight]
+    unlockmember   [member_id cache_member_ip cache_member_port]
+    deletemember   [member_id]   listgroups   listmembers [group_name]
+  Backup / restore (coordinator)
+    backup  [type=meta|fsmeta fs_id output_type=stdout|file|s3 out is_binary s3_*]
+    restore [type=meta|fsmeta fs_id input_type=stdout|file|s3 in is_force s3_*]
+  Store (coordinator, offline maintenance)
+    createmetatable / createfsstatstable / createalltable
+    dropmetatable / dropfsstatstable / dropfsmetatable [fs_id]
+    updatefss3infobystore / updatefsradosinfobystore [fs_name s3_*|rados_*]
+    deletemds [mds_id_list]   tree [fs_id]   (uses cluster_id, storage_engine)
 )",
-    .patterns = {"mds/client"},
+    .examples =
+        R"(  $ dingo-mds-client --mds_addr=127.0.0.1:7400 --cmd=listfs
+  $ dingo-mds-client --mds_addr=127.0.0.1:7400 --cmd=createfs --fs_name=myfs --s3_endpoint=http://s3:9000 --s3_ak=AK --s3_sk=SK --s3_bucketname=bkt
+  $ dingo-mds-client --mds_addr=127.0.0.1:7400 --cmd=setdirquota --fs_id=1 --ino=1024 --max_bytes=10737418240 --max_inodes=100000
+  $ dingo-mds-client --mds_addr=127.0.0.1:7400 --cmd=info --fs_id=1 --path=/mnt/dingofs/a/b
+  $ dingo-mds-client --mds_addr=127.0.0.1:7400 --cmd=summary --fs_id=1 --ino=1024 --depth=3 --format=json
+  $ dingo-mds-client --coor_addr=file://./coor_list --cmd=backup --type=meta --output_type=file --out=backup_restore/meta_backup1
+  $ dingo-mds-client --coor_addr=file://./coor_list --cmd=restore --type=meta --input_type=file --in=backup_restore/meta_backup1
+)",
+    .patterns = {"tools/mds-cli"},
 };
 
 int main(int argc, char* argv[]) {
@@ -376,5 +428,8 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  return dingofs::mds::client::GetOutputExitCode();
+  std::cerr << (lower_cmd.empty() ? "missing --cmd"
+                                  : "unknown --cmd: " + FLAGS_cmd)
+            << ", run with --help to see supported commands\n";
+  return 2;
 }
