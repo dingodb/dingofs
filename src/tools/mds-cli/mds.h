@@ -230,7 +230,8 @@ class MDSClient {
                           const std::string& client_id);
   UmountFsResponse UmountFs(const std::string& fs_name,
                             const std::string& client_id);
-  DeleteFsResponse DeleteFs(const std::string& fs_name, bool is_force);
+  DeleteFsResponse DeleteFs(const std::string& fs_name, bool is_force,
+                            bool keep_data, bool immediately);
   UpdateFsInfoResponse UpdateFs(const std::string& fs_name,
                                 const pb::mds::FsInfo& fs_info);
   GetFsInfoResponse GetFs(const std::string& fs_name);
@@ -382,6 +383,8 @@ class MdsCommandRunner {
     uint64_t max_bytes;
     uint64_t max_inodes;
     bool is_force{false};
+    bool keep_data{false};
+    bool immediately{false};
 
     std::string storage_path;
 

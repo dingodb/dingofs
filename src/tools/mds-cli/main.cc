@@ -78,6 +78,8 @@ DEFINE_uint64(max_bytes, 1024 * 1024 * 1024, "max bytes");
 DEFINE_uint64(max_inodes, 1000000, "max inodes");
 
 DEFINE_bool(is_force, false, "is force");
+DEFINE_bool(keep_data, false, "deletefs: only delete metadata, keep file data");
+DEFINE_bool(immediately, false, "deletefs: clean metadata immediately, requires keep_data");
 
 DEFINE_string(type, "", "type backup[meta|fsmeta]");
 DEFINE_string(output_type, "stdout", "output type[stdout|file|s3]");
@@ -292,6 +294,8 @@ int main(int argc, char* argv[]) {
     options.storage_path = FLAGS_storage_path;
 
     options.is_force = FLAGS_is_force;
+    options.keep_data = FLAGS_keep_data;
+    options.immediately = FLAGS_immediately;
 
     // cache member
     options.member_id = FLAGS_member_id;

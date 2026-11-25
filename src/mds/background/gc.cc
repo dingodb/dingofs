@@ -789,6 +789,18 @@ void GcProcessor::ScanDelFs(const FsInfoEntry& fs_info) {
 
   Trace trace;
   std::string prefix = "delfs." + std::to_string(fs_id) + ".";
+
+  // keep_data: no file data to clean, drop metadata directly
+  if (fs_info.keep_data()) {
+    auto status = file_system_set_->DestroyFsResource(fs_id);
+    LOG(INFO) << fmt::format("[gc.delfs.{}] keep data, clean fs resource, status({}).", fs_id, status.error_str());
+    if (!status.ok()) return;
+
+    status = CleanFsInfo(fs_info);
+    LOG(INFO) << fmt::format("[gc.delfs.{}] keep data, clean fs info, status({}).", fs_id, status.error_str());
+    return;
+  }
+
   std::string start_key =
       recycle_progress.last_ino() == 0 ? "" : MetaCodec::EncodeInodeKey(fs_id, recycle_progress.last_ino());
   ScanFsMetaTableOperation operation(
