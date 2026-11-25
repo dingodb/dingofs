@@ -225,6 +225,17 @@ TEST(HelperTest, PrefixNext) {
             std::string("\xff", 1));
 }
 
+TEST(HelperTest, KeyNext) {
+  EXPECT_EQ(::dingofs::Helper::KeyNext("abc"), std::string("abc\0", 4));
+  EXPECT_EQ(::dingofs::Helper::KeyNext(""), std::string("\0", 1));
+  // all-0xFF still yields a strictly greater key (PrefixNext can't)
+  const std::string ff("\xff", 1);
+  EXPECT_GT(::dingofs::Helper::KeyNext(ff), ff);
+  // nothing lies between key and KeyNext(key), but prefixed keys are kept
+  EXPECT_LT(std::string("a"), ::dingofs::Helper::KeyNext("a"));
+  EXPECT_LE(::dingofs::Helper::KeyNext("a"), std::string("ab"));
+}
+
 TEST(HelperTest, GenerateRandomStringHasRequestedLength) {
   EXPECT_EQ(::dingofs::Helper::GenerateRandomString(32).size(), 32u);
 }

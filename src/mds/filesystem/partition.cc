@@ -248,7 +248,7 @@ Status ShardPartition::Scan(const std::string& trace_id, const std::string& star
                             bool is_only_dir, std::vector<Dentry>& dentries) {
   limit = (limit > 0) ? limit : UINT32_MAX;
 
-  std::string next_name = ::dingofs::Helper::PrefixNext(start_name);
+  std::string next_name = ::dingofs::Helper::KeyNext(start_name);
   do {
     Range range;
     auto shard = GetShard(next_name, range);
