@@ -331,6 +331,41 @@ TEST_F(FileSystemSetTest, DeleteFs) {
       << "not should found fs, error: " << status.error_str();
 }
 
+TEST_F(FileSystemSetTest, DeleteFsKeepDataImmediately) {
+  auto fs_set = FsSet();
+
+  FileSystemSet::CreateFsParam param;
+  param.fs_id = 0;
+  param.fs_name = "test_fs_for_delete_keep_data";
+  param.block_size = 1024 * 1024;
+  param.chunk_size = 64 * 1024 * 1024;
+  param.fs_type = pb::mds::FsType::S3;
+  param.partition_type = pb::mds::PartitionType::MONOLITHIC_PARTITION;
+  param.candidate_mds_ids = {kMdsId};
+  *param.fs_extra.mutable_s3_info() = CreateS3Info();
+  param.owner = "dengzh";
+  param.capacity = 1024 * 1024 * 1024;
+  param.recycle_time_hour = 24;
+
+  pb::mds::FsInfo fs_info;
+  auto status = fs_set->CreateFs(param, fs_info);
+  ASSERT_TRUE(status.ok()) << "create fs fail, error: " << status.error_str();
+
+  Context ctx;
+  status = fs_set->DeleteFs(ctx, param.fs_name, false, true, true);
+  ASSERT_TRUE(status.ok()) << "delete fs fail, error: " << status.error_str();
+
+  ASSERT_EQ(nullptr, fs_set->GetFileSystem(fs_info.fs_id()));
+
+  // metadata is cleaned right away, not even a deleted fs record remains
+  std::vector<pb::mds::FsInfo> fs_infoes;
+  status = fs_set->GetAllFsInfo(ctx, true, fs_infoes);
+  ASSERT_TRUE(status.ok());
+  for (const auto& info : fs_infoes) {
+    ASSERT_NE(info.fs_id(), fs_info.fs_id());
+  }
+}
+
 TEST_F(FileSystemSetTest, MountFs) {
   auto fs_set = FsSet();
 

@@ -503,7 +503,8 @@ void MDSServiceImpl::DoDeleteFs(google::protobuf::RpcController*, const pb::mds:
   }
 
   Context ctx(request->context(), request->info().request_id(), __func__);
-  status = file_system_set_->DeleteFs(ctx, request->fs_name(), request->is_force());
+  status = file_system_set_->DeleteFs(ctx, request->fs_name(), request->is_force(), request->keep_data(),
+                                      request->immediately());
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     SpanScope::SetStatus(span, status);
@@ -519,6 +520,9 @@ void MDSServiceImpl::DeleteFs(google::protobuf::RpcController* controller, const
   auto validate_fn = [&]() -> Status {
     if (request->fs_name().empty()) {
       return Status(pb::error::EILLEGAL_PARAMTETER, "fs name is empty");
+    }
+    if (request->immediately() && !request->keep_data()) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "immediately only valid with keep_data");
     }
 
     return Status::OK();
