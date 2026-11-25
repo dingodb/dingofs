@@ -103,6 +103,8 @@ class Helper {
   static float GenerateRandomFloat(float min_value, float max_value);
 
   static std::string PrefixNext(const std::string& input);
+  // smallest key strictly greater than input
+  static std::string KeyNext(const std::string& input);
   static std::string EndPointToString(const butil::EndPoint& endpoint);
   static bool SaveFile(const std::string& filepath, const std::string& data);
   static std::string FsModeToString(mode_t mode);

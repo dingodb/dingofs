@@ -246,7 +246,7 @@ Status TikvTxn::DoScan(const Range& range, uint32_t limit, std::vector<KeyValue>
 
       if (kvs.size() >= limit || kv_pairs.size() < actual_limit) return Status::OK();
 
-      if (!kvs.empty()) start_key = ::dingofs::Helper::PrefixNext(kvs.back().key);
+      if (!kvs.empty()) start_key = ::dingofs::Helper::KeyNext(kvs.back().key);
 
     } catch (const std::exception& e) {
       if (IsOutOfRange(e.what())) {
@@ -558,7 +558,7 @@ Status TikvTxnAsync::DoScan(const Range& range, uint32_t limit, std::vector<KeyV
 
     if (param.error.empty()) {
       if (param.kvs.size() >= limit || param.count < actual_limit) return Status::OK();
-      if (!kvs.empty()) start_key = ::dingofs::Helper::PrefixNext(kvs.back().key);
+      if (!kvs.empty()) start_key = ::dingofs::Helper::KeyNext(kvs.back().key);
 
     } else {
       if (IsOutOfRange(param.error)) {
