@@ -611,6 +611,7 @@ Status DeleteFsOperation::Run(TxnUPtr& txn) {
   fs_info.set_fs_name(fmt::format("{}_DELETED_{}", fs_name_, fs_info.fs_id()));
   fs_info.set_status(pb::mds::FsStatus::DELETED);
   fs_info.set_is_deleted(true);
+  fs_info.set_keep_data(keep_data_);
   fs_info.set_delete_time_s(utils::Timestamp());
 
   txn->Put(MetaCodec::EncodeFsKey(fs_info.fs_name()), MetaCodec::EncodeFsValue(fs_info));

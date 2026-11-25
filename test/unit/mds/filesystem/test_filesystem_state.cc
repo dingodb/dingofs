@@ -1419,6 +1419,18 @@ TEST_F(FileSystemStateTest, LongRunningLookupCreateDeleteVersions) {
   EXPECT_GT(cleaner_rounds.load(), 0u) << "cleaner never ran";
 }
 
+TEST_F(FileSystemStateTest, ReadDirResumesStrictlyAfterLastName) {
+  for (const char* name : {"a", "ab", "b"}) MkNod(kTestRootIno, name);
+
+  // names prefixed by last_name ("ab" after "a") must not be skipped
+  Context ctx;
+  std::vector<EntryWithNameOut> entries;
+  ASSERT_TRUE(fs_->ReadDir(ctx, kTestRootIno, "a", 0, false, entries).ok());
+  ASSERT_EQ(2u, entries.size());
+  EXPECT_EQ("ab", entries[0].name);
+  EXPECT_EQ("b", entries[1].name);
+}
+
 }  // namespace unit_test
 }  // namespace mds
 }  // namespace dingofs

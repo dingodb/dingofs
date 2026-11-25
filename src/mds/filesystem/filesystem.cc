@@ -4627,12 +4627,14 @@ Status FileSystemSet::UmountFs(Context& ctx, const std::string& fs_name, const s
 }
 
 // check if fs is mounted
-Status FileSystemSet::DeleteFs(Context& ctx, const std::string& fs_name, bool is_force) {
+Status FileSystemSet::DeleteFs(Context& ctx, const std::string& fs_name, bool is_force, bool keep_data,
+                               bool immediately) {
   CHECK(!fs_name.empty()) << "fs name is empty.";
+  CHECK(keep_data || !immediately) << "immediately only valid with keep_data.";
 
   auto& trace = ctx.GetTrace();
 
-  DeleteFsOperation operation(trace, fs_name, is_force);
+  DeleteFsOperation operation(trace, fs_name, is_force, keep_data);
 
   auto status = RunOperation(&operation);
 
@@ -4641,7 +4643,19 @@ Status FileSystemSet::DeleteFs(Context& ctx, const std::string& fs_name, bool is
   auto& result = operation.GetResult();
   auto& fs_info = result.fs_info;
 
-  if (status.ok()) DeleteFileSystem(fs_info.fs_id());
+  if (!status.ok()) return status;
+
+  DeleteFileSystem(fs_info.fs_id());
+
+  if (immediately) {
+    status = DestroyFsResource(fs_info.fs_id());
+    if (!status.ok()) return status;
+
+    // fs_info carries the renamed fs name, same as gc
+    CleanFsOperation clean_operation(trace, fs_info.fs_name(), fs_info.fs_id());
+    status = RunOperation(&clean_operation);
+    LOG(INFO) << fmt::format("[fsset.{}] clean fs meta immediately, status({}).", fs_name, status.error_str());
+  }
 
   return status;
 }
