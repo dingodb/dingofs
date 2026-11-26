@@ -110,7 +110,7 @@ MDSClientUPtr MDSTest::CreateFilesystem(const std::string& mds_addr,
 
 bool MDSTest::DeleteFilesystem(MDSClientUPtr& client,
                                const std::string& fs_name) {
-  auto response = client->DeleteFs(fs_name, true);
+  auto response = client->DeleteFs(fs_name, true, false, false);
   return response.error().errcode() == dingofs::pb::error::OK;
 }
 

@@ -331,6 +331,10 @@ std::string Helper::PrefixNext(const std::string& input) {
   return (carry == 0) ? ret : input;
 }
 
+std::string Helper::KeyNext(const std::string& input) {
+  return input + '\0';
+}
+
 std::string Helper::EndPointToString(const butil::EndPoint& endpoint) {
   return std::string(butil::endpoint2str(endpoint).c_str());
 }

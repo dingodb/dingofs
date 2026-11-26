@@ -569,7 +569,10 @@ class FileSystemSet {
   Status CreateFs(const CreateFsParam& param, FsInfoEntry& fs_info);
   Status MountFs(Context& ctx, const std::string& fs_name, const pb::mds::MountPoint& mountpoint);
   Status UmountFs(Context& ctx, const std::string& fs_name, const std::string& client_id);
-  Status DeleteFs(Context& ctx, const std::string& fs_name, bool is_force);
+  // keep_data: only delete metadata, file data is left in the object store.
+  // immediately (requires keep_data): clean metadata now instead of by gc.
+  Status DeleteFs(Context& ctx, const std::string& fs_name, bool is_force, bool keep_data = false,
+                  bool immediately = false);
   Status UpdateFsInfo(Context& ctx, const std::string& fs_name, const FsInfoEntry& fs_info);
   Status GetFsInfo(Context& ctx, const std::string& fs_name, FsInfoEntry& fs_info);
   Status GetAllFsInfo(Context& ctx, bool include_deleted, std::vector<FsInfoEntry>& fs_infoes);

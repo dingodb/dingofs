@@ -177,10 +177,7 @@ Status CleanDelSliceTask::CleanDelSlice() {
   }
 
   // delete data from s3
-  if (!keys.empty()) {
-    auto status = BatchDeleteBlocks(data_accessor_, keys);
-    if (!status.ok()) return status;
-  }
+  if (!keys.empty()) BatchDeleteBlocks(data_accessor_, keys);
 
   // delete slice
   class Trace trace;
@@ -305,10 +302,7 @@ Status CleanFileTask::CleanFile(const AttrEntry& attr) {
     }
   }
 
-  if (!keys.empty()) {
-    auto status = BatchDeleteBlocks(data_accessor_, keys);
-    if (!status.ok()) return status;
-  }
+  if (!keys.empty()) BatchDeleteBlocks(data_accessor_, keys);
 
   // update recyle progress
   class Trace trace;
@@ -789,6 +783,18 @@ void GcProcessor::ScanDelFs(const FsInfoEntry& fs_info) {
 
   Trace trace;
   std::string prefix = "delfs." + std::to_string(fs_id) + ".";
+
+  // keep_data: no file data to clean, drop metadata directly
+  if (fs_info.keep_data()) {
+    auto status = file_system_set_->DestroyFsResource(fs_id);
+    LOG(INFO) << fmt::format("[gc.delfs.{}] keep data, clean fs resource, status({}).", fs_id, status.error_str());
+    if (!status.ok()) return;
+
+    status = CleanFsInfo(fs_info);
+    LOG(INFO) << fmt::format("[gc.delfs.{}] keep data, clean fs info, status({}).", fs_id, status.error_str());
+    return;
+  }
+
   std::string start_key =
       recycle_progress.last_ino() == 0 ? "" : MetaCodec::EncodeInodeKey(fs_id, recycle_progress.last_ino());
   ScanFsMetaTableOperation operation(
@@ -905,8 +911,7 @@ blockaccess::BlockAccesserSPtr GcProcessor::GetOrCreateDataAccesser(const FsInfo
     options.type = blockaccess::AccesserType::kS3;
     options.s3_options.s3_info = blockaccess::S3Info{
         .ak = s3_info.ak(), .sk = s3_info.sk(), .endpoint = s3_info.endpoint(), .bucket_name = s3_info.bucketname()};
-    blockaccess::FillAwsSdkConfigFromGFlags(
-        &options.s3_options.aws_sdk_config);
+    blockaccess::FillAwsSdkConfigFromGFlags(&options.s3_options.aws_sdk_config);
 
   } else if (fs_info.fs_type() == pb::mds::FsType::RADOS) {
     const auto& rados_info = fs_info.extra().rados_info();

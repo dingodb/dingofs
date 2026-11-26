@@ -280,7 +280,8 @@ UmountFsResponse MDSClient::UmountFs(const std::string& fs_name,
 }
 
 DeleteFsResponse MDSClient::DeleteFs(const std::string& fs_name,
-                                     bool is_force) {
+                                     bool is_force, bool keep_data,
+                                     bool immediately) {
   DeleteFsRequest request;
   DeleteFsResponse response;
 
@@ -291,6 +292,8 @@ DeleteFsResponse MDSClient::DeleteFs(const std::string& fs_name,
 
   request.set_fs_name(fs_name);
   request.set_is_force(is_force);
+  request.set_keep_data(keep_data);
+  request.set_immediately(immediately);
 
   auto status =
       interaction_->SendRequest("MDSService", "DeleteFs", request, response);
@@ -2506,7 +2509,8 @@ bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr,
     mds_client.CreateFs(options.fs_name, params);
 
   } else if (cmd == ::dingofs::Helper::ToLowerCase("DeleteFs")) {
-    mds_client.DeleteFs(options.fs_name, options.is_force);
+    mds_client.DeleteFs(options.fs_name, options.is_force, options.keep_data,
+                        options.immediately);
 
   } else if (cmd == ::dingofs::Helper::ToLowerCase("UpdateFs")) {
     mds_client.UpdateFs(options.fs_name, {});

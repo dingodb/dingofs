@@ -459,8 +459,8 @@ class UmountFsOperation : public Operation {
 
 class DeleteFsOperation : public Operation {
  public:
-  DeleteFsOperation(Trace& trace, std::string fs_name, bool is_force)
-      : Operation(trace), fs_name_(fs_name), is_force_(is_force) {};
+  DeleteFsOperation(Trace& trace, std::string fs_name, bool is_force, bool keep_data)
+      : Operation(trace), fs_name_(fs_name), is_force_(is_force), keep_data_(keep_data) {};
   ~DeleteFsOperation() override = default;
 
   struct Result {
@@ -476,6 +476,7 @@ class DeleteFsOperation : public Operation {
  private:
   std::string fs_name_;
   bool is_force_{false};
+  bool keep_data_{false};
 
   Result result_;
 };
